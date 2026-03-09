@@ -13,14 +13,14 @@ import (
 
 type UserService struct {
 	pb.UnimplementedUserServiceServer
-	repo *repository.UserRepository
+	repo repository.IUserRepository
 }
 
-func NewUserService(repo *repository.UserRepository) *UserService {
+func NewUserService(repo repository.IUserRepository) *UserService {
 	return &UserService{repo: repo}
 }
 
-// --- Employee Handlers ---
+// #region Employee Handlers
 
 func (s *UserService) CreateEmployee(ctx context.Context, req *pb.CreateEmployeeRequest) (*pb.EmployeeResponse, error) {
 	dob, _ := time.Parse("2006-01-02", req.DateOfBirth)
@@ -93,7 +93,9 @@ func (s *UserService) DeleteEmployee(ctx context.Context, req *pb.DeleteEmployee
 	return &emptypb.Empty{}, nil
 }
 
-// --- Client Handlers ---
+// #endregion
+
+// #region Client Handlers
 
 func (s *UserService) CreateClient(ctx context.Context, req *pb.CreateClientRequest) (*pb.ClientResponse, error) {
 	cli := &models.Client{
@@ -132,7 +134,35 @@ func (s *UserService) ListClients(ctx context.Context, req *pb.ListClientsReques
 	return &pb.ListClientsResponse{Clients: protoClients, Total: int32(total)}, nil
 }
 
-// --- Permission Handlers ---
+func (s *UserService) UpdateClient(ctx context.Context, req *pb.UpdateClientRequest) (*pb.ClientResponse, error) {
+	cli, err := s.repo.GetClientByID(req.Id)
+	if err != nil {
+		return nil, err
+	}
+
+	cli.FirstName = req.FirstName
+	cli.LastName = req.LastName
+	cli.Email = req.Email
+	cli.PhoneNumber = req.PhoneNumber
+	cli.Address = req.Address
+	cli.Gender = req.Gender
+
+	if err := s.repo.UpdateClient(cli); err != nil {
+		return nil, err
+	}
+	return &pb.ClientResponse{Client: mapClientToProto(cli)}, nil
+}
+
+func (s *UserService) DeleteClient(ctx context.Context, req *pb.DeleteClientRequest) (*emptypb.Empty, error) {
+	if err := s.repo.DeleteClient(req.Id); err != nil {
+		return nil, err
+	}
+	return &emptypb.Empty{}, nil
+}
+
+// #endregion
+
+// #region Permission Handlers
 
 func (s *UserService) CreatePermission(ctx context.Context, req *pb.CreatePermissionRequest) (*pb.PermissionResponse, error) {
 	p := &models.Permission{Name: req.Name, Description: req.Description}
@@ -154,7 +184,9 @@ func (s *UserService) ListPermissions(ctx context.Context, _ *emptypb.Empty) (*p
 	return &pb.ListPermissionsResponse{Permissions: protoPerms}, nil
 }
 
-// --- Mappers (Internal Helpers) ---
+// #endregion
+
+// #region Mappers
 
 func mapEmployeeToProto(m *models.Employee) *pb.Employee {
 	var perms []*pb.Permission
@@ -200,3 +232,5 @@ func mapPermissionToProto(m *models.Permission) *pb.Permission {
 		Description: m.Description,
 	}
 }
+
+// #endregion
