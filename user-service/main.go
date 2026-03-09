@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	"fmt"
 	"log"
 	"net"
 	"net/http"
@@ -19,33 +20,56 @@ import (
 )
 
 func main() {
-	// DB
 	db := initDB()
 
-	// DI
 	userRepo := repository.NewUserRepository(db)
 	userSvc := service.NewUserService(userRepo)
 
-	// gRPC server
-	lis, _ := net.Listen("tcp", ":50051")
+	lis, err := net.Listen("tcp", ":50051")
+	if err != nil {
+		log.Fatalf("failed to listen: %v", err)
+	}
+
 	grpcServer := grpc.NewServer()
 	pb.RegisterUserServiceServer(grpcServer, userSvc)
-	go grpcServer.Serve(lis)
 
-	// HTTP Gateway
+	log.Println("Starting gRPC server on :50051")
+	go func() {
+		if err := grpcServer.Serve(lis); err != nil {
+			log.Fatalf("failed to serve gRPC: %v", err)
+		}
+	}()
+
 	runGateway()
 }
 
 func initDB() *gorm.DB {
-	dsn := os.Getenv("DATABASE_URL")
-	db, _ := gorm.Open(postgres.Open(dsn), &gorm.Config{})
-	db.AutoMigrate(&models.Employee{}, &models.Client{})
+	dsn := fmt.Sprintf("host=%s user=%s password=%s dbname=%s port=%s sslmode=disable",
+		os.Getenv("DB_HOST"), os.Getenv("DB_USER"), os.Getenv("DB_PASSWORD"), os.Getenv("DB_NAME"), os.Getenv("DB_PORT"))
+
+	db, err := gorm.Open(postgres.Open(dsn), &gorm.Config{})
+	if err != nil {
+		log.Fatalf("Failed to connect to database: %v", err)
+	}
+
+	db.AutoMigrate(&models.Employee{}, &models.Client{}, &models.Permission{})
 	return db
 }
 
 func runGateway() {
-	conn, _ := grpc.Dial("localhost:50051", grpc.WithTransportCredentials(insecure.NewCredentials()))
+	ctx := context.Background()
+	conn, err := grpc.DialContext(ctx, "0.0.0.0:50051", grpc.WithTransportCredentials(insecure.NewCredentials()))
+	if err != nil {
+		log.Fatalf("Failed to dial gRPC server: %v", err)
+	}
+
 	mux := runtime.NewServeMux()
-	pb.RegisterUserServiceHandler(context.Background(), mux, conn)
-	log.Fatal(http.ListenAndServe(":8080", mux))
+	if err := pb.RegisterUserServiceHandler(ctx, mux, conn); err != nil {
+		log.Fatalf("Failed to register gateway: %v", err)
+	}
+
+	log.Println("Starting HTTP Gateway on :8080")
+	if err := http.ListenAndServe(":8080", mux); err != nil {
+		log.Fatal(err)
+	}
 }

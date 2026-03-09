@@ -1,34 +1,26 @@
-# Step 1: Build stage
-FROM golang:1.21-alpine AS builder
+# Use 1.26 to match your go.mod requirement
+FROM golang:1.26.1-alpine AS builder
 
-# Install build dependencies for CGO (if needed) and protoc tools
-RUN apk add --no-cache git protobuf-dev
+RUN apk add --no-cache git
 
 WORKDIR /app
 
-# Copy go mod files first to leverage Docker cache
-COPY go.mod go.sum ./
-RUN go mod download
-
-# Copy the rest of the source code
+# Copy everything first to ensure all local packages are available
 COPY . .
+
+# Clean up and download dependencies
+RUN go mod tidy && go mod download
 
 # Build the application
 RUN CGO_ENABLED=0 GOOS=linux go build -o user-app ./main.go
 
-# Step 2: Final stage
+# Stage 2: Final image
 FROM alpine:latest
-
 RUN apk --no-cache add ca-certificates
-
 WORKDIR /root/
-
-# Copy the binary from the builder
 COPY --from=builder /app/user-app .
 
-# Expose ports for gRPC and HTTP Gateway
 EXPOSE 50051
 EXPOSE 8080
 
-# Run the binary
 CMD ["./user-app"]
