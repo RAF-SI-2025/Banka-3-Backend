@@ -1,0 +1,63 @@
+# #region Binary & Build Outputs
+# Main application binaries
+*.exe
+*.exe~
+*.dll
+*.so
+*.dylib
+bin/
+out/
+# If your main app build creates a specific named binary:
+main-app
+user-service-bin
+# #endregion
+
+# #region Go Specifics
+go.sum
+# Keep go.mod, but ignore vendor if you prefer downloading modules
+# vendor/
+# Test coverage files
+*.out
+*.test
+# #endregion
+
+# #region IDE - VS Code
+.vscode/*
+!.vscode/settings.json
+!.vscode/tasks.json
+!.vscode/launch.json
+!.vscode/extensions.json
+*.code-workspace
+# #endregion
+
+# #region IDE - GoLand / JetBrains
+.idea/
+*.iwb
+*.iws
+# #endregion
+
+# #region AI & Copilot
+.copilot/
+# GitHub Copilot extensions sometimes cache data here
+.github/copilot/
+# #endregion
+
+# #region Environment & Secrets
+.env
+.env.local
+.env.*.local
+# Database data folders (if running postgres locally)
+pgdata/
+# #endregion
+
+# #region OS Specifics
+.DS_Store
+Thumbs.db
+# #endregion
+
+# #region Protobuf Generated Files
+# Note: Usually, you WANT to commit these so others don't need protoc installed,
+# but if you prefer generating them on build, uncomment below:
+# pb/*.pb.go
+# pb/*.pb.gw.go
+# #endregion
