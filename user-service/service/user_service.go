@@ -24,6 +24,7 @@ func NewUserService(repo repository.IUserRepository) *UserService {
 }
 
 // #region Helper: Error Handling
+
 func handleDBError(err error) error {
 	if err == nil {
 		return nil
@@ -31,25 +32,22 @@ func handleDBError(err error) error {
 
 	errStr := strings.ToLower(err.Error())
 
-	// 1. Check for Not Found
-	if strings.Contains(errStr, "record not found") || strings.Contains(errStr, "not found") {
-		return status.Error(codes.NotFound, "resource not found")
+	// Mapping DB errors to gRPC codes which Gateway translates to HTTP
+	if strings.Contains(errStr, "record not found") {
+		return status.Error(codes.NotFound, "the requested resource was not found")
 	}
 
-	// 2. Check for Duplicates (Postgres/SQLite/MySQL)
-	if strings.Contains(errStr, "duplicate") ||
-		strings.Contains(errStr, "unique constraint") ||
-		strings.Contains(errStr, "23505") { // SQLSTATE for Unique Violation
-		return status.Error(codes.AlreadyExists, "this record already exists")
+	// 23505 is Postgres code for unique_violation (HTTP 409)
+	if strings.Contains(errStr, "duplicate") || strings.Contains(errStr, "unique constraint") || strings.Contains(errStr, "23505") {
+		return status.Error(codes.AlreadyExists, "a record with this unique identifier already exists")
 	}
 
-	// 3. Check for Foreign Key Violations (Parent missing)
+	// 23503 is Postgres code for foreign_key_violation (HTTP 412 or 400)
 	if strings.Contains(errStr, "foreign key") || strings.Contains(errStr, "23503") {
-		return status.Error(codes.FailedPrecondition, "referenced resource does not exist")
+		return status.Error(codes.FailedPrecondition, "operation failed: referenced data (like permission IDs) does not exist")
 	}
 
-	// Default to Internal if we really don't know what happened
-	return status.Errorf(codes.Internal, "database error: %v", err)
+	return status.Errorf(codes.Internal, "an unexpected database error occurred: %v", err)
 }
 
 // #endregion
@@ -58,12 +56,12 @@ func handleDBError(err error) error {
 
 func (s *UserService) CreateEmployee(ctx context.Context, req *pb.CreateEmployeeRequest) (*pb.EmployeeResponse, error) {
 	if req.Email == "" || req.Username == "" {
-		return nil, status.Error(codes.InvalidArgument, "email and username are required")
+		return nil, status.Error(codes.InvalidArgument, "email and username are mandatory fields")
 	}
 
 	dob, err := time.Parse("2006-01-02", req.DateOfBirth)
 	if err != nil {
-		return nil, status.Errorf(codes.InvalidArgument, "invalid date format: %v", err)
+		return nil, status.Errorf(codes.InvalidArgument, "invalid date format, use YYYY-MM-DD: %v", err)
 	}
 
 	emp := &models.Employee{
@@ -88,8 +86,9 @@ func (s *UserService) CreateEmployee(ctx context.Context, req *pb.CreateEmployee
 
 func (s *UserService) GetEmployee(ctx context.Context, req *pb.GetEmployeeRequest) (*pb.EmployeeResponse, error) {
 	if req.Id == 0 {
-		return nil, status.Error(codes.InvalidArgument, "valid ID is required")
+		return nil, status.Error(codes.InvalidArgument, "valid employee ID is required")
 	}
+
 	emp, err := s.repo.GetEmployeeByID(req.Id)
 	if err != nil {
 		return nil, handleDBError(err)
@@ -98,11 +97,10 @@ func (s *UserService) GetEmployee(ctx context.Context, req *pb.GetEmployeeReques
 }
 
 func (s *UserService) ListEmployees(ctx context.Context, req *pb.ListEmployeesRequest) (*pb.ListEmployeesResponse, error) {
-	page := int(req.Page)
+	page, pageSize := int(req.Page), int(req.PageSize)
 	if page <= 0 {
 		page = 1
 	}
-	pageSize := int(req.PageSize)
 	if pageSize <= 0 {
 		pageSize = 10
 	}
@@ -120,9 +118,13 @@ func (s *UserService) ListEmployees(ctx context.Context, req *pb.ListEmployeesRe
 }
 
 func (s *UserService) UpdateEmployee(ctx context.Context, req *pb.UpdateEmployeeRequest) (*pb.EmployeeResponse, error) {
+	if req.Id == 0 {
+		return nil, status.Error(codes.InvalidArgument, "employee ID is required for updates")
+	}
+
 	emp, err := s.repo.GetEmployeeByID(req.Id)
 	if err != nil {
-		return nil, handleDBError(err)
+		return nil, handleDBError(err) // Returns 404 if not found
 	}
 
 	emp.FirstName = req.FirstName
@@ -141,6 +143,10 @@ func (s *UserService) UpdateEmployee(ctx context.Context, req *pb.UpdateEmployee
 }
 
 func (s *UserService) DeleteEmployee(ctx context.Context, req *pb.DeleteEmployeeRequest) (*emptypb.Empty, error) {
+	if req.Id == 0 {
+		return nil, status.Error(codes.InvalidArgument, "valid employee ID is required for deletion")
+	}
+
 	if err := s.repo.DeleteEmployee(req.Id); err != nil {
 		return nil, handleDBError(err)
 	}
@@ -180,7 +186,15 @@ func (s *UserService) GetClient(ctx context.Context, req *pb.GetClientRequest) (
 }
 
 func (s *UserService) ListClients(ctx context.Context, req *pb.ListClientsRequest) (*pb.ListClientsResponse, error) {
-	clients, total, err := s.repo.ListClients(int(req.Page), int(req.PageSize))
+	page, pageSize := int(req.Page), int(req.PageSize)
+	if page <= 0 {
+		page = 1
+	}
+	if pageSize <= 0 {
+		pageSize = 10
+	}
+
+	clients, total, err := s.repo.ListClients(page, pageSize)
 	if err != nil {
 		return nil, handleDBError(err)
 	}
