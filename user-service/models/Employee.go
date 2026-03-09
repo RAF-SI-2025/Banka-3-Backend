@@ -16,8 +16,8 @@ type Employee struct {
 	PhoneNumber  string       `gorm:"not null" json:"phone_number"`
 	Address      string       `gorm:"not null" json:"address"`
 	Username     string       `gorm:"uniqueIndex;not null" json:"username"`
-	Password     string       `gorm:"not null" json:"-"`      
-	SaltPassword string       `gorm:"not null" json:"-"`      
+	Password     string       `gorm:"not null" json:"-"`
+	SaltPassword string       `gorm:"not null" json:"-"`
 	Position     string       `gorm:"not null" json:"position"`
 	Department   string       `gorm:"not null" json:"department"`
 	IsActive     bool         `gorm:"default:true" json:"is_active"`
