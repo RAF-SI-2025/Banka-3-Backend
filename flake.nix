@@ -39,6 +39,8 @@
             protoc-gen-go
             protoc-gen-go-grpc
             postgresql
+
+            grpcurl
           ];
         };
       }

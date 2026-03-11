@@ -37,12 +37,11 @@ services:
     ports:
       - "50052:50051"
     environment:
-      DATABASE_URL: "postgres://${POSTGRES_USER}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB}?sslmode=disable"
       GRPC_PORT: "50051"
-    depends_on: #potentially add message broker in future
-      postgres:
-        condition: service_healthy
-
+      FROM_EMAIL: "${FROM_EMAIL}"
+      FROM_EMAIL_PASSWORD: "${FROM_EMAIL_PASSWORD}"
+      FROM_EMAIL_SMTP: "${FROM_EMAIL_SMTP}"
+      SMTP_ADDR: "${SMTP_ADDR}"
 
 volumes:
   pgdata:

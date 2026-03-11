@@ -7,9 +7,7 @@ import (
 	"log"
 	"net"
 	"os"
-	//"context" for notifications
-	//"banka-raf/gen/notification"
-	//"google.golang.org/grpc/credentials/insecure"
+
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/reflection"
 )
@@ -30,27 +28,7 @@ func main() {
 	reflection.Register(srv)
 
 	log.Printf("user service listening on :%s", port)
-	//stvaranje konekcije sa servisom
-	/*conn, err := grpc.Dial(
-		"notification:50051",
-		grpc.WithTransportCredentials(insecure.NewCredentials()),
-	)
-	if err != nil {
-		log.Fatal(err)
-	}*/
-	//pravljenje klijenta
-	//client := notification.NewNotificationServiceClient(conn)
-	//poziv neke metode servisa
-	/*
-		resp, err := client.SendActivationEmail(context.Background(), &notification.ActivationMailRequest{
-			ToAddr: "pajicaleksa.12@gmail.com",
-			Link:   "servis.raf.edu.rs",
-		})
-		if err != nil {log.Fatal(err)}
-		log.Printf("resp: %s", resp)*/
-
 	if err := srv.Serve(lis); err != nil {
 		log.Fatalf("failed to serve: %v", err)
 	}
-
 }

@@ -14,7 +14,7 @@ import (
 )
 
 func main() {
-	port := os.Getenv("NOTIFICATION_PORT")
+	port := os.Getenv("GRPC_PORT")
 	if port == "" {
 		port = "50051"
 	}

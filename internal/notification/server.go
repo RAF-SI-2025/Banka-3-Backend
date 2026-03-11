@@ -6,10 +6,7 @@ import (
 	"context"
 	"html/template"
 	"log"
-
-	"github.com/joho/godotenv"
-	//"net/http"
-	"net/smtp" // protocol for sending mails
+	"net/smtp"
 	"os"
 	"strings"
 )
@@ -21,24 +18,20 @@ type Server struct {
 func (s *Server) SendConfirmationEmail(ctx context.Context, req *notification.ConfirmationMailRequest) (*notification.SuccessResponse, error) {
 	log.Println("Sending confirmation email")
 
-	//lista primaoca mejla
 	to := strings.Split(req.ToAddr, ",")
 
-	//parsiranje templejta
 	templ, err := template.ParseFiles("templates/confirmation.html")
 	if err != nil {
 		log.Println("Cannot parse confirmation.html:", err)
 		return &notification.SuccessResponse{Successful: false}, nil
 	}
 
-	//renderovanje templejta
 	var rendered bytes.Buffer
 	if err := templ.Execute(&rendered, req); err != nil {
 		log.Println("Cannot execute confirmation.html:", err)
 		return &notification.SuccessResponse{Successful: false}, nil
 	}
 
-	// slanje email-a
 	err = sendHTMLEmail(to, "Confirm your Banka 3 account", rendered.String())
 	if err != nil {
 		log.Println("Couldn't send confirmation email:", err)
@@ -51,7 +44,6 @@ func (s *Server) SendConfirmationEmail(ctx context.Context, req *notification.Co
 }
 
 func (s *Server) SendActivationEmail(ctx context.Context, req *notification.ActivationMailRequest) (*notification.SuccessResponse, error) {
-	//list of email we want to send to
 	to := strings.Split(req.ToAddr, ",")
 	templ, err := template.ParseFiles("templates/activation.html")
 	if err != nil {
@@ -59,7 +51,6 @@ func (s *Server) SendActivationEmail(ctx context.Context, req *notification.Acti
 		return &notification.SuccessResponse{Successful: false}, nil
 	}
 
-	//render the html template
 	var rendered bytes.Buffer
 	if err := templ.Execute(&rendered, req); err != nil {
 		log.Println("Cannot execute activation.html:", err)
@@ -71,18 +62,13 @@ func (s *Server) SendActivationEmail(ctx context.Context, req *notification.Acti
 		log.Println("Couldn't send email:", err)
 		return &notification.SuccessResponse{Successful: false}, nil
 	}
-	//if mail was sent
+
 	return &notification.SuccessResponse{
 		Successful: true,
 	}, nil
 }
-func sendHTMLEmail(to []string, subject string, htmlBody string) error {
 
-	err := godotenv.Load(".env")
-	if err != nil {
-		log.Fatal("Error loading .env file")
-		return err
-	}
+func sendHTMLEmail(to []string, subject string, htmlBody string) error {
 	auth := smtp.PlainAuth(
 		"",
 		os.Getenv("FROM_EMAIL"),

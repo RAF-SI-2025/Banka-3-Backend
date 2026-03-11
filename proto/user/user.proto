@@ -20,7 +20,3 @@ message EmployeeResponse {
   string position = 5;
   bool active = 6;
 }
-
-message SearchEmployees{
-  string search_term=1;
-}

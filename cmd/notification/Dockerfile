@@ -18,7 +18,6 @@ WORKDIR /app
 
 COPY --from=build /app/notification ./notification
 COPY --from=build /app/internal/notification/templates ./templates
-COPY --from=build /app/.env ./
 
 EXPOSE 50051
 
