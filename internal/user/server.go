@@ -61,11 +61,11 @@ func (s *Server) Login(ctx context.Context, req *userpb.LoginRequest) (*userpb.L
 	hashedPassword := hasher.Sum(nil)
 	println("encoded hash " + string(hashedPassword))
 	user, err := s.GetUserByEmail(req.Email)
-	if err != nil || user == nil {
+	if err != nil {
 		return nil, err
 	}
 
-	if bytes.Equal(hashedPassword, user.hashedPassword) {
+	if user != nil && bytes.Equal(hashedPassword, user.hashedPassword) {
 		accessToken, err := generateAccessToken(user.email, s.accessJwtSecret)
 		if err != nil {
 			return nil, err
