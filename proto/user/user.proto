@@ -1,0 +1,53 @@
+syntax = "proto3";
+
+package user;
+
+option go_package = "banka-raf/gen/user";
+
+service UserService {
+  rpc GetEmployeeById(GetEmployeeByIdRequest) returns (EmployeeResponse);
+  rpc Login(LoginRequest) returns (LoginResponse);
+  rpc Refresh(RefreshRequest) returns (RefreshResponse);
+  rpc ValidateAccessToken(ValidateTokenRequest) returns (ValidateTokenResponse);
+  rpc ValidateRefreshToken(ValidateTokenRequest) returns (ValidateTokenResponse);
+}
+
+message ValidateTokenRequest {
+  string token = 1;
+}
+
+message ValidateTokenResponse {
+  bool valid = 1;
+}
+
+message RefreshRequest {
+  string refresh_token = 1;
+}
+
+message RefreshResponse {
+  string access_token = 1;
+  string refresh_token = 2;
+}
+
+message GetEmployeeByIdRequest {
+  int64 id = 1;
+}
+
+message EmployeeResponse {
+  int64 id = 1;
+  string first_name = 2;
+  string last_name = 3;
+  string email = 4;
+  string position = 5;
+  bool active = 6;
+}
+
+message LoginRequest {
+  string email = 1;
+  string password = 2;
+}
+
+message LoginResponse {
+  string accessToken = 1;
+  string refreshToken = 2;
+}
