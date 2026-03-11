@@ -6,6 +6,7 @@ import (
 	"crypto/sha256"
 	"database/sql"
 	"errors"
+	"fmt"
 	"time"
 
 	"banka-raf/gen/user"
@@ -57,6 +58,91 @@ func (s *Server) GenerateAccessToken(email string) (string, error) {
 
 	token := jwt.NewWithClaims(jwt.SigningMethodHS256, claims)
 	return token.SignedString([]byte(s.accessJwtSecret))
+}
+
+func (s *Server) ValidateRefreshToken(ctx context.Context, req *userpb.ValidateTokenRequest) (*userpb.ValidateTokenResponse, error) {
+	token, err := jwt.Parse(req.Token, func(t *jwt.Token) (any, error) {
+		return []byte(s.refreshJwtSecret), nil
+	})
+
+	if err != nil {
+		return nil, err
+	}
+	return &user.ValidateTokenResponse{
+		Valid: token.Valid,
+	}, nil
+}
+
+func (s *Server) ValidateAccessToken(ctx context.Context, req *userpb.ValidateTokenRequest) (*userpb.ValidateTokenResponse, error) {
+	token, err := jwt.Parse(req.Token, func(t *jwt.Token) (any, error) {
+		return []byte(s.accessJwtSecret), nil
+	})
+
+	if err != nil {
+		return nil, err
+	}
+	return &user.ValidateTokenResponse{
+		Valid: token.Valid,
+	}, nil
+}
+
+func (s *Server) Refresh(ctx context.Context, req *userpb.RefreshRequest) (*userpb.RefreshResponse, error) {
+	refreshToken := req.RefreshToken
+	parsed, err := jwt.Parse(refreshToken, func(t *jwt.Token) (any, error) {
+		return []byte(s.refreshJwtSecret), nil
+	})
+	if err != nil {
+		return nil, fmt.Errorf("parsing token: %w", err)
+	}
+	if !parsed.Valid {
+		return nil, fmt.Errorf("invalid refresh token: %w", err)
+	}
+	email, err := parsed.Claims.GetSubject()
+	if err != nil {
+		return nil, fmt.Errorf("getting subject: %w", err)
+	}
+
+	newSignedToken, err := s.GenerateRefreshToken(email)
+	if err != nil {
+		return nil, fmt.Errorf("generating refresh token: %w", err)
+	}
+
+	newAccessToken, err := s.GenerateAccessToken(email)
+	if err != nil {
+		return nil, fmt.Errorf("generating access token: %w", err)
+	}
+
+	hash := func(t string) []byte {
+		h := sha256.New()
+		h.Write([]byte(t))
+		return h.Sum(nil)
+	}
+
+	newParsed, _, err := jwt.NewParser().ParseUnverified(newSignedToken, &jwt.RegisteredClaims{})
+	if err != nil {
+		return nil, fmt.Errorf("parsing new token: %w", err)
+	}
+	newExpiry, err := newParsed.Claims.GetExpirationTime()
+	if err != nil {
+		return nil, fmt.Errorf("getting expiry: %w", err)
+	}
+
+	tx, err := s.database.Begin()
+	if err != nil {
+		return nil, fmt.Errorf("starting transaction: %w", err)
+	}
+	defer tx.Rollback()
+
+	err = s.rotateRefreshToken(tx, email, hash(refreshToken), hash(newSignedToken), newExpiry.Time)
+	if err != nil {
+		return nil, err
+	}
+
+	if err = tx.Commit(); err != nil {
+		return nil, fmt.Errorf("committing transaction: %w", err)
+	}
+
+	return &userpb.RefreshResponse{AccessToken: newAccessToken, RefreshToken: newSignedToken}, nil
 }
 
 func (s *Server) Login(ctx context.Context, req *userpb.LoginRequest) (*userpb.LoginResponse, error) {

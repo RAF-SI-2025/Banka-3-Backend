@@ -1,9 +1,11 @@
 package user
 
 import (
+	"bytes"
 	"crypto/sha256"
 	"database/sql"
 	"fmt"
+	"time"
 
 	"github.com/golang-jwt/jwt/v5"
 )
@@ -31,6 +33,35 @@ func (s *Server) GetUserByEmail(email string) (*User, error) {
 		return nil, err
 	}
 	return &user, nil
+}
+
+func (s *Server) rotateRefreshToken(tx *sql.Tx, email string, oldHash, newHash []byte, newExpiry time.Time) error {
+	var storedHash []byte
+	err := tx.QueryRow(`
+        SELECT hashed_token FROM refresh_tokens
+        WHERE email = $1 AND revoked = FALSE AND valid_until > now()
+        FOR UPDATE
+    `, email).Scan(&storedHash)
+	if err != nil {
+		return fmt.Errorf("refresh token not found or expired: %w", err)
+	}
+
+	if !bytes.Equal(storedHash, oldHash) {
+		_, err := tx.Exec(`UPDATE refresh_tokens SET revoked = TRUE WHERE email = $1`, email)
+		if err != nil {
+			tx.Rollback()
+			return fmt.Errorf("failed to revoke tokens: %w", err)
+		}
+		tx.Commit()
+		return fmt.Errorf("token mismatch: possible reuse attack")
+	}
+
+	_, err = tx.Exec(`
+        UPDATE refresh_tokens
+        SET hashed_token = $1, valid_until = $2, revoked = FALSE
+        WHERE email = $3
+    `, newHash, newExpiry, email)
+	return err
 }
 
 func (s *Server) InsertRefreshToken(token string) error {
