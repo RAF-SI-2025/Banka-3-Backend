@@ -4,7 +4,6 @@ import (
 	"context"
 	"strings"
 	"time"
-
 	"user-service/models"
 	"user-service/pb"
 	"user-service/repository"
@@ -23,149 +22,122 @@ func NewUserService(repo repository.IUserRepository) *UserService {
 	return &UserService{repo: repo}
 }
 
-// #region Helper: Error Handling
+// =================== Helpers ===================
 
 func handleDBError(err error) error {
 	if err == nil {
 		return nil
 	}
-
 	errStr := strings.ToLower(err.Error())
-
-	// Mapping DB errors to gRPC codes which Gateway translates to HTTP
 	if strings.Contains(errStr, "record not found") {
-		return status.Error(codes.NotFound, "the requested resource was not found")
+		return status.Error(codes.NotFound, "not found")
 	}
-
-	// 23505 is Postgres code for unique_violation (HTTP 409)
-	if strings.Contains(errStr, "duplicate") || strings.Contains(errStr, "unique constraint") || strings.Contains(errStr, "23505") {
-		return status.Error(codes.AlreadyExists, "a record with this unique identifier already exists")
+	if strings.Contains(errStr, "unique") || strings.Contains(errStr, "23505") {
+		return status.Error(codes.AlreadyExists, "duplicate record")
 	}
-
-	// 23503 is Postgres code for foreign_key_violation (HTTP 412 or 400)
 	if strings.Contains(errStr, "foreign key") || strings.Contains(errStr, "23503") {
-		return status.Error(codes.FailedPrecondition, "operation failed: referenced data (like permission IDs) does not exist")
+		return status.Error(codes.FailedPrecondition, "referenced data does not exist")
 	}
-
-	return status.Errorf(codes.Internal, "an unexpected database error occurred: %v", err)
+	return status.Errorf(codes.Internal, "unexpected db error: %v", err)
 }
 
-// #endregion
+// =================== Employee ===================
 
-// #region Employee Handlers
-
-func (s *UserService) CreateEmployee(ctx context.Context, req *pb.CreateEmployeeRequest) (*pb.EmployeeResponse, error) {
+func (s *UserService) CreateEmployee(ctx context.Context, req *pb.CreateEmployeeRequest) (*pb.Employee, error) {
 	if req.Email == "" || req.Username == "" {
-		return nil, status.Error(codes.InvalidArgument, "email and username are mandatory fields")
+		return nil, status.Error(codes.InvalidArgument, "email and username required")
 	}
-
 	dob, err := time.Parse("2006-01-02", req.DateOfBirth)
 	if err != nil {
-		return nil, status.Errorf(codes.InvalidArgument, "invalid date format, use YYYY-MM-DD: %v", err)
+		return nil, status.Error(codes.InvalidArgument, "invalid date format")
 	}
 
 	emp := &models.Employee{
 		FirstName:   req.FirstName,
 		LastName:    req.LastName,
+		DateOfBirth: dob,
+		Gender:      req.Gender,
 		Email:       req.Email,
+		PhoneNumber: req.PhoneNumber,
+		Address:     req.Address,
 		Username:    req.Username,
 		Position:    req.Position,
 		Department:  req.Department,
-		PhoneNumber: req.PhoneNumber,
-		Address:     req.Address,
 		IsActive:    req.Active,
-		Gender:      req.Gender,
-		DateOfBirth: dob,
 	}
 
-	if err := s.repo.CreateEmployee(emp, req.PermissionIds); err != nil {
+	var permIDs []uint
+	for _, p := range req.Permissions {
+		per, err := s.repo.GetPermissionByName(p)
+		if err != nil || per == nil {
+			return nil, status.Errorf(codes.InvalidArgument, "permission not found: %s", p)
+		}
+		permIDs = append(permIDs, per.ID)
+	}
+
+	if err := s.repo.CreateEmployee(emp, permIDs); err != nil {
 		return nil, handleDBError(err)
 	}
-	return &pb.EmployeeResponse{Employee: mapEmployeeToProto(emp)}, nil
+	return mapEmployeeToProto(emp), nil
 }
 
-func (s *UserService) GetEmployee(ctx context.Context, req *pb.GetEmployeeRequest) (*pb.EmployeeResponse, error) {
-	if req.Id == 0 {
-		return nil, status.Error(codes.InvalidArgument, "valid employee ID is required")
+func (s *UserService) GetEmployee(ctx context.Context, req *pb.GetEmployeeRequest) (*pb.Employee, error) {
+	if req.EmployeeId == 0 {
+		return nil, status.Error(codes.InvalidArgument, "employee_id required")
 	}
-
-	emp, err := s.repo.GetEmployeeByID(req.Id)
+	emp, err := s.repo.GetEmployeeByID(uint(req.EmployeeId))
 	if err != nil {
 		return nil, handleDBError(err)
 	}
-	return &pb.EmployeeResponse{Employee: mapEmployeeToProto(emp)}, nil
+	return mapEmployeeToProto(emp), nil
 }
 
-func (s *UserService) ListEmployees(ctx context.Context, req *pb.ListEmployeesRequest) (*pb.ListEmployeesResponse, error) {
-	page, pageSize := int(req.Page), int(req.PageSize)
-	if page <= 0 {
-		page = 1
-	}
-	if pageSize <= 0 {
-		pageSize = 10
-	}
-
-	emps, total, err := s.repo.ListEmployees(page, pageSize)
+func (s *UserService) UpdateEmployee(ctx context.Context, req *pb.UpdateEmployeeRequest) (*pb.Employee, error) {
+	emp, err := s.repo.GetEmployeeByID(uint(req.EmployeeId))
 	if err != nil {
 		return nil, handleDBError(err)
-	}
-
-	var protoEmps []*pb.Employee
-	for _, e := range emps {
-		protoEmps = append(protoEmps, mapEmployeeToProto(&e))
-	}
-	return &pb.ListEmployeesResponse{Employees: protoEmps, Total: int32(total)}, nil
-}
-
-func (s *UserService) UpdateEmployee(ctx context.Context, req *pb.UpdateEmployeeRequest) (*pb.EmployeeResponse, error) {
-	if req.Id == 0 {
-		return nil, status.Error(codes.InvalidArgument, "employee ID is required for updates")
-	}
-
-	emp, err := s.repo.GetEmployeeByID(req.Id)
-	if err != nil {
-		return nil, handleDBError(err) // Returns 404 if not found
 	}
 
 	emp.FirstName = req.FirstName
 	emp.LastName = req.LastName
+	emp.DateOfBirth, _ = time.Parse("2006-01-02", req.DateOfBirth)
+	emp.Gender = req.Gender
 	emp.Email = req.Email
-	emp.Position = req.Position
-	emp.Department = req.Department
 	emp.PhoneNumber = req.PhoneNumber
 	emp.Address = req.Address
+	emp.Position = req.Position
+	emp.Department = req.Department
 	emp.IsActive = req.Active
 
-	if err := s.repo.UpdateEmployee(emp, req.PermissionIds); err != nil {
+	var permIDs []uint
+	for _, p := range req.Permissions {
+		per, err := s.repo.GetPermissionByName(p)
+		if err != nil || per == nil {
+			return nil, status.Errorf(codes.InvalidArgument, "permission not found: %s", p)
+		}
+		permIDs = append(permIDs, per.ID)
+	}
+
+	if err := s.repo.UpdateEmployee(emp, permIDs); err != nil {
 		return nil, handleDBError(err)
 	}
-	return &pb.EmployeeResponse{Employee: mapEmployeeToProto(emp)}, nil
+	return mapEmployeeToProto(emp), nil
 }
 
 func (s *UserService) DeleteEmployee(ctx context.Context, req *pb.DeleteEmployeeRequest) (*emptypb.Empty, error) {
-	if req.Id == 0 {
-		return nil, status.Error(codes.InvalidArgument, "valid employee ID is required for deletion")
-	}
-
-	if err := s.repo.DeleteEmployee(req.Id); err != nil {
+	if err := s.repo.DeleteEmployee(uint(req.EmployeeId)); err != nil {
 		return nil, handleDBError(err)
 	}
 	return &emptypb.Empty{}, nil
 }
 
-// #endregion
+// =================== Client ===================
 
-// #region Client Handlers
-
-func (s *UserService) CreateClient(ctx context.Context, req *pb.CreateClientRequest) (*pb.ClientResponse, error) {
-	if req.Email == "" {
-		return nil, status.Error(codes.InvalidArgument, "client email is required")
-	}
-
+func (s *UserService) CreateClient(ctx context.Context, req *pb.CreateClientRequest) (*pb.Client, error) {
 	cli := &models.Client{
 		FirstName:   req.FirstName,
 		LastName:    req.LastName,
-		DateOfBirth: req.DateOfBirth,
+		DateOfBirth: req.DateOfBirth, // int64 timestamp
 		Gender:      req.Gender,
 		Email:       req.Email,
 		PhoneNumber: req.PhoneNumber,
@@ -174,117 +146,82 @@ func (s *UserService) CreateClient(ctx context.Context, req *pb.CreateClientRequ
 	if err := s.repo.CreateClient(cli); err != nil {
 		return nil, handleDBError(err)
 	}
-	return &pb.ClientResponse{Client: mapClientToProto(cli)}, nil
+	return mapClientToProto(cli), nil
 }
 
-func (s *UserService) GetClient(ctx context.Context, req *pb.GetClientRequest) (*pb.ClientResponse, error) {
-	cli, err := s.repo.GetClientByID(req.Id)
+func (s *UserService) GetClient(ctx context.Context, req *pb.GetClientRequest) (*pb.Client, error) {
+	cli, err := s.repo.GetClientByID(uint(req.ClientId))
 	if err != nil {
 		return nil, handleDBError(err)
 	}
-	return &pb.ClientResponse{Client: mapClientToProto(cli)}, nil
+	return mapClientToProto(cli), nil
 }
 
-func (s *UserService) ListClients(ctx context.Context, req *pb.ListClientsRequest) (*pb.ListClientsResponse, error) {
-	page, pageSize := int(req.Page), int(req.PageSize)
-	if page <= 0 {
-		page = 1
-	}
-	if pageSize <= 0 {
-		pageSize = 10
-	}
-
-	clients, total, err := s.repo.ListClients(page, pageSize)
+func (s *UserService) UpdateClient(ctx context.Context, req *pb.UpdateClientRequest) (*pb.Client, error) {
+	cli, err := s.repo.GetClientByID(uint(req.ClientId))
 	if err != nil {
 		return nil, handleDBError(err)
 	}
-
-	var protoClients []*pb.Client
-	for _, c := range clients {
-		protoClients = append(protoClients, mapClientToProto(&c))
-	}
-	return &pb.ListClientsResponse{Clients: protoClients, Total: int32(total)}, nil
-}
-
-func (s *UserService) UpdateClient(ctx context.Context, req *pb.UpdateClientRequest) (*pb.ClientResponse, error) {
-	cli, err := s.repo.GetClientByID(req.Id)
-	if err != nil {
-		return nil, handleDBError(err)
-	}
-
 	cli.FirstName = req.FirstName
 	cli.LastName = req.LastName
+	cli.DateOfBirth = req.DateOfBirth
+	cli.Gender = req.Gender
 	cli.Email = req.Email
 	cli.PhoneNumber = req.PhoneNumber
 	cli.Address = req.Address
-	cli.Gender = req.Gender
 
 	if err := s.repo.UpdateClient(cli); err != nil {
 		return nil, handleDBError(err)
 	}
-	return &pb.ClientResponse{Client: mapClientToProto(cli)}, nil
+	return mapClientToProto(cli), nil
 }
 
 func (s *UserService) DeleteClient(ctx context.Context, req *pb.DeleteClientRequest) (*emptypb.Empty, error) {
-	if err := s.repo.DeleteClient(req.Id); err != nil {
+	if err := s.repo.DeleteClient(uint(req.ClientId)); err != nil {
 		return nil, handleDBError(err)
 	}
 	return &emptypb.Empty{}, nil
 }
 
-// #endregion
-
-// #region Permission Handlers
-
-func (s *UserService) CreatePermission(ctx context.Context, req *pb.CreatePermissionRequest) (*pb.PermissionResponse, error) {
-	if req.Name == "" {
-		return nil, status.Error(codes.InvalidArgument, "permission name cannot be empty")
-	}
-	p := &models.Permission{Name: req.Name, Description: req.Description}
-	if err := s.repo.CreatePermission(p); err != nil {
-		return nil, handleDBError(err)
-	}
-	return &pb.PermissionResponse{Permission: mapPermissionToProto(p)}, nil
-}
+// =================== Permissions ===================
 
 func (s *UserService) ListPermissions(ctx context.Context, _ *emptypb.Empty) (*pb.ListPermissionsResponse, error) {
 	perms, err := s.repo.ListPermissions()
 	if err != nil {
 		return nil, handleDBError(err)
 	}
-	var protoPerms []*pb.Permission
+	res := &pb.ListPermissionsResponse{}
 	for _, p := range perms {
-		protoPerms = append(protoPerms, mapPermissionToProto(&p))
+		res.Permissions = append(res.Permissions, mapPermissionToProto(&p))
 	}
-	return &pb.ListPermissionsResponse{Permissions: protoPerms}, nil
+	return res, nil
 }
 
-// #endregion
-
-// #region Mappers
+// =================== Mapping ===================
 
 func mapEmployeeToProto(m *models.Employee) *pb.Employee {
 	if m == nil {
 		return nil
 	}
-	var perms []*pb.Permission
-	for _, p := range m.Permissions {
-		perms = append(perms, mapPermissionToProto(&p))
+
+	perms := make([]string, len(m.Permissions))
+	for i, p := range m.Permissions {
+		perms[i] = p.Name
 	}
 
 	return &pb.Employee{
 		Id:          uint64(m.ID),
 		FirstName:   m.FirstName,
 		LastName:    m.LastName,
+		DateOfBirth: m.DateOfBirth.Format("2006-01-02"), // time.Time -> string
+		Gender:      m.Gender,
 		Email:       m.Email,
+		PhoneNumber: m.PhoneNumber,
+		Address:     m.Address,
 		Username:    m.Username,
 		Position:    m.Position,
 		Department:  m.Department,
-		PhoneNumber: m.PhoneNumber,
-		Address:     m.Address,
 		Active:      m.IsActive,
-		Gender:      m.Gender,
-		DateOfBirth: m.DateOfBirth.Format("2006-01-02"),
 		Permissions: perms,
 	}
 }
@@ -293,16 +230,22 @@ func mapClientToProto(m *models.Client) *pb.Client {
 	if m == nil {
 		return nil
 	}
+
+	var accounts []string
+	if m.ConnectedAccounts != "" {
+		accounts = strings.Split(m.ConnectedAccounts, ",")
+	}
+
 	return &pb.Client{
 		Id:                uint64(m.ID),
 		FirstName:         m.FirstName,
 		LastName:          m.LastName,
-		DateOfBirth:       m.DateOfBirth,
+		DateOfBirth:       m.DateOfBirth, // int64 timestamp
 		Gender:            m.Gender,
 		Email:             m.Email,
 		PhoneNumber:       m.PhoneNumber,
 		Address:           m.Address,
-		ConnectedAccounts: m.ConnectedAccounts,
+		ConnectedAccounts: accounts,
 	}
 }
 
@@ -316,5 +259,3 @@ func mapPermissionToProto(m *models.Permission) *pb.Permission {
 		Description: m.Description,
 	}
 }
-
-// #endregion

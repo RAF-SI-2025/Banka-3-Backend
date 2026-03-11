@@ -2,148 +2,143 @@ syntax = "proto3";
 
 package user;
 
-import "google/protobuf/empty.proto";
 import "google/api/annotations.proto";
+import "google/protobuf/empty.proto";
 
 option go_package = "user-service/pb/";
 
+// =======================
+// SERVICE
+// =======================
+
 service UserService {
-  rpc CreateEmployee(CreateEmployeeRequest) returns (EmployeeResponse) {
-    option (google.api.http) = {
-      post: "/v1/employees"
-      body: "*"
-    };
-  }
-  rpc GetEmployee(GetEmployeeRequest) returns (EmployeeResponse) {
-    option (google.api.http) = {
-      get: "/v1/employees/{id}"
-    };
-  }
+
+  // Employees CRUD
   rpc ListEmployees(ListEmployeesRequest) returns (ListEmployeesResponse) {
-    option (google.api.http) = {
-      get: "/v1/employees"
-    };
+    option (google.api.http) = {get: "/employees"};
   }
-  rpc UpdateEmployee(UpdateEmployeeRequest) returns (EmployeeResponse) {
-    option (google.api.http) = {
-      put: "/v1/employees/{id}"
-      body: "*"
-    };
+
+  rpc CreateEmployee(CreateEmployeeRequest) returns (Employee) {
+    option (google.api.http) = {post: "/employees" body: "*"};
   }
+
+  rpc GetEmployee(GetEmployeeRequest) returns (Employee) {
+    option (google.api.http) = {get: "/employees/{employee_id}"};
+  }
+
+  rpc UpdateEmployee(UpdateEmployeeRequest) returns (Employee) {
+    option (google.api.http) = {put: "/employees/{employee_id}" body: "*"};
+  }
+
   rpc DeleteEmployee(DeleteEmployeeRequest) returns (google.protobuf.Empty) {
-    option (google.api.http) = {
-      delete: "/v1/employees/{id}"
-    };
+    option (google.api.http) = {delete: "/employees/{employee_id}"};
   }
 
-  rpc CreateClient(CreateClientRequest) returns (ClientResponse) {
-    option (google.api.http) = {
-      post: "/v1/clients"
-      body: "*"
-    };
-  }
-  rpc GetClient(GetClientRequest) returns (ClientResponse) {
-    option (google.api.http) = {
-      get: "/v1/clients/{id}"
-    };
-  }
+  // Clients CRUD
   rpc ListClients(ListClientsRequest) returns (ListClientsResponse) {
-    option (google.api.http) = {
-      get: "/v1/clients"
-    };
+    option (google.api.http) = {get: "/clients"};
   }
-  rpc UpdateClient(UpdateClientRequest) returns (ClientResponse) {
-    option (google.api.http) = {
-      put: "/v1/clients/{id}"
-      body: "*"
-    };
+
+  rpc CreateClient(CreateClientRequest) returns (Client) {
+    option (google.api.http) = {post: "/clients" body: "*"};
   }
+
+  rpc GetClient(GetClientRequest) returns (Client) {
+    option (google.api.http) = {get: "/clients/{client_id}"};
+  }
+
+  rpc UpdateClient(UpdateClientRequest) returns (Client) {
+    option (google.api.http) = {put: "/clients/{client_id}" body: "*"};
+  }
+
   rpc DeleteClient(DeleteClientRequest) returns (google.protobuf.Empty) {
-    option (google.api.http) = {
-      delete: "/v1/clients/{id}"
-    };
+    option (google.api.http) = {delete: "/clients/{client_id}"};
   }
 
-  rpc CreatePermission(CreatePermissionRequest) returns (PermissionResponse) {
-    option (google.api.http) = {
-      post: "/v1/permissions"
-      body: "*"
-    };
-  }
+  // Permissions
   rpc ListPermissions(google.protobuf.Empty) returns (ListPermissionsResponse) {
-    option (google.api.http) = {
-      get: "/v1/permissions"
-    };
+    option (google.api.http) = {get: "/permissions"};
   }
+
 }
 
-message Permission {
-  uint64 id = 1;
-  string name = 2;
-  string description = 3;
-}
+// =======================
+// EMPLOYEE MESSAGES
+// =======================
 
 message Employee {
   uint64 id = 1;
   string first_name = 2;
   string last_name = 3;
-  string email = 4;
-  string username = 5;
-  string position = 6;
-  string department = 7;
-  string phone_number = 8;
-  string address = 9;
-  bool active = 10;
-  string gender = 11;
-  string date_of_birth = 12;
-  repeated Permission permissions = 13;
+  string date_of_birth = 4;  // yyyy-mm-dd
+  string gender = 5;
+  string email = 6;
+  string phone_number = 7;
+  string address = 8;
+  string username = 9;
+  string position = 10;
+  string department = 11;
+  bool active = 12;
+  repeated string permissions = 13;
 }
 
 message CreateEmployeeRequest {
   string first_name = 1;
   string last_name = 2;
-  string email = 3;
-  string username = 4;
-  string position = 5;
-  string department = 6;
-  string phone_number = 7;
-  string address = 8;
-  bool active = 9;
-  string gender = 10;
-  string date_of_birth = 11;
-  repeated uint64 permission_ids = 12;
+  string date_of_birth = 3;
+  string gender = 4;
+  string email = 5;
+  string phone_number = 6;
+  string address = 7;
+  string username = 8;
+  string position = 9;
+  string department = 10;
+  bool active = 11;
+  repeated string permissions = 12;
 }
 
-message GetEmployeeRequest { uint64 id = 1; }
+message GetEmployeeRequest {uint64 employee_id = 1;}
 
 message UpdateEmployeeRequest {
-  uint64 id = 1;
+  uint64 employee_id = 1;
   string first_name = 2;
   string last_name = 3;
-  string email = 4;
-  string position = 5;
-  string department = 6;
+  string date_of_birth = 4;
+  string gender = 5;
+  string email = 6;
   string phone_number = 7;
   string address = 8;
-  bool active = 9;
-  repeated uint64 permission_ids = 10;
+  string position = 9;
+  string department = 10;
+  bool active = 11;
+  repeated string permissions = 12;
 }
 
-message DeleteEmployeeRequest { uint64 id = 1; }
-message EmployeeResponse { Employee employee = 1; }
-message ListEmployeesRequest { int32 page = 1; int32 page_size = 2; }
-message ListEmployeesResponse { repeated Employee employees = 1; int32 total = 2; }
+message DeleteEmployeeRequest {uint64 employee_id = 1;}
+
+message ListEmployeesRequest {
+  string email = 1;
+  string first_name = 2;
+  string last_name = 3;
+  string position = 4;
+}
+
+message ListEmployeesResponse {repeated Employee employees = 1;}
+
+// =======================
+// CLIENT MESSAGES
+// =======================
 
 message Client {
   uint64 id = 1;
   string first_name = 2;
   string last_name = 3;
-  int64 date_of_birth = 4;
+  int64 date_of_birth = 4; // Unix timestamp
   string gender = 5;
   string email = 6;
   string phone_number = 7;
   string address = 8;
-  string connected_accounts = 9;
+  repeated string connected_accounts = 9;
 }
 
 message CreateClientRequest {
@@ -156,27 +151,33 @@ message CreateClientRequest {
   string address = 7;
 }
 
-message GetClientRequest { uint64 id = 1; }
+message GetClientRequest {uint64 client_id = 1;}
 
 message UpdateClientRequest {
-  uint64 id = 1;
+  uint64 client_id = 1;
   string first_name = 2;
   string last_name = 3;
-  string email = 4;
-  string phone_number = 5;
-  string address = 6;
-  string gender = 7;
+  int64 date_of_birth = 4;
+  string gender = 5;
+  string email = 6;
+  string phone_number = 7;
+  string address = 8;
 }
 
-message DeleteClientRequest { uint64 id = 1; }
-message ClientResponse { Client client = 1; }
-message ListClientsRequest { int32 page = 1; int32 page_size = 2; }
-message ListClientsResponse { repeated Client clients = 1; int32 total = 2; }
+message DeleteClientRequest {uint64 client_id = 1;}
 
-message CreatePermissionRequest {
-  string name = 1;
-  string description = 2;
+message ListClientsRequest {}
+message ListClientsResponse {repeated Client clients = 1;}
+
+// =======================
+// PERMISSION MESSAGES
+// =======================
+
+message Permission {
+  uint64 id = 1;
+  string name = 2;
+  string description = 3;
 }
 
-message PermissionResponse { Permission permission = 1; }
-message ListPermissionsResponse { repeated Permission permissions = 1; }
+
+message ListPermissionsResponse {repeated Permission permissions = 1;}

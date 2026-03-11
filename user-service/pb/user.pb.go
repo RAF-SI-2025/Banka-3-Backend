@@ -23,88 +23,28 @@ const (
 	_ = protoimpl.EnforceVersion(protoimpl.MaxVersion - 20)
 )
 
-type Permission struct {
-	state         protoimpl.MessageState `protogen:"open.v1"`
-	Id            uint64                 `protobuf:"varint,1,opt,name=id,proto3" json:"id,omitempty"`
-	Name          string                 `protobuf:"bytes,2,opt,name=name,proto3" json:"name,omitempty"`
-	Description   string                 `protobuf:"bytes,3,opt,name=description,proto3" json:"description,omitempty"`
-	unknownFields protoimpl.UnknownFields
-	sizeCache     protoimpl.SizeCache
-}
-
-func (x *Permission) Reset() {
-	*x = Permission{}
-	mi := &file_proto_user_proto_msgTypes[0]
-	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
-	ms.StoreMessageInfo(mi)
-}
-
-func (x *Permission) String() string {
-	return protoimpl.X.MessageStringOf(x)
-}
-
-func (*Permission) ProtoMessage() {}
-
-func (x *Permission) ProtoReflect() protoreflect.Message {
-	mi := &file_proto_user_proto_msgTypes[0]
-	if x != nil {
-		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
-		if ms.LoadMessageInfo() == nil {
-			ms.StoreMessageInfo(mi)
-		}
-		return ms
-	}
-	return mi.MessageOf(x)
-}
-
-// Deprecated: Use Permission.ProtoReflect.Descriptor instead.
-func (*Permission) Descriptor() ([]byte, []int) {
-	return file_proto_user_proto_rawDescGZIP(), []int{0}
-}
-
-func (x *Permission) GetId() uint64 {
-	if x != nil {
-		return x.Id
-	}
-	return 0
-}
-
-func (x *Permission) GetName() string {
-	if x != nil {
-		return x.Name
-	}
-	return ""
-}
-
-func (x *Permission) GetDescription() string {
-	if x != nil {
-		return x.Description
-	}
-	return ""
-}
-
 type Employee struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
 	Id            uint64                 `protobuf:"varint,1,opt,name=id,proto3" json:"id,omitempty"`
 	FirstName     string                 `protobuf:"bytes,2,opt,name=first_name,json=firstName,proto3" json:"first_name,omitempty"`
 	LastName      string                 `protobuf:"bytes,3,opt,name=last_name,json=lastName,proto3" json:"last_name,omitempty"`
-	Email         string                 `protobuf:"bytes,4,opt,name=email,proto3" json:"email,omitempty"`
-	Username      string                 `protobuf:"bytes,5,opt,name=username,proto3" json:"username,omitempty"`
-	Position      string                 `protobuf:"bytes,6,opt,name=position,proto3" json:"position,omitempty"`
-	Department    string                 `protobuf:"bytes,7,opt,name=department,proto3" json:"department,omitempty"`
-	PhoneNumber   string                 `protobuf:"bytes,8,opt,name=phone_number,json=phoneNumber,proto3" json:"phone_number,omitempty"`
-	Address       string                 `protobuf:"bytes,9,opt,name=address,proto3" json:"address,omitempty"`
-	Active        bool                   `protobuf:"varint,10,opt,name=active,proto3" json:"active,omitempty"`
-	Gender        string                 `protobuf:"bytes,11,opt,name=gender,proto3" json:"gender,omitempty"`
-	DateOfBirth   string                 `protobuf:"bytes,12,opt,name=date_of_birth,json=dateOfBirth,proto3" json:"date_of_birth,omitempty"`
-	Permissions   []*Permission          `protobuf:"bytes,13,rep,name=permissions,proto3" json:"permissions,omitempty"`
+	DateOfBirth   string                 `protobuf:"bytes,4,opt,name=date_of_birth,json=dateOfBirth,proto3" json:"date_of_birth,omitempty"` // yyyy-mm-dd
+	Gender        string                 `protobuf:"bytes,5,opt,name=gender,proto3" json:"gender,omitempty"`
+	Email         string                 `protobuf:"bytes,6,opt,name=email,proto3" json:"email,omitempty"`
+	PhoneNumber   string                 `protobuf:"bytes,7,opt,name=phone_number,json=phoneNumber,proto3" json:"phone_number,omitempty"`
+	Address       string                 `protobuf:"bytes,8,opt,name=address,proto3" json:"address,omitempty"`
+	Username      string                 `protobuf:"bytes,9,opt,name=username,proto3" json:"username,omitempty"`
+	Position      string                 `protobuf:"bytes,10,opt,name=position,proto3" json:"position,omitempty"`
+	Department    string                 `protobuf:"bytes,11,opt,name=department,proto3" json:"department,omitempty"`
+	Active        bool                   `protobuf:"varint,12,opt,name=active,proto3" json:"active,omitempty"`
+	Permissions   []string               `protobuf:"bytes,13,rep,name=permissions,proto3" json:"permissions,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
 
 func (x *Employee) Reset() {
 	*x = Employee{}
-	mi := &file_proto_user_proto_msgTypes[1]
+	mi := &file_proto_user_proto_msgTypes[0]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -116,7 +56,7 @@ func (x *Employee) String() string {
 func (*Employee) ProtoMessage() {}
 
 func (x *Employee) ProtoReflect() protoreflect.Message {
-	mi := &file_proto_user_proto_msgTypes[1]
+	mi := &file_proto_user_proto_msgTypes[0]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -129,7 +69,7 @@ func (x *Employee) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use Employee.ProtoReflect.Descriptor instead.
 func (*Employee) Descriptor() ([]byte, []int) {
-	return file_proto_user_proto_rawDescGZIP(), []int{1}
+	return file_proto_user_proto_rawDescGZIP(), []int{0}
 }
 
 func (x *Employee) GetId() uint64 {
@@ -153,9 +93,37 @@ func (x *Employee) GetLastName() string {
 	return ""
 }
 
+func (x *Employee) GetDateOfBirth() string {
+	if x != nil {
+		return x.DateOfBirth
+	}
+	return ""
+}
+
+func (x *Employee) GetGender() string {
+	if x != nil {
+		return x.Gender
+	}
+	return ""
+}
+
 func (x *Employee) GetEmail() string {
 	if x != nil {
 		return x.Email
+	}
+	return ""
+}
+
+func (x *Employee) GetPhoneNumber() string {
+	if x != nil {
+		return x.PhoneNumber
+	}
+	return ""
+}
+
+func (x *Employee) GetAddress() string {
+	if x != nil {
+		return x.Address
 	}
 	return ""
 }
@@ -181,20 +149,6 @@ func (x *Employee) GetDepartment() string {
 	return ""
 }
 
-func (x *Employee) GetPhoneNumber() string {
-	if x != nil {
-		return x.PhoneNumber
-	}
-	return ""
-}
-
-func (x *Employee) GetAddress() string {
-	if x != nil {
-		return x.Address
-	}
-	return ""
-}
-
 func (x *Employee) GetActive() bool {
 	if x != nil {
 		return x.Active
@@ -202,21 +156,7 @@ func (x *Employee) GetActive() bool {
 	return false
 }
 
-func (x *Employee) GetGender() string {
-	if x != nil {
-		return x.Gender
-	}
-	return ""
-}
-
-func (x *Employee) GetDateOfBirth() string {
-	if x != nil {
-		return x.DateOfBirth
-	}
-	return ""
-}
-
-func (x *Employee) GetPermissions() []*Permission {
+func (x *Employee) GetPermissions() []string {
 	if x != nil {
 		return x.Permissions
 	}
@@ -227,23 +167,23 @@ type CreateEmployeeRequest struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
 	FirstName     string                 `protobuf:"bytes,1,opt,name=first_name,json=firstName,proto3" json:"first_name,omitempty"`
 	LastName      string                 `protobuf:"bytes,2,opt,name=last_name,json=lastName,proto3" json:"last_name,omitempty"`
-	Email         string                 `protobuf:"bytes,3,opt,name=email,proto3" json:"email,omitempty"`
-	Username      string                 `protobuf:"bytes,4,opt,name=username,proto3" json:"username,omitempty"`
-	Position      string                 `protobuf:"bytes,5,opt,name=position,proto3" json:"position,omitempty"`
-	Department    string                 `protobuf:"bytes,6,opt,name=department,proto3" json:"department,omitempty"`
-	PhoneNumber   string                 `protobuf:"bytes,7,opt,name=phone_number,json=phoneNumber,proto3" json:"phone_number,omitempty"`
-	Address       string                 `protobuf:"bytes,8,opt,name=address,proto3" json:"address,omitempty"`
-	Active        bool                   `protobuf:"varint,9,opt,name=active,proto3" json:"active,omitempty"`
-	Gender        string                 `protobuf:"bytes,10,opt,name=gender,proto3" json:"gender,omitempty"`
-	DateOfBirth   string                 `protobuf:"bytes,11,opt,name=date_of_birth,json=dateOfBirth,proto3" json:"date_of_birth,omitempty"`
-	PermissionIds []uint64               `protobuf:"varint,12,rep,packed,name=permission_ids,json=permissionIds,proto3" json:"permission_ids,omitempty"`
+	DateOfBirth   string                 `protobuf:"bytes,3,opt,name=date_of_birth,json=dateOfBirth,proto3" json:"date_of_birth,omitempty"`
+	Gender        string                 `protobuf:"bytes,4,opt,name=gender,proto3" json:"gender,omitempty"`
+	Email         string                 `protobuf:"bytes,5,opt,name=email,proto3" json:"email,omitempty"`
+	PhoneNumber   string                 `protobuf:"bytes,6,opt,name=phone_number,json=phoneNumber,proto3" json:"phone_number,omitempty"`
+	Address       string                 `protobuf:"bytes,7,opt,name=address,proto3" json:"address,omitempty"`
+	Username      string                 `protobuf:"bytes,8,opt,name=username,proto3" json:"username,omitempty"`
+	Position      string                 `protobuf:"bytes,9,opt,name=position,proto3" json:"position,omitempty"`
+	Department    string                 `protobuf:"bytes,10,opt,name=department,proto3" json:"department,omitempty"`
+	Active        bool                   `protobuf:"varint,11,opt,name=active,proto3" json:"active,omitempty"`
+	Permissions   []string               `protobuf:"bytes,12,rep,name=permissions,proto3" json:"permissions,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
 
 func (x *CreateEmployeeRequest) Reset() {
 	*x = CreateEmployeeRequest{}
-	mi := &file_proto_user_proto_msgTypes[2]
+	mi := &file_proto_user_proto_msgTypes[1]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -255,7 +195,7 @@ func (x *CreateEmployeeRequest) String() string {
 func (*CreateEmployeeRequest) ProtoMessage() {}
 
 func (x *CreateEmployeeRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_proto_user_proto_msgTypes[2]
+	mi := &file_proto_user_proto_msgTypes[1]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -268,7 +208,7 @@ func (x *CreateEmployeeRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use CreateEmployeeRequest.ProtoReflect.Descriptor instead.
 func (*CreateEmployeeRequest) Descriptor() ([]byte, []int) {
-	return file_proto_user_proto_rawDescGZIP(), []int{2}
+	return file_proto_user_proto_rawDescGZIP(), []int{1}
 }
 
 func (x *CreateEmployeeRequest) GetFirstName() string {
@@ -285,9 +225,37 @@ func (x *CreateEmployeeRequest) GetLastName() string {
 	return ""
 }
 
+func (x *CreateEmployeeRequest) GetDateOfBirth() string {
+	if x != nil {
+		return x.DateOfBirth
+	}
+	return ""
+}
+
+func (x *CreateEmployeeRequest) GetGender() string {
+	if x != nil {
+		return x.Gender
+	}
+	return ""
+}
+
 func (x *CreateEmployeeRequest) GetEmail() string {
 	if x != nil {
 		return x.Email
+	}
+	return ""
+}
+
+func (x *CreateEmployeeRequest) GetPhoneNumber() string {
+	if x != nil {
+		return x.PhoneNumber
+	}
+	return ""
+}
+
+func (x *CreateEmployeeRequest) GetAddress() string {
+	if x != nil {
+		return x.Address
 	}
 	return ""
 }
@@ -313,20 +281,6 @@ func (x *CreateEmployeeRequest) GetDepartment() string {
 	return ""
 }
 
-func (x *CreateEmployeeRequest) GetPhoneNumber() string {
-	if x != nil {
-		return x.PhoneNumber
-	}
-	return ""
-}
-
-func (x *CreateEmployeeRequest) GetAddress() string {
-	if x != nil {
-		return x.Address
-	}
-	return ""
-}
-
 func (x *CreateEmployeeRequest) GetActive() bool {
 	if x != nil {
 		return x.Active
@@ -334,37 +288,23 @@ func (x *CreateEmployeeRequest) GetActive() bool {
 	return false
 }
 
-func (x *CreateEmployeeRequest) GetGender() string {
+func (x *CreateEmployeeRequest) GetPermissions() []string {
 	if x != nil {
-		return x.Gender
-	}
-	return ""
-}
-
-func (x *CreateEmployeeRequest) GetDateOfBirth() string {
-	if x != nil {
-		return x.DateOfBirth
-	}
-	return ""
-}
-
-func (x *CreateEmployeeRequest) GetPermissionIds() []uint64 {
-	if x != nil {
-		return x.PermissionIds
+		return x.Permissions
 	}
 	return nil
 }
 
 type GetEmployeeRequest struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
-	Id            uint64                 `protobuf:"varint,1,opt,name=id,proto3" json:"id,omitempty"`
+	EmployeeId    uint64                 `protobuf:"varint,1,opt,name=employee_id,json=employeeId,proto3" json:"employee_id,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
 
 func (x *GetEmployeeRequest) Reset() {
 	*x = GetEmployeeRequest{}
-	mi := &file_proto_user_proto_msgTypes[3]
+	mi := &file_proto_user_proto_msgTypes[2]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -376,7 +316,7 @@ func (x *GetEmployeeRequest) String() string {
 func (*GetEmployeeRequest) ProtoMessage() {}
 
 func (x *GetEmployeeRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_proto_user_proto_msgTypes[3]
+	mi := &file_proto_user_proto_msgTypes[2]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -389,35 +329,37 @@ func (x *GetEmployeeRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use GetEmployeeRequest.ProtoReflect.Descriptor instead.
 func (*GetEmployeeRequest) Descriptor() ([]byte, []int) {
-	return file_proto_user_proto_rawDescGZIP(), []int{3}
+	return file_proto_user_proto_rawDescGZIP(), []int{2}
 }
 
-func (x *GetEmployeeRequest) GetId() uint64 {
+func (x *GetEmployeeRequest) GetEmployeeId() uint64 {
 	if x != nil {
-		return x.Id
+		return x.EmployeeId
 	}
 	return 0
 }
 
 type UpdateEmployeeRequest struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
-	Id            uint64                 `protobuf:"varint,1,opt,name=id,proto3" json:"id,omitempty"`
+	EmployeeId    uint64                 `protobuf:"varint,1,opt,name=employee_id,json=employeeId,proto3" json:"employee_id,omitempty"`
 	FirstName     string                 `protobuf:"bytes,2,opt,name=first_name,json=firstName,proto3" json:"first_name,omitempty"`
 	LastName      string                 `protobuf:"bytes,3,opt,name=last_name,json=lastName,proto3" json:"last_name,omitempty"`
-	Email         string                 `protobuf:"bytes,4,opt,name=email,proto3" json:"email,omitempty"`
-	Position      string                 `protobuf:"bytes,5,opt,name=position,proto3" json:"position,omitempty"`
-	Department    string                 `protobuf:"bytes,6,opt,name=department,proto3" json:"department,omitempty"`
+	DateOfBirth   string                 `protobuf:"bytes,4,opt,name=date_of_birth,json=dateOfBirth,proto3" json:"date_of_birth,omitempty"`
+	Gender        string                 `protobuf:"bytes,5,opt,name=gender,proto3" json:"gender,omitempty"`
+	Email         string                 `protobuf:"bytes,6,opt,name=email,proto3" json:"email,omitempty"`
 	PhoneNumber   string                 `protobuf:"bytes,7,opt,name=phone_number,json=phoneNumber,proto3" json:"phone_number,omitempty"`
 	Address       string                 `protobuf:"bytes,8,opt,name=address,proto3" json:"address,omitempty"`
-	Active        bool                   `protobuf:"varint,9,opt,name=active,proto3" json:"active,omitempty"`
-	PermissionIds []uint64               `protobuf:"varint,10,rep,packed,name=permission_ids,json=permissionIds,proto3" json:"permission_ids,omitempty"`
+	Position      string                 `protobuf:"bytes,9,opt,name=position,proto3" json:"position,omitempty"`
+	Department    string                 `protobuf:"bytes,10,opt,name=department,proto3" json:"department,omitempty"`
+	Active        bool                   `protobuf:"varint,11,opt,name=active,proto3" json:"active,omitempty"`
+	Permissions   []string               `protobuf:"bytes,12,rep,name=permissions,proto3" json:"permissions,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
 
 func (x *UpdateEmployeeRequest) Reset() {
 	*x = UpdateEmployeeRequest{}
-	mi := &file_proto_user_proto_msgTypes[4]
+	mi := &file_proto_user_proto_msgTypes[3]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -429,7 +371,7 @@ func (x *UpdateEmployeeRequest) String() string {
 func (*UpdateEmployeeRequest) ProtoMessage() {}
 
 func (x *UpdateEmployeeRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_proto_user_proto_msgTypes[4]
+	mi := &file_proto_user_proto_msgTypes[3]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -442,12 +384,12 @@ func (x *UpdateEmployeeRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use UpdateEmployeeRequest.ProtoReflect.Descriptor instead.
 func (*UpdateEmployeeRequest) Descriptor() ([]byte, []int) {
-	return file_proto_user_proto_rawDescGZIP(), []int{4}
+	return file_proto_user_proto_rawDescGZIP(), []int{3}
 }
 
-func (x *UpdateEmployeeRequest) GetId() uint64 {
+func (x *UpdateEmployeeRequest) GetEmployeeId() uint64 {
 	if x != nil {
-		return x.Id
+		return x.EmployeeId
 	}
 	return 0
 }
@@ -466,23 +408,23 @@ func (x *UpdateEmployeeRequest) GetLastName() string {
 	return ""
 }
 
+func (x *UpdateEmployeeRequest) GetDateOfBirth() string {
+	if x != nil {
+		return x.DateOfBirth
+	}
+	return ""
+}
+
+func (x *UpdateEmployeeRequest) GetGender() string {
+	if x != nil {
+		return x.Gender
+	}
+	return ""
+}
+
 func (x *UpdateEmployeeRequest) GetEmail() string {
 	if x != nil {
 		return x.Email
-	}
-	return ""
-}
-
-func (x *UpdateEmployeeRequest) GetPosition() string {
-	if x != nil {
-		return x.Position
-	}
-	return ""
-}
-
-func (x *UpdateEmployeeRequest) GetDepartment() string {
-	if x != nil {
-		return x.Department
 	}
 	return ""
 }
@@ -501,6 +443,20 @@ func (x *UpdateEmployeeRequest) GetAddress() string {
 	return ""
 }
 
+func (x *UpdateEmployeeRequest) GetPosition() string {
+	if x != nil {
+		return x.Position
+	}
+	return ""
+}
+
+func (x *UpdateEmployeeRequest) GetDepartment() string {
+	if x != nil {
+		return x.Department
+	}
+	return ""
+}
+
 func (x *UpdateEmployeeRequest) GetActive() bool {
 	if x != nil {
 		return x.Active
@@ -508,23 +464,23 @@ func (x *UpdateEmployeeRequest) GetActive() bool {
 	return false
 }
 
-func (x *UpdateEmployeeRequest) GetPermissionIds() []uint64 {
+func (x *UpdateEmployeeRequest) GetPermissions() []string {
 	if x != nil {
-		return x.PermissionIds
+		return x.Permissions
 	}
 	return nil
 }
 
 type DeleteEmployeeRequest struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
-	Id            uint64                 `protobuf:"varint,1,opt,name=id,proto3" json:"id,omitempty"`
+	EmployeeId    uint64                 `protobuf:"varint,1,opt,name=employee_id,json=employeeId,proto3" json:"employee_id,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
 
 func (x *DeleteEmployeeRequest) Reset() {
 	*x = DeleteEmployeeRequest{}
-	mi := &file_proto_user_proto_msgTypes[5]
+	mi := &file_proto_user_proto_msgTypes[4]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -536,7 +492,7 @@ func (x *DeleteEmployeeRequest) String() string {
 func (*DeleteEmployeeRequest) ProtoMessage() {}
 
 func (x *DeleteEmployeeRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_proto_user_proto_msgTypes[5]
+	mi := &file_proto_user_proto_msgTypes[4]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -549,71 +505,29 @@ func (x *DeleteEmployeeRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use DeleteEmployeeRequest.ProtoReflect.Descriptor instead.
 func (*DeleteEmployeeRequest) Descriptor() ([]byte, []int) {
-	return file_proto_user_proto_rawDescGZIP(), []int{5}
+	return file_proto_user_proto_rawDescGZIP(), []int{4}
 }
 
-func (x *DeleteEmployeeRequest) GetId() uint64 {
+func (x *DeleteEmployeeRequest) GetEmployeeId() uint64 {
 	if x != nil {
-		return x.Id
+		return x.EmployeeId
 	}
 	return 0
 }
 
-type EmployeeResponse struct {
-	state         protoimpl.MessageState `protogen:"open.v1"`
-	Employee      *Employee              `protobuf:"bytes,1,opt,name=employee,proto3" json:"employee,omitempty"`
-	unknownFields protoimpl.UnknownFields
-	sizeCache     protoimpl.SizeCache
-}
-
-func (x *EmployeeResponse) Reset() {
-	*x = EmployeeResponse{}
-	mi := &file_proto_user_proto_msgTypes[6]
-	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
-	ms.StoreMessageInfo(mi)
-}
-
-func (x *EmployeeResponse) String() string {
-	return protoimpl.X.MessageStringOf(x)
-}
-
-func (*EmployeeResponse) ProtoMessage() {}
-
-func (x *EmployeeResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_proto_user_proto_msgTypes[6]
-	if x != nil {
-		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
-		if ms.LoadMessageInfo() == nil {
-			ms.StoreMessageInfo(mi)
-		}
-		return ms
-	}
-	return mi.MessageOf(x)
-}
-
-// Deprecated: Use EmployeeResponse.ProtoReflect.Descriptor instead.
-func (*EmployeeResponse) Descriptor() ([]byte, []int) {
-	return file_proto_user_proto_rawDescGZIP(), []int{6}
-}
-
-func (x *EmployeeResponse) GetEmployee() *Employee {
-	if x != nil {
-		return x.Employee
-	}
-	return nil
-}
-
 type ListEmployeesRequest struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
-	Page          int32                  `protobuf:"varint,1,opt,name=page,proto3" json:"page,omitempty"`
-	PageSize      int32                  `protobuf:"varint,2,opt,name=page_size,json=pageSize,proto3" json:"page_size,omitempty"`
+	Email         string                 `protobuf:"bytes,1,opt,name=email,proto3" json:"email,omitempty"`
+	FirstName     string                 `protobuf:"bytes,2,opt,name=first_name,json=firstName,proto3" json:"first_name,omitempty"`
+	LastName      string                 `protobuf:"bytes,3,opt,name=last_name,json=lastName,proto3" json:"last_name,omitempty"`
+	Position      string                 `protobuf:"bytes,4,opt,name=position,proto3" json:"position,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
 
 func (x *ListEmployeesRequest) Reset() {
 	*x = ListEmployeesRequest{}
-	mi := &file_proto_user_proto_msgTypes[7]
+	mi := &file_proto_user_proto_msgTypes[5]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -625,7 +539,7 @@ func (x *ListEmployeesRequest) String() string {
 func (*ListEmployeesRequest) ProtoMessage() {}
 
 func (x *ListEmployeesRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_proto_user_proto_msgTypes[7]
+	mi := &file_proto_user_proto_msgTypes[5]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -638,34 +552,47 @@ func (x *ListEmployeesRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ListEmployeesRequest.ProtoReflect.Descriptor instead.
 func (*ListEmployeesRequest) Descriptor() ([]byte, []int) {
-	return file_proto_user_proto_rawDescGZIP(), []int{7}
+	return file_proto_user_proto_rawDescGZIP(), []int{5}
 }
 
-func (x *ListEmployeesRequest) GetPage() int32 {
+func (x *ListEmployeesRequest) GetEmail() string {
 	if x != nil {
-		return x.Page
+		return x.Email
 	}
-	return 0
+	return ""
 }
 
-func (x *ListEmployeesRequest) GetPageSize() int32 {
+func (x *ListEmployeesRequest) GetFirstName() string {
 	if x != nil {
-		return x.PageSize
+		return x.FirstName
 	}
-	return 0
+	return ""
+}
+
+func (x *ListEmployeesRequest) GetLastName() string {
+	if x != nil {
+		return x.LastName
+	}
+	return ""
+}
+
+func (x *ListEmployeesRequest) GetPosition() string {
+	if x != nil {
+		return x.Position
+	}
+	return ""
 }
 
 type ListEmployeesResponse struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
 	Employees     []*Employee            `protobuf:"bytes,1,rep,name=employees,proto3" json:"employees,omitempty"`
-	Total         int32                  `protobuf:"varint,2,opt,name=total,proto3" json:"total,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
 
 func (x *ListEmployeesResponse) Reset() {
 	*x = ListEmployeesResponse{}
-	mi := &file_proto_user_proto_msgTypes[8]
+	mi := &file_proto_user_proto_msgTypes[6]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -677,7 +604,7 @@ func (x *ListEmployeesResponse) String() string {
 func (*ListEmployeesResponse) ProtoMessage() {}
 
 func (x *ListEmployeesResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_proto_user_proto_msgTypes[8]
+	mi := &file_proto_user_proto_msgTypes[6]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -690,7 +617,7 @@ func (x *ListEmployeesResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ListEmployeesResponse.ProtoReflect.Descriptor instead.
 func (*ListEmployeesResponse) Descriptor() ([]byte, []int) {
-	return file_proto_user_proto_rawDescGZIP(), []int{8}
+	return file_proto_user_proto_rawDescGZIP(), []int{6}
 }
 
 func (x *ListEmployeesResponse) GetEmployees() []*Employee {
@@ -700,31 +627,24 @@ func (x *ListEmployeesResponse) GetEmployees() []*Employee {
 	return nil
 }
 
-func (x *ListEmployeesResponse) GetTotal() int32 {
-	if x != nil {
-		return x.Total
-	}
-	return 0
-}
-
 type Client struct {
 	state             protoimpl.MessageState `protogen:"open.v1"`
 	Id                uint64                 `protobuf:"varint,1,opt,name=id,proto3" json:"id,omitempty"`
 	FirstName         string                 `protobuf:"bytes,2,opt,name=first_name,json=firstName,proto3" json:"first_name,omitempty"`
 	LastName          string                 `protobuf:"bytes,3,opt,name=last_name,json=lastName,proto3" json:"last_name,omitempty"`
-	DateOfBirth       int64                  `protobuf:"varint,4,opt,name=date_of_birth,json=dateOfBirth,proto3" json:"date_of_birth,omitempty"`
+	DateOfBirth       int64                  `protobuf:"varint,4,opt,name=date_of_birth,json=dateOfBirth,proto3" json:"date_of_birth,omitempty"` // Unix timestamp
 	Gender            string                 `protobuf:"bytes,5,opt,name=gender,proto3" json:"gender,omitempty"`
 	Email             string                 `protobuf:"bytes,6,opt,name=email,proto3" json:"email,omitempty"`
 	PhoneNumber       string                 `protobuf:"bytes,7,opt,name=phone_number,json=phoneNumber,proto3" json:"phone_number,omitempty"`
 	Address           string                 `protobuf:"bytes,8,opt,name=address,proto3" json:"address,omitempty"`
-	ConnectedAccounts string                 `protobuf:"bytes,9,opt,name=connected_accounts,json=connectedAccounts,proto3" json:"connected_accounts,omitempty"`
+	ConnectedAccounts []string               `protobuf:"bytes,9,rep,name=connected_accounts,json=connectedAccounts,proto3" json:"connected_accounts,omitempty"`
 	unknownFields     protoimpl.UnknownFields
 	sizeCache         protoimpl.SizeCache
 }
 
 func (x *Client) Reset() {
 	*x = Client{}
-	mi := &file_proto_user_proto_msgTypes[9]
+	mi := &file_proto_user_proto_msgTypes[7]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -736,7 +656,7 @@ func (x *Client) String() string {
 func (*Client) ProtoMessage() {}
 
 func (x *Client) ProtoReflect() protoreflect.Message {
-	mi := &file_proto_user_proto_msgTypes[9]
+	mi := &file_proto_user_proto_msgTypes[7]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -749,7 +669,7 @@ func (x *Client) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use Client.ProtoReflect.Descriptor instead.
 func (*Client) Descriptor() ([]byte, []int) {
-	return file_proto_user_proto_rawDescGZIP(), []int{9}
+	return file_proto_user_proto_rawDescGZIP(), []int{7}
 }
 
 func (x *Client) GetId() uint64 {
@@ -808,11 +728,11 @@ func (x *Client) GetAddress() string {
 	return ""
 }
 
-func (x *Client) GetConnectedAccounts() string {
+func (x *Client) GetConnectedAccounts() []string {
 	if x != nil {
 		return x.ConnectedAccounts
 	}
-	return ""
+	return nil
 }
 
 type CreateClientRequest struct {
@@ -830,7 +750,7 @@ type CreateClientRequest struct {
 
 func (x *CreateClientRequest) Reset() {
 	*x = CreateClientRequest{}
-	mi := &file_proto_user_proto_msgTypes[10]
+	mi := &file_proto_user_proto_msgTypes[8]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -842,7 +762,7 @@ func (x *CreateClientRequest) String() string {
 func (*CreateClientRequest) ProtoMessage() {}
 
 func (x *CreateClientRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_proto_user_proto_msgTypes[10]
+	mi := &file_proto_user_proto_msgTypes[8]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -855,7 +775,7 @@ func (x *CreateClientRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use CreateClientRequest.ProtoReflect.Descriptor instead.
 func (*CreateClientRequest) Descriptor() ([]byte, []int) {
-	return file_proto_user_proto_rawDescGZIP(), []int{10}
+	return file_proto_user_proto_rawDescGZIP(), []int{8}
 }
 
 func (x *CreateClientRequest) GetFirstName() string {
@@ -909,14 +829,14 @@ func (x *CreateClientRequest) GetAddress() string {
 
 type GetClientRequest struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
-	Id            uint64                 `protobuf:"varint,1,opt,name=id,proto3" json:"id,omitempty"`
+	ClientId      uint64                 `protobuf:"varint,1,opt,name=client_id,json=clientId,proto3" json:"client_id,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
 
 func (x *GetClientRequest) Reset() {
 	*x = GetClientRequest{}
-	mi := &file_proto_user_proto_msgTypes[11]
+	mi := &file_proto_user_proto_msgTypes[9]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -928,7 +848,7 @@ func (x *GetClientRequest) String() string {
 func (*GetClientRequest) ProtoMessage() {}
 
 func (x *GetClientRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_proto_user_proto_msgTypes[11]
+	mi := &file_proto_user_proto_msgTypes[9]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -941,32 +861,33 @@ func (x *GetClientRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use GetClientRequest.ProtoReflect.Descriptor instead.
 func (*GetClientRequest) Descriptor() ([]byte, []int) {
-	return file_proto_user_proto_rawDescGZIP(), []int{11}
+	return file_proto_user_proto_rawDescGZIP(), []int{9}
 }
 
-func (x *GetClientRequest) GetId() uint64 {
+func (x *GetClientRequest) GetClientId() uint64 {
 	if x != nil {
-		return x.Id
+		return x.ClientId
 	}
 	return 0
 }
 
 type UpdateClientRequest struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
-	Id            uint64                 `protobuf:"varint,1,opt,name=id,proto3" json:"id,omitempty"`
+	ClientId      uint64                 `protobuf:"varint,1,opt,name=client_id,json=clientId,proto3" json:"client_id,omitempty"`
 	FirstName     string                 `protobuf:"bytes,2,opt,name=first_name,json=firstName,proto3" json:"first_name,omitempty"`
 	LastName      string                 `protobuf:"bytes,3,opt,name=last_name,json=lastName,proto3" json:"last_name,omitempty"`
-	Email         string                 `protobuf:"bytes,4,opt,name=email,proto3" json:"email,omitempty"`
-	PhoneNumber   string                 `protobuf:"bytes,5,opt,name=phone_number,json=phoneNumber,proto3" json:"phone_number,omitempty"`
-	Address       string                 `protobuf:"bytes,6,opt,name=address,proto3" json:"address,omitempty"`
-	Gender        string                 `protobuf:"bytes,7,opt,name=gender,proto3" json:"gender,omitempty"`
+	DateOfBirth   int64                  `protobuf:"varint,4,opt,name=date_of_birth,json=dateOfBirth,proto3" json:"date_of_birth,omitempty"`
+	Gender        string                 `protobuf:"bytes,5,opt,name=gender,proto3" json:"gender,omitempty"`
+	Email         string                 `protobuf:"bytes,6,opt,name=email,proto3" json:"email,omitempty"`
+	PhoneNumber   string                 `protobuf:"bytes,7,opt,name=phone_number,json=phoneNumber,proto3" json:"phone_number,omitempty"`
+	Address       string                 `protobuf:"bytes,8,opt,name=address,proto3" json:"address,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
 
 func (x *UpdateClientRequest) Reset() {
 	*x = UpdateClientRequest{}
-	mi := &file_proto_user_proto_msgTypes[12]
+	mi := &file_proto_user_proto_msgTypes[10]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -978,7 +899,7 @@ func (x *UpdateClientRequest) String() string {
 func (*UpdateClientRequest) ProtoMessage() {}
 
 func (x *UpdateClientRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_proto_user_proto_msgTypes[12]
+	mi := &file_proto_user_proto_msgTypes[10]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -991,12 +912,12 @@ func (x *UpdateClientRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use UpdateClientRequest.ProtoReflect.Descriptor instead.
 func (*UpdateClientRequest) Descriptor() ([]byte, []int) {
-	return file_proto_user_proto_rawDescGZIP(), []int{12}
+	return file_proto_user_proto_rawDescGZIP(), []int{10}
 }
 
-func (x *UpdateClientRequest) GetId() uint64 {
+func (x *UpdateClientRequest) GetClientId() uint64 {
 	if x != nil {
-		return x.Id
+		return x.ClientId
 	}
 	return 0
 }
@@ -1011,6 +932,20 @@ func (x *UpdateClientRequest) GetFirstName() string {
 func (x *UpdateClientRequest) GetLastName() string {
 	if x != nil {
 		return x.LastName
+	}
+	return ""
+}
+
+func (x *UpdateClientRequest) GetDateOfBirth() int64 {
+	if x != nil {
+		return x.DateOfBirth
+	}
+	return 0
+}
+
+func (x *UpdateClientRequest) GetGender() string {
+	if x != nil {
+		return x.Gender
 	}
 	return ""
 }
@@ -1036,23 +971,16 @@ func (x *UpdateClientRequest) GetAddress() string {
 	return ""
 }
 
-func (x *UpdateClientRequest) GetGender() string {
-	if x != nil {
-		return x.Gender
-	}
-	return ""
-}
-
 type DeleteClientRequest struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
-	Id            uint64                 `protobuf:"varint,1,opt,name=id,proto3" json:"id,omitempty"`
+	ClientId      uint64                 `protobuf:"varint,1,opt,name=client_id,json=clientId,proto3" json:"client_id,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
 
 func (x *DeleteClientRequest) Reset() {
 	*x = DeleteClientRequest{}
-	mi := &file_proto_user_proto_msgTypes[13]
+	mi := &file_proto_user_proto_msgTypes[11]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1064,7 +992,7 @@ func (x *DeleteClientRequest) String() string {
 func (*DeleteClientRequest) ProtoMessage() {}
 
 func (x *DeleteClientRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_proto_user_proto_msgTypes[13]
+	mi := &file_proto_user_proto_msgTypes[11]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1077,71 +1005,25 @@ func (x *DeleteClientRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use DeleteClientRequest.ProtoReflect.Descriptor instead.
 func (*DeleteClientRequest) Descriptor() ([]byte, []int) {
-	return file_proto_user_proto_rawDescGZIP(), []int{13}
+	return file_proto_user_proto_rawDescGZIP(), []int{11}
 }
 
-func (x *DeleteClientRequest) GetId() uint64 {
+func (x *DeleteClientRequest) GetClientId() uint64 {
 	if x != nil {
-		return x.Id
+		return x.ClientId
 	}
 	return 0
 }
 
-type ClientResponse struct {
-	state         protoimpl.MessageState `protogen:"open.v1"`
-	Client        *Client                `protobuf:"bytes,1,opt,name=client,proto3" json:"client,omitempty"`
-	unknownFields protoimpl.UnknownFields
-	sizeCache     protoimpl.SizeCache
-}
-
-func (x *ClientResponse) Reset() {
-	*x = ClientResponse{}
-	mi := &file_proto_user_proto_msgTypes[14]
-	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
-	ms.StoreMessageInfo(mi)
-}
-
-func (x *ClientResponse) String() string {
-	return protoimpl.X.MessageStringOf(x)
-}
-
-func (*ClientResponse) ProtoMessage() {}
-
-func (x *ClientResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_proto_user_proto_msgTypes[14]
-	if x != nil {
-		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
-		if ms.LoadMessageInfo() == nil {
-			ms.StoreMessageInfo(mi)
-		}
-		return ms
-	}
-	return mi.MessageOf(x)
-}
-
-// Deprecated: Use ClientResponse.ProtoReflect.Descriptor instead.
-func (*ClientResponse) Descriptor() ([]byte, []int) {
-	return file_proto_user_proto_rawDescGZIP(), []int{14}
-}
-
-func (x *ClientResponse) GetClient() *Client {
-	if x != nil {
-		return x.Client
-	}
-	return nil
-}
-
 type ListClientsRequest struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
-	Page          int32                  `protobuf:"varint,1,opt,name=page,proto3" json:"page,omitempty"`
-	PageSize      int32                  `protobuf:"varint,2,opt,name=page_size,json=pageSize,proto3" json:"page_size,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
 
 func (x *ListClientsRequest) Reset() {
 	*x = ListClientsRequest{}
-	mi := &file_proto_user_proto_msgTypes[15]
+	mi := &file_proto_user_proto_msgTypes[12]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1153,7 +1035,7 @@ func (x *ListClientsRequest) String() string {
 func (*ListClientsRequest) ProtoMessage() {}
 
 func (x *ListClientsRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_proto_user_proto_msgTypes[15]
+	mi := &file_proto_user_proto_msgTypes[12]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1166,34 +1048,19 @@ func (x *ListClientsRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ListClientsRequest.ProtoReflect.Descriptor instead.
 func (*ListClientsRequest) Descriptor() ([]byte, []int) {
-	return file_proto_user_proto_rawDescGZIP(), []int{15}
-}
-
-func (x *ListClientsRequest) GetPage() int32 {
-	if x != nil {
-		return x.Page
-	}
-	return 0
-}
-
-func (x *ListClientsRequest) GetPageSize() int32 {
-	if x != nil {
-		return x.PageSize
-	}
-	return 0
+	return file_proto_user_proto_rawDescGZIP(), []int{12}
 }
 
 type ListClientsResponse struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
 	Clients       []*Client              `protobuf:"bytes,1,rep,name=clients,proto3" json:"clients,omitempty"`
-	Total         int32                  `protobuf:"varint,2,opt,name=total,proto3" json:"total,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
 
 func (x *ListClientsResponse) Reset() {
 	*x = ListClientsResponse{}
-	mi := &file_proto_user_proto_msgTypes[16]
+	mi := &file_proto_user_proto_msgTypes[13]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1205,7 +1072,7 @@ func (x *ListClientsResponse) String() string {
 func (*ListClientsResponse) ProtoMessage() {}
 
 func (x *ListClientsResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_proto_user_proto_msgTypes[16]
+	mi := &file_proto_user_proto_msgTypes[13]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1218,7 +1085,7 @@ func (x *ListClientsResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ListClientsResponse.ProtoReflect.Descriptor instead.
 func (*ListClientsResponse) Descriptor() ([]byte, []int) {
-	return file_proto_user_proto_rawDescGZIP(), []int{16}
+	return file_proto_user_proto_rawDescGZIP(), []int{13}
 }
 
 func (x *ListClientsResponse) GetClients() []*Client {
@@ -1228,36 +1095,30 @@ func (x *ListClientsResponse) GetClients() []*Client {
 	return nil
 }
 
-func (x *ListClientsResponse) GetTotal() int32 {
-	if x != nil {
-		return x.Total
-	}
-	return 0
-}
-
-type CreatePermissionRequest struct {
+type Permission struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
-	Name          string                 `protobuf:"bytes,1,opt,name=name,proto3" json:"name,omitempty"`
-	Description   string                 `protobuf:"bytes,2,opt,name=description,proto3" json:"description,omitempty"`
+	Id            uint64                 `protobuf:"varint,1,opt,name=id,proto3" json:"id,omitempty"`
+	Name          string                 `protobuf:"bytes,2,opt,name=name,proto3" json:"name,omitempty"`
+	Description   string                 `protobuf:"bytes,3,opt,name=description,proto3" json:"description,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
 
-func (x *CreatePermissionRequest) Reset() {
-	*x = CreatePermissionRequest{}
-	mi := &file_proto_user_proto_msgTypes[17]
+func (x *Permission) Reset() {
+	*x = Permission{}
+	mi := &file_proto_user_proto_msgTypes[14]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
 
-func (x *CreatePermissionRequest) String() string {
+func (x *Permission) String() string {
 	return protoimpl.X.MessageStringOf(x)
 }
 
-func (*CreatePermissionRequest) ProtoMessage() {}
+func (*Permission) ProtoMessage() {}
 
-func (x *CreatePermissionRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_proto_user_proto_msgTypes[17]
+func (x *Permission) ProtoReflect() protoreflect.Message {
+	mi := &file_proto_user_proto_msgTypes[14]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1268,67 +1129,30 @@ func (x *CreatePermissionRequest) ProtoReflect() protoreflect.Message {
 	return mi.MessageOf(x)
 }
 
-// Deprecated: Use CreatePermissionRequest.ProtoReflect.Descriptor instead.
-func (*CreatePermissionRequest) Descriptor() ([]byte, []int) {
-	return file_proto_user_proto_rawDescGZIP(), []int{17}
+// Deprecated: Use Permission.ProtoReflect.Descriptor instead.
+func (*Permission) Descriptor() ([]byte, []int) {
+	return file_proto_user_proto_rawDescGZIP(), []int{14}
 }
 
-func (x *CreatePermissionRequest) GetName() string {
+func (x *Permission) GetId() uint64 {
+	if x != nil {
+		return x.Id
+	}
+	return 0
+}
+
+func (x *Permission) GetName() string {
 	if x != nil {
 		return x.Name
 	}
 	return ""
 }
 
-func (x *CreatePermissionRequest) GetDescription() string {
+func (x *Permission) GetDescription() string {
 	if x != nil {
 		return x.Description
 	}
 	return ""
-}
-
-type PermissionResponse struct {
-	state         protoimpl.MessageState `protogen:"open.v1"`
-	Permission    *Permission            `protobuf:"bytes,1,opt,name=permission,proto3" json:"permission,omitempty"`
-	unknownFields protoimpl.UnknownFields
-	sizeCache     protoimpl.SizeCache
-}
-
-func (x *PermissionResponse) Reset() {
-	*x = PermissionResponse{}
-	mi := &file_proto_user_proto_msgTypes[18]
-	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
-	ms.StoreMessageInfo(mi)
-}
-
-func (x *PermissionResponse) String() string {
-	return protoimpl.X.MessageStringOf(x)
-}
-
-func (*PermissionResponse) ProtoMessage() {}
-
-func (x *PermissionResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_proto_user_proto_msgTypes[18]
-	if x != nil {
-		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
-		if ms.LoadMessageInfo() == nil {
-			ms.StoreMessageInfo(mi)
-		}
-		return ms
-	}
-	return mi.MessageOf(x)
-}
-
-// Deprecated: Use PermissionResponse.ProtoReflect.Descriptor instead.
-func (*PermissionResponse) Descriptor() ([]byte, []int) {
-	return file_proto_user_proto_rawDescGZIP(), []int{18}
-}
-
-func (x *PermissionResponse) GetPermission() *Permission {
-	if x != nil {
-		return x.Permission
-	}
-	return nil
 }
 
 type ListPermissionsResponse struct {
@@ -1340,7 +1164,7 @@ type ListPermissionsResponse struct {
 
 func (x *ListPermissionsResponse) Reset() {
 	*x = ListPermissionsResponse{}
-	mi := &file_proto_user_proto_msgTypes[19]
+	mi := &file_proto_user_proto_msgTypes[15]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1352,7 +1176,7 @@ func (x *ListPermissionsResponse) String() string {
 func (*ListPermissionsResponse) ProtoMessage() {}
 
 func (x *ListPermissionsResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_proto_user_proto_msgTypes[19]
+	mi := &file_proto_user_proto_msgTypes[15]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1365,7 +1189,7 @@ func (x *ListPermissionsResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ListPermissionsResponse.ProtoReflect.Descriptor instead.
 func (*ListPermissionsResponse) Descriptor() ([]byte, []int) {
-	return file_proto_user_proto_rawDescGZIP(), []int{19}
+	return file_proto_user_proto_rawDescGZIP(), []int{15}
 }
 
 func (x *ListPermissionsResponse) GetPermissions() []*Permission {
@@ -1379,74 +1203,74 @@ var File_proto_user_proto protoreflect.FileDescriptor
 
 const file_proto_user_proto_rawDesc = "" +
 	"\n" +
-	"\x10proto/user.proto\x12\x04user\x1a\x1bgoogle/protobuf/empty.proto\x1a\x1cgoogle/api/annotations.proto\"R\n" +
-	"\n" +
-	"Permission\x12\x0e\n" +
-	"\x02id\x18\x01 \x01(\x04R\x02id\x12\x12\n" +
-	"\x04name\x18\x02 \x01(\tR\x04name\x12 \n" +
-	"\vdescription\x18\x03 \x01(\tR\vdescription\"\x89\x03\n" +
+	"\x10proto/user.proto\x12\x04user\x1a\x1cgoogle/api/annotations.proto\x1a\x1bgoogle/protobuf/empty.proto\"\xf7\x02\n" +
 	"\bEmployee\x12\x0e\n" +
 	"\x02id\x18\x01 \x01(\x04R\x02id\x12\x1d\n" +
 	"\n" +
 	"first_name\x18\x02 \x01(\tR\tfirstName\x12\x1b\n" +
-	"\tlast_name\x18\x03 \x01(\tR\blastName\x12\x14\n" +
-	"\x05email\x18\x04 \x01(\tR\x05email\x12\x1a\n" +
-	"\busername\x18\x05 \x01(\tR\busername\x12\x1a\n" +
-	"\bposition\x18\x06 \x01(\tR\bposition\x12\x1e\n" +
+	"\tlast_name\x18\x03 \x01(\tR\blastName\x12\"\n" +
+	"\rdate_of_birth\x18\x04 \x01(\tR\vdateOfBirth\x12\x16\n" +
+	"\x06gender\x18\x05 \x01(\tR\x06gender\x12\x14\n" +
+	"\x05email\x18\x06 \x01(\tR\x05email\x12!\n" +
+	"\fphone_number\x18\a \x01(\tR\vphoneNumber\x12\x18\n" +
+	"\aaddress\x18\b \x01(\tR\aaddress\x12\x1a\n" +
+	"\busername\x18\t \x01(\tR\busername\x12\x1a\n" +
+	"\bposition\x18\n" +
+	" \x01(\tR\bposition\x12\x1e\n" +
 	"\n" +
-	"department\x18\a \x01(\tR\n" +
-	"department\x12!\n" +
-	"\fphone_number\x18\b \x01(\tR\vphoneNumber\x12\x18\n" +
-	"\aaddress\x18\t \x01(\tR\aaddress\x12\x16\n" +
-	"\x06active\x18\n" +
-	" \x01(\bR\x06active\x12\x16\n" +
-	"\x06gender\x18\v \x01(\tR\x06gender\x12\"\n" +
-	"\rdate_of_birth\x18\f \x01(\tR\vdateOfBirth\x122\n" +
-	"\vpermissions\x18\r \x03(\v2\x10.user.PermissionR\vpermissions\"\xf9\x02\n" +
+	"department\x18\v \x01(\tR\n" +
+	"department\x12\x16\n" +
+	"\x06active\x18\f \x01(\bR\x06active\x12 \n" +
+	"\vpermissions\x18\r \x03(\tR\vpermissions\"\xf4\x02\n" +
 	"\x15CreateEmployeeRequest\x12\x1d\n" +
 	"\n" +
 	"first_name\x18\x01 \x01(\tR\tfirstName\x12\x1b\n" +
-	"\tlast_name\x18\x02 \x01(\tR\blastName\x12\x14\n" +
-	"\x05email\x18\x03 \x01(\tR\x05email\x12\x1a\n" +
-	"\busername\x18\x04 \x01(\tR\busername\x12\x1a\n" +
-	"\bposition\x18\x05 \x01(\tR\bposition\x12\x1e\n" +
+	"\tlast_name\x18\x02 \x01(\tR\blastName\x12\"\n" +
+	"\rdate_of_birth\x18\x03 \x01(\tR\vdateOfBirth\x12\x16\n" +
+	"\x06gender\x18\x04 \x01(\tR\x06gender\x12\x14\n" +
+	"\x05email\x18\x05 \x01(\tR\x05email\x12!\n" +
+	"\fphone_number\x18\x06 \x01(\tR\vphoneNumber\x12\x18\n" +
+	"\aaddress\x18\a \x01(\tR\aaddress\x12\x1a\n" +
+	"\busername\x18\b \x01(\tR\busername\x12\x1a\n" +
+	"\bposition\x18\t \x01(\tR\bposition\x12\x1e\n" +
 	"\n" +
-	"department\x18\x06 \x01(\tR\n" +
-	"department\x12!\n" +
-	"\fphone_number\x18\a \x01(\tR\vphoneNumber\x12\x18\n" +
-	"\aaddress\x18\b \x01(\tR\aaddress\x12\x16\n" +
-	"\x06active\x18\t \x01(\bR\x06active\x12\x16\n" +
-	"\x06gender\x18\n" +
-	" \x01(\tR\x06gender\x12\"\n" +
-	"\rdate_of_birth\x18\v \x01(\tR\vdateOfBirth\x12%\n" +
-	"\x0epermission_ids\x18\f \x03(\x04R\rpermissionIds\"$\n" +
-	"\x12GetEmployeeRequest\x12\x0e\n" +
-	"\x02id\x18\x01 \x01(\x04R\x02id\"\xb1\x02\n" +
-	"\x15UpdateEmployeeRequest\x12\x0e\n" +
-	"\x02id\x18\x01 \x01(\x04R\x02id\x12\x1d\n" +
+	"department\x18\n" +
+	" \x01(\tR\n" +
+	"department\x12\x16\n" +
+	"\x06active\x18\v \x01(\bR\x06active\x12 \n" +
+	"\vpermissions\x18\f \x03(\tR\vpermissions\"5\n" +
+	"\x12GetEmployeeRequest\x12\x1f\n" +
+	"\vemployee_id\x18\x01 \x01(\x04R\n" +
+	"employeeId\"\xf9\x02\n" +
+	"\x15UpdateEmployeeRequest\x12\x1f\n" +
+	"\vemployee_id\x18\x01 \x01(\x04R\n" +
+	"employeeId\x12\x1d\n" +
 	"\n" +
 	"first_name\x18\x02 \x01(\tR\tfirstName\x12\x1b\n" +
-	"\tlast_name\x18\x03 \x01(\tR\blastName\x12\x14\n" +
-	"\x05email\x18\x04 \x01(\tR\x05email\x12\x1a\n" +
-	"\bposition\x18\x05 \x01(\tR\bposition\x12\x1e\n" +
-	"\n" +
-	"department\x18\x06 \x01(\tR\n" +
-	"department\x12!\n" +
+	"\tlast_name\x18\x03 \x01(\tR\blastName\x12\"\n" +
+	"\rdate_of_birth\x18\x04 \x01(\tR\vdateOfBirth\x12\x16\n" +
+	"\x06gender\x18\x05 \x01(\tR\x06gender\x12\x14\n" +
+	"\x05email\x18\x06 \x01(\tR\x05email\x12!\n" +
 	"\fphone_number\x18\a \x01(\tR\vphoneNumber\x12\x18\n" +
-	"\aaddress\x18\b \x01(\tR\aaddress\x12\x16\n" +
-	"\x06active\x18\t \x01(\bR\x06active\x12%\n" +
-	"\x0epermission_ids\x18\n" +
-	" \x03(\x04R\rpermissionIds\"'\n" +
-	"\x15DeleteEmployeeRequest\x12\x0e\n" +
-	"\x02id\x18\x01 \x01(\x04R\x02id\">\n" +
-	"\x10EmployeeResponse\x12*\n" +
-	"\bemployee\x18\x01 \x01(\v2\x0e.user.EmployeeR\bemployee\"G\n" +
-	"\x14ListEmployeesRequest\x12\x12\n" +
-	"\x04page\x18\x01 \x01(\x05R\x04page\x12\x1b\n" +
-	"\tpage_size\x18\x02 \x01(\x05R\bpageSize\"[\n" +
+	"\aaddress\x18\b \x01(\tR\aaddress\x12\x1a\n" +
+	"\bposition\x18\t \x01(\tR\bposition\x12\x1e\n" +
+	"\n" +
+	"department\x18\n" +
+	" \x01(\tR\n" +
+	"department\x12\x16\n" +
+	"\x06active\x18\v \x01(\bR\x06active\x12 \n" +
+	"\vpermissions\x18\f \x03(\tR\vpermissions\"8\n" +
+	"\x15DeleteEmployeeRequest\x12\x1f\n" +
+	"\vemployee_id\x18\x01 \x01(\x04R\n" +
+	"employeeId\"\x84\x01\n" +
+	"\x14ListEmployeesRequest\x12\x14\n" +
+	"\x05email\x18\x01 \x01(\tR\x05email\x12\x1d\n" +
+	"\n" +
+	"first_name\x18\x02 \x01(\tR\tfirstName\x12\x1b\n" +
+	"\tlast_name\x18\x03 \x01(\tR\blastName\x12\x1a\n" +
+	"\bposition\x18\x04 \x01(\tR\bposition\"E\n" +
 	"\x15ListEmployeesResponse\x12,\n" +
-	"\temployees\x18\x01 \x03(\v2\x0e.user.EmployeeR\temployees\x12\x14\n" +
-	"\x05total\x18\x02 \x01(\x05R\x05total\"\x92\x02\n" +
+	"\temployees\x18\x01 \x03(\v2\x0e.user.EmployeeR\temployees\"\x92\x02\n" +
 	"\x06Client\x12\x0e\n" +
 	"\x02id\x18\x01 \x01(\x04R\x02id\x12\x1d\n" +
 	"\n" +
@@ -1457,7 +1281,7 @@ const file_proto_user_proto_rawDesc = "" +
 	"\x05email\x18\x06 \x01(\tR\x05email\x12!\n" +
 	"\fphone_number\x18\a \x01(\tR\vphoneNumber\x12\x18\n" +
 	"\aaddress\x18\b \x01(\tR\aaddress\x12-\n" +
-	"\x12connected_accounts\x18\t \x01(\tR\x11connectedAccounts\"\xe0\x01\n" +
+	"\x12connected_accounts\x18\t \x03(\tR\x11connectedAccounts\"\xe0\x01\n" +
 	"\x13CreateClientRequest\x12\x1d\n" +
 	"\n" +
 	"first_name\x18\x01 \x01(\tR\tfirstName\x12\x1b\n" +
@@ -1466,50 +1290,46 @@ const file_proto_user_proto_rawDesc = "" +
 	"\x06gender\x18\x04 \x01(\tR\x06gender\x12\x14\n" +
 	"\x05email\x18\x05 \x01(\tR\x05email\x12!\n" +
 	"\fphone_number\x18\x06 \x01(\tR\vphoneNumber\x12\x18\n" +
-	"\aaddress\x18\a \x01(\tR\aaddress\"\"\n" +
-	"\x10GetClientRequest\x12\x0e\n" +
-	"\x02id\x18\x01 \x01(\x04R\x02id\"\xcc\x01\n" +
-	"\x13UpdateClientRequest\x12\x0e\n" +
-	"\x02id\x18\x01 \x01(\x04R\x02id\x12\x1d\n" +
+	"\aaddress\x18\a \x01(\tR\aaddress\"/\n" +
+	"\x10GetClientRequest\x12\x1b\n" +
+	"\tclient_id\x18\x01 \x01(\x04R\bclientId\"\xfd\x01\n" +
+	"\x13UpdateClientRequest\x12\x1b\n" +
+	"\tclient_id\x18\x01 \x01(\x04R\bclientId\x12\x1d\n" +
 	"\n" +
 	"first_name\x18\x02 \x01(\tR\tfirstName\x12\x1b\n" +
-	"\tlast_name\x18\x03 \x01(\tR\blastName\x12\x14\n" +
-	"\x05email\x18\x04 \x01(\tR\x05email\x12!\n" +
-	"\fphone_number\x18\x05 \x01(\tR\vphoneNumber\x12\x18\n" +
-	"\aaddress\x18\x06 \x01(\tR\aaddress\x12\x16\n" +
-	"\x06gender\x18\a \x01(\tR\x06gender\"%\n" +
-	"\x13DeleteClientRequest\x12\x0e\n" +
-	"\x02id\x18\x01 \x01(\x04R\x02id\"6\n" +
-	"\x0eClientResponse\x12$\n" +
-	"\x06client\x18\x01 \x01(\v2\f.user.ClientR\x06client\"E\n" +
-	"\x12ListClientsRequest\x12\x12\n" +
-	"\x04page\x18\x01 \x01(\x05R\x04page\x12\x1b\n" +
-	"\tpage_size\x18\x02 \x01(\x05R\bpageSize\"S\n" +
+	"\tlast_name\x18\x03 \x01(\tR\blastName\x12\"\n" +
+	"\rdate_of_birth\x18\x04 \x01(\x03R\vdateOfBirth\x12\x16\n" +
+	"\x06gender\x18\x05 \x01(\tR\x06gender\x12\x14\n" +
+	"\x05email\x18\x06 \x01(\tR\x05email\x12!\n" +
+	"\fphone_number\x18\a \x01(\tR\vphoneNumber\x12\x18\n" +
+	"\aaddress\x18\b \x01(\tR\aaddress\"2\n" +
+	"\x13DeleteClientRequest\x12\x1b\n" +
+	"\tclient_id\x18\x01 \x01(\x04R\bclientId\"\x14\n" +
+	"\x12ListClientsRequest\"=\n" +
 	"\x13ListClientsResponse\x12&\n" +
-	"\aclients\x18\x01 \x03(\v2\f.user.ClientR\aclients\x12\x14\n" +
-	"\x05total\x18\x02 \x01(\x05R\x05total\"O\n" +
-	"\x17CreatePermissionRequest\x12\x12\n" +
-	"\x04name\x18\x01 \x01(\tR\x04name\x12 \n" +
-	"\vdescription\x18\x02 \x01(\tR\vdescription\"F\n" +
-	"\x12PermissionResponse\x120\n" +
+	"\aclients\x18\x01 \x03(\v2\f.user.ClientR\aclients\"R\n" +
 	"\n" +
-	"permission\x18\x01 \x01(\v2\x10.user.PermissionR\n" +
-	"permission\"M\n" +
+	"Permission\x12\x0e\n" +
+	"\x02id\x18\x01 \x01(\x04R\x02id\x12\x12\n" +
+	"\x04name\x18\x02 \x01(\tR\x04name\x12 \n" +
+	"\vdescription\x18\x03 \x01(\tR\vdescription\"M\n" +
 	"\x17ListPermissionsResponse\x122\n" +
-	"\vpermissions\x18\x01 \x03(\v2\x10.user.PermissionR\vpermissions2\x83\t\n" +
-	"\vUserService\x12_\n" +
-	"\x0eCreateEmployee\x12\x1b.user.CreateEmployeeRequest\x1a\x16.user.EmployeeResponse\"\x18\x82\xd3\xe4\x93\x02\x12:\x01*\"\r/v1/employees\x12[\n" +
-	"\vGetEmployee\x12\x18.user.GetEmployeeRequest\x1a\x16.user.EmployeeResponse\"\x1a\x82\xd3\xe4\x93\x02\x14\x12\x12/v1/employees/{id}\x12_\n" +
-	"\rListEmployees\x12\x1a.user.ListEmployeesRequest\x1a\x1b.user.ListEmployeesResponse\"\x15\x82\xd3\xe4\x93\x02\x0f\x12\r/v1/employees\x12d\n" +
-	"\x0eUpdateEmployee\x12\x1b.user.UpdateEmployeeRequest\x1a\x16.user.EmployeeResponse\"\x1d\x82\xd3\xe4\x93\x02\x17:\x01*\x1a\x12/v1/employees/{id}\x12a\n" +
-	"\x0eDeleteEmployee\x12\x1b.user.DeleteEmployeeRequest\x1a\x16.google.protobuf.Empty\"\x1a\x82\xd3\xe4\x93\x02\x14*\x12/v1/employees/{id}\x12W\n" +
-	"\fCreateClient\x12\x19.user.CreateClientRequest\x1a\x14.user.ClientResponse\"\x16\x82\xd3\xe4\x93\x02\x10:\x01*\"\v/v1/clients\x12S\n" +
-	"\tGetClient\x12\x16.user.GetClientRequest\x1a\x14.user.ClientResponse\"\x18\x82\xd3\xe4\x93\x02\x12\x12\x10/v1/clients/{id}\x12W\n" +
-	"\vListClients\x12\x18.user.ListClientsRequest\x1a\x19.user.ListClientsResponse\"\x13\x82\xd3\xe4\x93\x02\r\x12\v/v1/clients\x12\\\n" +
-	"\fUpdateClient\x12\x19.user.UpdateClientRequest\x1a\x14.user.ClientResponse\"\x1b\x82\xd3\xe4\x93\x02\x15:\x01*\x1a\x10/v1/clients/{id}\x12[\n" +
-	"\fDeleteClient\x12\x19.user.DeleteClientRequest\x1a\x16.google.protobuf.Empty\"\x18\x82\xd3\xe4\x93\x02\x12*\x10/v1/clients/{id}\x12g\n" +
-	"\x10CreatePermission\x12\x1d.user.CreatePermissionRequest\x1a\x18.user.PermissionResponse\"\x1a\x82\xd3\xe4\x93\x02\x14:\x01*\"\x0f/v1/permissions\x12a\n" +
-	"\x0fListPermissions\x12\x16.google.protobuf.Empty\x1a\x1d.user.ListPermissionsResponse\"\x17\x82\xd3\xe4\x93\x02\x11\x12\x0f/v1/permissionsB\x12Z\x10user-service/pb/b\x06proto3"
+	"\vpermissions\x18\x01 \x03(\v2\x10.user.PermissionR\vpermissions2\xf9\a\n" +
+	"\vUserService\x12\\\n" +
+	"\rListEmployees\x12\x1a.user.ListEmployeesRequest\x1a\x1b.user.ListEmployeesResponse\"\x12\x82\xd3\xe4\x93\x02\f\x12\n" +
+	"/employees\x12T\n" +
+	"\x0eCreateEmployee\x12\x1b.user.CreateEmployeeRequest\x1a\x0e.user.Employee\"\x15\x82\xd3\xe4\x93\x02\x0f:\x01*\"\n" +
+	"/employees\x12Y\n" +
+	"\vGetEmployee\x12\x18.user.GetEmployeeRequest\x1a\x0e.user.Employee\" \x82\xd3\xe4\x93\x02\x1a\x12\x18/employees/{employee_id}\x12b\n" +
+	"\x0eUpdateEmployee\x12\x1b.user.UpdateEmployeeRequest\x1a\x0e.user.Employee\"#\x82\xd3\xe4\x93\x02\x1d:\x01*\x1a\x18/employees/{employee_id}\x12g\n" +
+	"\x0eDeleteEmployee\x12\x1b.user.DeleteEmployeeRequest\x1a\x16.google.protobuf.Empty\" \x82\xd3\xe4\x93\x02\x1a*\x18/employees/{employee_id}\x12T\n" +
+	"\vListClients\x12\x18.user.ListClientsRequest\x1a\x19.user.ListClientsResponse\"\x10\x82\xd3\xe4\x93\x02\n" +
+	"\x12\b/clients\x12L\n" +
+	"\fCreateClient\x12\x19.user.CreateClientRequest\x1a\f.user.Client\"\x13\x82\xd3\xe4\x93\x02\r:\x01*\"\b/clients\x12O\n" +
+	"\tGetClient\x12\x16.user.GetClientRequest\x1a\f.user.Client\"\x1c\x82\xd3\xe4\x93\x02\x16\x12\x14/clients/{client_id}\x12X\n" +
+	"\fUpdateClient\x12\x19.user.UpdateClientRequest\x1a\f.user.Client\"\x1f\x82\xd3\xe4\x93\x02\x19:\x01*\x1a\x14/clients/{client_id}\x12_\n" +
+	"\fDeleteClient\x12\x19.user.DeleteClientRequest\x1a\x16.google.protobuf.Empty\"\x1c\x82\xd3\xe4\x93\x02\x16*\x14/clients/{client_id}\x12^\n" +
+	"\x0fListPermissions\x12\x16.google.protobuf.Empty\x1a\x1d.user.ListPermissionsResponse\"\x14\x82\xd3\xe4\x93\x02\x0e\x12\f/permissionsB\x12Z\x10user-service/pb/b\x06proto3"
 
 var (
 	file_proto_user_proto_rawDescOnce sync.Once
@@ -1523,67 +1343,57 @@ func file_proto_user_proto_rawDescGZIP() []byte {
 	return file_proto_user_proto_rawDescData
 }
 
-var file_proto_user_proto_msgTypes = make([]protoimpl.MessageInfo, 20)
+var file_proto_user_proto_msgTypes = make([]protoimpl.MessageInfo, 16)
 var file_proto_user_proto_goTypes = []any{
-	(*Permission)(nil),              // 0: user.Permission
-	(*Employee)(nil),                // 1: user.Employee
-	(*CreateEmployeeRequest)(nil),   // 2: user.CreateEmployeeRequest
-	(*GetEmployeeRequest)(nil),      // 3: user.GetEmployeeRequest
-	(*UpdateEmployeeRequest)(nil),   // 4: user.UpdateEmployeeRequest
-	(*DeleteEmployeeRequest)(nil),   // 5: user.DeleteEmployeeRequest
-	(*EmployeeResponse)(nil),        // 6: user.EmployeeResponse
-	(*ListEmployeesRequest)(nil),    // 7: user.ListEmployeesRequest
-	(*ListEmployeesResponse)(nil),   // 8: user.ListEmployeesResponse
-	(*Client)(nil),                  // 9: user.Client
-	(*CreateClientRequest)(nil),     // 10: user.CreateClientRequest
-	(*GetClientRequest)(nil),        // 11: user.GetClientRequest
-	(*UpdateClientRequest)(nil),     // 12: user.UpdateClientRequest
-	(*DeleteClientRequest)(nil),     // 13: user.DeleteClientRequest
-	(*ClientResponse)(nil),          // 14: user.ClientResponse
-	(*ListClientsRequest)(nil),      // 15: user.ListClientsRequest
-	(*ListClientsResponse)(nil),     // 16: user.ListClientsResponse
-	(*CreatePermissionRequest)(nil), // 17: user.CreatePermissionRequest
-	(*PermissionResponse)(nil),      // 18: user.PermissionResponse
-	(*ListPermissionsResponse)(nil), // 19: user.ListPermissionsResponse
-	(*emptypb.Empty)(nil),           // 20: google.protobuf.Empty
+	(*Employee)(nil),                // 0: user.Employee
+	(*CreateEmployeeRequest)(nil),   // 1: user.CreateEmployeeRequest
+	(*GetEmployeeRequest)(nil),      // 2: user.GetEmployeeRequest
+	(*UpdateEmployeeRequest)(nil),   // 3: user.UpdateEmployeeRequest
+	(*DeleteEmployeeRequest)(nil),   // 4: user.DeleteEmployeeRequest
+	(*ListEmployeesRequest)(nil),    // 5: user.ListEmployeesRequest
+	(*ListEmployeesResponse)(nil),   // 6: user.ListEmployeesResponse
+	(*Client)(nil),                  // 7: user.Client
+	(*CreateClientRequest)(nil),     // 8: user.CreateClientRequest
+	(*GetClientRequest)(nil),        // 9: user.GetClientRequest
+	(*UpdateClientRequest)(nil),     // 10: user.UpdateClientRequest
+	(*DeleteClientRequest)(nil),     // 11: user.DeleteClientRequest
+	(*ListClientsRequest)(nil),      // 12: user.ListClientsRequest
+	(*ListClientsResponse)(nil),     // 13: user.ListClientsResponse
+	(*Permission)(nil),              // 14: user.Permission
+	(*ListPermissionsResponse)(nil), // 15: user.ListPermissionsResponse
+	(*emptypb.Empty)(nil),           // 16: google.protobuf.Empty
 }
 var file_proto_user_proto_depIdxs = []int32{
-	0,  // 0: user.Employee.permissions:type_name -> user.Permission
-	1,  // 1: user.EmployeeResponse.employee:type_name -> user.Employee
-	1,  // 2: user.ListEmployeesResponse.employees:type_name -> user.Employee
-	9,  // 3: user.ClientResponse.client:type_name -> user.Client
-	9,  // 4: user.ListClientsResponse.clients:type_name -> user.Client
-	0,  // 5: user.PermissionResponse.permission:type_name -> user.Permission
-	0,  // 6: user.ListPermissionsResponse.permissions:type_name -> user.Permission
-	2,  // 7: user.UserService.CreateEmployee:input_type -> user.CreateEmployeeRequest
-	3,  // 8: user.UserService.GetEmployee:input_type -> user.GetEmployeeRequest
-	7,  // 9: user.UserService.ListEmployees:input_type -> user.ListEmployeesRequest
-	4,  // 10: user.UserService.UpdateEmployee:input_type -> user.UpdateEmployeeRequest
-	5,  // 11: user.UserService.DeleteEmployee:input_type -> user.DeleteEmployeeRequest
-	10, // 12: user.UserService.CreateClient:input_type -> user.CreateClientRequest
-	11, // 13: user.UserService.GetClient:input_type -> user.GetClientRequest
-	15, // 14: user.UserService.ListClients:input_type -> user.ListClientsRequest
-	12, // 15: user.UserService.UpdateClient:input_type -> user.UpdateClientRequest
-	13, // 16: user.UserService.DeleteClient:input_type -> user.DeleteClientRequest
-	17, // 17: user.UserService.CreatePermission:input_type -> user.CreatePermissionRequest
-	20, // 18: user.UserService.ListPermissions:input_type -> google.protobuf.Empty
-	6,  // 19: user.UserService.CreateEmployee:output_type -> user.EmployeeResponse
-	6,  // 20: user.UserService.GetEmployee:output_type -> user.EmployeeResponse
-	8,  // 21: user.UserService.ListEmployees:output_type -> user.ListEmployeesResponse
-	6,  // 22: user.UserService.UpdateEmployee:output_type -> user.EmployeeResponse
-	20, // 23: user.UserService.DeleteEmployee:output_type -> google.protobuf.Empty
-	14, // 24: user.UserService.CreateClient:output_type -> user.ClientResponse
-	14, // 25: user.UserService.GetClient:output_type -> user.ClientResponse
-	16, // 26: user.UserService.ListClients:output_type -> user.ListClientsResponse
-	14, // 27: user.UserService.UpdateClient:output_type -> user.ClientResponse
-	20, // 28: user.UserService.DeleteClient:output_type -> google.protobuf.Empty
-	18, // 29: user.UserService.CreatePermission:output_type -> user.PermissionResponse
-	19, // 30: user.UserService.ListPermissions:output_type -> user.ListPermissionsResponse
-	19, // [19:31] is the sub-list for method output_type
-	7,  // [7:19] is the sub-list for method input_type
-	7,  // [7:7] is the sub-list for extension type_name
-	7,  // [7:7] is the sub-list for extension extendee
-	0,  // [0:7] is the sub-list for field type_name
+	0,  // 0: user.ListEmployeesResponse.employees:type_name -> user.Employee
+	7,  // 1: user.ListClientsResponse.clients:type_name -> user.Client
+	14, // 2: user.ListPermissionsResponse.permissions:type_name -> user.Permission
+	5,  // 3: user.UserService.ListEmployees:input_type -> user.ListEmployeesRequest
+	1,  // 4: user.UserService.CreateEmployee:input_type -> user.CreateEmployeeRequest
+	2,  // 5: user.UserService.GetEmployee:input_type -> user.GetEmployeeRequest
+	3,  // 6: user.UserService.UpdateEmployee:input_type -> user.UpdateEmployeeRequest
+	4,  // 7: user.UserService.DeleteEmployee:input_type -> user.DeleteEmployeeRequest
+	12, // 8: user.UserService.ListClients:input_type -> user.ListClientsRequest
+	8,  // 9: user.UserService.CreateClient:input_type -> user.CreateClientRequest
+	9,  // 10: user.UserService.GetClient:input_type -> user.GetClientRequest
+	10, // 11: user.UserService.UpdateClient:input_type -> user.UpdateClientRequest
+	11, // 12: user.UserService.DeleteClient:input_type -> user.DeleteClientRequest
+	16, // 13: user.UserService.ListPermissions:input_type -> google.protobuf.Empty
+	6,  // 14: user.UserService.ListEmployees:output_type -> user.ListEmployeesResponse
+	0,  // 15: user.UserService.CreateEmployee:output_type -> user.Employee
+	0,  // 16: user.UserService.GetEmployee:output_type -> user.Employee
+	0,  // 17: user.UserService.UpdateEmployee:output_type -> user.Employee
+	16, // 18: user.UserService.DeleteEmployee:output_type -> google.protobuf.Empty
+	13, // 19: user.UserService.ListClients:output_type -> user.ListClientsResponse
+	7,  // 20: user.UserService.CreateClient:output_type -> user.Client
+	7,  // 21: user.UserService.GetClient:output_type -> user.Client
+	7,  // 22: user.UserService.UpdateClient:output_type -> user.Client
+	16, // 23: user.UserService.DeleteClient:output_type -> google.protobuf.Empty
+	15, // 24: user.UserService.ListPermissions:output_type -> user.ListPermissionsResponse
+	14, // [14:25] is the sub-list for method output_type
+	3,  // [3:14] is the sub-list for method input_type
+	3,  // [3:3] is the sub-list for extension type_name
+	3,  // [3:3] is the sub-list for extension extendee
+	0,  // [0:3] is the sub-list for field type_name
 }
 
 func init() { file_proto_user_proto_init() }
@@ -1597,7 +1407,7 @@ func file_proto_user_proto_init() {
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
 			RawDescriptor: unsafe.Slice(unsafe.StringData(file_proto_user_proto_rawDesc), len(file_proto_user_proto_rawDesc)),
 			NumEnums:      0,
-			NumMessages:   20,
+			NumMessages:   16,
 			NumExtensions: 0,
 			NumServices:   1,
 		},

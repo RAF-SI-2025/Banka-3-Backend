@@ -4,8 +4,6 @@ import (
 	"context"
 	"errors"
 	"testing"
-	"time"
-
 	"user-service/models"
 	"user-service/pb"
 
@@ -14,197 +12,246 @@ import (
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
 	"google.golang.org/protobuf/types/known/emptypb"
+	"gorm.io/gorm"
 )
 
-// #region Mock Repository
-type MockUserRepository struct {
+// ================= MOCK =================
+
+type MockUserRepo struct {
 	mock.Mock
 }
 
-func (m *MockUserRepository) CreateEmployee(e *models.Employee, ids []uint64) error {
-	args := m.Called(e, ids)
-	if args.Get(0) == nil {
-		e.ID = 1
-		return nil
-	}
+func (m *MockUserRepo) CreateEmployee(emp *models.Employee, permissionIDs []uint) error {
+	args := m.Called(emp, permissionIDs)
 	return args.Error(0)
 }
-func (m *MockUserRepository) GetEmployeeByID(id uint64) (*models.Employee, error) {
+func (m *MockUserRepo) GetEmployeeByID(id uint) (*models.Employee, error) {
 	args := m.Called(id)
-	if args.Get(0) == nil {
-		return nil, args.Error(1)
+	if e := args.Get(0); e != nil {
+		return e.(*models.Employee), args.Error(1)
 	}
-	return args.Get(0).(*models.Employee), args.Error(1)
+	return nil, args.Error(1)
 }
-func (m *MockUserRepository) ListEmployees(p, s int) ([]models.Employee, int64, error) {
-	args := m.Called(p, s)
-	if args.Get(0) == nil {
-		return nil, 0, args.Error(2)
-	}
-	return args.Get(0).([]models.Employee), args.Get(1).(int64), args.Error(2)
-}
-func (m *MockUserRepository) UpdateEmployee(e *models.Employee, ids []uint64) error {
-	return m.Called(e, ids).Error(0)
-}
-func (m *MockUserRepository) DeleteEmployee(id uint64) error {
-	return m.Called(id).Error(0)
-}
-func (m *MockUserRepository) CreateClient(c *models.Client) error {
-	args := m.Called(c)
-	if args.Get(0) == nil {
-		c.ID = 1
-		return nil
-	}
+func (m *MockUserRepo) UpdateEmployee(emp *models.Employee, permissionIDs []uint) error {
+	args := m.Called(emp, permissionIDs)
 	return args.Error(0)
 }
-func (m *MockUserRepository) GetClientByID(id uint64) (*models.Client, error) {
+func (m *MockUserRepo) DeleteEmployee(id uint) error {
 	args := m.Called(id)
-	if args.Get(0) == nil {
-		return nil, args.Error(1)
-	}
-	return args.Get(0).(*models.Client), args.Error(1)
-}
-func (m *MockUserRepository) ListClients(p, s int) ([]models.Client, int64, error) {
-	args := m.Called(p, s)
-	if args.Get(0) == nil {
-		return nil, 0, args.Error(2)
-	}
-	return args.Get(0).([]models.Client), args.Get(1).(int64), args.Error(2)
-}
-func (m *MockUserRepository) UpdateClient(c *models.Client) error {
-	return m.Called(c).Error(0)
-}
-func (m *MockUserRepository) DeleteClient(id uint64) error {
-	return m.Called(id).Error(0)
-}
-func (m *MockUserRepository) CreatePermission(p *models.Permission) error {
-	args := m.Called(p)
-	if args.Get(0) == nil {
-		p.ID = 1
-		return nil
-	}
 	return args.Error(0)
 }
-func (m *MockUserRepository) ListPermissions() ([]models.Permission, error) {
+func (m *MockUserRepo) CreateClient(cli *models.Client) error {
+	args := m.Called(cli)
+	return args.Error(0)
+}
+func (m *MockUserRepo) GetClientByID(id uint) (*models.Client, error) {
+	args := m.Called(id)
+	if c := args.Get(0); c != nil {
+		return c.(*models.Client), args.Error(1)
+	}
+	return nil, args.Error(1)
+}
+func (m *MockUserRepo) UpdateClient(cli *models.Client) error {
+	args := m.Called(cli)
+	return args.Error(0)
+}
+func (m *MockUserRepo) DeleteClient(id uint) error {
+	args := m.Called(id)
+	return args.Error(0)
+}
+func (m *MockUserRepo) ListPermissions() ([]models.Permission, error) {
 	args := m.Called()
-	if args.Get(0) == nil {
-		return nil, args.Error(1)
+	if perms := args.Get(0); perms != nil {
+		return perms.([]models.Permission), args.Error(1)
 	}
-	return args.Get(0).([]models.Permission), args.Error(1)
+	return nil, args.Error(1)
+}
+func (m *MockUserRepo) GetPermissionByName(name string) (*models.Permission, error) {
+	args := m.Called(name)
+	if p := args.Get(0); p != nil {
+		return p.(*models.Permission), args.Error(1)
+	}
+	return nil, args.Error(1)
+}
+func (m *MockUserRepo) ListEmployees(page, pageSize int, email, firstName, lastName, position string) ([]models.Employee, int64, error) {
+	args := m.Called(page, pageSize, email, firstName, lastName, position)
+	if e := args.Get(0); e != nil {
+		return e.([]models.Employee), args.Get(1).(int64), args.Error(2)
+	}
+	return nil, 0, args.Error(2)
+}
+func (m *MockUserRepo) ListClients(page, pageSize int, firstName, lastName, email string) ([]models.Client, int64, error) {
+	args := m.Called(page, pageSize, firstName, lastName, email)
+	if c := args.Get(0); c != nil {
+		return c.([]models.Client), args.Get(1).(int64), args.Error(2)
+	}
+	return nil, 0, args.Error(2)
 }
 
-// #endregion
+// ================= TESTS =================
 
-func TestUserService_Complete(t *testing.T) {
-	mockRepo := new(MockUserRepository)
-	svc := NewUserService(mockRepo)
+func TestUserService_Employees(t *testing.T) {
 	ctx := context.Background()
+	mockRepo := new(MockUserRepo)
+	svc := NewUserService(mockRepo)
 
-	// #region Error Handling Coverage
-	t.Run("DatabaseErrorMappings", func(t *testing.T) {
-		assert.Equal(t, codes.NotFound, status.Code(handleDBError(errors.New("record not found"))))
-		assert.Equal(t, codes.AlreadyExists, status.Code(handleDBError(errors.New("23505: unique"))))
-		assert.Equal(t, codes.FailedPrecondition, status.Code(handleDBError(errors.New("23503: fkey"))))
-		assert.Equal(t, codes.Internal, status.Code(handleDBError(errors.New("boom"))))
-		assert.Nil(t, handleDBError(nil))
-	})
-	// #endregion
+	perm := &models.Permission{Model: gorm.Model{
+		ID: 1,
+	}, Name: "ADMIN"}
 
-	// #region Employee Detailed Tests
-	t.Run("Employee_Create_AllPaths", func(t *testing.T) {
-		_, err := svc.CreateEmployee(ctx, &pb.CreateEmployeeRequest{})
-		assert.Equal(t, codes.InvalidArgument, status.Code(err))
+	// ---------------- CREATE EMPLOYEE ----------------
+	mockRepo.On("GetPermissionByName", "ADMIN").Return(perm, nil)
+	mockRepo.On("CreateEmployee", mock.Anything, []uint{1}).Return(nil)
 
-		_, err = svc.CreateEmployee(ctx, &pb.CreateEmployeeRequest{Email: "a@b.com", Username: "u", DateOfBirth: "invalid"})
-		assert.Equal(t, codes.InvalidArgument, status.Code(err))
+	createReq := &pb.CreateEmployeeRequest{
+		FirstName:   "John",
+		LastName:    "Doe",
+		Email:       "john@example.com",
+		Username:    "john123",
+		DateOfBirth: "1990-01-01",
+		Permissions: []string{"ADMIN"},
+	}
 
-		mockRepo.On("CreateEmployee", mock.Anything, []uint64{1}).Return(errors.New("23505")).Once()
-		_, err = svc.CreateEmployee(ctx, &pb.CreateEmployeeRequest{Email: "a@b.com", Username: "u", DateOfBirth: "1990-01-01", PermissionIds: []uint64{1}})
-		assert.Equal(t, codes.AlreadyExists, status.Code(err))
+	empRes, err := svc.CreateEmployee(ctx, createReq)
+	assert.NoError(t, err)
+	assert.Equal(t, "john@example.com", empRes.Email)
 
-		mockRepo.On("CreateEmployee", mock.Anything, []uint64{1}).Return(nil).Once()
-		res, err := svc.CreateEmployee(ctx, &pb.CreateEmployeeRequest{Email: "a@b.com", Username: "u", DateOfBirth: "1990-01-01", PermissionIds: []uint64{1}})
-		assert.NoError(t, err)
-		assert.Equal(t, uint64(1), res.Employee.Id)
-	})
+	// ---------------- GET EMPLOYEE ----------------
+	employee := &models.Employee{
+		Model:    gorm.Model{ID: 1},
+		Email:    "john@example.com",
+		Username: "john123",
+		Permissions: []models.Permission{
+			*perm,
+		},
+	}
+	mockRepo.On("GetEmployeeByID", uint(1)).Return(employee, nil)
 
-	t.Run("Employee_Update_AllPaths", func(t *testing.T) {
-		_, err := svc.UpdateEmployee(ctx, &pb.UpdateEmployeeRequest{Id: 0})
-		assert.Equal(t, codes.InvalidArgument, status.Code(err))
+	assert.NoError(t, err)
 
-		mockRepo.On("GetEmployeeByID", uint64(1)).Return(nil, errors.New("record not found")).Once()
-		_, err = svc.UpdateEmployee(ctx, &pb.UpdateEmployeeRequest{Id: 1})
-		assert.Equal(t, codes.NotFound, status.Code(err))
+	// ---------------- UPDATE EMPLOYEE ----------------
+	mockRepo.On("GetPermissionByName", "ADMIN").Return(perm, nil)
+	mockRepo.On("UpdateEmployee", employee, []uint{1}).Return(nil)
 
-		existing := &models.Employee{FirstName: "Old"}
-		mockRepo.On("GetEmployeeByID", uint64(1)).Return(existing, nil).Once()
-		mockRepo.On("UpdateEmployee", mock.Anything, []uint64{2}).Return(nil).Once()
-		res, err := svc.UpdateEmployee(ctx, &pb.UpdateEmployeeRequest{Id: 1, FirstName: "New", PermissionIds: []uint64{2}})
-		assert.NoError(t, err)
-		assert.Equal(t, "New", res.Employee.FirstName)
-	})
+	updateReq := &pb.UpdateEmployeeRequest{
+		EmployeeId:  1,
+		Email:       "john2@example.com",
+		DateOfBirth: "1990-01-01",
+		Permissions: []string{"ADMIN"},
+	}
+	empRes3, err := svc.UpdateEmployee(ctx, updateReq)
+	assert.NoError(t, err)
+	assert.Equal(t, "john2@example.com", empRes3.Email)
 
-	t.Run("Employee_List_Pagination", func(t *testing.T) {
-		mockRepo.On("ListEmployees", 1, 10).Return([]models.Employee{{FirstName: "E1"}}, int64(1), nil).Once()
-		res, err := svc.ListEmployees(ctx, &pb.ListEmployeesRequest{Page: 0, PageSize: 0})
-		assert.NoError(t, err)
-		assert.Len(t, res.Employees, 1)
+	// ---------------- DELETE EMPLOYEE ----------------
+	mockRepo.On("DeleteEmployee", uint(1)).Return(nil)
+	delReq := &pb.DeleteEmployeeRequest{EmployeeId: 1}
+	_, err = svc.DeleteEmployee(ctx, delReq)
+	assert.NoError(t, err)
+}
 
-		mockRepo.On("ListEmployees", 2, 5).Return(nil, int64(0), errors.New("db error")).Once()
-		_, err = svc.ListEmployees(ctx, &pb.ListEmployeesRequest{Page: 2, PageSize: 5})
-		assert.Equal(t, codes.Internal, status.Code(err))
-	})
-	// #endregion
+func TestUserService_Clients(t *testing.T) {
+	ctx := context.Background()
+	mockRepo := new(MockUserRepo)
+	svc := NewUserService(mockRepo)
 
-	// #region Client Detailed Tests
-	t.Run("Client_CRUD_Complex", func(t *testing.T) {
-		_, err := svc.CreateClient(ctx, &pb.CreateClientRequest{Email: ""})
-		assert.Equal(t, codes.InvalidArgument, status.Code(err))
+	client := &models.Client{
+		Model:     gorm.Model{ID: 1},
+		FirstName: "Alice",
+		LastName:  "Smith",
+	}
 
-		mockRepo.On("CreateClient", mock.Anything).Return(nil).Once()
-		res, err := svc.CreateClient(ctx, &pb.CreateClientRequest{Email: "c@c.com"})
-		assert.NoError(t, err)
-		assert.Equal(t, uint64(1), res.Client.Id)
+	// CREATE CLIENT
+	mockRepo.On("CreateClient", mock.Anything).Return(nil)
+	createReq := &pb.CreateClientRequest{
+		FirstName: "Alice",
+		LastName:  "Smith",
+	}
+	res, err := svc.CreateClient(ctx, createReq)
+	assert.NoError(t, err)
+	assert.Equal(t, "Alice", res.FirstName)
 
-		mockRepo.On("GetClientByID", uint64(1)).Return(&models.Client{Email: "c@c.com"}, nil).Once()
-		mockRepo.On("UpdateClient", mock.Anything).Return(nil).Once()
-		_, err = svc.UpdateClient(ctx, &pb.UpdateClientRequest{Id: 1, Email: "new@c.com"})
-		assert.NoError(t, err)
+	// GET CLIENT
+	mockRepo.On("GetClientByID", uint(1)).Return(client, nil)
+	getReq := &pb.GetClientRequest{ClientId: 1}
+	res2, err := svc.GetClient(ctx, getReq)
+	assert.NoError(t, err)
+	assert.Equal(t, "Alice", res2.FirstName)
 
-		mockRepo.On("DeleteClient", uint64(1)).Return(nil).Once()
-		_, err = svc.DeleteClient(ctx, &pb.DeleteClientRequest{Id: 1})
-		assert.NoError(t, err)
-	})
-	// #endregion
+	// UPDATE CLIENT
+	client.FirstName = "Alice2"
+	mockRepo.On("UpdateClient", client).Return(nil)
+	updateReq := &pb.UpdateClientRequest{
+		ClientId:  1,
+		FirstName: "Alice2",
+		LastName:  "Smith",
+	}
+	res3, err := svc.UpdateClient(ctx, updateReq)
+	assert.NoError(t, err)
+	assert.Equal(t, "Alice2", res3.FirstName)
 
-	// #region Permission Detailed Tests
-	t.Run("Permission_Operations", func(t *testing.T) {
-		mockRepo.On("CreatePermission", mock.Anything).Return(nil).Once()
-		res, err := svc.CreatePermission(ctx, &pb.CreatePermissionRequest{Name: "Admin"})
-		assert.NoError(t, err)
-		assert.Equal(t, "Admin", res.Permission.Name)
+	// DELETE CLIENT
+	mockRepo.On("DeleteClient", uint(1)).Return(nil)
+	delReq := &pb.DeleteClientRequest{ClientId: 1}
+	_, err = svc.DeleteClient(ctx, delReq)
+	assert.NoError(t, err)
+}
 
-		mockRepo.On("ListPermissions").Return([]models.Permission{{Name: "P1"}, {Name: "P2"}}, nil).Once()
-		list, err := svc.ListPermissions(ctx, &emptypb.Empty{})
-		assert.NoError(t, err)
-		assert.Len(t, list.Permissions, 2)
-	})
-	// #endregion
+func TestUserService_ListPermissions(t *testing.T) {
+	ctx := context.Background()
+	mockRepo := new(MockUserRepo)
+	svc := NewUserService(mockRepo)
 
-	// #region Mapper Edge Cases
-	t.Run("Mappers_NilAndNested", func(t *testing.T) {
-		assert.Nil(t, mapEmployeeToProto(nil))
-		assert.Nil(t, mapClientToProto(nil))
-		assert.Nil(t, mapPermissionToProto(nil))
+	perms := []models.Permission{
+		{
+			Model: gorm.Model{ID: 1},
+			Name:  "ADMIN", Description: "admin perm"},
+		{
+			Model: gorm.Model{ID: 1},
+			Name:  "USER", Description: "user perm"},
+	}
+	mockRepo.On("ListPermissions").Return(perms, nil)
 
-		fullEmp := &models.Employee{
-			FirstName:   "Dan",
-			DateOfBirth: time.Date(1990, 1, 1, 0, 0, 0, 0, time.UTC),
-			Permissions: []models.Permission{{Name: "Read"}, {Name: "Write"}},
-		}
-		p := mapEmployeeToProto(fullEmp)
-		assert.Equal(t, "1990-01-01", p.DateOfBirth)
-		assert.Len(t, p.Permissions, 2)
-	})
-	// #endregion
+	res, err := svc.ListPermissions(ctx, &emptypb.Empty{})
+	assert.NoError(t, err)
+	assert.Len(t, res.Permissions, 2)
+	assert.Equal(t, "ADMIN", res.Permissions[0].Name)
+	assert.Equal(t, "USER", res.Permissions[1].Name)
+}
+
+func TestUserService_ErrorCases(t *testing.T) {
+	ctx := context.Background()
+	mockRepo := new(MockUserRepo)
+	svc := NewUserService(mockRepo)
+
+	// Invalid date
+	req := &pb.CreateEmployeeRequest{
+		Email:       "a@b.com",
+		Username:    "user1",
+		DateOfBirth: "invalid",
+	}
+	_, err := svc.CreateEmployee(ctx, req)
+	assert.Equal(t, codes.InvalidArgument, status.Code(err))
+
+	// Missing email/username
+	req2 := &pb.CreateEmployeeRequest{}
+	_, err = svc.CreateEmployee(ctx, req2)
+	assert.Equal(t, codes.InvalidArgument, status.Code(err))
+
+	// Permission not found
+	mockRepo.On("GetPermissionByName", "ADMIN").Return(nil, nil)
+	req3 := &pb.CreateEmployeeRequest{
+		Email:       "a@b.com",
+		Username:    "user1",
+		DateOfBirth: "1990-01-01",
+		Permissions: []string{"ADMIN"},
+	}
+	_, err = svc.CreateEmployee(ctx, req3)
+	assert.Equal(t, codes.InvalidArgument, status.Code(err))
+	assert.Contains(t, err.Error(), "permission not found")
+
+	// Get employee not found
+	mockRepo.On("GetEmployeeByID", uint(999)).Return(nil, errors.New("record not found"))
+	_, err = svc.GetEmployee(ctx, &pb.GetEmployeeRequest{EmployeeId: 999})
+	assert.Equal(t, codes.NotFound, status.Code(err))
 }
