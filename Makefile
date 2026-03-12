@@ -16,11 +16,14 @@ down-v:
 
 proto:
 	docker build -t banka-proto -f scripts/proto/Dockerfile .
+	# Note: We include /opt/googleapis so protoc can find google/api/annotations.proto
 	docker run --rm -v $(PWD):/workspace -u $$(id -u):$$(id -g) banka-proto \
 		--proto_path=/workspace/proto \
+		--proto_path=/opt/googleapis \
 		--go_out=/workspace/gen --go_opt=paths=source_relative \
 		--go-grpc_out=/workspace/gen --go-grpc_opt=paths=source_relative \
-		$$(cd proto && find . -name '*.proto' | sed 's|^\./||')
+		--grpc-gateway_out=/workspace/gen --grpc-gateway_opt=paths=source_relative \
+		user/user.proto notification/notification.proto
 
 schema:
 	docker compose exec -T postgres psql -U $(POSTGRES_USER) -d $(POSTGRES_DB) < scripts/db/schema.sql

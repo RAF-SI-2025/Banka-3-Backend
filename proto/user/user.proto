@@ -19,7 +19,7 @@ service UserService {
   }
 
   rpc CreateEmployee(CreateEmployeeRequest) returns (Employee) {
-    option (google.api.http) = {post: "/employees" body: "*"};
+    option (google.api.http) = {post: "/employees", body: "*"};
   }
 
   rpc GetEmployee(GetEmployeeRequest) returns (Employee) {
@@ -27,7 +27,7 @@ service UserService {
   }
 
   rpc UpdateEmployee(UpdateEmployeeRequest) returns (Employee) {
-    option (google.api.http) = {put: "/employees/{employee_id}" body: "*"};
+    option (google.api.http) = {put: "/employees/{employee_id}", body: "*"};
   }
 
   rpc DeleteEmployee(DeleteEmployeeRequest) returns (google.protobuf.Empty) {
@@ -40,7 +40,7 @@ service UserService {
   }
 
   rpc CreateClient(CreateClientRequest) returns (Client) {
-    option (google.api.http) = {post: "/clients" body: "*"};
+    option (google.api.http) = {post: "/clients", body: "*"};
   }
 
   rpc GetClient(GetClientRequest) returns (Client) {
@@ -48,7 +48,7 @@ service UserService {
   }
 
   rpc UpdateClient(UpdateClientRequest) returns (Client) {
-    option (google.api.http) = {put: "/clients/{client_id}" body: "*"};
+    option (google.api.http) = {put: "/clients/{client_id}", body: "*"};
   }
 
   rpc DeleteClient(DeleteClientRequest) returns (google.protobuf.Empty) {
@@ -60,6 +60,22 @@ service UserService {
     option (google.api.http) = {get: "/permissions"};
   }
 
+  // Auth
+  rpc Login(LoginRequest) returns (LoginResponse) {
+    option (google.api.http) = {post: "/auth/login", body: "*"};
+  }
+
+  rpc Refresh(RefreshRequest) returns (RefreshResponse) {
+    option (google.api.http) = {post: "/auth/refresh", body: "*"};
+  }
+
+  rpc ValidateAccessToken(ValidateTokenRequest) returns (ValidateTokenResponse) {
+    option (google.api.http) = {post: "/auth/validate-access", body: "*"};
+  }
+
+  rpc ValidateRefreshToken(ValidateTokenRequest) returns (ValidateTokenResponse) {
+    option (google.api.http) = {post: "/auth/validate-refresh", body: "*"};
+  }
 }
 
 // =======================
@@ -70,7 +86,7 @@ message Employee {
   uint64 id = 1;
   string first_name = 2;
   string last_name = 3;
-  string date_of_birth = 4;  // yyyy-mm-dd
+  string date_of_birth = 4;
   string gender = 5;
   string email = 6;
   string phone_number = 7;
@@ -121,15 +137,13 @@ message ListEmployeesRequest {
   string first_name = 2;
   string last_name = 3;
   string position = 4;
-
-  int32 page = 5;       // page number, starts at 1
+  int32 page = 5;
   int32 page_size = 6;
 }
 
-
 message ListEmployeesResponse {
   repeated Employee employees = 1;
-  int64 total = 2; // matching filter
+  int64 total = 2;
 }
 
 // =======================
@@ -140,18 +154,17 @@ message Client {
   uint64 id = 1;
   string first_name = 2;
   string last_name = 3;
-  int64 date_of_birth = 4; // Unix timestamp
+  string date_of_birth = 4;
   string gender = 5;
   string email = 6;
   string phone_number = 7;
   string address = 8;
-  repeated string connected_accounts = 9;
 }
 
 message CreateClientRequest {
   string first_name = 1;
   string last_name = 2;
-  int64 date_of_birth = 3;
+  string date_of_birth = 3;
   string gender = 4;
   string email = 5;
   string phone_number = 6;
@@ -164,7 +177,7 @@ message UpdateClientRequest {
   uint64 client_id = 1;
   string first_name = 2;
   string last_name = 3;
-  int64 date_of_birth = 4;
+  string date_of_birth = 4;
   string gender = 5;
   string email = 6;
   string phone_number = 7;
@@ -174,9 +187,10 @@ message UpdateClientRequest {
 message DeleteClientRequest {uint64 client_id = 1;}
 
 message ListClientsRequest {
-  int32 page = 1; // starts at 1
+  int32 page = 1;
   int32 page_size = 2;
 }
+
 message ListClientsResponse {
   repeated Client clients = 1;
   int64 total = 2;
@@ -189,8 +203,37 @@ message ListClientsResponse {
 message Permission {
   uint64 id = 1;
   string name = 2;
-  string description = 3;
 }
 
-
 message ListPermissionsResponse {repeated Permission permissions = 1;}
+
+// =======================
+// AUTH MESSAGES
+// =======================
+
+message ValidateTokenRequest {
+  string token = 1;
+}
+
+message ValidateTokenResponse {
+  bool valid = 1;
+}
+
+message RefreshRequest {
+  string refresh_token = 1;
+}
+
+message RefreshResponse {
+  string access_token = 1;
+  string refresh_token = 2;
+}
+
+message LoginRequest {
+  string email = 1;
+  string password = 2;
+}
+
+message LoginResponse {
+  string access_token = 1;
+  string refresh_token = 2;
+}

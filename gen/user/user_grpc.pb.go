@@ -8,7 +8,6 @@ package user
 
 import (
 	context "context"
-
 	grpc "google.golang.org/grpc"
 	codes "google.golang.org/grpc/codes"
 	status "google.golang.org/grpc/status"
@@ -21,17 +20,21 @@ import (
 const _ = grpc.SupportPackageIsVersion9
 
 const (
-	UserService_ListEmployees_FullMethodName   = "/user.UserService/ListEmployees"
-	UserService_CreateEmployee_FullMethodName  = "/user.UserService/CreateEmployee"
-	UserService_GetEmployee_FullMethodName     = "/user.UserService/GetEmployee"
-	UserService_UpdateEmployee_FullMethodName  = "/user.UserService/UpdateEmployee"
-	UserService_DeleteEmployee_FullMethodName  = "/user.UserService/DeleteEmployee"
-	UserService_ListClients_FullMethodName     = "/user.UserService/ListClients"
-	UserService_CreateClient_FullMethodName    = "/user.UserService/CreateClient"
-	UserService_GetClient_FullMethodName       = "/user.UserService/GetClient"
-	UserService_UpdateClient_FullMethodName    = "/user.UserService/UpdateClient"
-	UserService_DeleteClient_FullMethodName    = "/user.UserService/DeleteClient"
-	UserService_ListPermissions_FullMethodName = "/user.UserService/ListPermissions"
+	UserService_ListEmployees_FullMethodName        = "/user.UserService/ListEmployees"
+	UserService_CreateEmployee_FullMethodName       = "/user.UserService/CreateEmployee"
+	UserService_GetEmployee_FullMethodName          = "/user.UserService/GetEmployee"
+	UserService_UpdateEmployee_FullMethodName       = "/user.UserService/UpdateEmployee"
+	UserService_DeleteEmployee_FullMethodName       = "/user.UserService/DeleteEmployee"
+	UserService_ListClients_FullMethodName          = "/user.UserService/ListClients"
+	UserService_CreateClient_FullMethodName         = "/user.UserService/CreateClient"
+	UserService_GetClient_FullMethodName            = "/user.UserService/GetClient"
+	UserService_UpdateClient_FullMethodName         = "/user.UserService/UpdateClient"
+	UserService_DeleteClient_FullMethodName         = "/user.UserService/DeleteClient"
+	UserService_ListPermissions_FullMethodName      = "/user.UserService/ListPermissions"
+	UserService_Login_FullMethodName                = "/user.UserService/Login"
+	UserService_Refresh_FullMethodName              = "/user.UserService/Refresh"
+	UserService_ValidateAccessToken_FullMethodName  = "/user.UserService/ValidateAccessToken"
+	UserService_ValidateRefreshToken_FullMethodName = "/user.UserService/ValidateRefreshToken"
 )
 
 // UserServiceClient is the client API for UserService service.
@@ -52,6 +55,11 @@ type UserServiceClient interface {
 	DeleteClient(ctx context.Context, in *DeleteClientRequest, opts ...grpc.CallOption) (*emptypb.Empty, error)
 	// Permissions
 	ListPermissions(ctx context.Context, in *emptypb.Empty, opts ...grpc.CallOption) (*ListPermissionsResponse, error)
+	// Auth
+	Login(ctx context.Context, in *LoginRequest, opts ...grpc.CallOption) (*LoginResponse, error)
+	Refresh(ctx context.Context, in *RefreshRequest, opts ...grpc.CallOption) (*RefreshResponse, error)
+	ValidateAccessToken(ctx context.Context, in *ValidateTokenRequest, opts ...grpc.CallOption) (*ValidateTokenResponse, error)
+	ValidateRefreshToken(ctx context.Context, in *ValidateTokenRequest, opts ...grpc.CallOption) (*ValidateTokenResponse, error)
 }
 
 type userServiceClient struct {
@@ -172,6 +180,46 @@ func (c *userServiceClient) ListPermissions(ctx context.Context, in *emptypb.Emp
 	return out, nil
 }
 
+func (c *userServiceClient) Login(ctx context.Context, in *LoginRequest, opts ...grpc.CallOption) (*LoginResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(LoginResponse)
+	err := c.cc.Invoke(ctx, UserService_Login_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *userServiceClient) Refresh(ctx context.Context, in *RefreshRequest, opts ...grpc.CallOption) (*RefreshResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(RefreshResponse)
+	err := c.cc.Invoke(ctx, UserService_Refresh_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *userServiceClient) ValidateAccessToken(ctx context.Context, in *ValidateTokenRequest, opts ...grpc.CallOption) (*ValidateTokenResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(ValidateTokenResponse)
+	err := c.cc.Invoke(ctx, UserService_ValidateAccessToken_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *userServiceClient) ValidateRefreshToken(ctx context.Context, in *ValidateTokenRequest, opts ...grpc.CallOption) (*ValidateTokenResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(ValidateTokenResponse)
+	err := c.cc.Invoke(ctx, UserService_ValidateRefreshToken_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
 // UserServiceServer is the server API for UserService service.
 // All implementations must embed UnimplementedUserServiceServer
 // for forward compatibility.
@@ -190,6 +238,11 @@ type UserServiceServer interface {
 	DeleteClient(context.Context, *DeleteClientRequest) (*emptypb.Empty, error)
 	// Permissions
 	ListPermissions(context.Context, *emptypb.Empty) (*ListPermissionsResponse, error)
+	// Auth
+	Login(context.Context, *LoginRequest) (*LoginResponse, error)
+	Refresh(context.Context, *RefreshRequest) (*RefreshResponse, error)
+	ValidateAccessToken(context.Context, *ValidateTokenRequest) (*ValidateTokenResponse, error)
+	ValidateRefreshToken(context.Context, *ValidateTokenRequest) (*ValidateTokenResponse, error)
 	mustEmbedUnimplementedUserServiceServer()
 }
 
@@ -232,6 +285,18 @@ func (UnimplementedUserServiceServer) DeleteClient(context.Context, *DeleteClien
 }
 func (UnimplementedUserServiceServer) ListPermissions(context.Context, *emptypb.Empty) (*ListPermissionsResponse, error) {
 	return nil, status.Error(codes.Unimplemented, "method ListPermissions not implemented")
+}
+func (UnimplementedUserServiceServer) Login(context.Context, *LoginRequest) (*LoginResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method Login not implemented")
+}
+func (UnimplementedUserServiceServer) Refresh(context.Context, *RefreshRequest) (*RefreshResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method Refresh not implemented")
+}
+func (UnimplementedUserServiceServer) ValidateAccessToken(context.Context, *ValidateTokenRequest) (*ValidateTokenResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method ValidateAccessToken not implemented")
+}
+func (UnimplementedUserServiceServer) ValidateRefreshToken(context.Context, *ValidateTokenRequest) (*ValidateTokenResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method ValidateRefreshToken not implemented")
 }
 func (UnimplementedUserServiceServer) mustEmbedUnimplementedUserServiceServer() {}
 func (UnimplementedUserServiceServer) testEmbeddedByValue()                     {}
@@ -452,6 +517,78 @@ func _UserService_ListPermissions_Handler(srv interface{}, ctx context.Context, 
 	return interceptor(ctx, in, info, handler)
 }
 
+func _UserService_Login_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(LoginRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(UserServiceServer).Login(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: UserService_Login_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(UserServiceServer).Login(ctx, req.(*LoginRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _UserService_Refresh_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(RefreshRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(UserServiceServer).Refresh(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: UserService_Refresh_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(UserServiceServer).Refresh(ctx, req.(*RefreshRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _UserService_ValidateAccessToken_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(ValidateTokenRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(UserServiceServer).ValidateAccessToken(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: UserService_ValidateAccessToken_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(UserServiceServer).ValidateAccessToken(ctx, req.(*ValidateTokenRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _UserService_ValidateRefreshToken_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(ValidateTokenRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(UserServiceServer).ValidateRefreshToken(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: UserService_ValidateRefreshToken_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(UserServiceServer).ValidateRefreshToken(ctx, req.(*ValidateTokenRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
 // UserService_ServiceDesc is the grpc.ServiceDesc for UserService service.
 // It's only intended for direct use with grpc.RegisterService,
 // and not to be introspected or modified (even as a copy)
@@ -502,6 +639,22 @@ var UserService_ServiceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "ListPermissions",
 			Handler:    _UserService_ListPermissions_Handler,
+		},
+		{
+			MethodName: "Login",
+			Handler:    _UserService_Login_Handler,
+		},
+		{
+			MethodName: "Refresh",
+			Handler:    _UserService_Refresh_Handler,
+		},
+		{
+			MethodName: "ValidateAccessToken",
+			Handler:    _UserService_ValidateAccessToken_Handler,
+		},
+		{
+			MethodName: "ValidateRefreshToken",
+			Handler:    _UserService_ValidateRefreshToken_Handler,
 		},
 	},
 	Streams:  []grpc.StreamDesc{},
