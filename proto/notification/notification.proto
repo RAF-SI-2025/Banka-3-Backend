@@ -7,6 +7,8 @@ option go_package = "banka-raf/gen/notification";
 service NotificationService {
   rpc SendConfirmationEmail(ConfirmationMailRequest) returns (SuccessResponse);
   rpc SendActivationEmail(ActivationMailRequest) returns (SuccessResponse);
+  rpc SendPasswordResetEmail(PasswordLinkMailRequest) returns (SuccessResponse);
+  rpc SendInitialPasswordSetEmail(PasswordLinkMailRequest) returns (SuccessResponse);
 }
 
 message ConfirmationMailRequest {
@@ -18,6 +20,11 @@ message ConfirmationMailRequest {
 message ActivationMailRequest {
   string to_addr = 1; // comma separated addresses of receivers
   string link = 2;    // link to page
+}
+
+message PasswordLinkMailRequest {
+  string to_addr = 1;
+  string link = 2;
 }
 
 message SuccessResponse { bool successful = 1; }

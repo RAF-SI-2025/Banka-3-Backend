@@ -10,6 +10,11 @@ service UserService {
   rpc Refresh(RefreshRequest) returns (RefreshResponse);
   rpc ValidateAccessToken(ValidateTokenRequest) returns (ValidateTokenResponse);
   rpc ValidateRefreshToken(ValidateTokenRequest) returns (ValidateTokenResponse);
+  rpc RequestPasswordReset(PasswordActionRequest) returns (PasswordActionResponse);
+  rpc RequestInitialPasswordSet(PasswordActionRequest) returns (PasswordActionResponse);
+  rpc SetPasswordWithToken(SetPasswordWithTokenRequest) returns (SetPasswordWithTokenResponse);
+  rpc CreateClientAccount(CreateClientRequest) returns (CreateClientResponse);
+  rpc CreateEmployeeAccount(CreateEmployeeRequest) returns (CreateEmployeeResponse);
 }
 
 message ValidateTokenRequest {
@@ -50,4 +55,53 @@ message LoginRequest {
 message LoginResponse {
   string accessToken = 1;
   string refreshToken = 2;
+}
+
+message PasswordActionRequest {
+  string email = 1;
+}
+
+message PasswordActionResponse {
+  bool accepted = 1;
+}
+
+message SetPasswordWithTokenRequest {
+  string token = 1;
+  string new_password = 2;
+}
+
+message SetPasswordWithTokenResponse {
+  bool successful = 1;
+}
+message CreateEmployeeRequest{
+  string FirstName = 1;
+  string Last_name = 2;
+  int64 DateOfBirth = 3;
+  string Gender = 4;
+  string Email = 5;
+  string PhoneNumber = 6;
+  string Address = 7;
+  string Username = 8;
+  string Position = 9;
+  string Department = 10;
+  string password = 11;
+}
+
+message CreateEmployeeResponse{
+  bool valid = 1;
+}
+
+message CreateClientRequest{
+  string FirstName = 1;
+  string Last_name = 2;
+  int64 DateOfBirth = 3;
+  string Gender = 4;
+  string Email = 5;
+  string PhoneNumber = 6;
+  string Address = 7;
+  string password = 8;
+}
+
+message CreateClientResponse{
+  bool valid = 1;
 }

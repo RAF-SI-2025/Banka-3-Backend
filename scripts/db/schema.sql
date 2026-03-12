@@ -49,3 +49,15 @@ CREATE TABLE IF NOT EXISTS refresh_tokens (
     valid_until  TIMESTAMP    NOT NULL,
     revoked      BOOLEAN      NOT NULL DEFAULT FALSE
 );
+
+CREATE TABLE IF NOT EXISTS password_action_tokens (
+    email        VARCHAR(255) NOT NULL,
+    action_type  VARCHAR(20)  NOT NULL,
+    hashed_token BYTEA        NOT NULL UNIQUE,
+    valid_until  TIMESTAMP    NOT NULL,
+    used         BOOLEAN      NOT NULL DEFAULT FALSE,
+    created_at   TIMESTAMP    NOT NULL DEFAULT NOW(),
+    used_at      TIMESTAMP,
+    PRIMARY KEY (email, action_type),
+    CHECK (action_type IN ('reset', 'initial_set'))
+);

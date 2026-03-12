@@ -133,6 +133,58 @@ func (x *ActivationMailRequest) GetLink() string {
 	return ""
 }
 
+type PasswordLinkMailRequest struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	ToAddr        string                 `protobuf:"bytes,1,opt,name=to_addr,json=toAddr,proto3" json:"to_addr,omitempty"`
+	Link          string                 `protobuf:"bytes,2,opt,name=link,proto3" json:"link,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *PasswordLinkMailRequest) Reset() {
+	*x = PasswordLinkMailRequest{}
+	mi := &file_notification_notification_proto_msgTypes[2]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *PasswordLinkMailRequest) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*PasswordLinkMailRequest) ProtoMessage() {}
+
+func (x *PasswordLinkMailRequest) ProtoReflect() protoreflect.Message {
+	mi := &file_notification_notification_proto_msgTypes[2]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use PasswordLinkMailRequest.ProtoReflect.Descriptor instead.
+func (*PasswordLinkMailRequest) Descriptor() ([]byte, []int) {
+	return file_notification_notification_proto_rawDescGZIP(), []int{2}
+}
+
+func (x *PasswordLinkMailRequest) GetToAddr() string {
+	if x != nil {
+		return x.ToAddr
+	}
+	return ""
+}
+
+func (x *PasswordLinkMailRequest) GetLink() string {
+	if x != nil {
+		return x.Link
+	}
+	return ""
+}
+
 type SuccessResponse struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
 	Successful    bool                   `protobuf:"varint,1,opt,name=successful,proto3" json:"successful,omitempty"`
@@ -142,7 +194,7 @@ type SuccessResponse struct {
 
 func (x *SuccessResponse) Reset() {
 	*x = SuccessResponse{}
-	mi := &file_notification_notification_proto_msgTypes[2]
+	mi := &file_notification_notification_proto_msgTypes[3]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -154,7 +206,7 @@ func (x *SuccessResponse) String() string {
 func (*SuccessResponse) ProtoMessage() {}
 
 func (x *SuccessResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_notification_notification_proto_msgTypes[2]
+	mi := &file_notification_notification_proto_msgTypes[3]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -167,7 +219,7 @@ func (x *SuccessResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use SuccessResponse.ProtoReflect.Descriptor instead.
 func (*SuccessResponse) Descriptor() ([]byte, []int) {
-	return file_notification_notification_proto_rawDescGZIP(), []int{2}
+	return file_notification_notification_proto_rawDescGZIP(), []int{3}
 }
 
 func (x *SuccessResponse) GetSuccessful() bool {
@@ -188,14 +240,19 @@ const file_notification_notification_proto_rawDesc = "" +
 	"\x04body\x18\x03 \x01(\tR\x04body\"D\n" +
 	"\x15ActivationMailRequest\x12\x17\n" +
 	"\ato_addr\x18\x01 \x01(\tR\x06toAddr\x12\x12\n" +
+	"\x04link\x18\x02 \x01(\tR\x04link\"F\n" +
+	"\x17PasswordLinkMailRequest\x12\x17\n" +
+	"\ato_addr\x18\x01 \x01(\tR\x06toAddr\x12\x12\n" +
 	"\x04link\x18\x02 \x01(\tR\x04link\"1\n" +
 	"\x0fSuccessResponse\x12\x1e\n" +
 	"\n" +
 	"successful\x18\x01 \x01(\bR\n" +
-	"successful2\xcf\x01\n" +
+	"successful2\x94\x03\n" +
 	"\x13NotificationService\x12]\n" +
 	"\x15SendConfirmationEmail\x12%.notification.ConfirmationMailRequest\x1a\x1d.notification.SuccessResponse\x12Y\n" +
-	"\x13SendActivationEmail\x12#.notification.ActivationMailRequest\x1a\x1d.notification.SuccessResponseB\x1cZ\x1abanka-raf/gen/notificationb\x06proto3"
+	"\x13SendActivationEmail\x12#.notification.ActivationMailRequest\x1a\x1d.notification.SuccessResponse\x12^\n" +
+	"\x16SendPasswordResetEmail\x12%.notification.PasswordLinkMailRequest\x1a\x1d.notification.SuccessResponse\x12c\n" +
+	"\x1bSendInitialPasswordSetEmail\x12%.notification.PasswordLinkMailRequest\x1a\x1d.notification.SuccessResponseB\x1cZ\x1abanka-raf/gen/notificationb\x06proto3"
 
 var (
 	file_notification_notification_proto_rawDescOnce sync.Once
@@ -209,19 +266,24 @@ func file_notification_notification_proto_rawDescGZIP() []byte {
 	return file_notification_notification_proto_rawDescData
 }
 
-var file_notification_notification_proto_msgTypes = make([]protoimpl.MessageInfo, 3)
+var file_notification_notification_proto_msgTypes = make([]protoimpl.MessageInfo, 4)
 var file_notification_notification_proto_goTypes = []any{
 	(*ConfirmationMailRequest)(nil), // 0: notification.ConfirmationMailRequest
 	(*ActivationMailRequest)(nil),   // 1: notification.ActivationMailRequest
-	(*SuccessResponse)(nil),         // 2: notification.SuccessResponse
+	(*PasswordLinkMailRequest)(nil), // 2: notification.PasswordLinkMailRequest
+	(*SuccessResponse)(nil),         // 3: notification.SuccessResponse
 }
 var file_notification_notification_proto_depIdxs = []int32{
 	0, // 0: notification.NotificationService.SendConfirmationEmail:input_type -> notification.ConfirmationMailRequest
 	1, // 1: notification.NotificationService.SendActivationEmail:input_type -> notification.ActivationMailRequest
-	2, // 2: notification.NotificationService.SendConfirmationEmail:output_type -> notification.SuccessResponse
-	2, // 3: notification.NotificationService.SendActivationEmail:output_type -> notification.SuccessResponse
-	2, // [2:4] is the sub-list for method output_type
-	0, // [0:2] is the sub-list for method input_type
+	2, // 2: notification.NotificationService.SendPasswordResetEmail:input_type -> notification.PasswordLinkMailRequest
+	2, // 3: notification.NotificationService.SendInitialPasswordSetEmail:input_type -> notification.PasswordLinkMailRequest
+	3, // 4: notification.NotificationService.SendConfirmationEmail:output_type -> notification.SuccessResponse
+	3, // 5: notification.NotificationService.SendActivationEmail:output_type -> notification.SuccessResponse
+	3, // 6: notification.NotificationService.SendPasswordResetEmail:output_type -> notification.SuccessResponse
+	3, // 7: notification.NotificationService.SendInitialPasswordSetEmail:output_type -> notification.SuccessResponse
+	4, // [4:8] is the sub-list for method output_type
+	0, // [0:4] is the sub-list for method input_type
 	0, // [0:0] is the sub-list for extension type_name
 	0, // [0:0] is the sub-list for extension extendee
 	0, // [0:0] is the sub-list for field type_name
@@ -238,7 +300,7 @@ func file_notification_notification_proto_init() {
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
 			RawDescriptor: unsafe.Slice(unsafe.StringData(file_notification_notification_proto_rawDesc), len(file_notification_notification_proto_rawDesc)),
 			NumEnums:      0,
-			NumMessages:   3,
+			NumMessages:   4,
 			NumExtensions: 0,
 			NumServices:   1,
 		},

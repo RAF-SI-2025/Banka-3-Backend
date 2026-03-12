@@ -12,7 +12,18 @@ import (
 	_ "github.com/jackc/pgx/v5/stdlib"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/reflection"
+	"gorm.io/gorm"
+	"gorm.io/driver/postgres"
 )
+
+func connect_to_db_gorm() *gorm.DB {
+	dsn := os.Getenv("DATABASE_URL")
+	gorm_db, gorm_err := gorm.Open(postgres.Open(dsn), &gorm.Config{})
+	if gorm_err != nil {
+		log.Fatal("pgx", dsn)
+	}
+	return gorm_db
+}
 
 func connectToDB() *sql.DB {
 	connStr := os.Getenv("DATABASE_URL")
@@ -35,6 +46,8 @@ func main() {
 	}
 
 	db := connectToDB()
+	gorm_db := connect_to_db_gorm()
+	gorm_db.AutoMigrate(&internalUser.Clients{}, &internalUser.Employees{});
 	log.Println("connected to database...")
 	defer db.Close()
 
@@ -44,7 +57,7 @@ func main() {
 		log.Fatalf("JWT secrets not set, exiting...")
 	}
 
-	userService := internalUser.NewServer(accessJwtSecret, refreshJwtSecret, db)
+	userService := internalUser.NewServer(accessJwtSecret, refreshJwtSecret, db, gorm_db)
 
 	srv := grpc.NewServer()
 	user.RegisterUserServiceServer(srv, userService)

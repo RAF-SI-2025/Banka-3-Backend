@@ -15,7 +15,7 @@ services:
       timeout: 5s
       retries: 10
     networks: [banka]
-
+    
   user:
     container_name: user
     build:
@@ -28,6 +28,9 @@ services:
       GRPC_PORT: "50051"
       ACCESS_JWT_SECRET: ${ACCESS_JWT_SECRET}
       REFRESH_JWT_SECRET: ${REFRESH_JWT_SECRET}
+      NOTIFICATION_GRPC_ADDR: ${NOTIFICATION_GRPC_ADDR:-notification:50051}
+      PASSWORD_RESET_BASE_URL: ${PASSWORD_RESET_BASE_URL}
+      PASSWORD_SET_BASE_URL: ${PASSWORD_SET_BASE_URL}
     depends_on:
       postgres:
         condition: service_healthy
@@ -48,21 +51,21 @@ services:
       SMTP_ADDR: "${SMTP_ADDR}"
     networks: [banka]
 
-  # gateway:
-  #   container_name: gateway
-  #   build:
-  #     context: .
-  #     dockerfile: cmd/gateway/Dockerfile
-  #   ports:
-  #     - "${GATEWAY_PORT:-8080}:8080"
-  #   environment:
-  #     HTTP_PORT: "8080"
-  #     USER_GRPC_ADDR: "user:50051"
-  #     NOTIFICATION_GRPC_ADDR: "notification:50051"
-  #   depends_on:
-  #     - user
-  #     - notification
-  #   networks: [banka]
+  gateway:
+    container_name: gateway
+    build:
+      context: .
+      dockerfile: cmd/gateway/Dockerfile
+    ports:
+      - "${GATEWAY_PORT:-8080}:8080"
+    environment:
+      HTTP_PORT: "8080"
+      USER_GRPC_ADDR: "user:50051"
+      NOTIFICATION_GRPC_ADDR: "notification:50051"
+    depends_on:
+      - user
+      - notification
+    networks: [banka]
 
 volumes:
   pgdata:

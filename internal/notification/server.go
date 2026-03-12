@@ -98,6 +98,56 @@ func (s *Server) SendActivationEmail(ctx context.Context, req *notification.Acti
 	}, nil
 }
 
+func (s *Server) SendPasswordResetEmail(ctx context.Context, req *notification.PasswordLinkMailRequest) (*notification.SuccessResponse, error) {
+	to := strings.Split(req.ToAddr, ",")
+	templ, err := template.ParseFiles("templates/password_reset.html")
+	if err != nil {
+		log.Println("Cannot parse password_reset.html:", err)
+		return &notification.SuccessResponse{Successful: false}, nil
+	}
+
+	var rendered bytes.Buffer
+	if err := templ.Execute(&rendered, req); err != nil {
+		log.Println("Cannot execute password_reset.html:", err)
+		return &notification.SuccessResponse{Successful: false}, nil
+	}
+
+	err = sendHTMLEmail(to, "Reset your Banka 3 password", rendered.String())
+	if err != nil {
+		log.Println("Couldn't send password reset email:", err)
+		return &notification.SuccessResponse{Successful: false}, nil
+	}
+
+	return &notification.SuccessResponse{
+		Successful: true,
+	}, nil
+}
+
+func (s *Server) SendInitialPasswordSetEmail(ctx context.Context, req *notification.PasswordLinkMailRequest) (*notification.SuccessResponse, error) {
+	to := strings.Split(req.ToAddr, ",")
+	templ, err := template.ParseFiles("templates/initial_password_set.html")
+	if err != nil {
+		log.Println("Cannot parse initial_password_set.html:", err)
+		return &notification.SuccessResponse{Successful: false}, nil
+	}
+
+	var rendered bytes.Buffer
+	if err := templ.Execute(&rendered, req); err != nil {
+		log.Println("Cannot execute initial_password_set.html:", err)
+		return &notification.SuccessResponse{Successful: false}, nil
+	}
+
+	err = sendHTMLEmail(to, "Set your Banka 3 password", rendered.String())
+	if err != nil {
+		log.Println("Couldn't send initial password set email:", err)
+		return &notification.SuccessResponse{Successful: false}, nil
+	}
+
+	return &notification.SuccessResponse{
+		Successful: true,
+	}, nil
+}
+
 func sendHTMLEmail(to []string, subject string, htmlBody string) error {
 	auth := smtp.PlainAuth(
 		"",
