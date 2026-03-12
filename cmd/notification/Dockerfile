@@ -8,7 +8,7 @@ RUN go mod download
 
 COPY . .
 
-RUN CGO_ENABLED=0 GOOS=linux go build -o notification ./cmd/notification
+RUN CGO_ENABLED=0 GOOS=linux go build -o notification-service ./cmd/notification
 
 
 # --- runtime stage ---
@@ -16,9 +16,9 @@ FROM alpine:3.19
 
 WORKDIR /app
 
-COPY --from=build /app/notification ./notification
+COPY --from=build /app/notification-service .
 COPY --from=build /app/internal/notification/templates ./templates
 
-EXPOSE 50051
+EXPOSE 50052
 
-CMD ["./notification"]
+CMD ["./notification-service"]

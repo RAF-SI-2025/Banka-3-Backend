@@ -1,6 +1,6 @@
 package repository
 
-import "user-service/models"
+import "banka-raf/internal/user/models"
 
 type IUserRepository interface {
 	CreateEmployee(emp *models.Employee, permissionIDs []uint) error

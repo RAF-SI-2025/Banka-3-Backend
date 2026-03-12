@@ -1,12 +1,12 @@
 package service
 
 import (
+	"banka-raf/gen/user"
+	"banka-raf/internal/user/models"
+	"banka-raf/internal/user/repository"
 	"context"
 	"strings"
 	"time"
-	"user-service/models"
-	"user-service/pb"
-	"user-service/repository"
 
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
@@ -14,7 +14,7 @@ import (
 )
 
 type UserService struct {
-	pb.UnimplementedUserServiceServer
+	user.UnimplementedUserServiceServer
 	repo repository.IUserRepository
 }
 
@@ -43,7 +43,35 @@ func handleDBError(err error) error {
 
 // =================== Employee ===================
 
-func (s *UserService) CreateEmployee(ctx context.Context, req *pb.CreateEmployeeRequest) (*pb.Employee, error) {
+func (s *UserService) ListEmployees(ctx context.Context, req *user.ListEmployeesRequest) (*user.ListEmployeesResponse, error) {
+
+	page := 1
+	pageSize := 50
+
+	emps, _, err := s.repo.ListEmployees(
+		page,
+		pageSize,
+		req.Email,
+		req.FirstName,
+		req.LastName,
+		req.Position,
+	)
+
+	if err != nil {
+		return nil, handleDBError(err)
+	}
+
+	res := &user.ListEmployeesResponse{}
+
+	for _, e := range emps {
+		emp := e
+		res.Employees = append(res.Employees, mapEmployeeToProto(&emp))
+	}
+
+	return res, nil
+}
+
+func (s *UserService) CreateEmployee(ctx context.Context, req *user.CreateEmployeeRequest) (*user.Employee, error) {
 	if req.Email == "" || req.Username == "" {
 		return nil, status.Error(codes.InvalidArgument, "email and username required")
 	}
@@ -81,7 +109,7 @@ func (s *UserService) CreateEmployee(ctx context.Context, req *pb.CreateEmployee
 	return mapEmployeeToProto(emp), nil
 }
 
-func (s *UserService) GetEmployee(ctx context.Context, req *pb.GetEmployeeRequest) (*pb.Employee, error) {
+func (s *UserService) GetEmployee(ctx context.Context, req *user.GetEmployeeRequest) (*user.Employee, error) {
 	if req.EmployeeId == 0 {
 		return nil, status.Error(codes.InvalidArgument, "employee_id required")
 	}
@@ -92,15 +120,21 @@ func (s *UserService) GetEmployee(ctx context.Context, req *pb.GetEmployeeReques
 	return mapEmployeeToProto(emp), nil
 }
 
-func (s *UserService) UpdateEmployee(ctx context.Context, req *pb.UpdateEmployeeRequest) (*pb.Employee, error) {
+func (s *UserService) UpdateEmployee(ctx context.Context, req *user.UpdateEmployeeRequest) (*user.Employee, error) {
 	emp, err := s.repo.GetEmployeeByID(uint(req.EmployeeId))
 	if err != nil {
 		return nil, handleDBError(err)
 	}
 
+	dob, err := time.Parse("2006-01-02", req.DateOfBirth)
+	if err != nil {
+		return nil, status.Error(codes.InvalidArgument, "invalid date format")
+	}
+
 	emp.FirstName = req.FirstName
 	emp.LastName = req.LastName
 	emp.DateOfBirth, _ = time.Parse("2006-01-02", req.DateOfBirth)
+	emp.DateOfBirth = dob
 	emp.Gender = req.Gender
 	emp.Email = req.Email
 	emp.PhoneNumber = req.PhoneNumber
@@ -124,7 +158,7 @@ func (s *UserService) UpdateEmployee(ctx context.Context, req *pb.UpdateEmployee
 	return mapEmployeeToProto(emp), nil
 }
 
-func (s *UserService) DeleteEmployee(ctx context.Context, req *pb.DeleteEmployeeRequest) (*emptypb.Empty, error) {
+func (s *UserService) DeleteEmployee(ctx context.Context, req *user.DeleteEmployeeRequest) (*emptypb.Empty, error) {
 	if err := s.repo.DeleteEmployee(uint(req.EmployeeId)); err != nil {
 		return nil, handleDBError(err)
 	}
@@ -133,7 +167,34 @@ func (s *UserService) DeleteEmployee(ctx context.Context, req *pb.DeleteEmployee
 
 // =================== Client ===================
 
-func (s *UserService) CreateClient(ctx context.Context, req *pb.CreateClientRequest) (*pb.Client, error) {
+func (s *UserService) ListClients(ctx context.Context, req *user.ListClientsRequest) (*user.ListClientsResponse, error) {
+
+	page := 1
+	pageSize := 50
+
+	clients, _, err := s.repo.ListClients(
+		page,
+		pageSize,
+		"", // first name filter
+		"", // last name filter
+		"", // email filter
+	)
+
+	if err != nil {
+		return nil, handleDBError(err)
+	}
+
+	res := &user.ListClientsResponse{}
+
+	for _, c := range clients {
+		cli := c
+		res.Clients = append(res.Clients, mapClientToProto(&cli))
+	}
+
+	return res, nil
+}
+
+func (s *UserService) CreateClient(ctx context.Context, req *user.CreateClientRequest) (*user.Client, error) {
 	cli := &models.Client{
 		FirstName:   req.FirstName,
 		LastName:    req.LastName,
@@ -149,7 +210,7 @@ func (s *UserService) CreateClient(ctx context.Context, req *pb.CreateClientRequ
 	return mapClientToProto(cli), nil
 }
 
-func (s *UserService) GetClient(ctx context.Context, req *pb.GetClientRequest) (*pb.Client, error) {
+func (s *UserService) GetClient(ctx context.Context, req *user.GetClientRequest) (*user.Client, error) {
 	cli, err := s.repo.GetClientByID(uint(req.ClientId))
 	if err != nil {
 		return nil, handleDBError(err)
@@ -157,7 +218,7 @@ func (s *UserService) GetClient(ctx context.Context, req *pb.GetClientRequest) (
 	return mapClientToProto(cli), nil
 }
 
-func (s *UserService) UpdateClient(ctx context.Context, req *pb.UpdateClientRequest) (*pb.Client, error) {
+func (s *UserService) UpdateClient(ctx context.Context, req *user.UpdateClientRequest) (*user.Client, error) {
 	cli, err := s.repo.GetClientByID(uint(req.ClientId))
 	if err != nil {
 		return nil, handleDBError(err)
@@ -176,7 +237,7 @@ func (s *UserService) UpdateClient(ctx context.Context, req *pb.UpdateClientRequ
 	return mapClientToProto(cli), nil
 }
 
-func (s *UserService) DeleteClient(ctx context.Context, req *pb.DeleteClientRequest) (*emptypb.Empty, error) {
+func (s *UserService) DeleteClient(ctx context.Context, req *user.DeleteClientRequest) (*emptypb.Empty, error) {
 	if err := s.repo.DeleteClient(uint(req.ClientId)); err != nil {
 		return nil, handleDBError(err)
 	}
@@ -185,12 +246,12 @@ func (s *UserService) DeleteClient(ctx context.Context, req *pb.DeleteClientRequ
 
 // =================== Permissions ===================
 
-func (s *UserService) ListPermissions(ctx context.Context, _ *emptypb.Empty) (*pb.ListPermissionsResponse, error) {
+func (s *UserService) ListPermissions(ctx context.Context, _ *emptypb.Empty) (*user.ListPermissionsResponse, error) {
 	perms, err := s.repo.ListPermissions()
 	if err != nil {
 		return nil, handleDBError(err)
 	}
-	res := &pb.ListPermissionsResponse{}
+	res := &user.ListPermissionsResponse{}
 	for _, p := range perms {
 		res.Permissions = append(res.Permissions, mapPermissionToProto(&p))
 	}
@@ -199,7 +260,7 @@ func (s *UserService) ListPermissions(ctx context.Context, _ *emptypb.Empty) (*p
 
 // =================== Mapping ===================
 
-func mapEmployeeToProto(m *models.Employee) *pb.Employee {
+func mapEmployeeToProto(m *models.Employee) *user.Employee {
 	if m == nil {
 		return nil
 	}
@@ -209,7 +270,7 @@ func mapEmployeeToProto(m *models.Employee) *pb.Employee {
 		perms[i] = p.Name
 	}
 
-	return &pb.Employee{
+	return &user.Employee{
 		Id:          uint64(m.ID),
 		FirstName:   m.FirstName,
 		LastName:    m.LastName,
@@ -226,7 +287,7 @@ func mapEmployeeToProto(m *models.Employee) *pb.Employee {
 	}
 }
 
-func mapClientToProto(m *models.Client) *pb.Client {
+func mapClientToProto(m *models.Client) *user.Client {
 	if m == nil {
 		return nil
 	}
@@ -236,7 +297,7 @@ func mapClientToProto(m *models.Client) *pb.Client {
 		accounts = strings.Split(m.ConnectedAccounts, ",")
 	}
 
-	return &pb.Client{
+	return &user.Client{
 		Id:                uint64(m.ID),
 		FirstName:         m.FirstName,
 		LastName:          m.LastName,
@@ -249,11 +310,11 @@ func mapClientToProto(m *models.Client) *pb.Client {
 	}
 }
 
-func mapPermissionToProto(m *models.Permission) *pb.Permission {
+func mapPermissionToProto(m *models.Permission) *user.Permission {
 	if m == nil {
 		return nil
 	}
-	return &pb.Permission{
+	return &user.Permission{
 		Id:          uint64(m.ID),
 		Name:        m.Name,
 		Description: m.Description,

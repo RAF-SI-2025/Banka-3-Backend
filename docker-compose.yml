@@ -1,45 +1,54 @@
 services:
   postgres:
     image: postgres:18-alpine
+    container_name: postgres
     environment:
       POSTGRES_USER: ${POSTGRES_USER}
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
       POSTGRES_DB: ${POSTGRES_DB}
     ports:
-      - "${POSTGRES_PORT:-5432}:5432"
+      - "${POSTGRES_PORT}:5432"
     volumes:
       - pgdata:/var/lib/postgresql/data
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER} -d ${POSTGRES_DB}"]
+      test: [ "CMD-SHELL", "pg_isready -U ${POSTGRES_USER} -d ${POSTGRES_DB}" ]
       interval: 2s
       timeout: 5s
       retries: 10
 
-  user:
-    container_name: user
+  user-service:
+    container_name: user-service
     build:
       context: .
       dockerfile: cmd/user/Dockerfile
-    ports:
-      - "${USER_GRPC_PORT:-50051}:50051"
-    environment:
-      DATABASE_URL: "postgres://${POSTGRES_USER}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB}?sslmode=disable"
-      GRPC_PORT: "50051"
-      ACCESS_JWT_SECRET: ${ACCESS_JWT_SECRET}
-      REFRESH_JWT_SECRET: ${REFRESH_JWT_SECRET}
     depends_on:
       postgres:
         condition: service_healthy
+    ports:
+      - "${USER_HTTP_PORT}:${USER_HTTP_PORT}"
+      - "${USER_GRPC_PORT}:${USER_GRPC_PORT}"
+    environment:
+      DATABASE_URL: "postgres://${POSTGRES_USER}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB}?sslmode=disable"
 
-  notification:
-    container_name: notification
+      HTTP_PORT: "${USER_HTTP_PORT}"
+      GRPC_PORT: "${USER_GRPC_PORT}"
+
+      ACCESS_JWT_SECRET: ${ACCESS_JWT_SECRET}
+      REFRESH_JWT_SECRET: ${REFRESH_JWT_SECRET}
+    restart: on-failure
+
+  notification-service:
+    container_name: notification-service
     build:
       context: .
       dockerfile: cmd/notification/Dockerfile
+    depends_on:
+      - user-service
     ports:
-      - "${NOTIFICATION_GRPC_PORT:-50052}:50051"
+      - "${NOTIFICATION_GRPC_PORT}:${NOTIFICATION_GRPC_PORT}"
     environment:
-      GRPC_PORT: "50051"
+      GRPC_PORT: "${NOTIFICATION_GRPC_PORT}"
+
       FROM_EMAIL: "${FROM_EMAIL}"
       FROM_EMAIL_PASSWORD: "${FROM_EMAIL_PASSWORD}"
       FROM_EMAIL_SMTP: "${FROM_EMAIL_SMTP}"

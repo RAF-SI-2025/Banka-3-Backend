@@ -1,8 +1,8 @@
 package repository
 
 import (
+	"banka-raf/internal/user/models"
 	"errors"
-	"user-service/models"
 
 	"gorm.io/gorm"
 )

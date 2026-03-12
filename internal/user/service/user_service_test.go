@@ -1,11 +1,11 @@
 package service
 
 import (
+	"banka-raf/gen/user"
+	"banka-raf/internal/user/models"
 	"context"
 	"errors"
 	"testing"
-	"user-service/models"
-	"user-service/pb"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/mock"
@@ -103,7 +103,7 @@ func TestUserService_Employees(t *testing.T) {
 	mockRepo.On("GetPermissionByName", "ADMIN").Return(perm, nil)
 	mockRepo.On("CreateEmployee", mock.Anything, []uint{1}).Return(nil)
 
-	createReq := &pb.CreateEmployeeRequest{
+	createReq := &user.CreateEmployeeRequest{
 		FirstName:   "John",
 		LastName:    "Doe",
 		Email:       "john@example.com",
@@ -133,7 +133,7 @@ func TestUserService_Employees(t *testing.T) {
 	mockRepo.On("GetPermissionByName", "ADMIN").Return(perm, nil)
 	mockRepo.On("UpdateEmployee", employee, []uint{1}).Return(nil)
 
-	updateReq := &pb.UpdateEmployeeRequest{
+	updateReq := &user.UpdateEmployeeRequest{
 		EmployeeId:  1,
 		Email:       "john2@example.com",
 		DateOfBirth: "1990-01-01",
@@ -145,7 +145,7 @@ func TestUserService_Employees(t *testing.T) {
 
 	// ---------------- DELETE EMPLOYEE ----------------
 	mockRepo.On("DeleteEmployee", uint(1)).Return(nil)
-	delReq := &pb.DeleteEmployeeRequest{EmployeeId: 1}
+	delReq := &user.DeleteEmployeeRequest{EmployeeId: 1}
 	_, err = svc.DeleteEmployee(ctx, delReq)
 	assert.NoError(t, err)
 }
@@ -163,7 +163,7 @@ func TestUserService_Clients(t *testing.T) {
 
 	// CREATE CLIENT
 	mockRepo.On("CreateClient", mock.Anything).Return(nil)
-	createReq := &pb.CreateClientRequest{
+	createReq := &user.CreateClientRequest{
 		FirstName: "Alice",
 		LastName:  "Smith",
 	}
@@ -173,7 +173,7 @@ func TestUserService_Clients(t *testing.T) {
 
 	// GET CLIENT
 	mockRepo.On("GetClientByID", uint(1)).Return(client, nil)
-	getReq := &pb.GetClientRequest{ClientId: 1}
+	getReq := &user.GetClientRequest{ClientId: 1}
 	res2, err := svc.GetClient(ctx, getReq)
 	assert.NoError(t, err)
 	assert.Equal(t, "Alice", res2.FirstName)
@@ -181,7 +181,7 @@ func TestUserService_Clients(t *testing.T) {
 	// UPDATE CLIENT
 	client.FirstName = "Alice2"
 	mockRepo.On("UpdateClient", client).Return(nil)
-	updateReq := &pb.UpdateClientRequest{
+	updateReq := &user.UpdateClientRequest{
 		ClientId:  1,
 		FirstName: "Alice2",
 		LastName:  "Smith",
@@ -192,7 +192,7 @@ func TestUserService_Clients(t *testing.T) {
 
 	// DELETE CLIENT
 	mockRepo.On("DeleteClient", uint(1)).Return(nil)
-	delReq := &pb.DeleteClientRequest{ClientId: 1}
+	delReq := &user.DeleteClientRequest{ClientId: 1}
 	_, err = svc.DeleteClient(ctx, delReq)
 	assert.NoError(t, err)
 }
@@ -225,7 +225,7 @@ func TestUserService_ErrorCases(t *testing.T) {
 	svc := NewUserService(mockRepo)
 
 	// Invalid date
-	req := &pb.CreateEmployeeRequest{
+	req := &user.CreateEmployeeRequest{
 		Email:       "a@b.com",
 		Username:    "user1",
 		DateOfBirth: "invalid",
@@ -234,13 +234,13 @@ func TestUserService_ErrorCases(t *testing.T) {
 	assert.Equal(t, codes.InvalidArgument, status.Code(err))
 
 	// Missing email/username
-	req2 := &pb.CreateEmployeeRequest{}
+	req2 := &user.CreateEmployeeRequest{}
 	_, err = svc.CreateEmployee(ctx, req2)
 	assert.Equal(t, codes.InvalidArgument, status.Code(err))
 
 	// Permission not found
 	mockRepo.On("GetPermissionByName", "ADMIN").Return(nil, nil)
-	req3 := &pb.CreateEmployeeRequest{
+	req3 := &user.CreateEmployeeRequest{
 		Email:       "a@b.com",
 		Username:    "user1",
 		DateOfBirth: "1990-01-01",
@@ -252,6 +252,6 @@ func TestUserService_ErrorCases(t *testing.T) {
 
 	// Get employee not found
 	mockRepo.On("GetEmployeeByID", uint(999)).Return(nil, errors.New("record not found"))
-	_, err = svc.GetEmployee(ctx, &pb.GetEmployeeRequest{EmployeeId: 999})
+	_, err = svc.GetEmployee(ctx, &user.GetEmployeeRequest{EmployeeId: 999})
 	assert.Equal(t, codes.NotFound, status.Code(err))
 }
