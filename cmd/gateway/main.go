@@ -1,63 +1,23 @@
 package main
 
 import (
-	"log"
-	"net/http"
-	"os"
-	"time"
-
-	notificationpb "banka-raf/gen/notification"
-	userpb "banka-raf/gen/user"
 	"banka-raf/internal/gateway"
+	"log"
 
-	"google.golang.org/grpc"
-	"google.golang.org/grpc/credentials/insecure"
+	"github.com/gin-gonic/gin"
 )
 
 func main() {
-	httpPort := os.Getenv("HTTP_PORT")
-	if httpPort == "" {
-		httpPort = "8080"
-	}
+	router := gin.Default()
 
-	userAddr := os.Getenv("USER_GRPC_ADDR")
-	if userAddr == "" {
-		userAddr = "user:50051"
-	}
-
-	notificationAddr := os.Getenv("NOTIFICATION_GRPC_ADDR")
-	if notificationAddr == "" {
-		notificationAddr = "notification:50051"
-	}
-
-	userConn, err := grpc.Dial(userAddr, grpc.WithTransportCredentials(insecure.NewCredentials()))
+	server, err := gateway.NewServer()
 	if err != nil {
-		log.Fatalf("failed to connect to user service: %v", err)
-	}
-	defer userConn.Close()
-
-	notificationConn, err := grpc.Dial(notificationAddr, grpc.WithTransportCredentials(insecure.NewCredentials()))
-	if err != nil {
-		log.Fatalf("failed to connect to notification service: %v", err)
-	}
-	defer notificationConn.Close()
-
-	userClient := userpb.NewUserServiceClient(userConn)
-	notificationClient := notificationpb.NewNotificationServiceClient(notificationConn)
-
-	srv := gateway.NewServer(userClient, notificationClient)
-
-	mux := http.NewServeMux()
-	srv.RegisterRoutes(mux)
-
-	httpServer := &http.Server{
-		Addr:              ":" + httpPort,
-		Handler:           mux,
-		ReadHeaderTimeout: 5 * time.Second,
+		log.Fatalf("Error connecting to services: %v", err)
 	}
 
-	log.Printf("gateway listening on :%s", httpPort)
-	if err := httpServer.ListenAndServe(); err != nil {
+	gateway.SetupApi(router, server)
+
+	if err := router.Run(":8080"); err != nil {
 		log.Fatalf("gateway stopped: %v", err)
 	}
 }

@@ -1,4 +1,4 @@
-FROM golang:1.25-alpine AS builder
+FROM golang:1.25-alpine AS build
 
 WORKDIR /app
 
@@ -11,8 +11,8 @@ RUN CGO_ENABLED=0 GOOS=linux go build -o gateway ./cmd/gateway
 FROM alpine:3.19
 
 WORKDIR /app
-COPY --from=builder /app/gateway /app/gateway
+COPY --from=build /app/gateway ./gateway
 
 EXPOSE 8080
 
-CMD ["/app/gateway"]
+CMD ["./gateway"]
