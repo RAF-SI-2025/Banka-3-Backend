@@ -45,10 +45,16 @@ func handleDBError(err error) error {
 
 func (s *UserService) ListEmployees(ctx context.Context, req *user.ListEmployeesRequest) (*user.ListEmployeesResponse, error) {
 
-	page := 1
-	pageSize := 50
+	page := int(req.Page)
+	if page <= 0 {
+		page = 1
+	}
+	pageSize := int(req.PageSize)
+	if pageSize <= 0 {
+		pageSize = 50
+	}
 
-	emps, _, err := s.repo.ListEmployees(
+	emps, total, err := s.repo.ListEmployees(
 		page,
 		pageSize,
 		req.Email,
@@ -62,6 +68,8 @@ func (s *UserService) ListEmployees(ctx context.Context, req *user.ListEmployees
 	}
 
 	res := &user.ListEmployeesResponse{}
+
+	res.Total = total
 
 	for _, e := range emps {
 		emp := e
@@ -172,7 +180,7 @@ func (s *UserService) ListClients(ctx context.Context, req *user.ListClientsRequ
 	page := 1
 	pageSize := 50
 
-	clients, _, err := s.repo.ListClients(
+	clients, total, err := s.repo.ListClients(
 		page,
 		pageSize,
 		"", // first name filter
@@ -185,6 +193,8 @@ func (s *UserService) ListClients(ctx context.Context, req *user.ListClientsRequ
 	}
 
 	res := &user.ListClientsResponse{}
+
+	res.Total = total
 
 	for _, c := range clients {
 		cli := c
