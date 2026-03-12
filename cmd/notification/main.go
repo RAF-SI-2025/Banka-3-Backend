@@ -10,7 +10,6 @@ import (
 
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/reflection"
-
 )
 
 func main() {
@@ -24,7 +23,11 @@ func main() {
 		log.Fatalf("failed to listen: %v", err)
 	}
 	grpcServer := grpc.NewServer()
-	notification.RegisterNotificationServiceServer(grpcServer, &internalNotification.Server{})
+	//notification.RegisterNotificationServiceServer(grpcServer, &internalNotification.Server{})
+	smtpSender := &internalNotification.SMTPSender{}
+	server := internalNotification.NewServer(smtpSender)
+
+	notification.RegisterNotificationServiceServer(grpcServer, server)
 	reflection.Register(grpcServer)
 	log.Printf("Notification service listening on port %s", port)
 	if err := grpcServer.Serve(lis); err != nil {

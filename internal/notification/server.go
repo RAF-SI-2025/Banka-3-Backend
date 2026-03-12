@@ -11,8 +11,37 @@ import (
 	"strings"
 )
 
+type EmailSender interface {
+	Send(to []string, subject string, body string) error
+}
+
+type SMTPSender struct{}
+
+func (s *SMTPSender) Send(to []string, subject string, body string) error {
+	auth := smtp.PlainAuth(
+		"",
+		os.Getenv("FROM_EMAIL"),
+		os.Getenv("FROM_EMAIL_PASSWORD"),
+		os.Getenv("FROM_EMAIL_SMTP"),
+	)
+	headers := []string{
+		"From: " + os.Getenv("FROM_EMAIL"),
+		"To: " + strings.Join(to, ","),
+		"Subject: " + subject,
+		"MIME-Version: 1.0",
+		"Content-Type: text/html; charset=\"UTF-8\"",
+	}
+	message := strings.Join(headers, "\r\n") + "\r\n" + body
+	return smtp.SendMail(os.Getenv("SMTP_ADDR"), auth, os.Getenv("FROM_EMAIL"), to, []byte(message))
+}
+
 type Server struct {
 	notification.UnimplementedNotificationServiceServer
+	sender EmailSender
+}
+
+func NewServer(sender EmailSender) *Server {
+	return &Server{sender: sender}
 }
 
 func (s *Server) SendConfirmationEmail(ctx context.Context, req *notification.ConfirmationMailRequest) (*notification.SuccessResponse, error) {
@@ -32,7 +61,7 @@ func (s *Server) SendConfirmationEmail(ctx context.Context, req *notification.Co
 		return &notification.SuccessResponse{Successful: false}, nil
 	}
 
-	err = sendHTMLEmail(to, "Confirm your Banka 3 account", rendered.String())
+	err = s.sender.Send(to, "Confirm your Banka 3 account", rendered.String()) //umesto smtp
 	if err != nil {
 		log.Println("Couldn't send confirmation email:", err)
 		return &notification.SuccessResponse{Successful: false}, nil
@@ -57,7 +86,8 @@ func (s *Server) SendActivationEmail(ctx context.Context, req *notification.Acti
 		return &notification.SuccessResponse{Successful: false}, nil
 	}
 
-	err = sendHTMLEmail(to, "Aktivirajte Banka 3 nalog", rendered.String())
+	err = s.sender.Send(to, "Aktivirajte Banka 3 nalog", rendered.String()) //umesto smtp
+	//	err = sendHTMLEmail(to, "Aktivirajte Banka 3 nalog", rendered.String())
 	if err != nil {
 		log.Println("Couldn't send email:", err)
 		return &notification.SuccessResponse{Successful: false}, nil
