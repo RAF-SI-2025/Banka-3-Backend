@@ -9,17 +9,12 @@ import (
 	"encoding/base64"
 	"errors"
 	"fmt"
+	"log"
 	"net/url"
 	"os"
+	"slices"
 	"strings"
 	"time"
-
-	"banka-raf/gen/notification"
-	"banka-raf/gen/user"
-	userpb "banka-raf/gen/user"
-
-	"log"
-	"slices"
 
 	"github.com/golang-jwt/jwt/v5"
 	"google.golang.org/grpc"
@@ -27,6 +22,9 @@ import (
 	"google.golang.org/grpc/credentials/insecure"
 	"google.golang.org/grpc/status"
 	"gorm.io/gorm"
+
+	notificationpb "github.com/RAF-SI-2025/Banka-3-Backend/gen/notification"
+	userpb "github.com/RAF-SI-2025/Banka-3-Backend/gen/user"
 )
 
 const (
@@ -71,7 +69,7 @@ func NewServer(accessJwtSecret string, refreshJwtSecret string, database *sql.DB
 	}
 }
 
-func (s *Server) GetEmployeeById(ctx context.Context, req *userpb.GetEmployeeByIdRequest) (*user.EmployeeResponse, error) {
+func (s *Server) GetEmployeeById(ctx context.Context, req *userpb.GetEmployeeByIdRequest) (*userpb.EmployeeResponse, error) {
 	return nil, status.Error(codes.Unimplemented, "not implemented")
 }
 
@@ -336,12 +334,12 @@ func (s *Server) sendPasswordActionEmail(ctx context.Context, email string, link
 	}
 	defer conn.Close()
 
-	client := notification.NewNotificationServiceClient(conn)
+	client := notificationpb.NewNotificationServiceClient(conn)
 
 	sendCtx, cancelSend := context.WithTimeout(ctx, 5*time.Second)
 	defer cancelSend()
 
-	req := &notification.PasswordLinkMailRequest{
+	req := &notificationpb.PasswordLinkMailRequest{
 		ToAddr: email,
 		Link:   link,
 	}

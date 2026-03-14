@@ -1,7 +1,6 @@
 package notification
 
 import (
-	"banka-raf/gen/notification"
 	"bytes"
 	"context"
 	"html/template"
@@ -9,6 +8,8 @@ import (
 	"net/smtp"
 	"os"
 	"strings"
+
+	"github.com/RAF-SI-2025/Banka-3-Backend/gen/notification"
 )
 
 type EmailSender interface {

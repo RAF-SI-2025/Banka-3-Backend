@@ -1,8 +1,6 @@
 package main
 
 import (
-	"banka-raf/gen/user"
-	internalUser "banka-raf/internal/user"
 	"database/sql"
 	"fmt"
 	"log"
@@ -14,6 +12,9 @@ import (
 	"google.golang.org/grpc/reflection"
 	"gorm.io/driver/postgres"
 	"gorm.io/gorm"
+
+	"github.com/RAF-SI-2025/Banka-3-Backend/gen/user"
+	internalUser "github.com/RAF-SI-2025/Banka-3-Backend/internal/user"
 )
 
 func connect_to_db_gorm() *gorm.DB {

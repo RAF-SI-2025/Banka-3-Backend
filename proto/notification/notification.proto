@@ -2,7 +2,7 @@ syntax = "proto3";
 
 package notification;
 
-option go_package = "banka-raf/gen/notification";
+option go_package = "github.com/RAF-SI-2025/Banka-3-Backend/gen/notification";
 
 service NotificationService {
   rpc SendConfirmationEmail(ConfirmationMailRequest) returns (SuccessResponse);

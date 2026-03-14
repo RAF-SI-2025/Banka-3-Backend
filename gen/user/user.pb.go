@@ -1105,7 +1105,7 @@ const file_user_user_proto_rawDesc = "" +
 	"\x19RequestInitialPasswordSet\x12\x1b.user.PasswordActionRequest\x1a\x1c.user.PasswordActionResponse\x12]\n" +
 	"\x14SetPasswordWithToken\x12!.user.SetPasswordWithTokenRequest\x1a\".user.SetPasswordWithTokenResponse\x12L\n" +
 	"\x13CreateClientAccount\x12\x19.user.CreateClientRequest\x1a\x1a.user.CreateClientResponse\x12R\n" +
-	"\x15CreateEmployeeAccount\x12\x1b.user.CreateEmployeeRequest\x1a\x1c.user.CreateEmployeeResponseB\x14Z\x12banka-raf/gen/userb\x06proto3"
+	"\x15CreateEmployeeAccount\x12\x1b.user.CreateEmployeeRequest\x1a\x1c.user.CreateEmployeeResponseB1Z/github.com/RAF-SI-2025/Banka-3-Backend/gen/userb\x06proto3"
 
 var (
 	file_user_user_proto_rawDescOnce sync.Once

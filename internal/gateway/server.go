@@ -3,11 +3,11 @@ package gateway
 import (
 	"os"
 
-	notificationpb "banka-raf/gen/notification"
-	userpb "banka-raf/gen/user"
-
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials/insecure"
+
+	notificationpb "github.com/RAF-SI-2025/Banka-3-Backend/gen/notification"
+	userpb "github.com/RAF-SI-2025/Banka-3-Backend/gen/user"
 )
 
 type Server struct {
