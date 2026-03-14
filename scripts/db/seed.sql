@@ -41,3 +41,13 @@ VALUES (
     '\x00'::BYTEA
 )
 ON CONFLICT (email) DO NOTHING;
+
+INSERT INTO currency (
+    label, name, symbol, countries, description, active
+)
+VALUES (
+    'EUR', 'Euro', '€',
+    'Austria, Belgium, Bulgaria, Croatia, Cyprus, Estonia, Finland, France, Germany, Greece, Ireland, Italy, Latvia, Lithuania, Luxembourg, Malta, Netherlands, Portugal, Slovakia, Slovenia, Spain',
+    'The euro (symbol: €; currency code: EUR) is the official currency of 21 of the 27 member states of the European Union. This group of states is officially known as the euro area or, more commonly, the eurozone. The euro is divided into 100 euro cents.[7][8]',
+    TRUE
+)
