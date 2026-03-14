@@ -30,7 +30,7 @@ type (
 		Phone_number  string    `gorm:"column:phone_number;type:varchar(20); not null"`
 		Address       string    `gorm:"column:address;type:varchar(255);not null"`
 		Username      string    `gorm:"column:username;type:varchar(100);unique;not null"`
-		Password      []byte    `gorm:"column:password:type:bytea:not null"`
+		Password      []byte    `gorm:"column:password;type:bytea;not null"`
 		Salt_password []byte    `gorm:"column:salt_password;type:bytea;not null"`
 		Position      string    `gorm:"column:position;type:varchar(100);not null"`
 		Department    string    `gorm:"column:department;type:varchar(100);not null"`
