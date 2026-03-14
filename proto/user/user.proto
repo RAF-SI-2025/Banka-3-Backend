@@ -5,6 +5,31 @@ package user;
 option go_package = "banka-raf/gen/user";
 
 service UserService {
+    // Employees CRUD
+  rpc ListEmployees(ListEmployeesRequest) returns (ListEmployeesResponse);
+
+  rpc CreateEmployee(CreateEmployeeRequest) returns (Employee);
+
+  rpc GetEmployee(GetEmployeeRequest) returns (Employee);
+
+  rpc UpdateEmployee(UpdateEmployeeRequest) returns (Employee);
+
+  rpc DeleteEmployee(DeleteEmployeeRequest) returns (DeleteEmployeeResponse);
+
+  // Clients CRUD
+  rpc ListClients(ListClientsRequest) returns (ListClientsResponse);
+
+  rpc CreateClient(CreateClientRequest) returns (Client);
+
+  rpc GetClient(GetClientRequest) returns (Client);
+
+  rpc UpdateClient(UpdateClientRequest) returns (Client);
+
+  rpc DeleteClient(DeleteClientRequest) returns (DeleteClientResponse);
+
+  // Permissions
+  rpc ListPermissions(google.protbuf.empty) returns (ListPermissionsResponse);
+
   rpc GetEmployeeById(GetEmployeeByIdRequest) returns (EmployeeResponse);
   rpc Login(LoginRequest) returns (LoginResponse);
   rpc Logout(LogoutRequest) returns (LogoutResponse);
@@ -17,6 +42,141 @@ service UserService {
   rpc CreateClientAccount(CreateClientRequest) returns (CreateClientResponse);
   rpc CreateEmployeeAccount(CreateEmployeeRequest) returns (CreateEmployeeResponse);
 }
+
+
+message DeleteEmployeeResponse {bool success = 1;}
+message DeleteClientResponse {bool success = 1;}
+
+
+
+// =======================
+// EMPLOYEE MESSAGES
+// =======================
+
+message Employee {
+  uint64 id = 1;
+  string first_name = 2;
+  string last_name = 3;
+  string date_of_birth = 4;
+  string gender = 5;
+  string email = 6;
+  string phone_number = 7;
+  string address = 8;
+  string username = 9;
+  string position = 10;
+  string department = 11;
+  bool active = 12;
+  repeated string permissions = 13;
+}
+
+message CreateEmployeeRequest {
+  string first_name = 1;
+  string last_name = 2;
+  string date_of_birth = 3;
+  string gender = 4;
+  string email = 5;
+  string phone_number = 6;
+  string address = 7;
+  string username = 8;
+  string position = 9;
+  string department = 10;
+  bool active = 11;
+  repeated string permissions = 12;
+}
+
+message GetEmployeeRequest {uint64 employee_id = 1;}
+
+message UpdateEmployeeRequest {
+  uint64 employee_id = 1;
+  string first_name = 2;
+  string last_name = 3;
+  string date_of_birth = 4;
+  string gender = 5;
+  string email = 6;
+  string phone_number = 7;
+  string address = 8;
+  string position = 9;
+  string department = 10;
+  bool active = 11;
+  repeated string permissions = 12;
+}
+
+message DeleteEmployeeRequest {uint64 employee_id = 1;}
+
+message ListEmployeesRequest {
+  string email = 1;
+  string first_name = 2;
+  string last_name = 3;
+  string position = 4;
+  int32 page = 5;
+  int32 page_size = 6;
+}
+
+message ListEmployeesResponse {
+  repeated Employee employees = 1;
+  int64 total = 2;
+}
+
+// =======================
+// CLIENT MESSAGES
+// =======================
+
+message Client {
+  uint64 id = 1;
+  string first_name = 2;
+  string last_name = 3;
+  string date_of_birth = 4;
+  string gender = 5;
+  string email = 6;
+  string phone_number = 7;
+  string address = 8;
+}
+
+message CreateClientRequest {
+  string first_name = 1;
+  string last_name = 2;
+  string date_of_birth = 3;
+  string gender = 4;
+  string email = 5;
+  string phone_number = 6;
+  string address = 7;
+}
+
+message GetClientRequest {uint64 client_id = 1;}
+
+message UpdateClientRequest {
+  uint64 client_id = 1;
+  string first_name = 2;
+  string last_name = 3;
+  string date_of_birth = 4;
+  string gender = 5;
+  string email = 6;
+  string phone_number = 7;
+  string address = 8;
+}
+
+message DeleteClientRequest {uint64 client_id = 1;}
+
+message ListClientsRequest {
+  int32 page = 1;
+  int32 page_size = 2;
+}
+
+message ListClientsResponse {
+  repeated Client clients = 1;
+  int64 total = 2;
+}
+
+// =======================
+// PERMISSION MESSAGES
+// =======================
+
+message Permission {
+  uint64 id = 1;
+  string name = 2;
+}
+
+message ListPermissionsResponse {repeated Permission permissions = 1;}
 
 message ValidateTokenRequest {
   string token = 1;
@@ -78,6 +238,9 @@ message SetPasswordWithTokenRequest {
   string token = 1;
   string new_password = 2;
 }
+
+
+
 
 message SetPasswordWithTokenResponse {
   bool successful = 1;
