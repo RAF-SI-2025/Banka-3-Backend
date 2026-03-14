@@ -252,7 +252,7 @@ const file_notification_notification_proto_rawDesc = "" +
 	"\x15SendConfirmationEmail\x12%.notification.ConfirmationMailRequest\x1a\x1d.notification.SuccessResponse\x12Y\n" +
 	"\x13SendActivationEmail\x12#.notification.ActivationMailRequest\x1a\x1d.notification.SuccessResponse\x12^\n" +
 	"\x16SendPasswordResetEmail\x12%.notification.PasswordLinkMailRequest\x1a\x1d.notification.SuccessResponse\x12c\n" +
-	"\x1bSendInitialPasswordSetEmail\x12%.notification.PasswordLinkMailRequest\x1a\x1d.notification.SuccessResponseB\x1cZ\x1abanka-raf/gen/notificationb\x06proto3"
+	"\x1bSendInitialPasswordSetEmail\x12%.notification.PasswordLinkMailRequest\x1a\x1d.notification.SuccessResponseB9Z7github.com/RAF-SI-2025/Banka-3-Backend/gen/notificationb\x06proto3"
 
 var (
 	file_notification_notification_proto_rawDescOnce sync.Once

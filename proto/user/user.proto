@@ -2,7 +2,7 @@ syntax = "proto3";
 
 package user;
 
-option go_package = "banka-raf/gen/user";
+option go_package = "github.com/RAF-SI-2025/Banka-3-Backend/gen/user";
 
 service UserService {
   rpc GetEmployeeById(GetEmployeeByIdRequest) returns (EmployeeResponse);
