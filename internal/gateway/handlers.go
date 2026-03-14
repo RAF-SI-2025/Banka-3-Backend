@@ -6,7 +6,6 @@ import (
 	"strconv"
 	"time"
 
-	notificationpb "banka-raf/gen/notification"
 	userpb "banka-raf/gen/user"
 
 	"github.com/gin-gonic/gin"
@@ -27,39 +26,59 @@ type validateTokenRequest struct {
 	Token string `json:"token"`
 }
 
-type activationEmailRequest struct {
-	ToAddr string `json:"to_addr"`
-	Link   string `json:"link"`
+type passwordResetRequestRequest struct {
+	Email string `json:"email"`
 }
 
-type confirmationEmailRequest struct {
-	ToAddr  string `json:"to_addr"`
-	Subject string `json:"subject"`
-	Body    string `json:"body"`
+type passwordResetConfirmationRequest struct {
+	Token       string `json:"token"`
+	NewPassword string `json:"password"`
 }
 
 func SetupApi(router *gin.Engine, server *Server) {
 	router.GET("/healthz", server.Healthz)
 
-	auth := router.Group("/auth")
+	api := router.Group("/api")
+
 	{
-		auth.POST("/login", server.Login)
-		auth.POST("/refresh", server.Refresh)
-		auth.POST("/validate/access", server.ValidateAccessToken)
-		auth.POST("/validate/refresh", server.ValidateRefreshToken)
+		api.POST("/login", server.Login)
+		api.POST("/logout", AuthenticatedMiddleware(server.UserClient), server.Logout)
+		api.POST("/token/refresh", server.Refresh)
 	}
 
-	router.GET("/employees/:id", server.GetEmployeeByID)
-
-	emails := router.Group("/emails")
+	password_reset := api.Group("/password-reset")
 	{
-		emails.POST("/activation", server.SendActivationEmail)
-		emails.POST("/confirmation", server.SendConfirmationEmail)
+		password_reset.POST("/request", server.RequestPasswordReset)
+		password_reset.POST("/confirm", server.ConfirmPasswordReset)
+	}
+
+	employees := api.Group("/employees")
+
+	{
+		employees.GET("/:id", server.GetEmployeeByID)
 	}
 }
 
 func (s *Server) Healthz(c *gin.Context) {
 	c.JSON(http.StatusOK, gin.H{"status": "ok"})
+}
+
+func (s *Server) Logout(c *gin.Context) {
+	email := c.GetString("email")
+	println(email)
+
+	ctx, cancel := context.WithTimeout(c.Request.Context(), 5*time.Second)
+	defer cancel()
+	_, err := s.UserClient.Logout(ctx, &userpb.LogoutRequest{
+		Email: email,
+	})
+
+	if err != nil {
+		writeGRPCError(c, err)
+		return
+	}
+
+	c.Status(http.StatusAccepted)
 }
 
 func (s *Server) Login(c *gin.Context) {
@@ -111,48 +130,6 @@ func (s *Server) Refresh(c *gin.Context) {
 	})
 }
 
-func (s *Server) ValidateAccessToken(c *gin.Context) {
-	var req validateTokenRequest
-	if err := c.ShouldBindJSON(&req); err != nil {
-		c.String(http.StatusBadRequest, "invalid json body")
-		return
-	}
-
-	ctx, cancel := context.WithTimeout(c.Request.Context(), 5*time.Second)
-	defer cancel()
-
-	resp, err := s.UserClient.ValidateAccessToken(ctx, &userpb.ValidateTokenRequest{
-		Token: req.Token,
-	})
-	if err != nil {
-		writeGRPCError(c, err)
-		return
-	}
-
-	c.JSON(http.StatusOK, gin.H{"valid": resp.Valid})
-}
-
-func (s *Server) ValidateRefreshToken(c *gin.Context) {
-	var req validateTokenRequest
-	if err := c.ShouldBindJSON(&req); err != nil {
-		c.String(http.StatusBadRequest, "invalid json body")
-		return
-	}
-
-	ctx, cancel := context.WithTimeout(c.Request.Context(), 5*time.Second)
-	defer cancel()
-
-	resp, err := s.UserClient.ValidateRefreshToken(ctx, &userpb.ValidateTokenRequest{
-		Token: req.Token,
-	})
-	if err != nil {
-		writeGRPCError(c, err)
-		return
-	}
-
-	c.JSON(http.StatusOK, gin.H{"valid": resp.Valid})
-}
-
 func (s *Server) GetEmployeeByID(c *gin.Context) {
 	id, err := strconv.ParseInt(c.Param("id"), 10, 64)
 	if err != nil {
@@ -181,8 +158,8 @@ func (s *Server) GetEmployeeByID(c *gin.Context) {
 	})
 }
 
-func (s *Server) SendActivationEmail(c *gin.Context) {
-	var req activationEmailRequest
+func (s *Server) RequestPasswordReset(c *gin.Context) {
+	var req passwordResetRequestRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
 		c.String(http.StatusBadRequest, "invalid json body")
 		return
@@ -191,20 +168,22 @@ func (s *Server) SendActivationEmail(c *gin.Context) {
 	ctx, cancel := context.WithTimeout(c.Request.Context(), 10*time.Second)
 	defer cancel()
 
-	resp, err := s.NotificationClient.SendActivationEmail(ctx, &notificationpb.ActivationMailRequest{
-		ToAddr: req.ToAddr,
-		Link:   req.Link,
+	_, err := s.UserClient.RequestPasswordReset(ctx, &userpb.PasswordActionRequest{
+		Email: req.Email,
 	})
 	if err != nil {
 		writeGRPCError(c, err)
 		return
 	}
 
-	c.JSON(http.StatusOK, gin.H{"successful": resp.Successful})
+	// frontend should not be aware if the email got sent
+	c.JSON(http.StatusOK, gin.H{
+		"message": "If that email exists, a reset link was sent.",
+	})
 }
 
-func (s *Server) SendConfirmationEmail(c *gin.Context) {
-	var req confirmationEmailRequest
+func (s *Server) ConfirmPasswordReset(c *gin.Context) {
+	var req passwordResetConfirmationRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
 		c.String(http.StatusBadRequest, "invalid json body")
 		return
@@ -213,17 +192,20 @@ func (s *Server) SendConfirmationEmail(c *gin.Context) {
 	ctx, cancel := context.WithTimeout(c.Request.Context(), 10*time.Second)
 	defer cancel()
 
-	resp, err := s.NotificationClient.SendConfirmationEmail(ctx, &notificationpb.ConfirmationMailRequest{
-		ToAddr:  req.ToAddr,
-		Subject: req.Subject,
-		Body:    req.Body,
+	resp, err := s.UserClient.SetPasswordWithToken(ctx, &userpb.SetPasswordWithTokenRequest{
+		Token:       req.Token,
+		NewPassword: req.NewPassword,
 	})
 	if err != nil {
 		writeGRPCError(c, err)
 		return
 	}
+	if resp.Successful {
+		c.Status(http.StatusOK)
+	} else {
+		c.Status(http.StatusUnprocessableEntity)
+	}
 
-	c.JSON(http.StatusOK, gin.H{"successful": resp.Successful})
 }
 
 func writeGRPCError(c *gin.Context, err error) {
@@ -241,7 +223,9 @@ func writeGRPCError(c *gin.Context, err error) {
 	case codes.NotFound:
 		c.String(http.StatusNotFound, st.Message())
 	case codes.Unauthenticated:
-		c.String(http.StatusUnauthorized, st.Message())
+		c.JSON(http.StatusUnauthorized, gin.H{
+			"message": st.Message(),
+		})
 	case codes.PermissionDenied:
 		c.String(http.StatusForbidden, st.Message())
 	default:

@@ -18,14 +18,15 @@ import (
 	"banka-raf/gen/user"
 	userpb "banka-raf/gen/user"
 
+	"log"
+	"slices"
+
 	"github.com/golang-jwt/jwt/v5"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/credentials/insecure"
 	"google.golang.org/grpc/status"
 	"gorm.io/gorm"
-	"slices"
-	"log"
 )
 
 const (
@@ -69,7 +70,6 @@ func NewServer(accessJwtSecret string, refreshJwtSecret string, database *sql.DB
 		db_gorm:          gorm_db,
 	}
 }
-
 
 func (s *Server) GetEmployeeById(ctx context.Context, req *userpb.GetEmployeeByIdRequest) (*user.EmployeeResponse, error) {
 	return nil, status.Error(codes.Unimplemented, "not implemented")
@@ -118,7 +118,7 @@ func (s *Server) ValidateAccessToken(ctx context.Context, req *userpb.ValidateTo
 	})
 
 	if err != nil {
-		return nil, err
+		return nil, status.Error(codes.Unauthenticated, "invalid token")
 	}
 	return &userpb.ValidateTokenResponse{
 		Valid: token.Valid,
@@ -168,7 +168,7 @@ func (s *Server) Refresh(ctx context.Context, req *userpb.RefreshRequest) (*user
 
 	err = s.rotateRefreshToken(tx, email, hashValue(refreshToken), hashValue(newSignedToken), newExpiry.Time)
 	if err != nil {
-		return nil, err
+		return nil, status.Error(codes.Unauthenticated, "wrong token")
 	}
 
 	if err = tx.Commit(); err != nil {
@@ -205,10 +205,28 @@ func (s *Server) Login(ctx context.Context, req *userpb.LoginRequest) (*userpb.L
 		}, nil
 	}
 
-	return &userpb.LoginResponse{
-		AccessToken:  "",
-		RefreshToken: "",
-	}, errors.New("wrong creds")
+	return nil, status.Error(codes.Unauthenticated, "wrong creds")
+}
+
+func (s *Server) Logout(ctx context.Context, req *userpb.LogoutRequest) (*userpb.LogoutResponse, error) {
+	email := req.Email
+	tx, err := s.database.Begin()
+	if err != nil {
+		return nil, fmt.Errorf("starting transaction: %w", err)
+	}
+	defer tx.Rollback()
+	err = s.RevokeRefreshTokensByEmail(tx, email)
+	if err != nil {
+		return nil, err
+	}
+
+	if err = tx.Commit(); err != nil {
+		return nil, fmt.Errorf("committing transaction: %w", err)
+	}
+
+	return &userpb.LogoutResponse{
+		Success: true,
+	}, nil
 }
 
 func (s *Server) RequestPasswordReset(ctx context.Context, req *userpb.PasswordActionRequest) (*userpb.PasswordActionResponse, error) {
@@ -379,33 +397,33 @@ func buildPasswordLink(baseURL string, token string) (string, error) {
 	return parsedURL.String(), nil
 }
 
-func (s *Server) CreateClientAccount(ctx context.Context, req *userpb.CreateClientRequest) (*userpb.CreateClientResponse, error){
-	is_null := func(str string) bool{
+func (s *Server) CreateClientAccount(ctx context.Context, req *userpb.CreateClientRequest) (*userpb.CreateClientResponse, error) {
+	is_null := func(str string) bool {
 		return strings.TrimSpace(str) == ""
 	}
 	vals := []string{req.FirstName, req.LastName, req.Gender, req.Email, req.PhoneNumber,
-	req.Address}
-	for _, val := range vals{
-		if is_null(val){
+		req.Address}
+	for _, val := range vals {
+		if is_null(val) {
 			log.Printf("The value %s is null", val)
 		}
 	}
-	if req.Gender != "M" && req.Gender != "F"{
+	if req.Gender != "M" && req.Gender != "F" {
 		return nil, errors.New("Gender must be M of F")
 	}
 
 	salt, salt_err := generateSalt()
-	if salt_err != nil{
+	if salt_err != nil {
 		log.Printf("Error generating salt %s", salt_err.Error())
 	}
-	
+
 	client := Clients{First_name: req.FirstName,
 		Last_name: req.LastName, Date_of_birth: time.Unix(req.DateOfBirth, 0),
 		Gender: req.Gender, Email: req.Email, Phone_number: req.PhoneNumber,
 		Address: req.Address, Password: hashPassword(req.Password, salt),
 		Salt_password: salt}
 	err := s.create_client_user(client)
-	if err != nil{
+	if err != nil {
 		//return nil, errors.New(err.Error())
 		// just log for now
 		log.Printf("Error in user creation%s", err.Error())
@@ -414,26 +432,26 @@ func (s *Server) CreateClientAccount(ctx context.Context, req *userpb.CreateClie
 
 }
 
-func (s *Server) CreateEmployeeAccount(ctx context.Context, req *userpb.CreateEmployeeRequest) (*userpb.CreateEmployeeResponse, error){
-	is_null := func(str string) bool{
+func (s *Server) CreateEmployeeAccount(ctx context.Context, req *userpb.CreateEmployeeRequest) (*userpb.CreateEmployeeResponse, error) {
+	is_null := func(str string) bool {
 		return strings.TrimSpace(str) == ""
 	}
 	vals := []string{req.FirstName, req.LastName, req.Gender, req.Email, req.PhoneNumber,
-	req.Address, req.Username}
+		req.Address, req.Username}
 	if slices.ContainsFunc(vals, is_null) {
 		//return nil, status.Error(codes.InvalidArgument, "Non-nullable field is null")
 		log.Print("One of the fucking values is null for create employy, and we can't have that")
-		}
-	if req.Gender != "M" && req.Gender != "F"{
+	}
+	if req.Gender != "M" && req.Gender != "F" {
 		log.Print("create employee gender must be M or F")
 		return nil, errors.New("Gender must be M of F")
 	}
 
 	salt, salt_err := generateSalt()
-	if salt_err != nil{
+	if salt_err != nil {
 		log.Printf("Error generating salt %s", salt_err.Error())
 	}
-	
+
 	employee := Employees{First_name: req.FirstName,
 		Last_name: req.LastName, Date_of_birth: time.Unix(req.DateOfBirth, 0),
 		Gender: req.Gender, Email: req.Email, Phone_number: req.PhoneNumber,
@@ -443,7 +461,7 @@ func (s *Server) CreateEmployeeAccount(ctx context.Context, req *userpb.CreateEm
 
 	err := s.create_employee_user(employee)
 
-	if err != nil{
+	if err != nil {
 		//return nil, errors.New(err.Error())
 		//log.Printf("%s", err.Error())
 		log.Printf("Error in employee creation %s", err.Error())

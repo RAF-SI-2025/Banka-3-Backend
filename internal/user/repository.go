@@ -188,17 +188,17 @@ func (s *Server) RevokeRefreshTokensByEmail(tx *sql.Tx, email string) error {
 	return nil
 }
 
-func (s *Server) create_client_user(client Clients) error{
+func (s *Server) create_client_user(client Clients) error {
 	result := s.db_gorm.Create(&client)
-	if result.Error != nil{
+	if result.Error != nil {
 		return result.Error
 	}
 	return nil
 }
 
-func (s *Server) create_employee_user(employee Employees) error{
+func (s *Server) create_employee_user(employee Employees) error {
 	result := s.db_gorm.Create(&employee)
-	if result.Error != nil{
+	if result.Error != nil {
 		return result.Error
 	}
 	return nil

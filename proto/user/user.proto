@@ -7,6 +7,7 @@ option go_package = "banka-raf/gen/user";
 service UserService {
   rpc GetEmployeeById(GetEmployeeByIdRequest) returns (EmployeeResponse);
   rpc Login(LoginRequest) returns (LoginResponse);
+  rpc Logout(LogoutRequest) returns (LogoutResponse);
   rpc Refresh(RefreshRequest) returns (RefreshResponse);
   rpc ValidateAccessToken(ValidateTokenRequest) returns (ValidateTokenResponse);
   rpc ValidateRefreshToken(ValidateTokenRequest) returns (ValidateTokenResponse);
@@ -47,6 +48,14 @@ message EmployeeResponse {
   bool active = 6;
 }
 
+message LogoutRequest {
+  string email = 1;
+}
+
+message LogoutResponse {
+  bool success = 1;
+}
+
 message LoginRequest {
   string email = 1;
   string password = 2;
@@ -73,7 +82,7 @@ message SetPasswordWithTokenRequest {
 message SetPasswordWithTokenResponse {
   bool successful = 1;
 }
-message CreateEmployeeRequest{
+message CreateEmployeeRequest {
   string FirstName = 1;
   string Last_name = 2;
   int64 DateOfBirth = 3;
@@ -87,11 +96,11 @@ message CreateEmployeeRequest{
   string password = 11;
 }
 
-message CreateEmployeeResponse{
+message CreateEmployeeResponse {
   bool valid = 1;
 }
 
-message CreateClientRequest{
+message CreateClientRequest {
   string FirstName = 1;
   string Last_name = 2;
   int64 DateOfBirth = 3;
@@ -102,6 +111,6 @@ message CreateClientRequest{
   string password = 8;
 }
 
-message CreateClientResponse{
+message CreateClientResponse {
   bool valid = 1;
 }
