@@ -89,4 +89,5 @@ CREATE TABLE IF NOT EXISTS account (
     monthly_limit       BIGINT,
     daily_expenditure   BIGINT,
     monthly_expenditure BIGINT,
+    -- TODO dodati tip za da li je devizni ili tekuci
 );
