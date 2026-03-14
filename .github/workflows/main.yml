@@ -17,7 +17,7 @@ jobs:
         run: test -z "$(gofmt -l .)"
 
   lint:
-    name: Lint
+    name: Lint check
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -29,7 +29,7 @@ jobs:
           version: v2.4
 
   proto-check:
-    name: Proto staleness
+    name: Proto staleness check
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -52,8 +52,8 @@ jobs:
           go-version-file: go.mod
       - run: go build ./cmd/...
 
-  test:
-    name: Unit tests
+  tests-unit:
+    name: Tests (unit)
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -63,7 +63,7 @@ jobs:
       - run: go test -race -count=1 ./...
 
   schema-check:
-    name: Schema check
+    name: Schema+seed check
     runs-on: ubuntu-latest
     services:
       postgres:
@@ -98,8 +98,8 @@ jobs:
           PGPASSWORD: banka_secret
           PGDATABASE: banka
 
-  integration-test:
-    name: Integration tests
+  test-integration:
+    name: Tests (integration)
     runs-on: ubuntu-latest
     services:
       postgres:
