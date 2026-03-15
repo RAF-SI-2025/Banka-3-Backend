@@ -5,7 +5,9 @@ package user;
 option go_package = "github.com/RAF-SI-2025/Banka-3-Backend/gen/user";
 
 service UserService {
-  rpc GetEmployeeById(GetEmployeeByIdRequest) returns (EmployeeResponse);
+  rpc GetEmployeeById(GetEmployeeByIdRequest) returns (GetEmployeeByIdResponse);
+  rpc GetEmployees(GetEmployeesRequest) returns (GetEmployeesResponse);
+  rpc UpdateEmployee(UpdateEmployeeRequest) returns (UpdateEmployeeResponse);
   rpc Login(LoginRequest) returns (LoginResponse);
   rpc Logout(LogoutRequest) returns (LogoutResponse);
   rpc Refresh(RefreshRequest) returns (RefreshResponse);
@@ -35,9 +37,6 @@ message RefreshResponse {
   string refresh_token = 2;
 }
 
-message GetEmployeeByIdRequest {
-  int64 id = 1;
-}
 
 message EmployeeResponse {
   int64 id = 1;
@@ -82,7 +81,13 @@ message SetPasswordWithTokenRequest {
 message SetPasswordWithTokenResponse {
   bool successful = 1;
 }
-message CreateEmployeeRequest {
+
+message Permissions{
+  int64 Id = 1;
+  string Permision = 2;
+}
+
+message CreateEmployeeRequest{
   string FirstName = 1;
   string Last_name = 2;
   int64 DateOfBirth = 3;
@@ -113,4 +118,64 @@ message CreateClientRequest {
 
 message CreateClientResponse {
   bool valid = 1;
+}
+
+
+message GetEmployeesRequest{
+  string FirstName = 1;
+  string LastName = 2;
+  string Email = 3;
+  string Position = 4;
+  
+}
+
+message GetEmployeesResponse{
+  message Employee{
+    int64 Id = 1;
+    string FirstName = 2;
+    string LastName = 3;
+    string Email = 4;
+    string Position = 5;
+    string PhoneNumber = 6;
+    bool active = 8;
+    Permissions perms = 9;
+  }
+  repeated Employee Employees = 1;
+}
+
+message GetEmployeeByIdRequest {
+  int64 id = 1;
+}
+
+message GetEmployeeByIdResponse{
+  int64 Id = 1;
+  string FirstName = 2;
+  string LastName = 3;
+  int64 DateOfBirth = 4;
+  string Gender = 5;
+  string Email = 6;
+  string PhoneNumber = 7;
+  string Address = 8;
+  string Username = 9;
+  string Position = 10;
+  string department = 11;
+  bool active = 12;
+  Permissions perms = 13;
+}
+
+message UpdateEmployeeRequest{
+  int64 Id = 1;
+  string LastName = 2;
+  string Gender = 3;
+  string PhoneNumber = 4;
+  string Address = 5;
+  string Position = 6;
+  string Department = 7;
+  bool active = 8;
+  repeated Permissions perms = 9;
+}
+
+message UpdateEmployeeResponse{
+  bool Valid = 1;
+  string response = 2;
 }

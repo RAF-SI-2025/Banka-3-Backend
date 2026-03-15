@@ -8,7 +8,11 @@ import (
 	"fmt"
 	"time"
 
+	"log"
+
 	"github.com/golang-jwt/jwt/v5"
+	"strconv"
+	"strings"
 )
 
 type User struct {
@@ -188,18 +192,137 @@ func (s *Server) RevokeRefreshTokensByEmail(tx *sql.Tx, email string) error {
 	return nil
 }
 
-func (s *Server) create_client_user(client Clients) error {
-	result := s.db_gorm.Create(&client)
+func create_user_from_model[T Clients | Employees](user T, s *Server) error {
+	result := s.db_gorm.Create(&user)
 	if result.Error != nil {
+		log.Printf("We got this error: %s", result.Error.Error())
 		return result.Error
 	}
 	return nil
 }
 
-func (s *Server) create_employee_user(employee Employees) error {
-	result := s.db_gorm.Create(&employee)
-	if result.Error != nil {
-		return result.Error
+func (s *Server) GetUserByID(id int64) (*Employee_by_Id_response, error) {
+	query := `select e.id, first_name, last_name, date_of_birth, gender, email, phone_number, address, username, position, department ,active, p.id, p.name   from employees e join employee_permissions ep on e.id = ep.employee_id join permissions p on ep.permission_id = p.id where e.id = 2`
+
+	var user Employee_by_Id_response
+	err := s.database.QueryRow(query).Scan(
+		&user.Id, &user.First_name, &user.Last_name, &user.Date_of_birth,
+		&user.Gender, &user.Email, &user.Phone_number, &user.Address,
+		&user.Username, &user.Position, &user.Department, &user.Active,
+		&user.Permission_id, &user.Permission_name,
+	)
+	if err != nil {
+		if err == sql.ErrNoRows {
+			return nil, fmt.Errorf("no employee found with id: %d", id)
+		}
+		return nil, fmt.Errorf("querying user: %w", err)
+	}
+
+	return &user, nil
+}
+
+func (s *Server) GetAllEmployees(email string, name string, last_name string, position string) (*[]Get_employees, error) {
+	query := `SELECT e.id, e.first_name, e.last_name, e.email, e.position, e.phone_number, e.active, p.id, p.name
+	FROM employees e 
+	JOIN employee_permissions ep ON e.id = ep.employee_id 
+	JOIN permissions p ON ep.permission_id = p.id`
+
+	var conditions []string
+	// Query is variadic, and interface{}
+	// is basically the most generic type
+	// interface is same as any, maybe it's nicer to use any here
+	var args []interface{}
+
+	if email != "" {
+		conditions = append(conditions, "e.email = $"+strconv.Itoa(len(args)+1))
+		args = append(args, email)
+	}
+	if name != "" {
+		conditions = append(conditions, "e.first_name = $"+strconv.Itoa(len(args)+1))
+		args = append(args, name)
+	}
+	if last_name != "" {
+		conditions = append(conditions, "e.last_name = $"+strconv.Itoa(len(args)+1))
+		args = append(args, last_name)
+	}
+	if position != "" {
+		conditions = append(conditions, "e.position = $"+strconv.Itoa(len(args)+1))
+		args = append(args, position)
+	}
+
+	if len(conditions) > 0 {
+		query += " WHERE " + strings.Join(conditions, " AND ")
+	}
+
+	var employees []Get_employees
+	rows, err := s.database.Query(query, args...)
+	if err != nil {
+		return nil, fmt.Errorf("whatever the fuck went wrong now: %w", err)
+	}
+
+	for rows.Next() {
+		var emp Get_employees
+		if err := rows.Scan(
+			&emp.Id, &emp.First_name, &emp.Last_name, &emp.Email,
+			&emp.Position, &emp.Phone_number, &emp.Active,
+			&emp.Permission_id, &emp.Permission_name,
+		); err != nil {
+			return nil, fmt.Errorf("failed reading in the values: %w", err)
+		}
+		employees = append(employees, emp)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, fmt.Errorf("error: %w", err)
+	}
+
+	return &employees, nil
+}
+
+func (s *Server) UpdateEmployee_(emp *Employees, perms []Permissions) error {
+	updates := map[string]any{
+		"id":           emp.Id,
+		"last_name":    emp.First_name,
+		"gender":       emp.Gender,
+		"phone_number": emp.Phone_number,
+		"address":      emp.Address,
+		"position":     emp.Position,
+		"department":   emp.Department,
+		"active":       emp.Active,
+	}
+	if err := s.db_gorm.Model(emp).Updates(updates).Error; err != nil {
+		log.Printf("Error updating employee %v", err)
+		return err
+	}
+
+	var currentPermissions []Permissions
+	if err := s.db_gorm.Table("employee_permissions").
+		Select("permissions.*").
+		Joins("JOIN permissions ON employee_permissions.permission_id = permissions.id").
+		Where("employee_permissions.employee_id = ?", emp.Id).
+		Find(&currentPermissions).Error; err != nil {
+		log.Printf("Error fetching permissions: %v", err)
+		return err
+	}
+
+	var contains = func(perms []Permissions, perm Permissions) bool {
+		for _, p := range perms {
+			if p.Id == perm.Id {
+				return true
+			}
+		}
+		return false
+	}
+
+	for _, perm := range perms {
+		if !contains(currentPermissions, perm) {
+			s.db_gorm.Create(&EmployeePermissions{Employee_id: emp.Id, PermissionId: perm.Id})
+		}
+	}
+
+	for _, currentPerm := range currentPermissions {
+		if !contains(perms, currentPerm) {
+			s.db_gorm.Where("employee_id = ? AND permission_id = ?", emp.Id, currentPerm.Id).Delete(&EmployeePermissions{})
+		}
 	}
 	return nil
 }
