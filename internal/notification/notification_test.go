@@ -6,7 +6,7 @@ import (
 	"os"
 	"testing"
 
-	"banka-raf/gen/notification"
+	"github.com/RAF-SI-2025/Banka-3-Backend/gen/notification"
 )
 
 type MockSender struct {

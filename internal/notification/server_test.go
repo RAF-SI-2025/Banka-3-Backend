@@ -2,10 +2,17 @@ package notification
 
 import (
 	"context"
+	"errors"
 	"testing"
 
-	notificationpb "banka-raf/gen/notification"
+	notificationpb "github.com/RAF-SI-2025/Banka-3-Backend/gen/notification"
 )
+
+type failingSender struct{}
+
+func (f *failingSender) Send(to []string, subject string, body string) error {
+	return errors.New("send failed")
+}
 
 func setSMTPTestEnv(t *testing.T) {
 	t.Helper()
@@ -18,7 +25,7 @@ func setSMTPTestEnv(t *testing.T) {
 func TestSendPasswordResetEmailSMTPFailureReturnsUnsuccessful(t *testing.T) {
 	setSMTPTestEnv(t)
 
-	server := &Server{}
+	server := &Server{sender: &failingSender{}}
 	resp, err := server.SendPasswordResetEmail(context.Background(), &notificationpb.PasswordLinkMailRequest{
 		ToAddr: "receiver@example.com",
 		Link:   "https://frontend/reset-password?token=abc",
@@ -37,7 +44,7 @@ func TestSendPasswordResetEmailSMTPFailureReturnsUnsuccessful(t *testing.T) {
 func TestSendInitialPasswordSetEmailSMTPFailureReturnsUnsuccessful(t *testing.T) {
 	setSMTPTestEnv(t)
 
-	server := &Server{}
+	server := &Server{sender: &failingSender{}}
 	resp, err := server.SendInitialPasswordSetEmail(context.Background(), &notificationpb.PasswordLinkMailRequest{
 		ToAddr: "receiver@example.com",
 		Link:   "https://frontend/set-password?token=abc",

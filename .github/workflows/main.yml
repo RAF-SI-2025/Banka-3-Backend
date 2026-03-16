@@ -1,0 +1,155 @@
+name: CI
+
+on:
+  pull_request:
+    branches: [main]
+
+jobs:
+  fmt:
+    name: Format check
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-go@v6
+        with:
+          go-version-file: go.mod
+      - name: Check gofmt
+        run: test -z "$(gofmt -l .)"
+
+  lint:
+    name: Lint check
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-go@v6
+        with:
+          go-version-file: go.mod
+      - uses: golangci/golangci-lint-action@v9
+        with:
+          version: v2.4
+
+  proto-check:
+    name: Proto staleness check
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+      - name: Generate protos
+        run: make proto
+      - name: Check for diff
+        run: |
+          if ! git diff --exit-code gen/; then
+            echo "::error::Generated proto code is out of date. Run 'make proto' and commit the result."
+            exit 1
+          fi
+
+  build:
+    name: Build services
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-go@v6
+        with:
+          go-version-file: go.mod
+      - run: go build ./cmd/...
+
+  tests-unit:
+    name: Tests (unit)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-go@v6
+        with:
+          go-version-file: go.mod
+      - run: go test -race -count=1 ./...
+
+  schema-check:
+    name: Schema+seed check
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:18-alpine
+        env:
+          POSTGRES_USER: banka
+          POSTGRES_PASSWORD: banka_secret
+          POSTGRES_DB: banka
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U banka"
+          --health-interval 2s
+          --health-timeout 5s
+          --health-retries 10
+    steps:
+      - uses: actions/checkout@v5
+      - name: Apply schema
+        run: psql -f scripts/db/schema.sql
+        env:
+          PGHOST: localhost
+          PGPORT: "5432"
+          PGUSER: banka
+          PGPASSWORD: banka_secret
+          PGDATABASE: banka
+      - name: Apply seed
+        run: psql -f scripts/db/seed.sql
+        env:
+          PGHOST: localhost
+          PGPORT: "5432"
+          PGUSER: banka
+          PGPASSWORD: banka_secret
+          PGDATABASE: banka
+
+  test-integration:
+    name: Tests (integration)
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:18-alpine
+        env:
+          POSTGRES_USER: banka
+          POSTGRES_PASSWORD: banka_secret
+          POSTGRES_DB: banka
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U banka"
+          --health-interval 2s
+          --health-timeout 5s
+          --health-retries 10
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-go@v6
+        with:
+          go-version-file: go.mod
+      - name: Apply schema
+        run: psql -f scripts/db/schema.sql
+        env:
+          PGHOST: localhost
+          PGPORT: "5432"
+          PGUSER: banka
+          PGPASSWORD: banka_secret
+          PGDATABASE: banka
+      - name: Apply seed
+        run: psql -f scripts/db/seed.sql
+        env:
+          PGHOST: localhost
+          PGPORT: "5432"
+          PGUSER: banka
+          PGPASSWORD: banka_secret
+          PGDATABASE: banka
+      - name: Run integration tests
+        run: go test -race -count=1 -tags=integration ./...
+        env:
+          DATABASE_URL: postgres://banka:banka_secret@localhost:5432/banka?sslmode=disable
+          ACCESS_JWT_SECRET: ci-test-access-secret
+          REFRESH_JWT_SECRET: ci-test-refresh-secret
+
+  docker-build:
+    name: Docker build
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        service: [user, notification, gateway]
+    steps:
+      - uses: actions/checkout@v5
+      - name: Build ${{ matrix.service }} image
+        run: docker build -f cmd/${{ matrix.service }}/Dockerfile .

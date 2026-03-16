@@ -9,17 +9,12 @@ import (
 	"encoding/base64"
 	"errors"
 	"fmt"
+	"log"
 	"net/url"
 	"os"
+	"slices"
 	"strings"
 	"time"
-
-	"banka-raf/gen/notification"
-	"banka-raf/gen/user"
-	userpb "banka-raf/gen/user"
-
-	"log"
-	"slices"
 
 	"github.com/golang-jwt/jwt/v5"
 	"google.golang.org/grpc"
@@ -27,6 +22,9 @@ import (
 	"google.golang.org/grpc/credentials/insecure"
 	"google.golang.org/grpc/status"
 	"gorm.io/gorm"
+
+	notificationpb "github.com/RAF-SI-2025/Banka-3-Backend/gen/notification"
+	userpb "github.com/RAF-SI-2025/Banka-3-Backend/gen/user"
 )
 
 const (
@@ -71,8 +69,80 @@ func NewServer(accessJwtSecret string, refreshJwtSecret string, database *sql.DB
 	}
 }
 
-func (s *Server) GetEmployeeById(ctx context.Context, req *userpb.GetEmployeeByIdRequest) (*user.EmployeeResponse, error) {
-	return nil, status.Error(codes.Unimplemented, "not implemented")
+func (s *Server) GetEmployeeById(ctx context.Context, req *userpb.GetEmployeeByIdRequest) (*userpb.GetEmployeeByIdResponse, error) {
+	map_to_protobuff_resp := func(emp Employee_by_Id_response) *userpb.GetEmployeeByIdResponse {
+		return &userpb.GetEmployeeByIdResponse{
+			Id:          int64(emp.Id),
+			FirstName:   emp.First_name,
+			LastName:    emp.Last_name,
+			DateOfBirth: emp.Date_of_birth.Unix(),
+			Gender:      emp.Gender,
+			Email:       emp.Email,
+			PhoneNumber: emp.Phone_number,
+			Address:     emp.Address,
+			Username:    emp.Username,
+			Position:    emp.Position,
+			Department:  emp.Department,
+			Active:      emp.Active,
+			Perms:       &userpb.Permissions{Id: int64(emp.Permission_id), Permision: emp.Permission_name},
+		}
+	}
+
+	// user, err := get_user_by_id_from_model(Employee_by_Id_response{}, int(req.Id), s)
+	user, err := s.GetUserByID(req.Id)
+	if err != nil {
+		log.Printf("Error in employee retrieval%s", err.Error())
+		return nil, status.Error(codes.Internal, "Employee creation failed")
+	}
+
+	resp := map_to_protobuff_resp(*user)
+	log.Println("I managed to return without fail, with response", resp)
+	return resp, nil
+}
+
+func (s *Server) GetEmployees(ctx context.Context, req *userpb.GetEmployeesRequest) (*userpb.GetEmployeesResponse, error) {
+	map_func := func(emp Get_employees) *userpb.GetEmployeesResponse_Employee {
+		return &userpb.GetEmployeesResponse_Employee{
+			Id:          int64(emp.Id),
+			FirstName:   emp.First_name,
+			LastName:    emp.Last_name,
+			Email:       emp.Email,
+			Position:    emp.Position,
+			PhoneNumber: emp.Phone_number,
+			Active:      emp.Active,
+			Perms:       &userpb.Permissions{Id: emp.Permission_id, Permision: emp.Permission_name},
+		}
+	}
+	employees, err := s.GetAllEmployees(req.Email, req.FirstName, req.LastName, req.Position)
+	if err != nil {
+		log.Printf("Error in retrieving employees: %s", err.Error())
+		return nil, status.Error(codes.Internal, "Failed to retrieve employees")
+	}
+	var employee_responses []*userpb.GetEmployeesResponse_Employee
+	for _, emp := range *employees {
+		employee_responses = append(employee_responses, map_func(emp))
+	}
+
+	return &userpb.GetEmployeesResponse{Employees: employee_responses}, nil
+}
+
+func (s *Server) UpdateEmployee(ctx context.Context, req *userpb.UpdateEmployeeRequest) (*userpb.UpdateEmployeeResponse, error) {
+	emp := Employees{Last_name: req.LastName, Gender: req.Gender,
+		Phone_number: req.PhoneNumber, Address: req.Address, Position: req.Position,
+		Department: req.Department, Active: req.Active, Id: uint64(req.Id)}
+	var map_from_pbs = func(perms *userpb.Permissions) Permissions {
+		return Permissions{Id: uint64(perms.Id), Name: perms.Permision}
+	}
+	var permissions []Permissions
+	for _, perm := range req.Perms {
+		permissions = append(permissions, map_from_pbs(perm))
+	}
+	err := s.UpdateEmployee_(&emp, permissions)
+	if err != nil {
+		return nil, status.Error(codes.Internal, "Messed something up in UpdateEmployee_ in repo")
+	}
+	return &userpb.UpdateEmployeeResponse{Valid: true, Response: "You made it"}, nil
+
 }
 
 func (s *Server) GenerateRefreshToken(email string) (string, error) {
@@ -164,7 +234,7 @@ func (s *Server) Refresh(ctx context.Context, req *userpb.RefreshRequest) (*user
 	if err != nil {
 		return nil, fmt.Errorf("starting transaction: %w", err)
 	}
-	defer tx.Rollback()
+	defer func() { _ = tx.Rollback() }()
 
 	err = s.rotateRefreshToken(tx, email, hashValue(refreshToken), hashValue(newSignedToken), newExpiry.Time)
 	if err != nil {
@@ -214,7 +284,7 @@ func (s *Server) Logout(ctx context.Context, req *userpb.LogoutRequest) (*userpb
 	if err != nil {
 		return nil, fmt.Errorf("starting transaction: %w", err)
 	}
-	defer tx.Rollback()
+	defer func() { _ = tx.Rollback() }()
 	err = s.RevokeRefreshTokensByEmail(tx, email)
 	if err != nil {
 		return nil, err
@@ -249,7 +319,7 @@ func (s *Server) SetPasswordWithToken(ctx context.Context, req *userpb.SetPasswo
 	if err != nil {
 		return nil, status.Error(codes.Internal, "starting transaction failed")
 	}
-	defer tx.Rollback()
+	defer func() { _ = tx.Rollback() }()
 
 	email, _, err := s.ConsumePasswordActionToken(tx, hashValue(token))
 	if err != nil {
@@ -323,25 +393,21 @@ func (s *Server) sendPasswordActionEmail(ctx context.Context, email string, link
 		notificationAddr = defaultNotificationURL
 	}
 
-	dialCtx, cancelDial := context.WithTimeout(ctx, 5*time.Second)
-	defer cancelDial()
-	conn, err := grpc.DialContext(
-		dialCtx,
+	conn, err := grpc.NewClient(
 		notificationAddr,
 		grpc.WithTransportCredentials(insecure.NewCredentials()),
-		grpc.WithBlock(),
 	)
 	if err != nil {
 		return fmt.Errorf("dialing notification service: %w", err)
 	}
-	defer conn.Close()
+	defer func() { _ = conn.Close() }()
 
-	client := notification.NewNotificationServiceClient(conn)
+	client := notificationpb.NewNotificationServiceClient(conn)
 
 	sendCtx, cancelSend := context.WithTimeout(ctx, 5*time.Second)
 	defer cancelSend()
 
-	req := &notification.PasswordLinkMailRequest{
+	req := &notificationpb.PasswordLinkMailRequest{
 		ToAddr: email,
 		Link:   link,
 	}
@@ -403,18 +469,19 @@ func (s *Server) CreateClientAccount(ctx context.Context, req *userpb.CreateClie
 	}
 	vals := []string{req.FirstName, req.LastName, req.Gender, req.Email, req.PhoneNumber,
 		req.Address}
-	for _, val := range vals {
-		if is_null(val) {
-			log.Printf("The value %s is null", val)
-		}
+
+	if slices.ContainsFunc(vals, is_null) {
+		return nil, status.Error(codes.InvalidArgument, "One of the required cols is null")
 	}
+
 	if req.Gender != "M" && req.Gender != "F" {
-		return nil, errors.New("Gender must be M of F")
+		return nil, status.Error(codes.InvalidArgument, "Gender must be one of M or F")
 	}
 
 	salt, salt_err := generateSalt()
 	if salt_err != nil {
 		log.Printf("Error generating salt %s", salt_err.Error())
+		return nil, status.Error(codes.Internal, "Password salting failed")
 	}
 
 	client := Clients{First_name: req.FirstName,
@@ -422,11 +489,11 @@ func (s *Server) CreateClientAccount(ctx context.Context, req *userpb.CreateClie
 		Gender: req.Gender, Email: req.Email, Phone_number: req.PhoneNumber,
 		Address: req.Address, Password: hashPassword(req.Password, salt),
 		Salt_password: salt}
-	err := s.create_client_user(client)
+
+	err := create_user_from_model(client, s)
 	if err != nil {
-		//return nil, errors.New(err.Error())
-		// just log for now
 		log.Printf("Error in user creation%s", err.Error())
+		return nil, status.Error(codes.Internal, "Employee creation failed")
 	}
 	return &userpb.CreateClientResponse{Valid: true}, nil
 
@@ -439,12 +506,12 @@ func (s *Server) CreateEmployeeAccount(ctx context.Context, req *userpb.CreateEm
 	vals := []string{req.FirstName, req.LastName, req.Gender, req.Email, req.PhoneNumber,
 		req.Address, req.Username}
 	if slices.ContainsFunc(vals, is_null) {
-		//return nil, status.Error(codes.InvalidArgument, "Non-nullable field is null")
-		log.Print("One of the fucking values is null for create employy, and we can't have that")
+		return nil, status.Error(codes.InvalidArgument, "One of the required cols is null")
 	}
+
 	if req.Gender != "M" && req.Gender != "F" {
 		log.Print("create employee gender must be M or F")
-		return nil, errors.New("Gender must be M of F")
+		return nil, errors.New("gender must be M or F")
 	}
 
 	salt, salt_err := generateSalt()
@@ -459,12 +526,11 @@ func (s *Server) CreateEmployeeAccount(ctx context.Context, req *userpb.CreateEm
 		Department: req.Department, Salt_password: salt,
 		Password: hashPassword(req.Password, salt)}
 
-	err := s.create_employee_user(employee)
+	err := create_user_from_model(employee, s)
 
 	if err != nil {
-		//return nil, errors.New(err.Error())
-		//log.Printf("%s", err.Error())
-		log.Printf("Error in employee creation %s", err.Error())
+		log.Printf("Error in user creation%s", err.Error())
+		return nil, status.Error(codes.Internal, "Employee creation failed")
 	}
 	return &userpb.CreateEmployeeResponse{Valid: true}, nil
 

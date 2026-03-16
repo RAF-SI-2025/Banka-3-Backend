@@ -1,8 +1,6 @@
 package main
 
 import (
-	"banka-raf/gen/notification"
-	internalNotification "banka-raf/internal/notification"
 	"fmt"
 	"log"
 	"net"
@@ -10,6 +8,9 @@ import (
 
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/reflection"
+
+	"github.com/RAF-SI-2025/Banka-3-Backend/gen/notification"
+	internalNotification "github.com/RAF-SI-2025/Banka-3-Backend/internal/notification"
 )
 
 func main() {

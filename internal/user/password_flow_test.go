@@ -9,13 +9,13 @@ import (
 	"sync"
 	"testing"
 
-	notificationpb "banka-raf/gen/notification"
-	userpb "banka-raf/gen/user"
-
 	"github.com/DATA-DOG/go-sqlmock"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
+
+	notificationpb "github.com/RAF-SI-2025/Banka-3-Backend/gen/notification"
+	userpb "github.com/RAF-SI-2025/Banka-3-Backend/gen/user"
 )
 
 type testNotificationServer struct {
@@ -72,7 +72,7 @@ func newTestServer(t *testing.T) (*Server, sqlmock.Sqlmock, *sql.DB) {
 
 func TestRequestPasswordResetUnknownEmailReturnsAccepted(t *testing.T) {
 	server, mock, db := newTestServer(t)
-	defer db.Close()
+	defer func() { _ = db.Close() }()
 
 	email := "missing@banka.raf"
 	mock.ExpectQuery(regexp.QuoteMeta(`
@@ -99,7 +99,7 @@ func TestRequestPasswordResetUnknownEmailReturnsAccepted(t *testing.T) {
 
 func TestRequestPasswordResetExistingEmailSendsNotification(t *testing.T) {
 	server, mock, db := newTestServer(t)
-	defer db.Close()
+	defer func() { _ = db.Close() }()
 
 	notificationServer := &testNotificationServer{}
 	addr, stop := startNotificationTestServer(t, notificationServer)
@@ -161,7 +161,7 @@ func TestRequestPasswordResetExistingEmailSendsNotification(t *testing.T) {
 
 func TestRequestInitialPasswordSetExistingEmailSendsNotification(t *testing.T) {
 	server, mock, db := newTestServer(t)
-	defer db.Close()
+	defer func() { _ = db.Close() }()
 
 	notificationServer := &testNotificationServer{}
 	addr, stop := startNotificationTestServer(t, notificationServer)
@@ -219,7 +219,7 @@ func TestRequestInitialPasswordSetExistingEmailSendsNotification(t *testing.T) {
 
 func TestSetPasswordWithTokenInvalidInput(t *testing.T) {
 	server, mock, db := newTestServer(t)
-	defer db.Close()
+	defer func() { _ = db.Close() }()
 
 	_, err := server.SetPasswordWithToken(context.Background(), &userpb.SetPasswordWithTokenRequest{
 		Token:       "",
@@ -239,7 +239,7 @@ func TestSetPasswordWithTokenInvalidInput(t *testing.T) {
 
 func TestSetPasswordWithTokenSuccess(t *testing.T) {
 	server, mock, db := newTestServer(t)
-	defer db.Close()
+	defer func() { _ = db.Close() }()
 
 	email := "admin@banka.raf"
 	token := "opaque-token"
@@ -278,7 +278,7 @@ func TestSetPasswordWithTokenSuccess(t *testing.T) {
 
 func TestSetPasswordWithTokenInvalidOrExpiredToken(t *testing.T) {
 	server, mock, db := newTestServer(t)
-	defer db.Close()
+	defer func() { _ = db.Close() }()
 
 	mock.ExpectBegin()
 	mock.ExpectQuery("SELECT email, action_type").

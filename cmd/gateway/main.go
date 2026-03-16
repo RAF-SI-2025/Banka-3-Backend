@@ -1,10 +1,11 @@
 package main
 
 import (
-	"banka-raf/internal/gateway"
 	"log"
 
 	"github.com/gin-gonic/gin"
+
+	"github.com/RAF-SI-2025/Banka-3-Backend/internal/gateway"
 )
 
 func main() {

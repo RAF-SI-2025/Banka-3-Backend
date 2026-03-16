@@ -1,8 +1,6 @@
 package main
 
 import (
-	"banka-raf/gen/user"
-	internalUser "banka-raf/internal/user"
 	"database/sql"
 	"fmt"
 	"log"
@@ -14,6 +12,9 @@ import (
 	"google.golang.org/grpc/reflection"
 	"gorm.io/driver/postgres"
 	"gorm.io/gorm"
+
+	"github.com/RAF-SI-2025/Banka-3-Backend/gen/user"
+	internalUser "github.com/RAF-SI-2025/Banka-3-Backend/internal/user"
 )
 
 func connect_to_db_gorm() *gorm.DB {
@@ -49,11 +50,11 @@ func main() {
 	gorm_db := connect_to_db_gorm()
 	//gorm_db.AutoMigrate(&internalUser.Clients{}, &internalUser.Employees{});
 	log.Println("connected to database...")
-	defer db.Close()
+	defer func() { _ = db.Close() }()
 
 	accessJwtSecret, accessSecretSet := os.LookupEnv("ACCESS_JWT_SECRET")
 	refreshJwtSecret, refreshSecretSet := os.LookupEnv("REFRESH_JWT_SECRET")
-	if accessSecretSet == false || refreshSecretSet == false {
+	if !accessSecretSet || !refreshSecretSet {
 		log.Fatalf("JWT secrets not set, exiting...")
 	}
 

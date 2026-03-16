@@ -1,7 +1,6 @@
 package gateway
 
 import (
-	userpb "banka-raf/gen/user"
 	"context"
 	"net/http"
 	"strings"
@@ -9,6 +8,8 @@ import (
 
 	"github.com/gin-gonic/gin"
 	"github.com/golang-jwt/jwt/v5"
+
+	userpb "github.com/RAF-SI-2025/Banka-3-Backend/gen/user"
 )
 
 // Placeholder for future middleware (auth, logging, prometheus, etc.).
