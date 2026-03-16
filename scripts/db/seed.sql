@@ -16,8 +16,8 @@ INSERT INTO employees (
 VALUES (
     'Admin', 'Admin', '1990-01-01', 'M', 'admin@banka.raf',
     '+381600000000', 'N/A', 'admin',
-    '\x3eb3fe66b31e3b4d10fa70b5cad49c7112294af6ae4e476a1c405155d45aa121'::BYTEA,
-    '\x00'::BYTEA,
+    '\x78db8c5a70624a77ff540ee38898086ab4db699e8905399b8a84c485cd7c4953'::BYTEA,
+    '\xf5e2740f7afc0e0dd44968b7364fc102'::BYTEA,
     'Administrator', 'IT', true
 )
 ON CONFLICT (email) DO NOTHING;

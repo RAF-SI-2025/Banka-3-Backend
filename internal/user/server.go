@@ -177,11 +177,13 @@ func (s *Server) Refresh(ctx context.Context, req *userpb.RefreshRequest) (*user
 }
 
 func (s *Server) Login(ctx context.Context, req *userpb.LoginRequest) (*userpb.LoginResponse, error) {
-	hashedPassword := hashValue(req.Password)
 	user, err := s.GetUserByEmail(req.Email)
+	hashedPassword := hashPassword(req.Password, user.salt)
 	if err != nil {
 		return nil, err
 	}
+
+	fmt.Printf("%x %x %x\n", hashedPassword, user.hashedPassword, user.salt)
 
 	if user != nil && bytes.Equal(hashedPassword, user.hashedPassword) {
 		accessToken, err := s.GenerateAccessToken(user.email)

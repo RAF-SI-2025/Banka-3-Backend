@@ -14,21 +14,22 @@ import (
 type User struct {
 	email          string
 	hashedPassword []byte
+	salt           []byte
 }
 
 var ErrInvalidPasswordActionToken = errors.New("invalid or expired password token")
 
 func (s *Server) GetUserByEmail(email string) (*User, error) {
 	query := `
-		SELECT email, password FROM employees WHERE email = $1
+		SELECT email, password, salt_password FROM employees WHERE email = $1
 		UNION ALL
-		SELECT email, password FROM clients WHERE email = $1
+		SELECT email, password, salt_password FROM clients WHERE email = $1
 		LIMIT 1
 	`
 
 	var user User
 
-	err := s.database.QueryRow(query, email).Scan(&user.email, &user.hashedPassword)
+	err := s.database.QueryRow(query, email).Scan(&user.email, &user.hashedPassword, &user.salt)
 	if err == sql.ErrNoRows {
 		return nil, nil
 	}
