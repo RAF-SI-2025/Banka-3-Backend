@@ -15,7 +15,22 @@ services:
       timeout: 5s
       retries: 10
     networks: [banka]
-    
+
+  bank:
+    container_name: bank
+    build:
+      context: .
+      dockerfile: cmd/bank/Dockerfile
+    ports:
+      - "${BANK_GRPC_PORT:-50053}:50051"
+    environment:
+      DATABASE_URL: "postgres://${POSTGRES_USER}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB}?sslmode=disable"
+      GRPC_PORT: "50051"
+    depends_on:
+      postgres:
+        condition: service_healthy
+    networks: [banka]
+
   user:
     container_name: user
     build:

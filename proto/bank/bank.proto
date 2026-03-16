@@ -1,0 +1,9 @@
+syntax = "proto3";
+
+package bank;
+
+option go_package = "github.com/RAF-SI-2025/Banka-3-Backend/gen/bank";
+
+service BankService {
+
+}
