@@ -135,10 +135,10 @@ CREATE TABLE IF NOT EXISTS cards (
 
 CREATE TABLE IF NOT EXISTS authorized_party (
     id              BIGSERIAL       PRIMARY KEY,
-    ime             VARCHAR(63)     NOT NULL,
-    prezime         VARCHAR(63)     NOT NULL,
-    datum_rodjenja  DATE            NOT NULL,
-    pol             VARCHAR(7)      NOT NULL,
+    name            VARCHAR(63)     NOT NULL,
+    last_name       VARCHAR(63)     NOT NULL,
+    date_of_birth   DATE            NOT NULL,
+    gender          VARCHAR(7)      NOT NULL,
     email           VARCHAR(127)    NOT NULL,
     phone_number    VARCHAR(15)     NOT NULL,
     address         VARCHAR (255)   NOT NULL
@@ -152,7 +152,7 @@ CREATE TABLE IF NOT EXISTS payments (
     end_amount          BIGINT          NOT NULL,
     commission          BIGINT          NOT NULL,
     recipient_id        BIGINT          REFERENCES clients(id),
-    trascaction_code    INT             NOT NULL,
+    transcaction_code    INT            NOT NULL,
     call_number         VARCHAR(31)     NOT NULL,
     reason              VARCHAR(255)    NOT NULL,
     timestamp           TIMESTAMP       NOT NULL DEFAULT NOW()
@@ -211,12 +211,12 @@ CREATE TABLE IF NOT EXISTS loan_installment (
 
 CREATE TYPE employment_status AS ENUM ('full_time', 'temporary', 'unemployed');
 
-CREATE TABLE IF NOT EXISTS laon_request (
+CREATE TABLE IF NOT EXISTS loan_request (
     id                          BIGSERIAL           PRIMARY KEY,
     type                        loan_type           NOT NULL,
     interest_rate_type          interest_rate_type  NOT NULL,
     purpose                     VARCHAR(1023)       NOT NULL,
-    montly_installment          DECIMAL(20, 2)      NOT NULL,
+    monthly_installment         DECIMAL(20, 2)      NOT NULL,
     currency_id                 BIGINT              REFERENCES currencies(id) ON UPDATE CASCADE ON DELETE RESTRICT,
     amount                      DECIMAL(20, 2)      NOT NULL,
     employment_status           employment_status   NOT NULL,
