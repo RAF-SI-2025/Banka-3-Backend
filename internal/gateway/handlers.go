@@ -207,12 +207,19 @@ func (s *Server) GetEmployeeByID(c *gin.Context) {
 	}
 
 	c.JSON(http.StatusOK, gin.H{
-		"id":         resp.Id,
-		"first_name": resp.FirstName,
-		"last_name":  resp.LastName,
-		"email":      resp.Email,
-		"position":   resp.Position,
-		"active":     resp.Active,
+		"id":            resp.Id,
+		"first_name":    resp.FirstName,
+		"last_name":     resp.LastName,
+		"date_of_birth": resp.DateOfBirth,
+		"gender":        resp.Gender,
+		"email":         resp.Email,
+		"phone_number":  resp.PhoneNumber,
+		"address":       resp.Address,
+		"username":      resp.Username,
+		"position":      resp.Position,
+		"department":    resp.Department,
+		"active":        resp.Active,
+		"permissions":   []string{resp.Perms.Permision},
 	})
 }
 
