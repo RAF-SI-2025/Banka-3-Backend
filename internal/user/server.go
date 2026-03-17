@@ -175,10 +175,26 @@ func (s *Server) ValidateRefreshToken(ctx context.Context, req *userpb.ValidateT
 	})
 
 	if err != nil {
+		return nil, status.Error(codes.Unauthenticated, "invalid token")
+	}
+
+	sub, err := token.Claims.GetSubject()
+	if err != nil {
 		return nil, err
 	}
+	exp, err := token.Claims.GetExpirationTime()
+	if err != nil {
+		return nil, err
+	}
+	iat, err := token.Claims.GetIssuedAt()
+	if err != nil {
+		return nil, err
+	}
+
 	return &userpb.ValidateTokenResponse{
-		Valid: token.Valid,
+		Sub: sub,
+		Exp: exp.Unix(),
+		Iat: iat.Unix(),
 	}, nil
 }
 
@@ -190,8 +206,23 @@ func (s *Server) ValidateAccessToken(ctx context.Context, req *userpb.ValidateTo
 	if err != nil {
 		return nil, status.Error(codes.Unauthenticated, "invalid token")
 	}
+	sub, err := token.Claims.GetSubject()
+	if err != nil {
+		return nil, err
+	}
+	exp, err := token.Claims.GetExpirationTime()
+	if err != nil {
+		return nil, err
+	}
+	iat, err := token.Claims.GetIssuedAt()
+	if err != nil {
+		return nil, err
+	}
+
 	return &userpb.ValidateTokenResponse{
-		Valid: token.Valid,
+		Sub: sub,
+		Exp: exp.Unix(),
+		Iat: iat.Unix(),
 	}, nil
 }
 
