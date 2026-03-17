@@ -41,3 +41,43 @@ VALUES (
     '\x00'::BYTEA
 )
 ON CONFLICT (email) DO NOTHING;
+
+INSERT INTO currencies (
+    label, name, symbol, countries, description, active
+)
+VALUES (
+    'EUR', 'Euro', '€',
+    'Austria, Belgium, Bulgaria, Croatia, Cyprus, Estonia, Finland, France, Germany, Greece, Ireland, Italy, Latvia, Lithuania, Luxembourg, Malta, Netherlands, Portugal, Slovakia, Slovenia, Spain',
+    'The euro (symbol: €; currency code: EUR) is the official currency of 21 of the 27 member states of the European Union. This group of states is officially known as the euro area or, more commonly, the eurozone. The euro is divided into 100 euro cents.[7][8]',
+    TRUE
+);
+
+INSERT INTO accounts (number, name, owner, balance, created_by, valid_until, currency, owner_type, account_type, maintainance_cost, daily_limit, monthly_limit, daily_expenditure, monthly_expenditure)
+VALUES(
+'14159265358979323846', 'Arthur Dent', 1, 137, 1, '2029-12-31', 'EUR', 'personal', 'checking', 11, 2718, 100000, 10, 100);
+
+Insert into activity_codes (code, sector, branch) values('whateve', 'Sector for bullshiting', 'Socially unprodictive banking branch');
+
+Insert into companies(registered_id, name, tax_code, activity_code_id, address, owner_id) values(
+31415926, 'Marvin the android corp', 42, 1, 'At the restaurant at the end of the universe', 1
+);
+
+Insert into cards (number, name, valid_until, account_number, cvv, card_limit) values(
+'271828', 'Ford Perfect card', '2030-12-31', '14159265358979323846', '357', 10000
+);
+
+Insert into authorized_party (name, last_name, date_of_birth, gender, email, phone_number, address) values(
+'Zaphod', 'Beeblebrox', '1999-10-29', 'M', 'zaphod_beeblebrox@heartofgold.com', '42424242', 'On a vogon ship'
+);
+
+Insert into payments (from_account, to_account, start_amount, end_amount, commission, recipient_id, transcaction_code, call_number, reason) values(
+'14159265358979323846', '14159265358979323846', 42000, 1370, 50, 1, 11, '91803','Cuz I felt like it, there is no reason for you to have insight into my decision making process'
+);
+
+Insert into transfers (from_account, to_account, start_amount, end_amount, start_currency_id, exchange_rate, commission) values(
+'14159265358979323846', '14159265358979323846', 11, 0, 1, 11.27, 3
+);
+
+Insert into payment_codes (code, description) values(
+20, 'theory of Marx and Engels of the inevitability of a violent revolution refers to the bourgeois state'
+);

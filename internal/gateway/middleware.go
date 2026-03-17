@@ -7,7 +7,6 @@ import (
 	"time"
 
 	"github.com/gin-gonic/gin"
-	"github.com/golang-jwt/jwt/v5"
 
 	userpb "github.com/RAF-SI-2025/Banka-3-Backend/gen/user"
 )
@@ -37,24 +36,9 @@ func AuthenticatedMiddleware(user userpb.UserServiceClient) gin.HandlerFunc {
 			return
 		}
 
-		if !resp.Valid {
-			c.AbortWithStatus(http.StatusUnauthorized)
-			return
-		}
-
-		t, _, err := new(jwt.Parser).ParseUnverified(token, jwt.MapClaims{})
-		if err != nil {
-			c.AbortWithStatus(http.StatusUnauthorized)
-			return
-		}
-
-		if claims, ok := t.Claims.(jwt.MapClaims); ok {
-			email, err := claims.GetSubject()
-			if err != nil {
-				c.AbortWithStatus(http.StatusUnauthorized)
-			}
-			c.Set("email", email)
-			c.Next()
-		}
+		c.Set("email", resp.Sub)
+		c.Set("exp", resp.Exp)
+		c.Set("iat", resp.Iat)
+		c.Next()
 	}
 }

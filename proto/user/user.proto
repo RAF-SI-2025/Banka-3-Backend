@@ -25,7 +25,9 @@ message ValidateTokenRequest {
 }
 
 message ValidateTokenResponse {
-  bool valid = 1;
+  string sub = 1;
+  int64 iat = 2;
+  int64 exp = 3;
 }
 
 message RefreshRequest {
@@ -36,7 +38,6 @@ message RefreshResponse {
   string access_token = 1;
   string refresh_token = 2;
 }
-
 
 message EmployeeResponse {
   int64 id = 1;
@@ -82,12 +83,12 @@ message SetPasswordWithTokenResponse {
   bool successful = 1;
 }
 
-message Permissions{
+message Permissions {
   int64 Id = 1;
   string Permision = 2;
 }
 
-message CreateEmployeeRequest{
+message CreateEmployeeRequest {
   string FirstName = 1;
   string Last_name = 2;
   int64 DateOfBirth = 3;
@@ -120,17 +121,15 @@ message CreateClientResponse {
   bool valid = 1;
 }
 
-
-message GetEmployeesRequest{
+message GetEmployeesRequest {
   string FirstName = 1;
   string LastName = 2;
   string Email = 3;
   string Position = 4;
-  
 }
 
-message GetEmployeesResponse{
-  message Employee{
+message GetEmployeesResponse {
+  message Employee {
     int64 Id = 1;
     string FirstName = 2;
     string LastName = 3;
@@ -147,7 +146,7 @@ message GetEmployeeByIdRequest {
   int64 id = 1;
 }
 
-message GetEmployeeByIdResponse{
+message GetEmployeeByIdResponse {
   int64 Id = 1;
   string FirstName = 2;
   string LastName = 3;
@@ -163,7 +162,7 @@ message GetEmployeeByIdResponse{
   Permissions perms = 13;
 }
 
-message UpdateEmployeeRequest{
+message UpdateEmployeeRequest {
   int64 Id = 1;
   string LastName = 2;
   string Gender = 3;
@@ -175,7 +174,7 @@ message UpdateEmployeeRequest{
   repeated Permissions perms = 9;
 }
 
-message UpdateEmployeeResponse{
+message UpdateEmployeeResponse {
   bool Valid = 1;
   string response = 2;
 }
