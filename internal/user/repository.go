@@ -273,15 +273,27 @@ func (s *Server) GetAllEmployees(email string, name string, last_name string, po
 	if err != nil {
 		return nil, fmt.Errorf("whatever the fuck went wrong now: %w", err)
 	}
-	defer rows.Close()
 
 	for rows.Next() {
 		var emp Get_employees
 		var permissionID sql.NullInt64
 		var permissionName sql.NullString
 
-		if err := rows.Scan(&emp.Id, &emp.First_name, &emp.Last_name, &emp.Email, &emp.Position, &emp.Phone_number, &emp.Active, &permissionID, &permissionName); err != nil {
-			return nil, fmt.Errorf("failed reading employee row: %w", err)
+		if err := rows.Scan(
+			&emp.Id,
+			&emp.First_name,
+			&emp.Last_name,
+			&emp.Email,
+			&emp.Position,
+			&emp.Phone_number,
+			&emp.Active,
+			&permissionID,
+			&permissionName,
+		); err != nil {
+			if closeErr := rows.Close(); closeErr != nil {
+				return nil, fmt.Errorf("failed reading in the values: %w; additionally failed closing rows: %v", err, closeErr)
+			}
+			return nil, fmt.Errorf("failed reading in the values: %w", err)
 		}
 
 		if permissionID.Valid {
@@ -295,7 +307,14 @@ func (s *Server) GetAllEmployees(email string, name string, last_name string, po
 	}
 
 	if err := rows.Err(); err != nil {
+		if closeErr := rows.Close(); closeErr != nil {
+			return nil, fmt.Errorf("error: %w; additionally failed closing rows: %v", err, closeErr)
+		}
 		return nil, fmt.Errorf("error: %w", err)
+	}
+
+	if err := rows.Close(); err != nil {
+		return nil, fmt.Errorf("failed closing rows: %w", err)
 	}
 
 	return &employees, nil
