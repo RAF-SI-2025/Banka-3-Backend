@@ -12,7 +12,7 @@ import (
 
 func SetupApi(router *gin.Engine, server *Server) {
 	router.GET("/healthz", server.Healthz)
-
+	router.Use(CORSMiddleware())
 	api := router.Group("/api")
 	{
 		api.POST("/login", server.Login)
@@ -35,6 +35,8 @@ func SetupApi(router *gin.Engine, server *Server) {
 	{
 		employees.POST("", server.CreateEmployeeAccount)
 		employees.GET("/:id", server.GetEmployeeByID)
+		employees.GET("", server.GetEmployees)
+		employees.PUT("/:id", server.UpdateEmployee)
 	}
 
 	companies := api.Group("/companies")
@@ -263,7 +265,7 @@ func (s *Server) GetCompanies(c *gin.Context) {
 		return
 	}
 
-	var companies []gin.H
+	companies := make([]gin.H, 0)
 	for _, company := range resp.Companies {
 		companies = append(companies, companyResponse(company))
 	}
@@ -291,9 +293,7 @@ func (s *Server) UpdateCompany(c *gin.Context) {
 
 	resp, err := s.UserClient.UpdateCompany(ctx, &userpb.UpdateCompanyRequest{
 		Id:             uri.CompanyID,
-		RegisteredId:   req.RegisteredID,
 		Name:           req.Name,
-		TaxCode:        req.TaxCode,
 		ActivityCodeId: req.ActivityCodeID,
 		Address:        req.Address,
 		OwnerId:        req.OwnerID,
@@ -304,6 +304,14 @@ func (s *Server) UpdateCompany(c *gin.Context) {
 	}
 
 	c.JSON(http.StatusOK, companyResponse(resp.Company))
+}
+
+func permissionNamesFromProtoPerm(perm *userpb.Permissions) []string {
+	if perm == nil || perm.Permision == "" {
+		return []string{}
+	}
+
+	return []string{perm.Permision}
 }
 
 func (s *Server) GetEmployeeByID(c *gin.Context) {
@@ -324,13 +332,204 @@ func (s *Server) GetEmployeeByID(c *gin.Context) {
 		return
 	}
 
+	permissions := permissionNamesFromProtoPerm(resp.Perms)
+
 	c.JSON(http.StatusOK, gin.H{
-		"id":         resp.Id,
-		"first_name": resp.FirstName,
-		"last_name":  resp.LastName,
-		"email":      resp.Email,
-		"position":   resp.Position,
-		"active":     resp.Active,
+		"id":            resp.Id,
+		"first_name":    resp.FirstName,
+		"last_name":     resp.LastName,
+		"date_of_birth": resp.DateOfBirth,
+		"gender":        resp.Gender,
+		"email":         resp.Email,
+		"phone_number":  resp.PhoneNumber,
+		"address":       resp.Address,
+		"username":      resp.Username,
+		"position":      resp.Position,
+		"department":    resp.Department,
+		"active":        resp.Active,
+		"permissions":   permissions,
+	})
+}
+
+func (s *Server) GetEmployees(c *gin.Context) {
+	var query getEmployeesQuery
+	if err := c.ShouldBindQuery(&query); err != nil {
+		writeBindError(c, err)
+		return
+	}
+
+	ctx, cancel := context.WithTimeout(c.Request.Context(), 5*time.Second)
+	defer cancel()
+
+	resp, err := s.UserClient.GetEmployees(ctx, &userpb.GetEmployeesRequest{
+		FirstName: query.FirstName,
+		LastName:  query.LastName,
+		Email:     query.Email,
+		Position:  query.Position,
+	})
+	if err != nil {
+		writeGRPCError(c, err)
+		return
+	}
+
+	employees := make([]gin.H, 0, len(resp.Employees))
+	for _, emp := range resp.Employees {
+		employees = append(employees, gin.H{
+			"id":           emp.Id,
+			"first_name":   emp.FirstName,
+			"last_name":    emp.LastName,
+			"email":        emp.Email,
+			"position":     emp.Position,
+			"phone_number": emp.PhoneNumber,
+			"active":       emp.Active,
+			"permissions":  permissionNamesFromProtoPerm(emp.Perms),
+		})
+	}
+
+	c.JSON(http.StatusOK, employees)
+}
+
+func (s *Server) UpdateEmployee(c *gin.Context) {
+	var uri updateEmployeeURI
+	if err := c.ShouldBindUri(&uri); err != nil {
+		c.String(http.StatusBadRequest, "employee id is required and must be a valid integer")
+		return
+	}
+
+	var req updateEmployeeRequest
+	if err := c.ShouldBindJSON(&req); err != nil {
+		writeBindError(c, err)
+		return
+	}
+
+	getCtx, getCancel := context.WithTimeout(c.Request.Context(), 5*time.Second)
+	defer getCancel()
+
+	current, err := s.UserClient.GetEmployeeById(getCtx, &userpb.GetEmployeeByIdRequest{
+		Id: uri.EmployeeID,
+	})
+	if err != nil {
+		writeGRPCError(c, err)
+		return
+	}
+
+	lastName := current.LastName
+	if req.LastName != nil {
+		lastName = *req.LastName
+	}
+
+	gender := current.Gender
+	if req.Gender != nil {
+		gender = *req.Gender
+	}
+
+	phoneNumber := current.PhoneNumber
+	if req.PhoneNumber != nil {
+		phoneNumber = *req.PhoneNumber
+	}
+
+	address := current.Address
+	if req.Address != nil {
+		address = *req.Address
+	}
+
+	position := current.Position
+	if req.Position != nil {
+		position = *req.Position
+	}
+
+	department := current.Department
+	if req.Department != nil {
+		department = *req.Department
+	}
+
+	active := current.Active
+	if req.Active != nil {
+		active = *req.Active
+	}
+
+	perms := []*userpb.Permissions{}
+	if current.Perms != nil && current.Perms.Permision != "" {
+		perms = append(perms, &userpb.Permissions{
+			Id:        current.Perms.Id,
+			Permision: current.Perms.Permision,
+		})
+	}
+
+	if req.Permissions != nil {
+		requested := *req.Permissions
+
+		if len(requested) == 0 {
+			perms = []*userpb.Permissions{}
+		} else if current.Perms != nil && len(requested) == 1 && requested[0] == current.Perms.Permision {
+			perms = []*userpb.Permissions{
+				{
+					Id:        current.Perms.Id,
+					Permision: current.Perms.Permision,
+				},
+			}
+		} else {
+			c.JSON(http.StatusBadRequest, gin.H{
+				"error": "updating permissions by name is not supported yet",
+			})
+			return
+		}
+	}
+
+	updateCtx, updateCancel := context.WithTimeout(c.Request.Context(), 5*time.Second)
+	defer updateCancel()
+
+	updateResp, err := s.UserClient.UpdateEmployee(updateCtx, &userpb.UpdateEmployeeRequest{
+		Id:          uri.EmployeeID,
+		LastName:    lastName,
+		Gender:      gender,
+		PhoneNumber: phoneNumber,
+		Address:     address,
+		Position:    position,
+		Department:  department,
+		Active:      active,
+		Perms:       perms,
+	})
+	if err != nil {
+		writeGRPCError(c, err)
+		return
+	}
+
+	if !updateResp.Valid {
+		c.JSON(http.StatusUnprocessableEntity, gin.H{
+			"valid":    false,
+			"response": updateResp.Response,
+		})
+		return
+	}
+
+	finalCtx, finalCancel := context.WithTimeout(c.Request.Context(), 5*time.Second)
+	defer finalCancel()
+
+	updated, err := s.UserClient.GetEmployeeById(finalCtx, &userpb.GetEmployeeByIdRequest{
+		Id: uri.EmployeeID,
+	})
+	if err != nil {
+		writeGRPCError(c, err)
+		return
+	}
+
+	permissions := permissionNamesFromProtoPerm(updated.Perms)
+
+	c.JSON(http.StatusOK, gin.H{
+		"id":            updated.Id,
+		"first_name":    updated.FirstName,
+		"last_name":     updated.LastName,
+		"date_of_birth": updated.DateOfBirth,
+		"gender":        updated.Gender,
+		"email":         updated.Email,
+		"phone_number":  updated.PhoneNumber,
+		"address":       updated.Address,
+		"username":      updated.Username,
+		"position":      updated.Position,
+		"department":    updated.Department,
+		"active":        updated.Active,
+		"permissions":   permissions,
 	})
 }
 

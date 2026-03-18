@@ -17,6 +17,7 @@ func TestCreateCompanySuccess(t *testing.T) {
 	server, mock, db := newTestServer(t)
 	defer func() { _ = db.Close() }()
 
+	mock.ExpectBegin()
 	mock.ExpectQuery(regexp.QuoteMeta(`SELECT EXISTS(SELECT 1 FROM clients WHERE id = $1)`)).
 		WithArgs(int64(1)).
 		WillReturnRows(sqlmockBoolRow(true))
@@ -26,6 +27,7 @@ func TestCreateCompanySuccess(t *testing.T) {
 	mock.ExpectQuery("INSERT INTO companies").
 		WithArgs(int64(12345), "ACME", int64(999), int64(2), "Main street", int64(1)).
 		WillReturnRows(sqlmockCompanyRows().AddRow(int64(10), int64(12345), "ACME", int64(999), int64(2), "Main street", int64(1)))
+	mock.ExpectCommit()
 
 	resp, err := server.CreateCompany(context.Background(), &userpb.CreateCompanyRequest{
 		RegisteredId:   12345,
@@ -54,6 +56,7 @@ func TestCreateCompanyDuplicateRegisteredID(t *testing.T) {
 	server, mock, db := newTestServer(t)
 	defer func() { _ = db.Close() }()
 
+	mock.ExpectBegin()
 	mock.ExpectQuery(regexp.QuoteMeta(`SELECT EXISTS(SELECT 1 FROM clients WHERE id = $1)`)).
 		WithArgs(int64(1)).
 		WillReturnRows(sqlmockBoolRow(true))
@@ -84,6 +87,7 @@ func TestCreateCompanyOwnerNotFound(t *testing.T) {
 	server, mock, db := newTestServer(t)
 	defer func() { _ = db.Close() }()
 
+	mock.ExpectBegin()
 	mock.ExpectQuery(regexp.QuoteMeta(`SELECT EXISTS(SELECT 1 FROM clients WHERE id = $1)`)).
 		WithArgs(int64(77)).
 		WillReturnRows(sqlmockBoolRow(false))
@@ -111,6 +115,7 @@ func TestCreateCompanyActivityCodeNotFound(t *testing.T) {
 	server, mock, db := newTestServer(t)
 	defer func() { _ = db.Close() }()
 
+	mock.ExpectBegin()
 	mock.ExpectQuery(regexp.QuoteMeta(`SELECT EXISTS(SELECT 1 FROM clients WHERE id = $1)`)).
 		WithArgs(int64(1)).
 		WillReturnRows(sqlmockBoolRow(true))
@@ -131,6 +136,30 @@ func TestCreateCompanyActivityCodeNotFound(t *testing.T) {
 	}
 	if status.Code(err) != codes.InvalidArgument {
 		t.Fatalf("expected InvalidArgument, got %v", status.Code(err))
+	}
+
+	if err := mock.ExpectationsWereMet(); err != nil {
+		t.Fatalf("unmet sql expectations: %v", err)
+	}
+}
+
+func TestGetCompanyByIDSuccess(t *testing.T) {
+	server, mock, db := newTestServer(t)
+	defer func() { _ = db.Close() }()
+
+	mock.ExpectQuery("SELECT id, registered_id, name, tax_code, activity_code_id, address, owner_id").
+		WithArgs(int64(10)).
+		WillReturnRows(sqlmockCompanyRows().AddRow(int64(10), int64(12345), "ACME", int64(999), int64(2), "Main street", int64(1)))
+
+	resp, err := server.GetCompanyById(context.Background(), &userpb.GetCompanyByIdRequest{Id: 10})
+	if err != nil {
+		t.Fatalf("GetCompanyById returned error: %v", err)
+	}
+	if resp.Company == nil {
+		t.Fatalf("expected company in response")
+	}
+	if resp.Company.Id != 10 || resp.Company.RegisteredId != 12345 || resp.Company.Name != "ACME" {
+		t.Fatalf("unexpected company response: %+v", resp.Company)
 	}
 
 	if err := mock.ExpectationsWereMet(); err != nil {
@@ -188,6 +217,7 @@ func TestUpdateCompanySuccess(t *testing.T) {
 	server, mock, db := newTestServer(t)
 	defer func() { _ = db.Close() }()
 
+	mock.ExpectBegin()
 	mock.ExpectQuery(regexp.QuoteMeta(`SELECT EXISTS(SELECT 1 FROM companies WHERE id = $1)`)).
 		WithArgs(int64(10)).
 		WillReturnRows(sqlmockBoolRow(true))
@@ -195,16 +225,15 @@ func TestUpdateCompanySuccess(t *testing.T) {
 		WithArgs(int64(1)).
 		WillReturnRows(sqlmockBoolRow(true))
 	mock.ExpectQuery("UPDATE companies").
-		WithArgs(int64(12345), "ACME Updated", int64(999), "Main street 2", int64(1), int64(10)).
+		WithArgs("ACME Updated", "Main street 2", int64(1), int64(10)).
 		WillReturnRows(sqlmockCompanyRows().AddRow(int64(10), int64(12345), "ACME Updated", int64(999), nil, "Main street 2", int64(1)))
+	mock.ExpectCommit()
 
 	resp, err := server.UpdateCompany(context.Background(), &userpb.UpdateCompanyRequest{
-		Id:           10,
-		RegisteredId: 12345,
-		Name:         "ACME Updated",
-		TaxCode:      999,
-		Address:      "Main street 2",
-		OwnerId:      1,
+		Id:      10,
+		Name:    "ACME Updated",
+		Address: "Main street 2",
+		OwnerId: 1,
 	})
 	if err != nil {
 		t.Fatalf("UpdateCompany returned error: %v", err)
@@ -225,17 +254,16 @@ func TestUpdateCompanyNotFound(t *testing.T) {
 	server, mock, db := newTestServer(t)
 	defer func() { _ = db.Close() }()
 
+	mock.ExpectBegin()
 	mock.ExpectQuery(regexp.QuoteMeta(`SELECT EXISTS(SELECT 1 FROM companies WHERE id = $1)`)).
 		WithArgs(int64(404)).
 		WillReturnRows(sqlmockBoolRow(false))
 
 	_, err := server.UpdateCompany(context.Background(), &userpb.UpdateCompanyRequest{
-		Id:           404,
-		RegisteredId: 12345,
-		Name:         "ACME",
-		TaxCode:      999,
-		Address:      "Main street",
-		OwnerId:      1,
+		Id:      404,
+		Name:    "ACME",
+		Address: "Main street",
+		OwnerId: 1,
 	})
 	if err == nil {
 		t.Fatalf("expected error, got nil")
