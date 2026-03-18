@@ -13,6 +13,12 @@ type getEmployeeByIDURI struct {
 	EmployeeID int64 `uri:"id" binding:"required"`
 }
 
+type getEmployeesURI struct {
+	Email     string `form:"email"`
+	FirstName string `form:"first_name"`
+	LastName  string `form:"last_name"`
+	Position  string `form:"position"`
+}
 type companyByIDURI struct {
 	CompanyID int64 `uri:"id" binding:"required"`
 }
@@ -62,7 +68,7 @@ type createClientAccountRequest struct {
 type createEmployeeAccountRequest struct {
 	FirstName   string `json:"first_name" binding:"required"`
 	LastName    string `json:"last_name" binding:"required"`
-	DateOfBirth int64  `json:"date_of_birth"`
+	BirthDate   int64  `json:"date_of_birth"`
 	Gender      string `json:"gender"`
 	Email       string `json:"email" binding:"required"`
 	PhoneNumber string `json:"phone_number"`
