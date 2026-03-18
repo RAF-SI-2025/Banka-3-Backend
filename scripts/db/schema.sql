@@ -113,7 +113,8 @@ CREATE TABLE IF NOT EXISTS companies (
     activity_code_id    BIGINT          REFERENCES activity_codes(id) ON UPDATE CASCADE ON DELETE RESTRICT,
     address             VARCHAR(255)    NOT NULL,
     owner_id            BIGINT          NOT NULL REFERENCES clients(id) ON UPDATE CASCADE ON DELETE RESTRICT,
-    UNIQUE(registered_id)
+    UNIQUE(registered_id),
+    UNIQUE(tax_code)
 );
 
 CREATE TYPE card_type AS ENUM ('debit', 'credit');

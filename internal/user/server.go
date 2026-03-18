@@ -69,35 +69,42 @@ func NewServer(accessJwtSecret string, refreshJwtSecret string, database *sql.DB
 	}
 }
 
-func (s *Server) GetEmployeeById(ctx context.Context, req *userpb.GetEmployeeByIdRequest) (*userpb.GetEmployeeByIdResponse, error) {
-	map_to_protobuff_resp := func(emp Employee_by_Id_response) *userpb.GetEmployeeByIdResponse {
-		return &userpb.GetEmployeeByIdResponse{
-			Id:          int64(emp.Id),
-			FirstName:   emp.First_name,
-			LastName:    emp.Last_name,
-			DateOfBirth: emp.Date_of_birth.Unix(),
-			Gender:      emp.Gender,
-			Email:       emp.Email,
-			PhoneNumber: emp.Phone_number,
-			Address:     emp.Address,
-			Username:    emp.Username,
-			Position:    emp.Position,
-			Department:  emp.Department,
-			Active:      emp.Active,
-			Perms:       &userpb.Permissions{Id: int64(emp.Permission_id), Permision: emp.Permission_name},
-		}
+func (emp Employee) toProtobuf() *userpb.GetEmployeeResponse {
+	permissions := make([]string, len(emp.Permissions))
+	for i, v := range emp.Permissions {
+		permissions[i] = v.Name
 	}
+	return &userpb.GetEmployeeResponse{
+		Id:          int64(emp.Id),
+		FirstName:   emp.First_name,
+		LastName:    emp.Last_name,
+		BirthDate:   emp.Date_of_birth.Unix(),
+		Gender:      emp.Gender,
+		Email:       emp.Email,
+		PhoneNumber: emp.Phone_number,
+		Address:     emp.Address,
+		Username:    emp.Username,
+		Position:    emp.Position,
+		Department:  emp.Department,
+		Active:      emp.Active,
+		Permissions: permissions,
+	}
+}
 
-	// user, err := get_user_by_id_from_model(Employee_by_Id_response{}, int(req.Id), s)
-	user, err := s.GetUserByID(req.Id)
+func (s *Server) GetEmployeeByEmail(ctx context.Context, req *userpb.GetEmployeeByEmailRequest) (*userpb.GetEmployeeResponse, error) {
+	resp, err := s.getEmployeeByEmail(req.Email)
 	if err != nil {
-		log.Printf("Error in employee retrieval%s", err.Error())
-		return nil, status.Error(codes.Internal, "Employee creation failed")
+		return nil, err
 	}
+	return resp.toProtobuf(), nil
+}
 
-	resp := map_to_protobuff_resp(*user)
-	log.Println("I managed to return without fail, with response", resp)
-	return resp, nil
+func (s *Server) GetEmployeeById(ctx context.Context, req *userpb.GetEmployeeByIdRequest) (*userpb.GetEmployeeResponse, error) {
+	resp, err := s.getEmployeeById(req.Id)
+	if err != nil {
+		return nil, err
+	}
+	return resp.toProtobuf(), nil
 }
 
 func (s *Server) GetEmployees(ctx context.Context, req *userpb.GetEmployeesRequest) (*userpb.GetEmployeesResponse, error) {
@@ -110,7 +117,6 @@ func (s *Server) GetEmployees(ctx context.Context, req *userpb.GetEmployeesReque
 			Position:    emp.Position,
 			PhoneNumber: emp.Phone_number,
 			Active:      emp.Active,
-			Perms:       &userpb.Permissions{Id: emp.Permission_id, Permision: emp.Permission_name},
 		}
 	}
 	employees, err := s.GetAllEmployees(req.Email, req.FirstName, req.LastName, req.Position)
@@ -127,22 +133,248 @@ func (s *Server) GetEmployees(ctx context.Context, req *userpb.GetEmployeesReque
 }
 
 func (s *Server) UpdateEmployee(ctx context.Context, req *userpb.UpdateEmployeeRequest) (*userpb.UpdateEmployeeResponse, error) {
-	emp := Employees{Last_name: req.LastName, Gender: req.Gender,
-		Phone_number: req.PhoneNumber, Address: req.Address, Position: req.Position,
-		Department: req.Department, Active: req.Active, Id: uint64(req.Id)}
-	var map_from_pbs = func(perms *userpb.Permissions) Permissions {
-		return Permissions{Id: uint64(perms.Id), Name: perms.Permision}
+	var permissions []Permission
+	for _, perm := range req.Permissions {
+		// yes these are invalid. i don't care
+		permissions = append(permissions, Permission{Id: 0, Name: perm})
 	}
-	var permissions []Permissions
-	for _, perm := range req.Perms {
-		permissions = append(permissions, map_from_pbs(perm))
+
+	emp := Employee{
+		Last_name:     req.LastName,
+		Gender:        req.Gender,
+		Phone_number:  req.PhoneNumber,
+		Address:       req.Address,
+		Position:      req.Position,
+		Department:    req.Department,
+		Active:        req.Active,
+		Id:            uint64(req.Id),
+		Date_of_birth: time.Time{},
+		Updated_at:    time.Now(),
+		Permissions:   permissions,
 	}
-	err := s.UpdateEmployee_(&emp, permissions)
+
+	err := s.UpdateEmployee_(&emp)
 	if err != nil {
 		return nil, status.Error(codes.Internal, "Messed something up in UpdateEmployee_ in repo")
 	}
 	return &userpb.UpdateEmployeeResponse{Valid: true, Response: "You made it"}, nil
 
+}
+
+func mapClientToProto(client Client) *userpb.Client {
+	return &userpb.Client{
+		Id:          int64(client.Id),
+		FirstName:   client.First_name,
+		LastName:    client.Last_name,
+		DateOfBirth: client.Date_of_birth.Unix(),
+		Gender:      client.Gender,
+		Email:       client.Email,
+		PhoneNumber: client.Phone_number,
+		Address:     client.Address,
+	}
+}
+
+func (s *Server) GetClients(ctx context.Context, req *userpb.GetClientsRequest) (*userpb.GetClientsResponse, error) {
+	clients, err := s.GetAllClients(strings.TrimSpace(req.FirstName), strings.TrimSpace(req.LastName), strings.TrimSpace(req.Email))
+	if err != nil {
+		log.Printf("Error in retrieving clients: %s", err.Error())
+		return nil, status.Error(codes.Internal, "Failed to retrieve clients")
+	}
+
+	var clientResponses []*userpb.Client
+	for _, client := range clients {
+		clientResponses = append(clientResponses, mapClientToProto(client))
+	}
+
+	return &userpb.GetClientsResponse{Clients: clientResponses}, nil
+}
+
+func (s *Server) UpdateClient(ctx context.Context, req *userpb.UpdateClientRequest) (*userpb.UpdateClientResponse, error) {
+	if req.Id <= 0 {
+		return nil, status.Error(codes.InvalidArgument, "id must be greater than zero")
+	}
+	if strings.TrimSpace(req.Gender) != "" && req.Gender != "M" && req.Gender != "F" {
+		return nil, status.Error(codes.InvalidArgument, "Gender must be one of M or F")
+	}
+
+	_, err := s.GetClientByID(req.Id)
+	if err != nil {
+		switch {
+		case errors.Is(err, ErrClientNotFound):
+			return nil, status.Error(codes.NotFound, "client not found")
+		default:
+			return nil, status.Error(codes.Internal, "client lookup failed")
+		}
+	}
+
+	client := Client{
+		Id:           uint64(req.Id),
+		First_name:   req.FirstName,
+		Last_name:    req.LastName,
+		Gender:       req.Gender,
+		Email:        req.Email,
+		Phone_number: req.PhoneNumber,
+		Address:      req.Address,
+	}
+	if req.DateOfBirth != 0 {
+		client.Date_of_birth = time.Unix(req.DateOfBirth, 0)
+	}
+
+	err = s.UpdateClientRecord(&client)
+	if err != nil {
+		switch {
+		case errors.Is(err, ErrClientNotFound):
+			return nil, status.Error(codes.NotFound, "client not found")
+		case errors.Is(err, ErrClientEmailExists):
+			return nil, status.Error(codes.AlreadyExists, "client with that email already exists")
+		case errors.Is(err, ErrClientNoFieldsToUpdate):
+			return nil, status.Error(codes.InvalidArgument, "no fields to update")
+		default:
+			return nil, status.Error(codes.Internal, "client update failed")
+		}
+	}
+
+	return &userpb.UpdateClientResponse{Valid: true, Response: "Client updated"}, nil
+}
+
+func mapCompanyToProto(company *Company) *userpb.Company {
+	if company == nil {
+		return nil
+	}
+
+	return &userpb.Company{
+		Id:             company.Id,
+		RegisteredId:   company.Registered_id,
+		Name:           company.Name,
+		TaxCode:        company.Tax_code,
+		ActivityCodeId: company.Activity_code_id,
+		Address:        company.Address,
+		OwnerId:        company.Owner_id,
+	}
+}
+
+func validateCreateCompanyInput(registeredID int64, name string, taxCode int64, address string, ownerID int64) error {
+	if registeredID <= 0 {
+		return status.Error(codes.InvalidArgument, "registered id must be greater than zero")
+	}
+	if strings.TrimSpace(name) == "" {
+		return status.Error(codes.InvalidArgument, "name is required")
+	}
+	if taxCode <= 0 {
+		return status.Error(codes.InvalidArgument, "tax code must be greater than zero")
+	}
+	if strings.TrimSpace(address) == "" {
+		return status.Error(codes.InvalidArgument, "address is required")
+	}
+	if ownerID <= 0 {
+		return status.Error(codes.InvalidArgument, "owner id must be greater than zero")
+	}
+	return nil
+}
+
+func validateUpdateCompanyInput(id int64, name string, address string, ownerID int64) error {
+	if id <= 0 {
+		return status.Error(codes.InvalidArgument, "id must be greater than zero")
+	}
+	if strings.TrimSpace(name) == "" {
+		return status.Error(codes.InvalidArgument, "name is required")
+	}
+	if strings.TrimSpace(address) == "" {
+		return status.Error(codes.InvalidArgument, "address is required")
+	}
+	if ownerID <= 0 {
+		return status.Error(codes.InvalidArgument, "owner id must be greater than zero")
+	}
+	return nil
+}
+
+func (s *Server) CreateCompany(ctx context.Context, req *userpb.CreateCompanyRequest) (*userpb.CreateCompanyResponse, error) {
+	if err := validateCreateCompanyInput(req.RegisteredId, req.Name, req.TaxCode, req.Address, req.OwnerId); err != nil {
+		return nil, err
+	}
+
+	company, err := s.CreateCompanyRecord(Company{
+		Registered_id:    req.RegisteredId,
+		Name:             strings.TrimSpace(req.Name),
+		Tax_code:         req.TaxCode,
+		Activity_code_id: req.ActivityCodeId,
+		Address:          strings.TrimSpace(req.Address),
+		Owner_id:         req.OwnerId,
+	})
+	if err != nil {
+		switch {
+		case errors.Is(err, ErrCompanyRegisteredIDExists):
+			return nil, status.Error(codes.AlreadyExists, "company with that registered id already exists")
+		case errors.Is(err, ErrCompanyOwnerNotFound):
+			return nil, status.Error(codes.InvalidArgument, "owner does not exist")
+		case errors.Is(err, ErrCompanyActivityCodeNotFound):
+			return nil, status.Error(codes.InvalidArgument, "activity code does not exist")
+		default:
+			return nil, status.Error(codes.Internal, "company creation failed")
+		}
+	}
+
+	return &userpb.CreateCompanyResponse{Company: mapCompanyToProto(company)}, nil
+}
+
+func (s *Server) GetCompanyById(ctx context.Context, req *userpb.GetCompanyByIdRequest) (*userpb.GetCompanyByIdResponse, error) {
+	if req.Id <= 0 {
+		return nil, status.Error(codes.InvalidArgument, "id must be greater than zero")
+	}
+
+	company, err := s.GetCompanyByIDRecord(req.Id)
+	if err != nil {
+		switch {
+		case errors.Is(err, ErrCompanyNotFound):
+			return nil, status.Error(codes.NotFound, "company not found")
+		default:
+			return nil, status.Error(codes.Internal, "company lookup failed")
+		}
+	}
+
+	return &userpb.GetCompanyByIdResponse{Company: mapCompanyToProto(company)}, nil
+}
+
+func (s *Server) GetCompanies(ctx context.Context, req *userpb.GetCompaniesRequest) (*userpb.GetCompaniesResponse, error) {
+	companies, err := s.GetCompaniesRecords()
+	if err != nil {
+		return nil, status.Error(codes.Internal, "company listing failed")
+	}
+
+	var responseCompanies []*userpb.Company
+	for _, company := range companies {
+		responseCompanies = append(responseCompanies, mapCompanyToProto(company))
+	}
+
+	return &userpb.GetCompaniesResponse{Companies: responseCompanies}, nil
+}
+
+func (s *Server) UpdateCompany(ctx context.Context, req *userpb.UpdateCompanyRequest) (*userpb.UpdateCompanyResponse, error) {
+	if err := validateUpdateCompanyInput(req.Id, req.Name, req.Address, req.OwnerId); err != nil {
+		return nil, err
+	}
+
+	company, err := s.UpdateCompanyRecord(Company{
+		Id:               req.Id,
+		Name:             strings.TrimSpace(req.Name),
+		Activity_code_id: req.ActivityCodeId,
+		Address:          strings.TrimSpace(req.Address),
+		Owner_id:         req.OwnerId,
+	})
+	if err != nil {
+		switch {
+		case errors.Is(err, ErrCompanyNotFound):
+			return nil, status.Error(codes.NotFound, "company not found")
+		case errors.Is(err, ErrCompanyOwnerNotFound):
+			return nil, status.Error(codes.InvalidArgument, "owner does not exist")
+		case errors.Is(err, ErrCompanyActivityCodeNotFound):
+			return nil, status.Error(codes.InvalidArgument, "activity code does not exist")
+		default:
+			return nil, status.Error(codes.Internal, "company update failed")
+		}
+	}
+
+	return &userpb.UpdateCompanyResponse{Company: mapCompanyToProto(company)}, nil
 }
 
 func (s *Server) GenerateRefreshToken(email string) (string, error) {
@@ -169,9 +401,9 @@ func (s *Server) GenerateAccessToken(email string) (string, error) {
 	return token.SignedString([]byte(s.accessJwtSecret))
 }
 
-func (s *Server) ValidateRefreshToken(ctx context.Context, req *userpb.ValidateTokenRequest) (*userpb.ValidateTokenResponse, error) {
-	token, err := jwt.Parse(req.Token, func(t *jwt.Token) (any, error) {
-		return []byte(s.refreshJwtSecret), nil
+func validateJWTToken(tokenString, secret string) (*userpb.ValidateTokenResponse, error) {
+	token, err := jwt.Parse(tokenString, func(t *jwt.Token) (any, error) {
+		return []byte(secret), nil
 	})
 
 	if err != nil {
@@ -196,51 +428,22 @@ func (s *Server) ValidateRefreshToken(ctx context.Context, req *userpb.ValidateT
 		Exp: exp.Unix(),
 		Iat: iat.Unix(),
 	}, nil
+}
+
+func (s *Server) ValidateRefreshToken(ctx context.Context, req *userpb.ValidateTokenRequest) (*userpb.ValidateTokenResponse, error) {
+	return validateJWTToken(req.Token, s.refreshJwtSecret)
 }
 
 func (s *Server) ValidateAccessToken(ctx context.Context, req *userpb.ValidateTokenRequest) (*userpb.ValidateTokenResponse, error) {
-	token, err := jwt.Parse(req.Token, func(t *jwt.Token) (any, error) {
-		return []byte(s.accessJwtSecret), nil
-	})
-
-	if err != nil {
-		return nil, status.Error(codes.Unauthenticated, "invalid token")
-	}
-	sub, err := token.Claims.GetSubject()
-	if err != nil {
-		return nil, err
-	}
-	exp, err := token.Claims.GetExpirationTime()
-	if err != nil {
-		return nil, err
-	}
-	iat, err := token.Claims.GetIssuedAt()
-	if err != nil {
-		return nil, err
-	}
-
-	return &userpb.ValidateTokenResponse{
-		Sub: sub,
-		Exp: exp.Unix(),
-		Iat: iat.Unix(),
-	}, nil
+	return validateJWTToken(req.Token, s.accessJwtSecret)
 }
 
 func (s *Server) Refresh(ctx context.Context, req *userpb.RefreshRequest) (*userpb.RefreshResponse, error) {
-	refreshToken := req.RefreshToken
-	parsed, err := jwt.Parse(refreshToken, func(t *jwt.Token) (any, error) {
-		return []byte(s.refreshJwtSecret), nil
-	})
+	token, err := validateJWTToken(req.RefreshToken, s.refreshJwtSecret)
 	if err != nil {
-		return nil, fmt.Errorf("parsing token: %w", err)
+		return nil, err
 	}
-	if !parsed.Valid {
-		return nil, fmt.Errorf("invalid refresh token: %w", err)
-	}
-	email, err := parsed.Claims.GetSubject()
-	if err != nil {
-		return nil, fmt.Errorf("getting subject: %w", err)
-	}
+	email := token.Sub
 
 	newSignedToken, err := s.GenerateRefreshToken(email)
 	if err != nil {
@@ -267,7 +470,7 @@ func (s *Server) Refresh(ctx context.Context, req *userpb.RefreshRequest) (*user
 	}
 	defer func() { _ = tx.Rollback() }()
 
-	err = s.rotateRefreshToken(tx, email, hashValue(refreshToken), hashValue(newSignedToken), newExpiry.Time)
+	err = s.rotateRefreshToken(tx, email, hashValue(req.RefreshToken), hashValue(newSignedToken), newExpiry.Time)
 	if err != nil {
 		return nil, status.Error(codes.Unauthenticated, "wrong token")
 	}
@@ -515,8 +718,8 @@ func (s *Server) CreateClientAccount(ctx context.Context, req *userpb.CreateClie
 		return nil, status.Error(codes.Internal, "Password salting failed")
 	}
 
-	client := Clients{First_name: req.FirstName,
-		Last_name: req.LastName, Date_of_birth: time.Unix(req.DateOfBirth, 0),
+	client := Client{First_name: req.FirstName,
+		Last_name: req.LastName, Date_of_birth: time.Unix(req.BirthDate, 0),
 		Gender: req.Gender, Email: req.Email, Phone_number: req.PhoneNumber,
 		Address: req.Address, Password: HashPassword(req.Password, salt),
 		Salt_password: salt}
@@ -524,7 +727,7 @@ func (s *Server) CreateClientAccount(ctx context.Context, req *userpb.CreateClie
 	err := create_user_from_model(client, s)
 	if err != nil {
 		log.Printf("Error in user creation%s", err.Error())
-		return nil, status.Error(codes.Internal, "Employee creation failed")
+		return nil, status.Error(codes.Internal, "Client creation failed")
 	}
 	return &userpb.CreateClientResponse{Valid: true}, nil
 
@@ -550,8 +753,8 @@ func (s *Server) CreateEmployeeAccount(ctx context.Context, req *userpb.CreateEm
 		log.Printf("Error generating salt %s", salt_err.Error())
 	}
 
-	employee := Employees{First_name: req.FirstName,
-		Last_name: req.LastName, Date_of_birth: time.Unix(req.DateOfBirth, 0),
+	employee := Employee{First_name: req.FirstName,
+		Last_name: req.LastName, Date_of_birth: time.Unix(req.BirthDate, 0),
 		Gender: req.Gender, Email: req.Email, Phone_number: req.PhoneNumber,
 		Address: req.Address, Username: req.Username, Position: req.Position,
 		Department: req.Department, Salt_password: salt,

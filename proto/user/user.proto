@@ -5,9 +5,14 @@ package user;
 option go_package = "github.com/RAF-SI-2025/Banka-3-Backend/gen/user";
 
 service UserService {
-  rpc GetEmployeeById(GetEmployeeByIdRequest) returns (GetEmployeeByIdResponse);
+  rpc GetEmployeeById(GetEmployeeByIdRequest) returns (GetEmployeeResponse);
+  rpc GetEmployeeByEmail(GetEmployeeByEmailRequest) returns (GetEmployeeResponse);
   rpc GetEmployees(GetEmployeesRequest) returns (GetEmployeesResponse);
   rpc UpdateEmployee(UpdateEmployeeRequest) returns (UpdateEmployeeResponse);
+  rpc CreateCompany(CreateCompanyRequest) returns (CreateCompanyResponse);
+  rpc GetCompanyById(GetCompanyByIdRequest) returns (GetCompanyByIdResponse);
+  rpc GetCompanies(GetCompaniesRequest) returns (GetCompaniesResponse);
+  rpc UpdateCompany(UpdateCompanyRequest) returns (UpdateCompanyResponse);
   rpc Login(LoginRequest) returns (LoginResponse);
   rpc Logout(LogoutRequest) returns (LogoutResponse);
   rpc Refresh(RefreshRequest) returns (RefreshResponse);
@@ -17,6 +22,8 @@ service UserService {
   rpc RequestInitialPasswordSet(PasswordActionRequest) returns (PasswordActionResponse);
   rpc SetPasswordWithToken(SetPasswordWithTokenRequest) returns (SetPasswordWithTokenResponse);
   rpc CreateClientAccount(CreateClientRequest) returns (CreateClientResponse);
+  rpc GetClients(GetClientsRequest) returns (GetClientsResponse);
+  rpc UpdateClient(UpdateClientRequest) returns (UpdateClientResponse);
   rpc CreateEmployeeAccount(CreateEmployeeRequest) returns (CreateEmployeeResponse);
 }
 
@@ -28,6 +35,55 @@ message ValidateTokenResponse {
   string sub = 1;
   int64 iat = 2;
   int64 exp = 3;
+}
+
+message Company {
+  int64 id = 1;
+  int64 registered_id = 2;
+  string name = 3;
+  int64 tax_code = 4;
+  int64 activity_code_id = 5;
+  string address = 6;
+  int64 owner_id = 7;
+}
+
+message CreateCompanyRequest {
+  int64 registered_id = 1;
+  string name = 2;
+  int64 tax_code = 3;
+  int64 activity_code_id = 4;
+  string address = 5;
+  int64 owner_id = 6;
+}
+
+message CreateCompanyResponse {
+  Company company = 1;
+}
+
+message GetCompanyByIdRequest {
+  int64 id = 1;
+}
+
+message GetCompanyByIdResponse {
+  Company company = 1;
+}
+
+message GetCompaniesRequest {}
+
+message GetCompaniesResponse {
+  repeated Company companies = 1;
+}
+
+message UpdateCompanyRequest {
+  int64 id = 1;
+  string name = 3;
+  int64 activity_code_id = 5;
+  string address = 6;
+  int64 owner_id = 7;
+}
+
+message UpdateCompanyResponse {
+  Company company = 1;
 }
 
 message RefreshRequest {
@@ -62,8 +118,8 @@ message LoginRequest {
 }
 
 message LoginResponse {
-  string accessToken = 1;
-  string refreshToken = 2;
+  string access_token = 1;
+  string refresh_token = 2;
 }
 
 message PasswordActionRequest {
@@ -83,22 +139,22 @@ message SetPasswordWithTokenResponse {
   bool successful = 1;
 }
 
-message Permissions {
-  int64 Id = 1;
-  string Permision = 2;
-}
+// message Permission {
+//   uint64 id = 1;
+//   string permision = 2;
+// }
 
 message CreateEmployeeRequest {
-  string FirstName = 1;
-  string Last_name = 2;
-  int64 DateOfBirth = 3;
-  string Gender = 4;
-  string Email = 5;
-  string PhoneNumber = 6;
-  string Address = 7;
-  string Username = 8;
-  string Position = 9;
-  string Department = 10;
+  string first_name = 1;
+  string last_name = 2;
+  int64 birth_date = 3;
+  string gender = 4;
+  string email = 5;
+  string phone_number = 6;
+  string address = 7;
+  string username = 8;
+  string position = 9;
+  string department = 10;
   string password = 11;
 }
 
@@ -107,13 +163,13 @@ message CreateEmployeeResponse {
 }
 
 message CreateClientRequest {
-  string FirstName = 1;
-  string Last_name = 2;
-  int64 DateOfBirth = 3;
-  string Gender = 4;
-  string Email = 5;
-  string PhoneNumber = 6;
-  string Address = 7;
+  string first_name = 1;
+  string last_name = 2;
+  int64 birth_date = 3;
+  string gender = 4;
+  string email = 5;
+  string phone_number = 6;
+  string address = 7;
   string password = 8;
 }
 
@@ -121,32 +177,7 @@ message CreateClientResponse {
   bool valid = 1;
 }
 
-message GetEmployeesRequest {
-  string FirstName = 1;
-  string LastName = 2;
-  string Email = 3;
-  string Position = 4;
-}
-
-message GetEmployeesResponse {
-  message Employee {
-    int64 Id = 1;
-    string FirstName = 2;
-    string LastName = 3;
-    string Email = 4;
-    string Position = 5;
-    string PhoneNumber = 6;
-    bool active = 8;
-    Permissions perms = 9;
-  }
-  repeated Employee Employees = 1;
-}
-
-message GetEmployeeByIdRequest {
-  int64 id = 1;
-}
-
-message GetEmployeeByIdResponse {
+message Client {
   int64 Id = 1;
   string FirstName = 2;
   string LastName = 3;
@@ -155,26 +186,91 @@ message GetEmployeeByIdResponse {
   string Email = 6;
   string PhoneNumber = 7;
   string Address = 8;
-  string Username = 9;
-  string Position = 10;
+}
+
+message GetClientsRequest {
+  string FirstName = 1;
+  string LastName = 2;
+  string Email = 3;
+}
+
+message GetClientsResponse {
+  repeated Client Clients = 1;
+}
+
+message UpdateClientRequest {
+  int64 Id = 1;
+  string FirstName = 2;
+  string LastName = 3;
+  int64 DateOfBirth = 4;
+  string Gender = 5;
+  string Email = 6;
+  string PhoneNumber = 7;
+  string Address = 8;
+}
+
+message UpdateClientResponse {
+  bool Valid = 1;
+  string Response = 2;
+}
+
+message GetEmployeesRequest {
+  string first_name = 1;
+  string last_name = 2;
+  string email = 3;
+  string position = 4;
+}
+
+message GetEmployeesResponse {
+  message Employee {
+    int64 id = 1;
+    string first_name = 2;
+    string last_name = 3;
+    string email = 4;
+    string position = 5;
+    string phone_number = 6;
+    bool active = 8;
+  }
+  repeated Employee employees = 1;
+}
+
+message GetEmployeeByIdRequest {
+  int64 id = 1;
+}
+
+message GetEmployeeByEmailRequest {
+  string email = 1;
+}
+
+message GetEmployeeResponse {
+  int64 id = 1;
+  string first_name = 2;
+  string last_name = 3;
+  int64 birth_date = 4;
+  string gender = 5;
+  string email = 6;
+  string phone_number = 7;
+  string address = 8;
+  string username = 9;
+  string position = 10;
   string department = 11;
   bool active = 12;
-  Permissions perms = 13;
+  repeated string permissions = 13;
 }
 
 message UpdateEmployeeRequest {
-  int64 Id = 1;
-  string LastName = 2;
-  string Gender = 3;
-  string PhoneNumber = 4;
-  string Address = 5;
-  string Position = 6;
-  string Department = 7;
+  int64 id = 1;
+  string last_name = 2;
+  string gender = 3;
+  string phone_number = 4;
+  string address = 5;
+  string position = 6;
+  string department = 7;
   bool active = 8;
-  repeated Permissions perms = 9;
+  repeated string permissions = 9;
 }
 
 message UpdateEmployeeResponse {
-  bool Valid = 1;
+  bool valid = 1;
   string response = 2;
 }

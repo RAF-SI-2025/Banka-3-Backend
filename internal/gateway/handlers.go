@@ -29,12 +29,24 @@ func SetupApi(router *gin.Engine, server *Server) {
 	clients := api.Group("/clients")
 	{
 		clients.POST("", server.CreateClientAccount)
+		clients.GET("", server.GetClients)
+		clients.PUT("/:id", server.UpdateClient)
 	}
 
 	employees := api.Group("/employees")
 	{
 		employees.POST("", server.CreateEmployeeAccount)
 		employees.GET("/:id", server.GetEmployeeByID)
+		employees.GET("", server.GetEmployees)
+		employees.PUT("/:id", server.UpdateEmployee)
+	}
+
+	companies := api.Group("/companies")
+	{
+		companies.POST("", server.CreateCompany)
+		companies.GET("", server.GetCompanies)
+		companies.GET("/:id", server.GetCompanyByID)
+		companies.PUT("/:id", server.UpdateCompany)
 	}
 
 	loans := api.Group("/loans")
@@ -130,7 +142,7 @@ func (s *Server) CreateClientAccount(c *gin.Context) {
 	resp, err := s.UserClient.CreateClientAccount(ctx, &userpb.CreateClientRequest{
 		FirstName:   req.FirstName,
 		LastName:    req.LastName,
-		DateOfBirth: req.DateOfBirth,
+		BirthDate:   req.DateOfBirth,
 		Gender:      req.Gender,
 		Email:       req.Email,
 		PhoneNumber: req.PhoneNumber,
@@ -154,6 +166,80 @@ func (s *Server) CreateClientAccount(c *gin.Context) {
 	})
 }
 
+func clientResponse(client *userpb.Client) gin.H {
+	return gin.H{
+		"id":            client.Id,
+		"first_name":    client.FirstName,
+		"last_name":     client.LastName,
+		"date_of_birth": client.DateOfBirth,
+		"gender":        client.Gender,
+		"email":         client.Email,
+		"phone_number":  client.PhoneNumber,
+		"address":       client.Address,
+	}
+}
+
+func (s *Server) GetClients(c *gin.Context) {
+	ctx, cancel := context.WithTimeout(c.Request.Context(), 5*time.Second)
+	defer cancel()
+
+	resp, err := s.UserClient.GetClients(ctx, &userpb.GetClientsRequest{
+		FirstName: c.Query("first_name"),
+		LastName:  c.Query("last_name"),
+		Email:     c.Query("email"),
+	})
+	if err != nil {
+		writeGRPCError(c, err)
+		return
+	}
+
+	clients := make([]gin.H, 0, len(resp.Clients))
+	for _, client := range resp.Clients {
+		clients = append(clients, clientResponse(client))
+	}
+
+	c.JSON(http.StatusOK, gin.H{
+		"clients": clients,
+	})
+}
+
+func (s *Server) UpdateClient(c *gin.Context) {
+	var uri clientByIDURI
+	if err := c.ShouldBindUri(&uri); err != nil {
+		c.String(http.StatusBadRequest, "client id is required and must be a valid integer")
+		return
+	}
+
+	var req updateClientRequest
+	if err := c.ShouldBindJSON(&req); err != nil {
+		writeBindError(c, err)
+		return
+	}
+
+	ctx, cancel := context.WithTimeout(c.Request.Context(), 5*time.Second)
+	defer cancel()
+
+	resp, err := s.UserClient.UpdateClient(ctx, &userpb.UpdateClientRequest{
+		Id:          uri.ClientID,
+		FirstName:   req.FirstName,
+		LastName:    req.LastName,
+		DateOfBirth: req.DateOfBirth,
+		Gender:      req.Gender,
+		Email:       req.Email,
+		PhoneNumber: req.PhoneNumber,
+		Address:     req.Address,
+	})
+	if err != nil {
+		writeGRPCError(c, err)
+		return
+	}
+
+	c.JSON(http.StatusOK, gin.H{
+		"valid":    resp.Valid,
+		"response": resp.Response,
+	})
+}
+
 func (s *Server) CreateEmployeeAccount(c *gin.Context) {
 	var req createEmployeeAccountRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
@@ -167,7 +253,7 @@ func (s *Server) CreateEmployeeAccount(c *gin.Context) {
 	resp, err := s.UserClient.CreateEmployeeAccount(ctx, &userpb.CreateEmployeeRequest{
 		FirstName:   req.FirstName,
 		LastName:    req.LastName,
-		DateOfBirth: req.DateOfBirth,
+		BirthDate:   req.BirthDate,
 		Gender:      req.Gender,
 		Email:       req.Email,
 		PhoneNumber: req.PhoneNumber,
@@ -194,6 +280,116 @@ func (s *Server) CreateEmployeeAccount(c *gin.Context) {
 	})
 }
 
+func companyResponse(company *userpb.Company) gin.H {
+	return gin.H{
+		"id":               company.Id,
+		"registered_id":    company.RegisteredId,
+		"name":             company.Name,
+		"tax_code":         company.TaxCode,
+		"activity_code_id": company.ActivityCodeId,
+		"address":          company.Address,
+		"owner_id":         company.OwnerId,
+	}
+}
+
+func (s *Server) CreateCompany(c *gin.Context) {
+	var req createCompanyRequest
+	if err := c.ShouldBindJSON(&req); err != nil {
+		writeBindError(c, err)
+		return
+	}
+
+	ctx, cancel := context.WithTimeout(c.Request.Context(), 5*time.Second)
+	defer cancel()
+
+	resp, err := s.UserClient.CreateCompany(ctx, &userpb.CreateCompanyRequest{
+		RegisteredId:   req.RegisteredID,
+		Name:           req.Name,
+		TaxCode:        req.TaxCode,
+		ActivityCodeId: req.ActivityCodeID,
+		Address:        req.Address,
+		OwnerId:        req.OwnerID,
+	})
+	if err != nil {
+		writeGRPCError(c, err)
+		return
+	}
+
+	c.JSON(http.StatusCreated, companyResponse(resp.Company))
+}
+
+func (s *Server) GetCompanyByID(c *gin.Context) {
+	var uri companyByIDURI
+	if err := c.ShouldBindUri(&uri); err != nil {
+		c.String(http.StatusBadRequest, "company id is required and must be a valid integer")
+		return
+	}
+
+	ctx, cancel := context.WithTimeout(c.Request.Context(), 5*time.Second)
+	defer cancel()
+
+	resp, err := s.UserClient.GetCompanyById(ctx, &userpb.GetCompanyByIdRequest{
+		Id: uri.CompanyID,
+	})
+	if err != nil {
+		writeGRPCError(c, err)
+		return
+	}
+
+	c.JSON(http.StatusOK, companyResponse(resp.Company))
+}
+
+func (s *Server) GetCompanies(c *gin.Context) {
+	ctx, cancel := context.WithTimeout(c.Request.Context(), 5*time.Second)
+	defer cancel()
+
+	resp, err := s.UserClient.GetCompanies(ctx, &userpb.GetCompaniesRequest{})
+	if err != nil {
+		writeGRPCError(c, err)
+		return
+	}
+
+	companies := make([]gin.H, 0)
+	for _, company := range resp.Companies {
+		companies = append(companies, companyResponse(company))
+	}
+
+	c.JSON(http.StatusOK, gin.H{
+		"companies": companies,
+	})
+}
+
+func (s *Server) UpdateCompany(c *gin.Context) {
+	var uri companyByIDURI
+	if err := c.ShouldBindUri(&uri); err != nil {
+		c.String(http.StatusBadRequest, "company id is required and must be a valid integer")
+		return
+	}
+
+	var req updateCompanyRequest
+	if err := c.ShouldBindJSON(&req); err != nil {
+		writeBindError(c, err)
+		return
+	}
+
+	ctx, cancel := context.WithTimeout(c.Request.Context(), 5*time.Second)
+	defer cancel()
+
+	resp, err := s.UserClient.UpdateCompany(ctx, &userpb.UpdateCompanyRequest{
+		Id:             uri.CompanyID,
+		Name:           req.Name,
+		ActivityCodeId: req.ActivityCodeID,
+		Address:        req.Address,
+		OwnerId:        req.OwnerID,
+	})
+	if err != nil {
+		writeGRPCError(c, err)
+		return
+	}
+
+	c.JSON(http.StatusOK, companyResponse(resp.Company))
+}
+
 func (s *Server) GetEmployeeByID(c *gin.Context) {
 	var uri getEmployeeByIDURI
 	if err := c.ShouldBindUri(&uri); err != nil {
@@ -213,13 +409,79 @@ func (s *Server) GetEmployeeByID(c *gin.Context) {
 	}
 
 	c.JSON(http.StatusOK, gin.H{
-		"id":         resp.Id,
-		"first_name": resp.FirstName,
-		"last_name":  resp.LastName,
-		"email":      resp.Email,
-		"position":   resp.Position,
-		"active":     resp.Active,
+		"id":            resp.Id,
+		"first_name":    resp.FirstName,
+		"last_name":     resp.LastName,
+		"birth_date":    time.Unix(resp.BirthDate, 0).Format(time.DateOnly),
+		"gender":        resp.Gender,
+		"email":         resp.Email,
+		"phone_numbere": resp.PhoneNumber,
+		"address":       resp.PhoneNumber,
+		"username":      resp.Username,
+		"position":      resp.Position,
+		"department":    resp.Department,
+		"active":        resp.Active,
+		"permissions":   resp.Permissions,
 	})
+}
+
+func (s *Server) GetEmployees(c *gin.Context) {
+	var query getEmployeesQuery
+	if err := c.ShouldBindQuery(&query); err != nil {
+		writeBindError(c, err)
+		return
+	}
+
+	ctx, cancel := context.WithTimeout(c.Request.Context(), 5*time.Second)
+	defer cancel()
+
+	resp, err := s.UserClient.GetEmployees(ctx, &userpb.GetEmployeesRequest{
+		FirstName: query.FirstName,
+		LastName:  query.LastName,
+		Email:     query.Email,
+		Position:  query.Position,
+	})
+	if err != nil {
+		writeGRPCError(c, err)
+		return
+	}
+	if resp.Employees != nil {
+		c.JSON(http.StatusOK, resp.Employees)
+	} else {
+		empty := make([]string, 0)
+		c.JSON(http.StatusOK, empty)
+	}
+}
+
+func (s *Server) UpdateEmployee(c *gin.Context) {
+	var uri updateEmployeeURI
+	if err := c.ShouldBindUri(&uri); err != nil {
+		c.String(http.StatusBadRequest, "employee id is required and must be a valid integer")
+		return
+	}
+
+	var req updateEmployeeRequest
+	if err := c.ShouldBindJSON(&req); err != nil {
+		writeBindError(c, err)
+		return
+	}
+	ctx, cancel := context.WithTimeout(c.Request.Context(), 5*time.Second)
+	defer cancel()
+	resp, err := s.UserClient.UpdateEmployee(ctx, &userpb.UpdateEmployeeRequest{
+		Id:          uri.EmployeeID,
+		LastName:    *req.LastName,
+		Gender:      *req.Gender,
+		PhoneNumber: *req.PhoneNumber,
+		Address:     *req.Address,
+		Position:    *req.Position,
+		Department:  *req.Department,
+		Active:      *req.Active,
+		Permissions: *req.Permissions,
+	})
+	if err != nil {
+		writeGRPCError(c, err)
+	}
+	c.JSON(http.StatusOK, resp)
 }
 
 func (s *Server) RequestPasswordReset(c *gin.Context) {

@@ -20,8 +20,13 @@ const _ = grpc.SupportPackageIsVersion9
 
 const (
 	UserService_GetEmployeeById_FullMethodName           = "/user.UserService/GetEmployeeById"
+	UserService_GetEmployeeByEmail_FullMethodName        = "/user.UserService/GetEmployeeByEmail"
 	UserService_GetEmployees_FullMethodName              = "/user.UserService/GetEmployees"
 	UserService_UpdateEmployee_FullMethodName            = "/user.UserService/UpdateEmployee"
+	UserService_CreateCompany_FullMethodName             = "/user.UserService/CreateCompany"
+	UserService_GetCompanyById_FullMethodName            = "/user.UserService/GetCompanyById"
+	UserService_GetCompanies_FullMethodName              = "/user.UserService/GetCompanies"
+	UserService_UpdateCompany_FullMethodName             = "/user.UserService/UpdateCompany"
 	UserService_Login_FullMethodName                     = "/user.UserService/Login"
 	UserService_Logout_FullMethodName                    = "/user.UserService/Logout"
 	UserService_Refresh_FullMethodName                   = "/user.UserService/Refresh"
@@ -31,6 +36,8 @@ const (
 	UserService_RequestInitialPasswordSet_FullMethodName = "/user.UserService/RequestInitialPasswordSet"
 	UserService_SetPasswordWithToken_FullMethodName      = "/user.UserService/SetPasswordWithToken"
 	UserService_CreateClientAccount_FullMethodName       = "/user.UserService/CreateClientAccount"
+	UserService_GetClients_FullMethodName                = "/user.UserService/GetClients"
+	UserService_UpdateClient_FullMethodName              = "/user.UserService/UpdateClient"
 	UserService_CreateEmployeeAccount_FullMethodName     = "/user.UserService/CreateEmployeeAccount"
 )
 
@@ -38,9 +45,14 @@ const (
 //
 // For semantics around ctx use and closing/ending streaming RPCs, please refer to https://pkg.go.dev/google.golang.org/grpc/?tab=doc#ClientConn.NewStream.
 type UserServiceClient interface {
-	GetEmployeeById(ctx context.Context, in *GetEmployeeByIdRequest, opts ...grpc.CallOption) (*GetEmployeeByIdResponse, error)
+	GetEmployeeById(ctx context.Context, in *GetEmployeeByIdRequest, opts ...grpc.CallOption) (*GetEmployeeResponse, error)
+	GetEmployeeByEmail(ctx context.Context, in *GetEmployeeByEmailRequest, opts ...grpc.CallOption) (*GetEmployeeResponse, error)
 	GetEmployees(ctx context.Context, in *GetEmployeesRequest, opts ...grpc.CallOption) (*GetEmployeesResponse, error)
 	UpdateEmployee(ctx context.Context, in *UpdateEmployeeRequest, opts ...grpc.CallOption) (*UpdateEmployeeResponse, error)
+	CreateCompany(ctx context.Context, in *CreateCompanyRequest, opts ...grpc.CallOption) (*CreateCompanyResponse, error)
+	GetCompanyById(ctx context.Context, in *GetCompanyByIdRequest, opts ...grpc.CallOption) (*GetCompanyByIdResponse, error)
+	GetCompanies(ctx context.Context, in *GetCompaniesRequest, opts ...grpc.CallOption) (*GetCompaniesResponse, error)
+	UpdateCompany(ctx context.Context, in *UpdateCompanyRequest, opts ...grpc.CallOption) (*UpdateCompanyResponse, error)
 	Login(ctx context.Context, in *LoginRequest, opts ...grpc.CallOption) (*LoginResponse, error)
 	Logout(ctx context.Context, in *LogoutRequest, opts ...grpc.CallOption) (*LogoutResponse, error)
 	Refresh(ctx context.Context, in *RefreshRequest, opts ...grpc.CallOption) (*RefreshResponse, error)
@@ -50,6 +62,8 @@ type UserServiceClient interface {
 	RequestInitialPasswordSet(ctx context.Context, in *PasswordActionRequest, opts ...grpc.CallOption) (*PasswordActionResponse, error)
 	SetPasswordWithToken(ctx context.Context, in *SetPasswordWithTokenRequest, opts ...grpc.CallOption) (*SetPasswordWithTokenResponse, error)
 	CreateClientAccount(ctx context.Context, in *CreateClientRequest, opts ...grpc.CallOption) (*CreateClientResponse, error)
+	GetClients(ctx context.Context, in *GetClientsRequest, opts ...grpc.CallOption) (*GetClientsResponse, error)
+	UpdateClient(ctx context.Context, in *UpdateClientRequest, opts ...grpc.CallOption) (*UpdateClientResponse, error)
 	CreateEmployeeAccount(ctx context.Context, in *CreateEmployeeRequest, opts ...grpc.CallOption) (*CreateEmployeeResponse, error)
 }
 
@@ -61,10 +75,20 @@ func NewUserServiceClient(cc grpc.ClientConnInterface) UserServiceClient {
 	return &userServiceClient{cc}
 }
 
-func (c *userServiceClient) GetEmployeeById(ctx context.Context, in *GetEmployeeByIdRequest, opts ...grpc.CallOption) (*GetEmployeeByIdResponse, error) {
+func (c *userServiceClient) GetEmployeeById(ctx context.Context, in *GetEmployeeByIdRequest, opts ...grpc.CallOption) (*GetEmployeeResponse, error) {
 	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
-	out := new(GetEmployeeByIdResponse)
+	out := new(GetEmployeeResponse)
 	err := c.cc.Invoke(ctx, UserService_GetEmployeeById_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *userServiceClient) GetEmployeeByEmail(ctx context.Context, in *GetEmployeeByEmailRequest, opts ...grpc.CallOption) (*GetEmployeeResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(GetEmployeeResponse)
+	err := c.cc.Invoke(ctx, UserService_GetEmployeeByEmail_FullMethodName, in, out, cOpts...)
 	if err != nil {
 		return nil, err
 	}
@@ -85,6 +109,46 @@ func (c *userServiceClient) UpdateEmployee(ctx context.Context, in *UpdateEmploy
 	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
 	out := new(UpdateEmployeeResponse)
 	err := c.cc.Invoke(ctx, UserService_UpdateEmployee_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *userServiceClient) CreateCompany(ctx context.Context, in *CreateCompanyRequest, opts ...grpc.CallOption) (*CreateCompanyResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(CreateCompanyResponse)
+	err := c.cc.Invoke(ctx, UserService_CreateCompany_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *userServiceClient) GetCompanyById(ctx context.Context, in *GetCompanyByIdRequest, opts ...grpc.CallOption) (*GetCompanyByIdResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(GetCompanyByIdResponse)
+	err := c.cc.Invoke(ctx, UserService_GetCompanyById_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *userServiceClient) GetCompanies(ctx context.Context, in *GetCompaniesRequest, opts ...grpc.CallOption) (*GetCompaniesResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(GetCompaniesResponse)
+	err := c.cc.Invoke(ctx, UserService_GetCompanies_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *userServiceClient) UpdateCompany(ctx context.Context, in *UpdateCompanyRequest, opts ...grpc.CallOption) (*UpdateCompanyResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(UpdateCompanyResponse)
+	err := c.cc.Invoke(ctx, UserService_UpdateCompany_FullMethodName, in, out, cOpts...)
 	if err != nil {
 		return nil, err
 	}
@@ -181,6 +245,26 @@ func (c *userServiceClient) CreateClientAccount(ctx context.Context, in *CreateC
 	return out, nil
 }
 
+func (c *userServiceClient) GetClients(ctx context.Context, in *GetClientsRequest, opts ...grpc.CallOption) (*GetClientsResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(GetClientsResponse)
+	err := c.cc.Invoke(ctx, UserService_GetClients_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *userServiceClient) UpdateClient(ctx context.Context, in *UpdateClientRequest, opts ...grpc.CallOption) (*UpdateClientResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(UpdateClientResponse)
+	err := c.cc.Invoke(ctx, UserService_UpdateClient_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
 func (c *userServiceClient) CreateEmployeeAccount(ctx context.Context, in *CreateEmployeeRequest, opts ...grpc.CallOption) (*CreateEmployeeResponse, error) {
 	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
 	out := new(CreateEmployeeResponse)
@@ -195,9 +279,14 @@ func (c *userServiceClient) CreateEmployeeAccount(ctx context.Context, in *Creat
 // All implementations must embed UnimplementedUserServiceServer
 // for forward compatibility.
 type UserServiceServer interface {
-	GetEmployeeById(context.Context, *GetEmployeeByIdRequest) (*GetEmployeeByIdResponse, error)
+	GetEmployeeById(context.Context, *GetEmployeeByIdRequest) (*GetEmployeeResponse, error)
+	GetEmployeeByEmail(context.Context, *GetEmployeeByEmailRequest) (*GetEmployeeResponse, error)
 	GetEmployees(context.Context, *GetEmployeesRequest) (*GetEmployeesResponse, error)
 	UpdateEmployee(context.Context, *UpdateEmployeeRequest) (*UpdateEmployeeResponse, error)
+	CreateCompany(context.Context, *CreateCompanyRequest) (*CreateCompanyResponse, error)
+	GetCompanyById(context.Context, *GetCompanyByIdRequest) (*GetCompanyByIdResponse, error)
+	GetCompanies(context.Context, *GetCompaniesRequest) (*GetCompaniesResponse, error)
+	UpdateCompany(context.Context, *UpdateCompanyRequest) (*UpdateCompanyResponse, error)
 	Login(context.Context, *LoginRequest) (*LoginResponse, error)
 	Logout(context.Context, *LogoutRequest) (*LogoutResponse, error)
 	Refresh(context.Context, *RefreshRequest) (*RefreshResponse, error)
@@ -207,6 +296,8 @@ type UserServiceServer interface {
 	RequestInitialPasswordSet(context.Context, *PasswordActionRequest) (*PasswordActionResponse, error)
 	SetPasswordWithToken(context.Context, *SetPasswordWithTokenRequest) (*SetPasswordWithTokenResponse, error)
 	CreateClientAccount(context.Context, *CreateClientRequest) (*CreateClientResponse, error)
+	GetClients(context.Context, *GetClientsRequest) (*GetClientsResponse, error)
+	UpdateClient(context.Context, *UpdateClientRequest) (*UpdateClientResponse, error)
 	CreateEmployeeAccount(context.Context, *CreateEmployeeRequest) (*CreateEmployeeResponse, error)
 	mustEmbedUnimplementedUserServiceServer()
 }
@@ -218,14 +309,29 @@ type UserServiceServer interface {
 // pointer dereference when methods are called.
 type UnimplementedUserServiceServer struct{}
 
-func (UnimplementedUserServiceServer) GetEmployeeById(context.Context, *GetEmployeeByIdRequest) (*GetEmployeeByIdResponse, error) {
+func (UnimplementedUserServiceServer) GetEmployeeById(context.Context, *GetEmployeeByIdRequest) (*GetEmployeeResponse, error) {
 	return nil, status.Error(codes.Unimplemented, "method GetEmployeeById not implemented")
+}
+func (UnimplementedUserServiceServer) GetEmployeeByEmail(context.Context, *GetEmployeeByEmailRequest) (*GetEmployeeResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method GetEmployeeByEmail not implemented")
 }
 func (UnimplementedUserServiceServer) GetEmployees(context.Context, *GetEmployeesRequest) (*GetEmployeesResponse, error) {
 	return nil, status.Error(codes.Unimplemented, "method GetEmployees not implemented")
 }
 func (UnimplementedUserServiceServer) UpdateEmployee(context.Context, *UpdateEmployeeRequest) (*UpdateEmployeeResponse, error) {
 	return nil, status.Error(codes.Unimplemented, "method UpdateEmployee not implemented")
+}
+func (UnimplementedUserServiceServer) CreateCompany(context.Context, *CreateCompanyRequest) (*CreateCompanyResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method CreateCompany not implemented")
+}
+func (UnimplementedUserServiceServer) GetCompanyById(context.Context, *GetCompanyByIdRequest) (*GetCompanyByIdResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method GetCompanyById not implemented")
+}
+func (UnimplementedUserServiceServer) GetCompanies(context.Context, *GetCompaniesRequest) (*GetCompaniesResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method GetCompanies not implemented")
+}
+func (UnimplementedUserServiceServer) UpdateCompany(context.Context, *UpdateCompanyRequest) (*UpdateCompanyResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method UpdateCompany not implemented")
 }
 func (UnimplementedUserServiceServer) Login(context.Context, *LoginRequest) (*LoginResponse, error) {
 	return nil, status.Error(codes.Unimplemented, "method Login not implemented")
@@ -253,6 +359,12 @@ func (UnimplementedUserServiceServer) SetPasswordWithToken(context.Context, *Set
 }
 func (UnimplementedUserServiceServer) CreateClientAccount(context.Context, *CreateClientRequest) (*CreateClientResponse, error) {
 	return nil, status.Error(codes.Unimplemented, "method CreateClientAccount not implemented")
+}
+func (UnimplementedUserServiceServer) GetClients(context.Context, *GetClientsRequest) (*GetClientsResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method GetClients not implemented")
+}
+func (UnimplementedUserServiceServer) UpdateClient(context.Context, *UpdateClientRequest) (*UpdateClientResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method UpdateClient not implemented")
 }
 func (UnimplementedUserServiceServer) CreateEmployeeAccount(context.Context, *CreateEmployeeRequest) (*CreateEmployeeResponse, error) {
 	return nil, status.Error(codes.Unimplemented, "method CreateEmployeeAccount not implemented")
@@ -296,6 +408,24 @@ func _UserService_GetEmployeeById_Handler(srv interface{}, ctx context.Context, 
 	return interceptor(ctx, in, info, handler)
 }
 
+func _UserService_GetEmployeeByEmail_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(GetEmployeeByEmailRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(UserServiceServer).GetEmployeeByEmail(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: UserService_GetEmployeeByEmail_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(UserServiceServer).GetEmployeeByEmail(ctx, req.(*GetEmployeeByEmailRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
 func _UserService_GetEmployees_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
 	in := new(GetEmployeesRequest)
 	if err := dec(in); err != nil {
@@ -328,6 +458,78 @@ func _UserService_UpdateEmployee_Handler(srv interface{}, ctx context.Context, d
 	}
 	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
 		return srv.(UserServiceServer).UpdateEmployee(ctx, req.(*UpdateEmployeeRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _UserService_CreateCompany_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(CreateCompanyRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(UserServiceServer).CreateCompany(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: UserService_CreateCompany_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(UserServiceServer).CreateCompany(ctx, req.(*CreateCompanyRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _UserService_GetCompanyById_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(GetCompanyByIdRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(UserServiceServer).GetCompanyById(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: UserService_GetCompanyById_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(UserServiceServer).GetCompanyById(ctx, req.(*GetCompanyByIdRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _UserService_GetCompanies_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(GetCompaniesRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(UserServiceServer).GetCompanies(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: UserService_GetCompanies_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(UserServiceServer).GetCompanies(ctx, req.(*GetCompaniesRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _UserService_UpdateCompany_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(UpdateCompanyRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(UserServiceServer).UpdateCompany(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: UserService_UpdateCompany_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(UserServiceServer).UpdateCompany(ctx, req.(*UpdateCompanyRequest))
 	}
 	return interceptor(ctx, in, info, handler)
 }
@@ -494,6 +696,42 @@ func _UserService_CreateClientAccount_Handler(srv interface{}, ctx context.Conte
 	return interceptor(ctx, in, info, handler)
 }
 
+func _UserService_GetClients_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(GetClientsRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(UserServiceServer).GetClients(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: UserService_GetClients_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(UserServiceServer).GetClients(ctx, req.(*GetClientsRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _UserService_UpdateClient_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(UpdateClientRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(UserServiceServer).UpdateClient(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: UserService_UpdateClient_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(UserServiceServer).UpdateClient(ctx, req.(*UpdateClientRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
 func _UserService_CreateEmployeeAccount_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
 	in := new(CreateEmployeeRequest)
 	if err := dec(in); err != nil {
@@ -524,12 +762,32 @@ var UserService_ServiceDesc = grpc.ServiceDesc{
 			Handler:    _UserService_GetEmployeeById_Handler,
 		},
 		{
+			MethodName: "GetEmployeeByEmail",
+			Handler:    _UserService_GetEmployeeByEmail_Handler,
+		},
+		{
 			MethodName: "GetEmployees",
 			Handler:    _UserService_GetEmployees_Handler,
 		},
 		{
 			MethodName: "UpdateEmployee",
 			Handler:    _UserService_UpdateEmployee_Handler,
+		},
+		{
+			MethodName: "CreateCompany",
+			Handler:    _UserService_CreateCompany_Handler,
+		},
+		{
+			MethodName: "GetCompanyById",
+			Handler:    _UserService_GetCompanyById_Handler,
+		},
+		{
+			MethodName: "GetCompanies",
+			Handler:    _UserService_GetCompanies_Handler,
+		},
+		{
+			MethodName: "UpdateCompany",
+			Handler:    _UserService_UpdateCompany_Handler,
 		},
 		{
 			MethodName: "Login",
@@ -566,6 +824,14 @@ var UserService_ServiceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "CreateClientAccount",
 			Handler:    _UserService_CreateClientAccount_Handler,
+		},
+		{
+			MethodName: "GetClients",
+			Handler:    _UserService_GetClients_Handler,
+		},
+		{
+			MethodName: "UpdateClient",
+			Handler:    _UserService_UpdateClient_Handler,
 		},
 		{
 			MethodName: "CreateEmployeeAccount",

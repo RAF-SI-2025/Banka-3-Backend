@@ -6,13 +6,13 @@ import (
 	"database/sql"
 	"errors"
 	"fmt"
-	"time"
-
 	"log"
-
-	"github.com/golang-jwt/jwt/v5"
 	"strconv"
 	"strings"
+	"time"
+
+	"github.com/golang-jwt/jwt/v5"
+	"github.com/jackc/pgx/v5/pgconn"
 )
 
 type User struct {
@@ -22,6 +22,15 @@ type User struct {
 }
 
 var ErrInvalidPasswordActionToken = errors.New("invalid or expired password token")
+
+var ErrClientNotFound = errors.New("client not found")
+var ErrClientEmailExists = errors.New("client email already exists")
+var ErrClientNoFieldsToUpdate = errors.New("no client fields to update")
+
+var ErrCompanyNotFound = errors.New("company not found")
+var ErrCompanyRegisteredIDExists = errors.New("company with registered id already exists")
+var ErrCompanyOwnerNotFound = errors.New("company owner not found")
+var ErrCompanyActivityCodeNotFound = errors.New("company activity code not found")
 
 func (s *Server) GetUserByEmail(email string) (*User, error) {
 	query := `
@@ -193,7 +202,327 @@ func (s *Server) RevokeRefreshTokensByEmail(tx *sql.Tx, email string) error {
 	return nil
 }
 
-func create_user_from_model[T Clients | Employees](user T, s *Server) error {
+func scanClient(scanner interface {
+	Scan(dest ...any) error
+}) (*Client, error) {
+	var client Client
+	err := scanner.Scan(
+		&client.Id,
+		&client.First_name,
+		&client.Last_name,
+		&client.Date_of_birth,
+		&client.Gender,
+		&client.Email,
+		&client.Phone_number,
+		&client.Address,
+	)
+	if err != nil {
+		return nil, err
+	}
+	return &client, nil
+}
+
+func (s *Server) GetClientByID(id int64) (*Client, error) {
+	row := s.database.QueryRow(`
+		SELECT id, first_name, last_name, date_of_birth, gender, email, phone_number, address
+		FROM clients
+		WHERE id = $1
+	`, id)
+
+	client, err := scanClient(row)
+	if err == sql.ErrNoRows {
+		return nil, ErrClientNotFound
+	}
+	if err != nil {
+		return nil, fmt.Errorf("getting client by id: %w", err)
+	}
+
+	return client, nil
+}
+
+func (s *Server) GetAllClients(firstName string, lastName string, email string) ([]Client, error) {
+	query := `SELECT id, first_name, last_name, date_of_birth, gender, email, phone_number, address FROM clients`
+
+	var conditions []string
+	var args []interface{}
+
+	if firstName != "" {
+		conditions = append(conditions, "first_name = $"+strconv.Itoa(len(args)+1))
+		args = append(args, firstName)
+	}
+	if lastName != "" {
+		conditions = append(conditions, "last_name = $"+strconv.Itoa(len(args)+1))
+		args = append(args, lastName)
+	}
+	if email != "" {
+		conditions = append(conditions, "email = $"+strconv.Itoa(len(args)+1))
+		args = append(args, email)
+	}
+
+	if len(conditions) > 0 {
+		query += " WHERE " + strings.Join(conditions, " AND ")
+	}
+	query += " ORDER BY last_name ASC, first_name ASC"
+
+	rows, err := s.database.Query(query, args...)
+	if err != nil {
+		return nil, fmt.Errorf("listing clients: %w", err)
+	}
+	defer func() { _ = rows.Close() }()
+
+	var clients []Client
+	for rows.Next() {
+		client, err := scanClient(rows)
+		if err != nil {
+			return nil, fmt.Errorf("scanning client: %w", err)
+		}
+		clients = append(clients, *client)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, fmt.Errorf("iterating clients: %w", err)
+	}
+
+	return clients, nil
+}
+
+func (s *Server) UpdateClientRecord(client *Client) error {
+	updates := map[string]any{}
+
+	if strings.TrimSpace(client.First_name) != "" {
+		updates["first_name"] = strings.TrimSpace(client.First_name)
+	}
+	if strings.TrimSpace(client.Last_name) != "" {
+		updates["last_name"] = strings.TrimSpace(client.Last_name)
+	}
+	if !client.Date_of_birth.IsZero() {
+		updates["date_of_birth"] = client.Date_of_birth
+	}
+	if strings.TrimSpace(client.Gender) != "" {
+		updates["gender"] = strings.TrimSpace(client.Gender)
+	}
+	if strings.TrimSpace(client.Email) != "" {
+		updates["email"] = strings.TrimSpace(client.Email)
+	}
+	if strings.TrimSpace(client.Phone_number) != "" {
+		updates["phone_number"] = strings.TrimSpace(client.Phone_number)
+	}
+	if strings.TrimSpace(client.Address) != "" {
+		updates["address"] = strings.TrimSpace(client.Address)
+	}
+
+	if len(updates) == 0 {
+		return ErrClientNoFieldsToUpdate
+	}
+
+	updates["updated_at"] = time.Now()
+
+	result := s.db_gorm.Model(&Client{}).Where("id = ?", client.Id).Updates(updates)
+	if result.Error != nil {
+		if isUniqueViolation(result.Error) {
+			return ErrClientEmailExists
+		}
+		return fmt.Errorf("updating client: %w", result.Error)
+	}
+	if result.RowsAffected == 0 {
+		return ErrClientNotFound
+	}
+
+	return nil
+}
+
+func scanCompany(scanner interface {
+	Scan(dest ...any) error
+}) (*Company, error) {
+	var company Company
+	var activityCodeID sql.NullInt64
+	err := scanner.Scan(
+		&company.Id,
+		&company.Registered_id,
+		&company.Name,
+		&company.Tax_code,
+		&activityCodeID,
+		&company.Address,
+		&company.Owner_id,
+	)
+	if err != nil {
+		return nil, err
+	}
+	if activityCodeID.Valid {
+		company.Activity_code_id = activityCodeID.Int64
+	}
+	return &company, nil
+}
+
+func isUniqueViolation(err error) bool {
+	var pgErr *pgconn.PgError
+	return errors.As(err, &pgErr) && pgErr.Code == "23505"
+}
+
+func (s *Server) CreateCompanyRecord(company Company) (*Company, error) {
+	tx, err := s.database.Begin()
+	if err != nil {
+		return nil, fmt.Errorf("starting transaction: %w", err)
+	}
+	defer func() { _ = tx.Rollback() }()
+
+	var ownerExists bool
+	if err := tx.QueryRow(`SELECT EXISTS(SELECT 1 FROM clients WHERE id = $1)`, company.Owner_id).Scan(&ownerExists); err != nil {
+		return nil, fmt.Errorf("checking owner existence: %w", err)
+	}
+	if !ownerExists {
+		return nil, ErrCompanyOwnerNotFound
+	}
+
+	if company.Activity_code_id != 0 {
+		var activityCodeExists bool
+		if err := tx.QueryRow(`SELECT EXISTS(SELECT 1 FROM activity_codes WHERE id = $1)`, company.Activity_code_id).Scan(&activityCodeExists); err != nil {
+			return nil, fmt.Errorf("checking activity code existence: %w", err)
+		}
+		if !activityCodeExists {
+			return nil, ErrCompanyActivityCodeNotFound
+		}
+	}
+
+	var row *sql.Row
+	if company.Activity_code_id == 0 {
+		row = tx.QueryRow(`
+			INSERT INTO companies (registered_id, name, tax_code, activity_code_id, address, owner_id)
+			VALUES ($1, $2, $3, NULL, $4, $5)
+			RETURNING id, registered_id, name, tax_code, activity_code_id, address, owner_id
+		`, company.Registered_id, company.Name, company.Tax_code, company.Address, company.Owner_id)
+	} else {
+		row = tx.QueryRow(`
+			INSERT INTO companies (registered_id, name, tax_code, activity_code_id, address, owner_id)
+			VALUES ($1, $2, $3, $4, $5, $6)
+			RETURNING id, registered_id, name, tax_code, activity_code_id, address, owner_id
+		`, company.Registered_id, company.Name, company.Tax_code, company.Activity_code_id, company.Address, company.Owner_id)
+	}
+
+	created, err := scanCompany(row)
+	if err != nil {
+		if isUniqueViolation(err) {
+			return nil, ErrCompanyRegisteredIDExists
+		}
+		return nil, fmt.Errorf("creating company: %w", err)
+	}
+
+	if err := tx.Commit(); err != nil {
+		return nil, fmt.Errorf("committing transaction: %w", err)
+	}
+
+	return created, nil
+}
+
+func (s *Server) GetCompanyByIDRecord(companyID int64) (*Company, error) {
+	row := s.database.QueryRow(`
+		SELECT id, registered_id, name, tax_code, activity_code_id, address, owner_id
+		FROM companies
+		WHERE id = $1
+	`, companyID)
+
+	company, err := scanCompany(row)
+	if err == sql.ErrNoRows {
+		return nil, ErrCompanyNotFound
+	}
+	if err != nil {
+		return nil, fmt.Errorf("getting company by id: %w", err)
+	}
+
+	return company, nil
+}
+
+func (s *Server) GetCompaniesRecords() ([]*Company, error) {
+	rows, err := s.database.Query(`
+		SELECT id, registered_id, name, tax_code, activity_code_id, address, owner_id
+		FROM companies
+		ORDER BY id
+	`)
+	if err != nil {
+		return nil, fmt.Errorf("listing companies: %w", err)
+	}
+	defer func() { _ = rows.Close() }()
+
+	var companies []*Company
+	for rows.Next() {
+		company, err := scanCompany(rows)
+		if err != nil {
+			return nil, fmt.Errorf("scanning company: %w", err)
+		}
+		companies = append(companies, company)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, fmt.Errorf("iterating companies: %w", err)
+	}
+
+	return companies, nil
+}
+
+func (s *Server) UpdateCompanyRecord(company Company) (*Company, error) {
+	tx, err := s.database.Begin()
+	if err != nil {
+		return nil, fmt.Errorf("starting transaction: %w", err)
+	}
+	defer func() { _ = tx.Rollback() }()
+
+	var companyExists bool
+	if err := tx.QueryRow(`SELECT EXISTS(SELECT 1 FROM companies WHERE id = $1)`, company.Id).Scan(&companyExists); err != nil {
+		return nil, fmt.Errorf("checking company existence: %w", err)
+	}
+	if !companyExists {
+		return nil, ErrCompanyNotFound
+	}
+
+	var ownerExists bool
+	if err := tx.QueryRow(`SELECT EXISTS(SELECT 1 FROM clients WHERE id = $1)`, company.Owner_id).Scan(&ownerExists); err != nil {
+		return nil, fmt.Errorf("checking owner existence: %w", err)
+	}
+	if !ownerExists {
+		return nil, ErrCompanyOwnerNotFound
+	}
+
+	if company.Activity_code_id != 0 {
+		var activityCodeExists bool
+		if err := tx.QueryRow(`SELECT EXISTS(SELECT 1 FROM activity_codes WHERE id = $1)`, company.Activity_code_id).Scan(&activityCodeExists); err != nil {
+			return nil, fmt.Errorf("checking activity code existence: %w", err)
+		}
+		if !activityCodeExists {
+			return nil, ErrCompanyActivityCodeNotFound
+		}
+	}
+
+	var row *sql.Row
+	if company.Activity_code_id == 0 {
+		row = tx.QueryRow(`
+			UPDATE companies
+			SET name = $1, activity_code_id = NULL, address = $2, owner_id = $3
+			WHERE id = $4
+			RETURNING id, registered_id, name, tax_code, activity_code_id, address, owner_id
+		`, company.Name, company.Address, company.Owner_id, company.Id)
+	} else {
+		row = tx.QueryRow(`
+			UPDATE companies
+			SET name = $1, activity_code_id = $2, address = $3, owner_id = $4
+			WHERE id = $5
+			RETURNING id, registered_id, name, tax_code, activity_code_id, address, owner_id
+		`, company.Name, company.Activity_code_id, company.Address, company.Owner_id, company.Id)
+	}
+
+	updated, err := scanCompany(row)
+	if err != nil {
+		if err == sql.ErrNoRows {
+			return nil, ErrCompanyNotFound
+		}
+		return nil, fmt.Errorf("updating company: %w", err)
+	}
+
+	if err := tx.Commit(); err != nil {
+		return nil, fmt.Errorf("committing transaction: %w", err)
+	}
+
+	return updated, nil
+}
+
+func create_user_from_model[T Client | Employee](user T, s *Server) error {
 	result := s.db_gorm.Create(&user)
 	if result.Error != nil {
 		log.Printf("We got this error: %s", result.Error.Error())
@@ -202,30 +531,34 @@ func create_user_from_model[T Clients | Employees](user T, s *Server) error {
 	return nil
 }
 
-func (s *Server) GetUserByID(id int64) (*Employee_by_Id_response, error) {
-	query := `select e.id, first_name, last_name, date_of_birth, gender, email, phone_number, address, username, position, department ,active, p.id, p.name   from employees e join employee_permissions ep on e.id = ep.employee_id join permissions p on ep.permission_id = p.id where e.id = 2`
-
-	var user Employee_by_Id_response
-	err := s.database.QueryRow(query).Scan(
-		&user.Id, &user.First_name, &user.Last_name, &user.Date_of_birth,
-		&user.Gender, &user.Email, &user.Phone_number, &user.Address,
-		&user.Username, &user.Position, &user.Department, &user.Active,
-		&user.Permission_id, &user.Permission_name,
-	)
+func (s *Server) getEmployeeByEmail(email string) (*Employee, error) {
+	var employee Employee
+	err := s.db_gorm.Preload("Permissions").Where("email = ?", email).First(&employee).Error
 	if err != nil {
-		if err == sql.ErrNoRows {
-			return nil, fmt.Errorf("no employee found with id: %d", id)
-		}
-		return nil, fmt.Errorf("querying user: %w", err)
+		return nil, err
 	}
+	for _, perm := range employee.Permissions {
+		println(perm.Name)
+	}
+	return &employee, nil
+}
 
-	return &user, nil
+func (s *Server) getEmployeeById(id int64) (*Employee, error) {
+	var employee Employee
+	err := s.db_gorm.Preload("Permissions").Where("id = ?", id).First(&employee).Error
+	if err != nil {
+		return nil, err
+	}
+	for _, perm := range employee.Permissions {
+		println(perm.Name)
+	}
+	return &employee, nil
 }
 
 func (s *Server) GetAllEmployees(email string, name string, last_name string, position string) (*[]Get_employees, error) {
 	query := `SELECT e.id, e.first_name, e.last_name, e.email, e.position, e.phone_number, e.active, p.id, p.name
-	FROM employees e 
-	JOIN employee_permissions ep ON e.id = ep.employee_id 
+	FROM employees e
+	JOIN employee_permissions ep ON e.id = ep.employee_id
 	JOIN permissions p ON ep.permission_id = p.id`
 
 	var conditions []string
@@ -263,26 +596,54 @@ func (s *Server) GetAllEmployees(email string, name string, last_name string, po
 
 	for rows.Next() {
 		var emp Get_employees
+		var permissionID sql.NullInt64
+		var permissionName sql.NullString
+
 		if err := rows.Scan(
-			&emp.Id, &emp.First_name, &emp.Last_name, &emp.Email,
-			&emp.Position, &emp.Phone_number, &emp.Active,
-			&emp.Permission_id, &emp.Permission_name,
+			&emp.Id,
+			&emp.First_name,
+			&emp.Last_name,
+			&emp.Email,
+			&emp.Position,
+			&emp.Phone_number,
+			&emp.Active,
+			&permissionID,
+			&permissionName,
 		); err != nil {
+			if closeErr := rows.Close(); closeErr != nil {
+				return nil, fmt.Errorf("failed reading in the values: %w; additionally failed closing rows: %v", err, closeErr)
+			}
 			return nil, fmt.Errorf("failed reading in the values: %w", err)
 		}
+
+		if permissionID.Valid {
+			emp.Permission_id = permissionID.Int64
+		}
+		if permissionName.Valid {
+			emp.Permission_name = permissionName.String
+		}
+
 		employees = append(employees, emp)
 	}
+
 	if err := rows.Err(); err != nil {
+		if closeErr := rows.Close(); closeErr != nil {
+			return nil, fmt.Errorf("error: %w; additionally failed closing rows: %v", err, closeErr)
+		}
 		return nil, fmt.Errorf("error: %w", err)
+	}
+
+	if err := rows.Close(); err != nil {
+		return nil, fmt.Errorf("failed closing rows: %w", err)
 	}
 
 	return &employees, nil
 }
 
-func (s *Server) UpdateEmployee_(emp *Employees, perms []Permissions) error {
+func (s *Server) UpdateEmployee_(emp *Employee) error {
+
 	updates := map[string]any{
-		"id":           emp.Id,
-		"last_name":    emp.First_name,
+		"last_name":    emp.Last_name,
 		"gender":       emp.Gender,
 		"phone_number": emp.Phone_number,
 		"address":      emp.Address,
@@ -290,40 +651,36 @@ func (s *Server) UpdateEmployee_(emp *Employees, perms []Permissions) error {
 		"department":   emp.Department,
 		"active":       emp.Active,
 	}
-	if err := s.db_gorm.Model(emp).Updates(updates).Error; err != nil {
-		log.Printf("Error updating employee %v", err)
+
+	tx := s.db_gorm.Begin()
+
+	if err := tx.Model(&Employee{}).
+		Where("id = ?", emp.Id).
+		Updates(updates).Error; err != nil {
+		tx.Rollback()
 		return err
 	}
 
-	var currentPermissions []Permissions
-	if err := s.db_gorm.Table("employee_permissions").
-		Select("permissions.*").
-		Joins("JOIN permissions ON employee_permissions.permission_id = permissions.id").
-		Where("employee_permissions.employee_id = ?", emp.Id).
-		Find(&currentPermissions).Error; err != nil {
-		log.Printf("Error fetching permissions: %v", err)
+	var perms []Permission
+	var names []string
+
+	for _, p := range emp.Permissions {
+		names = append(names, p.Name)
+	}
+
+	if err := tx.
+		Where("name IN ?", names).
+		Find(&perms).Error; err != nil {
+		tx.Rollback()
 		return err
 	}
 
-	var contains = func(perms []Permissions, perm Permissions) bool {
-		for _, p := range perms {
-			if p.Id == perm.Id {
-				return true
-			}
-		}
-		return false
+	if err := tx.Model(emp).
+		Association("Permissions").
+		Replace(&perms); err != nil {
+		tx.Rollback()
+		return err
 	}
 
-	for _, perm := range perms {
-		if !contains(currentPermissions, perm) {
-			s.db_gorm.Create(&EmployeePermissions{Employee_id: emp.Id, PermissionId: perm.Id})
-		}
-	}
-
-	for _, currentPerm := range currentPermissions {
-		if !contains(perms, currentPerm) {
-			s.db_gorm.Where("employee_id = ? AND permission_id = ?", emp.Id, currentPerm.Id).Delete(&EmployeePermissions{})
-		}
-	}
-	return nil
+	return tx.Commit().Error
 }
