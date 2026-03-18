@@ -69,6 +69,15 @@ func NewServer(accessJwtSecret string, refreshJwtSecret string, database *sql.DB
 	}
 }
 
+func (s *Server) GetEmployeeByEmail(ctx context.Context, req *userpb.GetEmployeeByEmailRequest) (*userpb.GetEmployeeByEmailResponse, error) {
+	resp, err := s.getEmployeeByEmail(req.Email)
+	if err != nil {
+		return nil, err
+	}
+	println(resp)
+	return nil, nil
+}
+
 func (s *Server) GetEmployeeById(ctx context.Context, req *userpb.GetEmployeeByIdRequest) (*userpb.GetEmployeeByIdResponse, error) {
 	map_to_protobuff_resp := func(emp Employee_by_Id_response) *userpb.GetEmployeeByIdResponse {
 		return &userpb.GetEmployeeByIdResponse{

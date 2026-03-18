@@ -203,6 +203,18 @@ func create_user_from_model[T Clients | Employees](user T, s *Server) error {
 	return nil
 }
 
+func (s *Server) getEmployeeByEmail(email string) (*Employees, error) {
+	var employee Employees
+	err := s.db_gorm.Preload("Permissions").Where("email = ?", email).First(&employee).Error
+	if err != nil {
+		return nil, err
+	}
+	for _, perm := range employee.Permissions {
+		println(perm.Name)
+	}
+	return &employee, nil
+}
+
 func (s *Server) GetUserByID(id int64) (*Employee_by_Id_response, error) {
 	query := `select e.id, first_name, last_name, date_of_birth, gender, email, phone_number, address, username, position, department ,active, p.id, p.name   from employees e join employee_permissions ep on e.id = ep.employee_id join permissions p on ep.permission_id = p.id where e.id = 2`
 
@@ -225,7 +237,7 @@ func (s *Server) GetUserByID(id int64) (*Employee_by_Id_response, error) {
 	res := Employee_by_Id_response_temp{}
 	s.db_gorm.Raw("select e.id, e.first_name, e.last_name, e.email, e.position, e.phone_number, e.active, e.date_of_birth, e.gender, e.address, e.username, e.department, p.name from employees e join employee_permissions ep on e.id = ep.employee_id join permissions p on ep.permission_id = p.id").Scan(&res)
 	log.Println("Here's the fucking res", res)
-	if err != nil{
+	if err != nil {
 		log.Println(err)
 	}
 	if err != nil {
@@ -240,8 +252,8 @@ func (s *Server) GetUserByID(id int64) (*Employee_by_Id_response, error) {
 
 func (s *Server) GetAllEmployees(email string, name string, last_name string, position string) (*[]Get_employees, error) {
 	query := `SELECT e.id, e.first_name, e.last_name, e.email, e.position, e.phone_number, e.active, p.id, p.name
-	FROM employees e 
-	JOIN employee_permissions ep ON e.id = ep.employee_id 
+	FROM employees e
+	JOIN employee_permissions ep ON e.id = ep.employee_id
 	JOIN permissions p ON ep.permission_id = p.id`
 
 	var conditions []string

@@ -6,6 +6,7 @@ option go_package = "github.com/RAF-SI-2025/Banka-3-Backend/gen/user";
 
 service UserService {
   rpc GetEmployeeById(GetEmployeeByIdRequest) returns (GetEmployeeByIdResponse);
+  rpc GetEmployeeByEmail(GetEmployeeByEmailRequest) returns (GetEmployeeByEmailResponse);
   rpc GetEmployees(GetEmployeesRequest) returns (GetEmployeesResponse);
   rpc UpdateEmployee(UpdateEmployeeRequest) returns (UpdateEmployeeResponse);
   rpc Login(LoginRequest) returns (LoginResponse);
@@ -144,6 +145,26 @@ message GetEmployeesResponse {
 
 message GetEmployeeByIdRequest {
   int64 id = 1;
+}
+
+message GetEmployeeByEmailRequest {
+  string email = 1;
+}
+
+message GetEmployeeByEmailResponse {
+  int64 Id = 1;
+  string FirstName = 2;
+  string LastName = 3;
+  int64 DateOfBirth = 4;
+  string Gender = 5;
+  string Email = 6;
+  string PhoneNumber = 7;
+  string Address = 8;
+  string Username = 9;
+  string Position = 10;
+  string department = 11;
+  bool active = 12;
+  repeated Permissions perms = 13;
 }
 
 message GetEmployeeByIdResponse {

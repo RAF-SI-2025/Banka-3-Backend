@@ -20,6 +20,7 @@ const _ = grpc.SupportPackageIsVersion9
 
 const (
 	UserService_GetEmployeeById_FullMethodName           = "/user.UserService/GetEmployeeById"
+	UserService_GetEmployeeByEmail_FullMethodName        = "/user.UserService/GetEmployeeByEmail"
 	UserService_GetEmployees_FullMethodName              = "/user.UserService/GetEmployees"
 	UserService_UpdateEmployee_FullMethodName            = "/user.UserService/UpdateEmployee"
 	UserService_Login_FullMethodName                     = "/user.UserService/Login"
@@ -39,6 +40,7 @@ const (
 // For semantics around ctx use and closing/ending streaming RPCs, please refer to https://pkg.go.dev/google.golang.org/grpc/?tab=doc#ClientConn.NewStream.
 type UserServiceClient interface {
 	GetEmployeeById(ctx context.Context, in *GetEmployeeByIdRequest, opts ...grpc.CallOption) (*GetEmployeeByIdResponse, error)
+	GetEmployeeByEmail(ctx context.Context, in *GetEmployeeByEmailRequest, opts ...grpc.CallOption) (*GetEmployeeByEmailResponse, error)
 	GetEmployees(ctx context.Context, in *GetEmployeesRequest, opts ...grpc.CallOption) (*GetEmployeesResponse, error)
 	UpdateEmployee(ctx context.Context, in *UpdateEmployeeRequest, opts ...grpc.CallOption) (*UpdateEmployeeResponse, error)
 	Login(ctx context.Context, in *LoginRequest, opts ...grpc.CallOption) (*LoginResponse, error)
@@ -65,6 +67,16 @@ func (c *userServiceClient) GetEmployeeById(ctx context.Context, in *GetEmployee
 	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
 	out := new(GetEmployeeByIdResponse)
 	err := c.cc.Invoke(ctx, UserService_GetEmployeeById_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *userServiceClient) GetEmployeeByEmail(ctx context.Context, in *GetEmployeeByEmailRequest, opts ...grpc.CallOption) (*GetEmployeeByEmailResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(GetEmployeeByEmailResponse)
+	err := c.cc.Invoke(ctx, UserService_GetEmployeeByEmail_FullMethodName, in, out, cOpts...)
 	if err != nil {
 		return nil, err
 	}
@@ -196,6 +208,7 @@ func (c *userServiceClient) CreateEmployeeAccount(ctx context.Context, in *Creat
 // for forward compatibility.
 type UserServiceServer interface {
 	GetEmployeeById(context.Context, *GetEmployeeByIdRequest) (*GetEmployeeByIdResponse, error)
+	GetEmployeeByEmail(context.Context, *GetEmployeeByEmailRequest) (*GetEmployeeByEmailResponse, error)
 	GetEmployees(context.Context, *GetEmployeesRequest) (*GetEmployeesResponse, error)
 	UpdateEmployee(context.Context, *UpdateEmployeeRequest) (*UpdateEmployeeResponse, error)
 	Login(context.Context, *LoginRequest) (*LoginResponse, error)
@@ -220,6 +233,9 @@ type UnimplementedUserServiceServer struct{}
 
 func (UnimplementedUserServiceServer) GetEmployeeById(context.Context, *GetEmployeeByIdRequest) (*GetEmployeeByIdResponse, error) {
 	return nil, status.Error(codes.Unimplemented, "method GetEmployeeById not implemented")
+}
+func (UnimplementedUserServiceServer) GetEmployeeByEmail(context.Context, *GetEmployeeByEmailRequest) (*GetEmployeeByEmailResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method GetEmployeeByEmail not implemented")
 }
 func (UnimplementedUserServiceServer) GetEmployees(context.Context, *GetEmployeesRequest) (*GetEmployeesResponse, error) {
 	return nil, status.Error(codes.Unimplemented, "method GetEmployees not implemented")
@@ -292,6 +308,24 @@ func _UserService_GetEmployeeById_Handler(srv interface{}, ctx context.Context, 
 	}
 	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
 		return srv.(UserServiceServer).GetEmployeeById(ctx, req.(*GetEmployeeByIdRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _UserService_GetEmployeeByEmail_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(GetEmployeeByEmailRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(UserServiceServer).GetEmployeeByEmail(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: UserService_GetEmployeeByEmail_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(UserServiceServer).GetEmployeeByEmail(ctx, req.(*GetEmployeeByEmailRequest))
 	}
 	return interceptor(ctx, in, info, handler)
 }
@@ -522,6 +556,10 @@ var UserService_ServiceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "GetEmployeeById",
 			Handler:    _UserService_GetEmployeeById_Handler,
+		},
+		{
+			MethodName: "GetEmployeeByEmail",
+			Handler:    _UserService_GetEmployeeByEmail_Handler,
 		},
 		{
 			MethodName: "GetEmployees",
