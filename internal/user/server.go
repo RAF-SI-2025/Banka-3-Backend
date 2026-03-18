@@ -169,9 +169,9 @@ func (s *Server) GenerateAccessToken(email string) (string, error) {
 	return token.SignedString([]byte(s.accessJwtSecret))
 }
 
-func (s *Server) ValidateRefreshToken(ctx context.Context, req *userpb.ValidateTokenRequest) (*userpb.ValidateTokenResponse, error) {
-	token, err := jwt.Parse(req.Token, func(t *jwt.Token) (any, error) {
-		return []byte(s.refreshJwtSecret), nil
+func validateJWTToken(tokenString, secret string) (*userpb.ValidateTokenResponse, error) {
+	token, err := jwt.Parse(tokenString, func(t *jwt.Token) (any, error) {
+		return []byte(secret), nil
 	})
 
 	if err != nil {
@@ -196,51 +196,22 @@ func (s *Server) ValidateRefreshToken(ctx context.Context, req *userpb.ValidateT
 		Exp: exp.Unix(),
 		Iat: iat.Unix(),
 	}, nil
+}
+
+func (s *Server) ValidateRefreshToken(ctx context.Context, req *userpb.ValidateTokenRequest) (*userpb.ValidateTokenResponse, error) {
+	return validateJWTToken(req.Token, s.refreshJwtSecret)
 }
 
 func (s *Server) ValidateAccessToken(ctx context.Context, req *userpb.ValidateTokenRequest) (*userpb.ValidateTokenResponse, error) {
-	token, err := jwt.Parse(req.Token, func(t *jwt.Token) (any, error) {
-		return []byte(s.accessJwtSecret), nil
-	})
-
-	if err != nil {
-		return nil, status.Error(codes.Unauthenticated, "invalid token")
-	}
-	sub, err := token.Claims.GetSubject()
-	if err != nil {
-		return nil, err
-	}
-	exp, err := token.Claims.GetExpirationTime()
-	if err != nil {
-		return nil, err
-	}
-	iat, err := token.Claims.GetIssuedAt()
-	if err != nil {
-		return nil, err
-	}
-
-	return &userpb.ValidateTokenResponse{
-		Sub: sub,
-		Exp: exp.Unix(),
-		Iat: iat.Unix(),
-	}, nil
+	return validateJWTToken(req.Token, s.accessJwtSecret)
 }
 
 func (s *Server) Refresh(ctx context.Context, req *userpb.RefreshRequest) (*userpb.RefreshResponse, error) {
-	refreshToken := req.RefreshToken
-	parsed, err := jwt.Parse(refreshToken, func(t *jwt.Token) (any, error) {
-		return []byte(s.refreshJwtSecret), nil
-	})
+	token, err := validateJWTToken(req.RefreshToken, s.refreshJwtSecret)
 	if err != nil {
-		return nil, fmt.Errorf("parsing token: %w", err)
+		return nil, err
 	}
-	if !parsed.Valid {
-		return nil, fmt.Errorf("invalid refresh token: %w", err)
-	}
-	email, err := parsed.Claims.GetSubject()
-	if err != nil {
-		return nil, fmt.Errorf("getting subject: %w", err)
-	}
+	email := token.Sub
 
 	newSignedToken, err := s.GenerateRefreshToken(email)
 	if err != nil {
@@ -267,7 +238,7 @@ func (s *Server) Refresh(ctx context.Context, req *userpb.RefreshRequest) (*user
 	}
 	defer func() { _ = tx.Rollback() }()
 
-	err = s.rotateRefreshToken(tx, email, hashValue(refreshToken), hashValue(newSignedToken), newExpiry.Time)
+	err = s.rotateRefreshToken(tx, email, hashValue(req.RefreshToken), hashValue(newSignedToken), newExpiry.Time)
 	if err != nil {
 		return nil, status.Error(codes.Unauthenticated, "wrong token")
 	}
