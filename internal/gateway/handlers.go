@@ -533,18 +533,137 @@ func (s *Server) ConfirmPasswordReset(c *gin.Context) {
 	}
 }
 
-func (s *Server) GetAccounts(c *gin.Context) {
+func valueOrCurrentFloat64(newVal *float64, current float64) float64 {
+	if newVal != nil {
+		return *newVal
+	}
+	return current
+}
 
+func (s *Server) GetAccounts(c *gin.Context) {
+	var query getAccountsQuery
+	if err := c.ShouldBindQuery(&query); err != nil {
+		writeBindError(c, err)
+		return
+	}
+
+	ctx, cancel := context.WithTimeout(c.Request.Context(), 5*time.Second)
+	defer cancel()
+
+	resp, err := s.UserClient.GetAccounts(ctx, &userpb.GetAccountsRequest{
+		FirstName:     query.FirstName,
+		LastName:      query.LastName,
+		AccountNumber: query.AccountNumber,
+	})
+	if err != nil {
+		writeGRPCError(c, err)
+		return
+	}
+
+	accounts := make([]gin.H, 0, len(resp.Accounts))
+	for _, acc := range resp.Accounts {
+		accounts = append(accounts, gin.H{
+			"account_number": acc.AccountNumber,
+			"name":           acc.Name,
+			"client_id":      acc.ClientId,
+			"balance":        acc.Balance,
+			"currency":       acc.Currency,
+			"daily_limit":    acc.DailyLimit,
+			"monthly_limit":  acc.MonthlyLimit,
+			"status":         acc.Status,
+		})
+	}
+
+	c.JSON(http.StatusOK, accounts)
 }
 
 func (s *Server) GetAccountByNumber(c *gin.Context) {
+	var uri accountNumberURI
+	if err := c.ShouldBindUri(&uri); err != nil {
+		c.String(http.StatusBadRequest, "account number is required")
+		return
+	}
 
+	ctx, cancel := context.WithTimeout(c.Request.Context(), 5*time.Second)
+	defer cancel()
+
+	resp, err := s.UserClient.GetAccountByNumber(ctx, &userpb.GetAccountByNumberRequest{
+		AccountNumber: uri.AccountNumber,
+	})
+	if err != nil {
+		writeGRPCError(c, err)
+		return
+	}
+
+	c.JSON(http.StatusOK, gin.H{
+		"account_number": resp.AccountNumber,
+		"name":           resp.Name,
+		"client_id":      resp.ClientId,
+		"balance":        resp.Balance,
+		"currency":       resp.Currency,
+		"daily_limit":    resp.DailyLimit,
+		"monthly_limit":  resp.MonthlyLimit,
+		"status":         resp.Status,
+	})
 }
 
 func (s *Server) UpdateAccountName(c *gin.Context) {
+	var uri accountNumberURI
+	if err := c.ShouldBindUri(&uri); err != nil {
+		c.String(http.StatusBadRequest, "account number is required")
+		return
+	}
 
+	var req updateAccountNameRequest
+	if err := c.ShouldBindJSON(&req); err != nil {
+		writeBindError(c, err)
+		return
+	}
+
+	ctx, cancel := context.WithTimeout(c.Request.Context(), 5*time.Second)
+	defer cancel()
+
+	_, err := s.UserClient.UpdateAccountName(ctx, &userpb.UpdateAccountNameRequest{
+		AccountNumber: uri.AccountNumber,
+		Name:          req.Name,
+	})
+	if err != nil {
+		writeGRPCError(c, err)
+		return
+	}
+
+	c.JSON(http.StatusOK, gin.H{
+		"message": "Name updated",
+	})
 }
 
 func (s *Server) UpdateAccountLimits(c *gin.Context) {
+	var uri accountNumberURI
+	if err := c.ShouldBindUri(&uri); err != nil {
+		c.String(http.StatusBadRequest, "account number is required")
+		return
+	}
 
+	var req updateAccountLimitsRequest
+	if err := c.ShouldBindJSON(&req); err != nil {
+		writeBindError(c, err)
+		return
+	}
+
+	ctx, cancel := context.WithTimeout(c.Request.Context(), 5*time.Second)
+	defer cancel()
+
+	_, err := s.UserClient.UpdateAccountLimits(ctx, &userpb.UpdateAccountLimitsRequest{
+		AccountNumber: uri.AccountNumber,
+		DailyLimit:    valueOrCurrentFloat64(req.DailyLimit, 0),
+		MonthlyLimit:  valueOrCurrentFloat64(req.MonthlyLimit, 0),
+	})
+	if err != nil {
+		writeGRPCError(c, err)
+		return
+	}
+
+	c.JSON(http.StatusOK, gin.H{
+		"message": "Limits updated",
+	})
 }
