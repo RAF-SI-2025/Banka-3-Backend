@@ -8,6 +8,10 @@ service UserService {
   rpc GetEmployeeById(GetEmployeeByIdRequest) returns (GetEmployeeByIdResponse);
   rpc GetEmployees(GetEmployeesRequest) returns (GetEmployeesResponse);
   rpc UpdateEmployee(UpdateEmployeeRequest) returns (UpdateEmployeeResponse);
+  rpc CreateCompany(CreateCompanyRequest) returns (CreateCompanyResponse);
+  rpc GetCompanyById(GetCompanyByIdRequest) returns (GetCompanyByIdResponse);
+  rpc GetCompanies(GetCompaniesRequest) returns (GetCompaniesResponse);
+  rpc UpdateCompany(UpdateCompanyRequest) returns (UpdateCompanyResponse);
   rpc Login(LoginRequest) returns (LoginResponse);
   rpc Logout(LogoutRequest) returns (LogoutResponse);
   rpc Refresh(RefreshRequest) returns (RefreshResponse);
@@ -28,6 +32,55 @@ message ValidateTokenResponse {
   string sub = 1;
   int64 iat = 2;
   int64 exp = 3;
+}
+
+message Company {
+  int64 id = 1;
+  int64 registered_id = 2;
+  string name = 3;
+  int64 tax_code = 4;
+  int64 activity_code_id = 5;
+  string address = 6;
+  int64 owner_id = 7;
+}
+
+message CreateCompanyRequest {
+  int64 registered_id = 1;
+  string name = 2;
+  int64 tax_code = 3;
+  int64 activity_code_id = 4;
+  string address = 5;
+  int64 owner_id = 6;
+}
+
+message CreateCompanyResponse {
+  Company company = 1;
+}
+
+message GetCompanyByIdRequest {
+  int64 id = 1;
+}
+
+message GetCompanyByIdResponse {
+  Company company = 1;
+}
+
+message GetCompaniesRequest {}
+
+message GetCompaniesResponse {
+  repeated Company companies = 1;
+}
+
+message UpdateCompanyRequest {
+  int64 id = 1;
+  string name = 3;
+  int64 activity_code_id = 5;
+  string address = 6;
+  int64 owner_id = 7;
+}
+
+message UpdateCompanyResponse {
+  Company company = 1;
 }
 
 message RefreshRequest {

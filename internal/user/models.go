@@ -181,7 +181,7 @@ type (
 
 	Companies struct {
 		Id               int64  `gorm:"column:id;type:bigserial;not null;primaryKey"`
-		Register_id      int64  `gorm:"column:register_id;type:bigint;not null;unique"`
+		Registered_id    int64  `gorm:"column:registered_id;type:bigint;not null;unique"`
 		Name             string `gorm:"column:name;type:varchar(127);not null"`
 		Tax_code         int64  `gorm:"column:tax_code;type:bigint;not null"`
 		Activity_code_id int64  `gorm:"column:activity_code_id;type:int64;references activity_codes(id)"`
