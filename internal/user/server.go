@@ -133,13 +133,11 @@ func (s *Server) GetEmployees(ctx context.Context, req *userpb.GetEmployeesReque
 }
 
 func (s *Server) UpdateEmployee(ctx context.Context, req *userpb.UpdateEmployeeRequest) (*userpb.UpdateEmployeeResponse, error) {
-	// var map_from_pbs = func(perms *userpb.Permission) Permission {
-	// 	return Permission{Id: uint64(perms.Id), Name: perms.Permision}
-	// }
-	// var permissions []Permission
-	// for _, perm := range req.Perms {
-	// 	permissions = append(permissions, map_from_pbs(perm))
-	// }
+	var permissions []Permission
+	for _, perm := range req.Permissions {
+		// yes these are invalid. i don't care
+		permissions = append(permissions, Permission{Id: 0, Name: perm})
+	}
 
 	emp := Employee{
 		Last_name:     req.LastName,
@@ -152,7 +150,7 @@ func (s *Server) UpdateEmployee(ctx context.Context, req *userpb.UpdateEmployeeR
 		Id:            uint64(req.Id),
 		Date_of_birth: time.Time{},
 		Updated_at:    time.Now(),
-		// Permissions:   permissions,
+		Permissions:   permissions,
 	}
 
 	err := s.UpdateEmployee_(&emp)

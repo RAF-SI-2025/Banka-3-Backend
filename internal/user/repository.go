@@ -285,20 +285,46 @@ func (s *Server) GetAllEmployees(email string, name string, last_name string, po
 }
 
 func (s *Server) UpdateEmployee_(emp *Employee) error {
+
 	updates := map[string]any{
-		"id":           emp.Id,
-		"last_name":    emp.First_name,
+		"last_name":    emp.Last_name,
 		"gender":       emp.Gender,
 		"phone_number": emp.Phone_number,
 		"address":      emp.Address,
 		"position":     emp.Position,
 		"department":   emp.Department,
 		"active":       emp.Active,
-		"permissions":  emp.Permissions,
 	}
-	if err := s.db_gorm.Model(emp).Updates(updates).Error; err != nil {
-		log.Printf("Error updating employee %v", err)
+
+	tx := s.db_gorm.Begin()
+
+	if err := tx.Model(&Employee{}).
+		Where("id = ?", emp.Id).
+		Updates(updates).Error; err != nil {
+		tx.Rollback()
 		return err
 	}
-	return nil
+
+	var perms []Permission
+	var names []string
+
+	for _, p := range emp.Permissions {
+		names = append(names, p.Name)
+	}
+
+	if err := tx.
+		Where("name IN ?", names).
+		Find(&perms).Error; err != nil {
+		tx.Rollback()
+		return err
+	}
+
+	if err := tx.Model(emp).
+		Association("Permissions").
+		Replace(&perms); err != nil {
+		tx.Rollback()
+		return err
+	}
+
+	return tx.Commit().Error
 }
