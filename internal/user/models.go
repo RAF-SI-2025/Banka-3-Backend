@@ -6,15 +6,16 @@ import (
 
 type (
 	// Defining ALL 10 Enums which Dusan added
-	owner_type         string
-	account_type       string
-	card_type          string
-	card_status        string
-	loan_type          string
-	loan_status        string
-	interest_rate_type string
-	installment_status string
-	employment_status  string
+	owner_type          string
+	account_type        string
+	card_type           string
+	card_status         string
+	loan_type           string
+	loan_status         string
+	loan_request_status string
+	interest_rate_type  string
+	installment_status  string
+	employment_status   string
 
 	// Note, unlike type aliease these are all destinct types, only
 	// their underlying type is string.
@@ -53,6 +54,11 @@ const (
 	Rejected loan_status = "rejected"
 	Paid     loan_status = "paid"
 	Late     loan_status = "late"
+
+	// loan_request_status enum
+	LoanRequestPending  loan_request_status = "pending"
+	LoanRequestApproved loan_request_status = "approved"
+	LoanRequestRejected loan_request_status = "rejected"
 
 	// interest_rate_type enum
 	Fixed    interest_rate_type = "fixed"
@@ -258,17 +264,14 @@ type (
 	}
 
 	LoanRequest struct {
-		Id                      int64              `gorm:"column:id;type:bigserial;not null;primaryKey"`
-		Type                    loan_type          `gorm:"column:type;type:loan_type;not null"`
-		Interest_rate_type      interest_rate_type `gorm:"column:interest_rate_type;type:interest_rate_type;not null"`
-		Purpose                 string             `gorm:"column:purpose;type:varchar(1023);not null"`
-		Monthly_installment     string             `gorm:"column:monthly_installment;type:decimal(20,2);not null"`
-		Currency_id             int64              `gorm:"column:currency_id;type:bigint;references currencies(id)"`
-		Amount                  float64            `gorm:"column:amount;type:decimal(20,2);not null"`
-		Employment_status       employment_status  `gorm:"column:employment_status;type:employment_status;not null"`
-		Current_employment_time int64              `gorm:"column:current_employment_time;type:bigint;not null"`
-		Phone_contact           string             `gorm:"column:phone_contact;type:varchar(20);not null"`
-		Account_id              int64              `gorm:"column:account_id;type:bigint;references accounts(id)"`
+		Id               int64               `gorm:"column:id;type:bigserial;not null;primaryKey"`
+		Type             loan_type           `gorm:"column:type;type:loan_type;not null"`
+		Currency_id      int64               `gorm:"column:currency_id;type:bigint;references currencies(id)"`
+		Amount           float64             `gorm:"column:amount;type:decimal(20,2);not null"`
+		Repayment_period int64               `gorm:"column:repayment_period;type:bigint;not null"`
+		Account_id       int64               `gorm:"column:account_id;type:bigint;references accounts(id)"`
+		Status           loan_request_status `gorm:"column:status;type:loan_request_status;not null;default 'pending'"`
+		Submission_date  time.Time           `gorm:"column:submission_date;not null;autoCreateTime"`
 	}
 
 	VerificationCode struct {

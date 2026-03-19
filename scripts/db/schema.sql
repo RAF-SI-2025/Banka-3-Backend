@@ -213,6 +213,7 @@ CREATE TABLE IF NOT EXISTS loan_installment (
 CREATE TYPE employment_status AS ENUM ('full_time', 'temporary', 'unemployed'); -- unused due to this change, remove later?
 CREATE TYPE loan_request_status AS ENUM ('pending', 'approved', 'rejected');
 
+-- I will revert the previous DB change in sprint 3 in case it was meant to be used for employee loan endpoints later
 CREATE TABLE IF NOT EXISTS loan_request (
     id                  BIGSERIAL            PRIMARY KEY,
     type                loan_type            NOT NULL,
