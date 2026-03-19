@@ -22,7 +22,7 @@ const (
 	_ = protoimpl.EnforceVersion(protoimpl.MaxVersion - 20)
 )
 
-type PayoutRequest struct {
+type PaymentRequest struct {
 	state            protoimpl.MessageState `protogen:"open.v1"`
 	SenderAccount    string                 `protobuf:"bytes,1,opt,name=sender_account,json=senderAccount,proto3" json:"sender_account,omitempty"`
 	RecipientAccount string                 `protobuf:"bytes,2,opt,name=recipient_account,json=recipientAccount,proto3" json:"recipient_account,omitempty"`
@@ -35,20 +35,20 @@ type PayoutRequest struct {
 	sizeCache        protoimpl.SizeCache
 }
 
-func (x *PayoutRequest) Reset() {
-	*x = PayoutRequest{}
+func (x *PaymentRequest) Reset() {
+	*x = PaymentRequest{}
 	mi := &file_bank_bank_proto_msgTypes[0]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
 
-func (x *PayoutRequest) String() string {
+func (x *PaymentRequest) String() string {
 	return protoimpl.X.MessageStringOf(x)
 }
 
-func (*PayoutRequest) ProtoMessage() {}
+func (*PaymentRequest) ProtoMessage() {}
 
-func (x *PayoutRequest) ProtoReflect() protoreflect.Message {
+func (x *PaymentRequest) ProtoReflect() protoreflect.Message {
 	mi := &file_bank_bank_proto_msgTypes[0]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
@@ -60,61 +60,61 @@ func (x *PayoutRequest) ProtoReflect() protoreflect.Message {
 	return mi.MessageOf(x)
 }
 
-// Deprecated: Use PayoutRequest.ProtoReflect.Descriptor instead.
-func (*PayoutRequest) Descriptor() ([]byte, []int) {
+// Deprecated: Use PaymentRequest.ProtoReflect.Descriptor instead.
+func (*PaymentRequest) Descriptor() ([]byte, []int) {
 	return file_bank_bank_proto_rawDescGZIP(), []int{0}
 }
 
-func (x *PayoutRequest) GetSenderAccount() string {
+func (x *PaymentRequest) GetSenderAccount() string {
 	if x != nil {
 		return x.SenderAccount
 	}
 	return ""
 }
 
-func (x *PayoutRequest) GetRecipientAccount() string {
+func (x *PaymentRequest) GetRecipientAccount() string {
 	if x != nil {
 		return x.RecipientAccount
 	}
 	return ""
 }
 
-func (x *PayoutRequest) GetRecipientName() string {
+func (x *PaymentRequest) GetRecipientName() string {
 	if x != nil {
 		return x.RecipientName
 	}
 	return ""
 }
 
-func (x *PayoutRequest) GetAmount() int64 {
+func (x *PaymentRequest) GetAmount() int64 {
 	if x != nil {
 		return x.Amount
 	}
 	return 0
 }
 
-func (x *PayoutRequest) GetPaymentCode() string {
+func (x *PaymentRequest) GetPaymentCode() string {
 	if x != nil {
 		return x.PaymentCode
 	}
 	return ""
 }
 
-func (x *PayoutRequest) GetReferenceNumber() string {
+func (x *PaymentRequest) GetReferenceNumber() string {
 	if x != nil {
 		return x.ReferenceNumber
 	}
 	return ""
 }
 
-func (x *PayoutRequest) GetPurpose() string {
+func (x *PaymentRequest) GetPurpose() string {
 	if x != nil {
 		return x.Purpose
 	}
 	return ""
 }
 
-type PayoutResponse struct {
+type PaymentResponse struct {
 	state           protoimpl.MessageState `protogen:"open.v1"`
 	FromAccount     string                 `protobuf:"bytes,1,opt,name=from_account,json=fromAccount,proto3" json:"from_account,omitempty"`
 	ToAccount       string                 `protobuf:"bytes,2,opt,name=to_account,json=toAccount,proto3" json:"to_account,omitempty"`
@@ -131,20 +131,20 @@ type PayoutResponse struct {
 	sizeCache       protoimpl.SizeCache
 }
 
-func (x *PayoutResponse) Reset() {
-	*x = PayoutResponse{}
+func (x *PaymentResponse) Reset() {
+	*x = PaymentResponse{}
 	mi := &file_bank_bank_proto_msgTypes[1]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
 
-func (x *PayoutResponse) String() string {
+func (x *PaymentResponse) String() string {
 	return protoimpl.X.MessageStringOf(x)
 }
 
-func (*PayoutResponse) ProtoMessage() {}
+func (*PaymentResponse) ProtoMessage() {}
 
-func (x *PayoutResponse) ProtoReflect() protoreflect.Message {
+func (x *PaymentResponse) ProtoReflect() protoreflect.Message {
 	mi := &file_bank_bank_proto_msgTypes[1]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
@@ -156,82 +156,82 @@ func (x *PayoutResponse) ProtoReflect() protoreflect.Message {
 	return mi.MessageOf(x)
 }
 
-// Deprecated: Use PayoutResponse.ProtoReflect.Descriptor instead.
-func (*PayoutResponse) Descriptor() ([]byte, []int) {
+// Deprecated: Use PaymentResponse.ProtoReflect.Descriptor instead.
+func (*PaymentResponse) Descriptor() ([]byte, []int) {
 	return file_bank_bank_proto_rawDescGZIP(), []int{1}
 }
 
-func (x *PayoutResponse) GetFromAccount() string {
+func (x *PaymentResponse) GetFromAccount() string {
 	if x != nil {
 		return x.FromAccount
 	}
 	return ""
 }
 
-func (x *PayoutResponse) GetToAccount() string {
+func (x *PaymentResponse) GetToAccount() string {
 	if x != nil {
 		return x.ToAccount
 	}
 	return ""
 }
 
-func (x *PayoutResponse) GetInitialAmount() int64 {
+func (x *PaymentResponse) GetInitialAmount() int64 {
 	if x != nil {
 		return x.InitialAmount
 	}
 	return 0
 }
 
-func (x *PayoutResponse) GetFinalAmount() int64 {
+func (x *PaymentResponse) GetFinalAmount() int64 {
 	if x != nil {
 		return x.FinalAmount
 	}
 	return 0
 }
 
-func (x *PayoutResponse) GetFee() int64 {
+func (x *PaymentResponse) GetFee() int64 {
 	if x != nil {
 		return x.Fee
 	}
 	return 0
 }
 
-func (x *PayoutResponse) GetCurrency() string {
+func (x *PaymentResponse) GetCurrency() string {
 	if x != nil {
 		return x.Currency
 	}
 	return ""
 }
 
-func (x *PayoutResponse) GetPaymentCode() string {
+func (x *PaymentResponse) GetPaymentCode() string {
 	if x != nil {
 		return x.PaymentCode
 	}
 	return ""
 }
 
-func (x *PayoutResponse) GetReferenceNumber() string {
+func (x *PaymentResponse) GetReferenceNumber() string {
 	if x != nil {
 		return x.ReferenceNumber
 	}
 	return ""
 }
 
-func (x *PayoutResponse) GetPurpose() string {
+func (x *PaymentResponse) GetPurpose() string {
 	if x != nil {
 		return x.Purpose
 	}
 	return ""
 }
 
-func (x *PayoutResponse) GetStatus() string {
+func (x *PaymentResponse) GetStatus() string {
 	if x != nil {
 		return x.Status
 	}
 	return ""
 }
 
-func (x *PayoutResponse) GetTimestamp() string {
+func (x *PaymentResponse) GetTimestamp() string {
 	if x != nil {
 		return x.Timestamp
 	}
@@ -602,16 +602,16 @@ var File_bank_bank_proto protoreflect.FileDescriptor
 
 const file_bank_bank_proto_rawDesc = "" +
 	"\n" +
-	"\x0fbank/bank.proto\x12\x04bank\x1a\x1bgoogle/protobuf/empty.proto\"\x8a\x02\n" +
-	"\rPayoutRequest\x12%\n" +
+	"\x0fbank/bank.proto\x12\x04bank\x1a\x1bgoogle/protobuf/empty.proto\"\x8b\x02\n" +
+	"\x0ePaymentRequest\x12%\n" +
 	"\x0esender_account\x18\x01 \x01(\tR\rsenderAccount\x12+\n" +
 	"\x11recipient_account\x18\x02 \x01(\tR\x10recipientAccount\x12%\n" +
 	"\x0erecipient_name\x18\x03 \x01(\tR\rrecipientName\x12\x16\n" +
 	"\x06amount\x18\x04 \x01(\x03R\x06amount\x12!\n" +
 	"\fpayment_code\x18\x05 \x01(\tR\vpaymentCode\x12)\n" +
 	"\x10reference_number\x18\x06 \x01(\tR\x0freferenceNumber\x12\x18\n" +
-	"\apurpose\x18\a \x01(\tR\apurpose\"\xe8\x02\n" +
-	"\x0ePayoutResponse\x12!\n" +
+	"\apurpose\x18\a \x01(\tR\apurpose\"\xe9\x02\n" +
+	"\x0fPaymentResponse\x12!\n" +
 	"\ffrom_account\x18\x01 \x01(\tR\vfromAccount\x12\x1d\n" +
 	"\n" +
 	"to_account\x18\x02 \x01(\tR\ttoAccount\x12%\n" +
@@ -660,10 +660,10 @@ const file_bank_bank_proto_rawDesc = "" +
 	"\apurpose\x18\t \x01(\tR\apurpose\x12\x16\n" +
 	"\x06status\x18\n" +
 	" \x01(\tR\x06status\x12\x1c\n" +
-	"\ttimestamp\x18\v \x01(\tR\ttimestamp2\xee\x01\n" +
+	"\ttimestamp\x18\v \x01(\tR\ttimestamp2\xf0\x01\n" +
 	"\vBankService\x12M\n" +
-	"\x1cTransferMoneyBetweenAccounts\x12\x15.bank.TransferRequest\x1a\x16.bank.TransferResponse\x12F\n" +
-	"\x19PayoutMoneyToOtherAccount\x12\x13.bank.PayoutRequest\x1a\x14.bank.PayoutResponse\x12H\n" +
+	"\x1cTransferMoneyBetweenAccounts\x12\x15.bank.TransferRequest\x1a\x16.bank.TransferResponse\x12H\n" +
+	"\x19PayoutMoneyToOtherAccount\x12\x14.bank.PaymentRequest\x1a\x15.bank.PaymentResponse\x12H\n" +
 	"\x0fGetTransactions\x12\x16.google.protobuf.Empty\x1a\x1d.bank.GetTransactionsResponseB1Z/github.com/RAF-SI-2025/Banka-3-Backend/gen/bankb\x06proto3"
 
 var (
@@ -680,8 +680,8 @@ func file_bank_bank_proto_rawDescGZIP() []byte {
 
 var file_bank_bank_proto_msgTypes = make([]protoimpl.MessageInfo, 6)
 var file_bank_bank_proto_goTypes = []any{
-	(*PayoutRequest)(nil),                       // 0: bank.PayoutRequest
-	(*PayoutResponse)(nil),                      // 1: bank.PayoutResponse
+	(*PaymentRequest)(nil),                      // 0: bank.PaymentRequest
+	(*PaymentResponse)(nil),                     // 1: bank.PaymentResponse
 	(*TransferRequest)(nil),                     // 2: bank.TransferRequest
 	(*TransferResponse)(nil),                    // 3: bank.TransferResponse
 	(*GetTransactionsResponse)(nil),             // 4: bank.GetTransactionsResponse
@@ -691,10 +691,10 @@ var file_bank_bank_proto_goTypes = []any{
 var file_bank_bank_proto_depIdxs = []int32{
 	5, // 0: bank.GetTransactionsResponse.transactions:type_name -> bank.GetTransactionsResponse.Transaction
 	2, // 1: bank.BankService.TransferMoneyBetweenAccounts:input_type -> bank.TransferRequest
-	0, // 2: bank.BankService.PayoutMoneyToOtherAccount:input_type -> bank.PayoutRequest
+	0, // 2: bank.BankService.PayoutMoneyToOtherAccount:input_type -> bank.PaymentRequest
 	6, // 3: bank.BankService.GetTransactions:input_type -> google.protobuf.Empty
 	3, // 4: bank.BankService.TransferMoneyBetweenAccounts:output_type -> bank.TransferResponse
-	1, // 5: bank.BankService.PayoutMoneyToOtherAccount:output_type -> bank.PayoutResponse
+	1, // 5: bank.BankService.PayoutMoneyToOtherAccount:output_type -> bank.PaymentResponse
 	4, // 6: bank.BankService.GetTransactions:output_type -> bank.GetTransactionsResponse
 	4, // [4:7] is the sub-list for method output_type
 	1, // [1:4] is the sub-list for method input_type

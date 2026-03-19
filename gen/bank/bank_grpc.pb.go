@@ -30,7 +30,7 @@ const (
 // For semantics around ctx use and closing/ending streaming RPCs, please refer to https://pkg.go.dev/google.golang.org/grpc/?tab=doc#ClientConn.NewStream.
 type BankServiceClient interface {
 	TransferMoneyBetweenAccounts(ctx context.Context, in *TransferRequest, opts ...grpc.CallOption) (*TransferResponse, error)
-	PayoutMoneyToOtherAccount(ctx context.Context, in *PayoutRequest, opts ...grpc.CallOption) (*PayoutResponse, error)
+	PayoutMoneyToOtherAccount(ctx context.Context, in *PaymentRequest, opts ...grpc.CallOption) (*PaymentResponse, error)
 	GetTransactions(ctx context.Context, in *emptypb.Empty, opts ...grpc.CallOption) (*GetTransactionsResponse, error)
 }
 
@@ -52,9 +52,9 @@ func (c *bankServiceClient) TransferMoneyBetweenAccounts(ctx context.Context, in
 	return out, nil
 }
 
-func (c *bankServiceClient) PayoutMoneyToOtherAccount(ctx context.Context, in *PayoutRequest, opts ...grpc.CallOption) (*PayoutResponse, error) {
+func (c *bankServiceClient) PayoutMoneyToOtherAccount(ctx context.Context, in *PaymentRequest, opts ...grpc.CallOption) (*PaymentResponse, error) {
 	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
-	out := new(PayoutResponse)
+	out := new(PaymentResponse)
 	err := c.cc.Invoke(ctx, BankService_PayoutMoneyToOtherAccount_FullMethodName, in, out, cOpts...)
 	if err != nil {
 		return nil, err
@@ -77,7 +77,7 @@ func (c *bankServiceClient) GetTransactions(ctx context.Context, in *emptypb.Emp
 // for forward compatibility.
 type BankServiceServer interface {
 	TransferMoneyBetweenAccounts(context.Context, *TransferRequest) (*TransferResponse, error)
-	PayoutMoneyToOtherAccount(context.Context, *PayoutRequest) (*PayoutResponse, error)
+	PayoutMoneyToOtherAccount(context.Context, *PaymentRequest) (*PaymentResponse, error)
 	GetTransactions(context.Context, *emptypb.Empty) (*GetTransactionsResponse, error)
 	mustEmbedUnimplementedBankServiceServer()
 }
@@ -92,7 +92,7 @@ type UnimplementedBankServiceServer struct{}
 func (UnimplementedBankServiceServer) TransferMoneyBetweenAccounts(context.Context, *TransferRequest) (*TransferResponse, error) {
 	return nil, status.Error(codes.Unimplemented, "method TransferMoneyBetweenAccounts not implemented")
 }
-func (UnimplementedBankServiceServer) PayoutMoneyToOtherAccount(context.Context, *PayoutRequest) (*PayoutResponse, error) {
+func (UnimplementedBankServiceServer) PayoutMoneyToOtherAccount(context.Context, *PaymentRequest) (*PaymentResponse, error) {
 	return nil, status.Error(codes.Unimplemented, "method PayoutMoneyToOtherAccount not implemented")
 }
 func (UnimplementedBankServiceServer) GetTransactions(context.Context, *emptypb.Empty) (*GetTransactionsResponse, error) {
@@ -138,7 +138,7 @@ func _BankService_TransferMoneyBetweenAccounts_Handler(srv interface{}, ctx cont
 }
 
 func _BankService_PayoutMoneyToOtherAccount_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
-	in := new(PayoutRequest)
+	in := new(PaymentRequest)
 	if err := dec(in); err != nil {
 		return nil, err
 	}
@@ -150,7 +150,7 @@ func _BankService_PayoutMoneyToOtherAccount_Handler(srv interface{}, ctx context
 		FullMethod: BankService_PayoutMoneyToOtherAccount_FullMethodName,
 	}
 	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
-		return srv.(BankServiceServer).PayoutMoneyToOtherAccount(ctx, req.(*PayoutRequest))
+		return srv.(BankServiceServer).PayoutMoneyToOtherAccount(ctx, req.(*PaymentRequest))
 	}
 	return interceptor(ctx, in, info, handler)
 }
