@@ -42,14 +42,15 @@ type updateEmployeeURI struct {
 }
 
 type updateEmployeeRequest struct {
-	LastName    *string   `json:"last_name"`
-	Gender      *string   `json:"gender"`
-	PhoneNumber *string   `json:"phone_number"`
-	Address     *string   `json:"address"`
-	Position    *string   `json:"position"`
-	Department  *string   `json:"department"`
-	Active      *bool     `json:"active"`
-	Permissions *[]string `json:"permissions"`
+	FirstName   string   `json:"first_name"`
+	LastName    string   `json:"last_name"`
+	Gender      string   `json:"gender"`
+	PhoneNumber string   `json:"phone_number"`
+	Address     string   `json:"address"`
+	Position    string   `json:"position"`
+	Department  string   `json:"department"`
+	Active      bool     `json:"active"`
+	Permissions []string `json:"permissions"`
 }
 
 type createClientAccountRequest struct {
@@ -76,7 +77,7 @@ type updateClientRequest struct {
 type createEmployeeAccountRequest struct {
 	FirstName   string `json:"first_name" binding:"required"`
 	LastName    string `json:"last_name" binding:"required"`
-	BirthDate   int64  `json:"date_of_birth"`
+	BirthDate   int64  `json:"birth_date"`
 	Gender      string `json:"gender"`
 	Email       string `json:"email" binding:"required"`
 	PhoneNumber string `json:"phone_number"`

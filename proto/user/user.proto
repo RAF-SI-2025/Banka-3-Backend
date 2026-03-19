@@ -8,7 +8,7 @@ service UserService {
   rpc GetEmployeeById(GetEmployeeByIdRequest) returns (GetEmployeeResponse);
   rpc GetEmployeeByEmail(GetEmployeeByEmailRequest) returns (GetEmployeeResponse);
   rpc GetEmployees(GetEmployeesRequest) returns (GetEmployeesResponse);
-  rpc UpdateEmployee(UpdateEmployeeRequest) returns (UpdateEmployeeResponse);
+  rpc UpdateEmployee(UpdateEmployeeRequest) returns (GetEmployeeResponse);
   rpc CreateCompany(CreateCompanyRequest) returns (CreateCompanyResponse);
   rpc GetCompanyById(GetCompanyByIdRequest) returns (GetCompanyByIdResponse);
   rpc GetCompanies(GetCompaniesRequest) returns (GetCompaniesResponse);
@@ -24,7 +24,7 @@ service UserService {
   rpc CreateClientAccount(CreateClientRequest) returns (CreateClientResponse);
   rpc GetClients(GetClientsRequest) returns (GetClientsResponse);
   rpc UpdateClient(UpdateClientRequest) returns (UpdateClientResponse);
-  rpc CreateEmployeeAccount(CreateEmployeeRequest) returns (CreateEmployeeResponse);
+  rpc CreateEmployeeAccount(CreateEmployeeRequest) returns (GetEmployeeResponse);
 }
 
 message ValidateTokenRequest {
@@ -158,10 +158,6 @@ message CreateEmployeeRequest {
   string password = 11;
 }
 
-message CreateEmployeeResponse {
-  bool valid = 1;
-}
-
 message CreateClientRequest {
   string first_name = 1;
   string last_name = 2;
@@ -260,17 +256,13 @@ message GetEmployeeResponse {
 
 message UpdateEmployeeRequest {
   int64 id = 1;
-  string last_name = 2;
-  string gender = 3;
-  string phone_number = 4;
-  string address = 5;
-  string position = 6;
-  string department = 7;
-  bool active = 8;
-  repeated string permissions = 9;
-}
-
-message UpdateEmployeeResponse {
-  bool valid = 1;
-  string response = 2;
+  string first_name = 2;
+  string last_name = 3;
+  string gender = 4;
+  string phone_number = 5;
+  string address = 6;
+  string position = 7;
+  string department = 8;
+  bool active = 9;
+  repeated string permissions = 10;
 }

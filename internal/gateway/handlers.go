@@ -232,10 +232,7 @@ func (s *Server) UpdateClient(c *gin.Context) {
 		return
 	}
 
-	c.JSON(http.StatusOK, gin.H{
-		"valid":    resp.Valid,
-		"response": resp.Response,
-	})
+	c.JSON(http.StatusOK, resp)
 }
 
 func (s *Server) CreateEmployeeAccount(c *gin.Context) {
@@ -266,16 +263,7 @@ func (s *Server) CreateEmployeeAccount(c *gin.Context) {
 		return
 	}
 
-	if resp.Valid {
-		c.JSON(http.StatusCreated, gin.H{
-			"valid": true,
-		})
-		return
-	}
-
-	c.JSON(http.StatusUnprocessableEntity, gin.H{
-		"valid": false,
-	})
+	c.JSON(http.StatusCreated, resp)
 }
 
 func companyResponse(company *userpb.Company) gin.H {
@@ -459,22 +447,24 @@ func (s *Server) UpdateEmployee(c *gin.Context) {
 	}
 
 	var req updateEmployeeRequest
-	if err := c.ShouldBindJSON(&req); err != nil {
+	if err := c.BindJSON(&req); err != nil {
 		writeBindError(c, err)
 		return
 	}
 	ctx, cancel := context.WithTimeout(c.Request.Context(), 5*time.Second)
 	defer cancel()
+	println("please")
 	resp, err := s.UserClient.UpdateEmployee(ctx, &userpb.UpdateEmployeeRequest{
 		Id:          uri.EmployeeID,
-		LastName:    *req.LastName,
-		Gender:      *req.Gender,
-		PhoneNumber: *req.PhoneNumber,
-		Address:     *req.Address,
-		Position:    *req.Position,
-		Department:  *req.Department,
-		Active:      *req.Active,
-		Permissions: *req.Permissions,
+		FirstName:   req.FirstName,
+		LastName:    req.LastName,
+		Gender:      req.Gender,
+		PhoneNumber: req.PhoneNumber,
+		Address:     req.Address,
+		Position:    req.Position,
+		Department:  req.Department,
+		Active:      req.Active,
+		Permissions: req.Permissions,
 	})
 	if err != nil {
 		writeGRPCError(c, err)

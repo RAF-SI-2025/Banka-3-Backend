@@ -108,7 +108,7 @@ func (s *Server) GetEmployeeById(ctx context.Context, req *userpb.GetEmployeeByI
 }
 
 func (s *Server) GetEmployees(ctx context.Context, req *userpb.GetEmployeesRequest) (*userpb.GetEmployeesResponse, error) {
-	map_func := func(emp Get_employees) *userpb.GetEmployeesResponse_Employee {
+	map_func := func(emp Employee) *userpb.GetEmployeesResponse_Employee {
 		return &userpb.GetEmployeesResponse_Employee{
 			Id:          int64(emp.Id),
 			FirstName:   emp.First_name,
@@ -119,45 +119,56 @@ func (s *Server) GetEmployees(ctx context.Context, req *userpb.GetEmployeesReque
 			Active:      emp.Active,
 		}
 	}
-	employees, err := s.GetAllEmployees(req.Email, req.FirstName, req.LastName, req.Position)
+	employees, err := s.GetAllEmployees(&req.Email, &req.FirstName, &req.LastName, &req.Position)
 	if err != nil {
 		log.Printf("Error in retrieving employees: %s", err.Error())
 		return nil, status.Error(codes.Internal, "Failed to retrieve employees")
 	}
 	var employee_responses []*userpb.GetEmployeesResponse_Employee
-	for _, emp := range *employees {
+	for _, emp := range employees {
 		employee_responses = append(employee_responses, map_func(emp))
 	}
 
 	return &userpb.GetEmployeesResponse{Employees: employee_responses}, nil
 }
 
-func (s *Server) UpdateEmployee(ctx context.Context, req *userpb.UpdateEmployeeRequest) (*userpb.UpdateEmployeeResponse, error) {
+func (s *Server) UpdateEmployee(ctx context.Context, req *userpb.UpdateEmployeeRequest) (*userpb.GetEmployeeResponse, error) {
+	println("here")
+
 	var permissions []Permission
 	for _, perm := range req.Permissions {
 		// yes these are invalid. i don't care
 		permissions = append(permissions, Permission{Id: 0, Name: perm})
 	}
+	println("here1")
 
 	emp := Employee{
-		Last_name:     req.LastName,
-		Gender:        req.Gender,
-		Phone_number:  req.PhoneNumber,
-		Address:       req.Address,
-		Position:      req.Position,
-		Department:    req.Department,
-		Active:        req.Active,
-		Id:            uint64(req.Id),
-		Date_of_birth: time.Time{},
-		Updated_at:    time.Now(),
-		Permissions:   permissions,
+		First_name:   req.FirstName,
+		Last_name:    req.LastName,
+		Gender:       req.Gender,
+		Phone_number: req.PhoneNumber,
+		Address:      req.Address,
+		Position:     req.Position,
+		Department:   req.Department,
+		Active:       req.Active,
+		Id:           uint64(req.Id),
+		Updated_at:   time.Now(),
+		Permissions:  permissions,
 	}
 
-	err := s.UpdateEmployee_(&emp)
+	println("here2")
+
+	updated, err := s.UpdateEmployee_(&emp)
 	if err != nil {
+		if errors.Is(err, ErrEmployeeNotFound) {
+			return nil, status.Error(codes.NotFound, "Employee not found")
+		}
+		if errors.Is(err, ErrUnknownPermission) {
+			return nil, status.Error(codes.NotFound, "Uknown permissions")
+		}
 		return nil, status.Error(codes.Internal, "Messed something up in UpdateEmployee_ in repo")
 	}
-	return &userpb.UpdateEmployeeResponse{Valid: true, Response: "You made it"}, nil
+	return updated.toProtobuf(), nil
 
 }
 
@@ -733,19 +744,14 @@ func (s *Server) CreateClientAccount(ctx context.Context, req *userpb.CreateClie
 
 }
 
-func (s *Server) CreateEmployeeAccount(ctx context.Context, req *userpb.CreateEmployeeRequest) (*userpb.CreateEmployeeResponse, error) {
+func (s *Server) CreateEmployeeAccount(ctx context.Context, req *userpb.CreateEmployeeRequest) (*userpb.GetEmployeeResponse, error) {
 	is_null := func(str string) bool {
 		return strings.TrimSpace(str) == ""
 	}
-	vals := []string{req.FirstName, req.LastName, req.Gender, req.Email, req.PhoneNumber,
-		req.Address, req.Username}
+	vals := []string{req.FirstName, req.LastName, req.Email,
+		req.Username}
 	if slices.ContainsFunc(vals, is_null) {
 		return nil, status.Error(codes.InvalidArgument, "One of the required cols is null")
-	}
-
-	if req.Gender != "M" && req.Gender != "F" {
-		log.Print("create employee gender must be M or F")
-		return nil, errors.New("gender must be M or F")
 	}
 
 	salt, salt_err := generateSalt()
@@ -766,6 +772,6 @@ func (s *Server) CreateEmployeeAccount(ctx context.Context, req *userpb.CreateEm
 		log.Printf("Error in user creation%s", err.Error())
 		return nil, status.Error(codes.Internal, "Employee creation failed")
 	}
-	return &userpb.CreateEmployeeResponse{Valid: true}, nil
+	return employee.toProtobuf(), nil
 
 }

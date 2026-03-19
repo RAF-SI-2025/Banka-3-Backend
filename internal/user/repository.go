@@ -32,6 +32,10 @@ var ErrCompanyRegisteredIDExists = errors.New("company with registered id alread
 var ErrCompanyOwnerNotFound = errors.New("company owner not found")
 var ErrCompanyActivityCodeNotFound = errors.New("company activity code not found")
 
+var ErrEmployeeNotFound = errors.New("employee not found")
+
+var ErrUnknownPermission = errors.New("unknown permissions")
+
 func (s *Server) GetUserByEmail(email string) (*User, error) {
 	query := `
 		SELECT email, password, salt_password FROM employees WHERE email = $1
@@ -555,94 +559,38 @@ func (s *Server) getEmployeeById(id int64) (*Employee, error) {
 	return &employee, nil
 }
 
-func (s *Server) GetAllEmployees(email string, name string, last_name string, position string) (*[]Get_employees, error) {
-	query := `SELECT e.id, e.first_name, e.last_name, e.email, e.position, e.phone_number, e.active, p.id, p.name
-	FROM employees e
-	JOIN employee_permissions ep ON e.id = ep.employee_id
-	JOIN permissions p ON ep.permission_id = p.id`
+func (s *Server) GetAllEmployees(email *string, name *string, lastName *string, position *string) ([]Employee, error) {
+	var employees []Employee
+	query := s.db_gorm.Model(&Employee{}).Preload("Permissions")
 
-	var conditions []string
-	// Query is variadic, and interface{}
-	// is basically the most generic type
-	// interface is same as any, maybe it's nicer to use any here
-	var args []interface{}
-
-	if email != "" {
-		conditions = append(conditions, "e.email = $"+strconv.Itoa(len(args)+1))
-		args = append(args, email)
-	}
-	if name != "" {
-		conditions = append(conditions, "e.first_name = $"+strconv.Itoa(len(args)+1))
-		args = append(args, name)
-	}
-	if last_name != "" {
-		conditions = append(conditions, "e.last_name = $"+strconv.Itoa(len(args)+1))
-		args = append(args, last_name)
-	}
-	if position != "" {
-		conditions = append(conditions, "e.position = $"+strconv.Itoa(len(args)+1))
-		args = append(args, position)
+	if email != nil && *email != "" {
+		query = query.Where("email = ?", *email)
 	}
 
-	if len(conditions) > 0 {
-		query += " WHERE " + strings.Join(conditions, " AND ")
+	if name != nil && *name != "" {
+		query = query.Where("first_name ILIKE ?", "%"+*name+"%")
 	}
 
-	var employees []Get_employees
-	rows, err := s.database.Query(query, args...)
+	if lastName != nil && *lastName != "" {
+		query = query.Where("last_name ILIKE ?", "%"+*lastName+"%")
+	}
+
+	if position != nil && *position != "" {
+		query = query.Where("position = ?", *position)
+	}
+
+	err := query.Find(&employees).Error
 	if err != nil {
-		return nil, fmt.Errorf("whatever the fuck went wrong now: %w", err)
+		return nil, err
 	}
 
-	for rows.Next() {
-		var emp Get_employees
-		var permissionID sql.NullInt64
-		var permissionName sql.NullString
-
-		if err := rows.Scan(
-			&emp.Id,
-			&emp.First_name,
-			&emp.Last_name,
-			&emp.Email,
-			&emp.Position,
-			&emp.Phone_number,
-			&emp.Active,
-			&permissionID,
-			&permissionName,
-		); err != nil {
-			if closeErr := rows.Close(); closeErr != nil {
-				return nil, fmt.Errorf("failed reading in the values: %w; additionally failed closing rows: %v", err, closeErr)
-			}
-			return nil, fmt.Errorf("failed reading in the values: %w", err)
-		}
-
-		if permissionID.Valid {
-			emp.Permission_id = permissionID.Int64
-		}
-		if permissionName.Valid {
-			emp.Permission_name = permissionName.String
-		}
-
-		employees = append(employees, emp)
-	}
-
-	if err := rows.Err(); err != nil {
-		if closeErr := rows.Close(); closeErr != nil {
-			return nil, fmt.Errorf("error: %w; additionally failed closing rows: %v", err, closeErr)
-		}
-		return nil, fmt.Errorf("error: %w", err)
-	}
-
-	if err := rows.Close(); err != nil {
-		return nil, fmt.Errorf("failed closing rows: %w", err)
-	}
-
-	return &employees, nil
+	return employees, nil
 }
 
-func (s *Server) UpdateEmployee_(emp *Employee) error {
+func (s *Server) UpdateEmployee_(emp *Employee) (*Employee, error) {
 
 	updates := map[string]any{
+		"first_name":   emp.First_name,
 		"last_name":    emp.Last_name,
 		"gender":       emp.Gender,
 		"phone_number": emp.Phone_number,
@@ -658,7 +606,7 @@ func (s *Server) UpdateEmployee_(emp *Employee) error {
 		Where("id = ?", emp.Id).
 		Updates(updates).Error; err != nil {
 		tx.Rollback()
-		return err
+		return nil, ErrEmployeeNotFound
 	}
 
 	var perms []Permission
@@ -672,15 +620,27 @@ func (s *Server) UpdateEmployee_(emp *Employee) error {
 		Where("name IN ?", names).
 		Find(&perms).Error; err != nil {
 		tx.Rollback()
-		return err
+		return nil, ErrUnknownPermission
 	}
 
 	if err := tx.Model(emp).
 		Association("Permissions").
 		Replace(&perms); err != nil {
 		tx.Rollback()
-		return err
+		return nil, ErrEmployeeNotFound
 	}
 
-	return tx.Commit().Error
+	var updated Employee
+	if err := tx.
+		Preload("Permissions").
+		First(&updated, emp.Id).Error; err != nil {
+		tx.Rollback()
+		return nil, ErrEmployeeNotFound
+	}
+
+	if err := tx.Commit().Error; err != nil {
+		return nil, err
+	}
+
+	return &updated, nil
 }
