@@ -21,7 +21,7 @@ type SMTPSender struct{}
 func (s *SMTPSender) Send(to []string, subject string, body string) error {
 	auth := smtp.PlainAuth(
 		"",
-		os.Getenv("FROM_EMAIL"),
+		os.Getenv("FROM_EMAIL_AUTH"),
 		os.Getenv("FROM_EMAIL_PASSWORD"),
 		os.Getenv("FROM_EMAIL_SMTP"),
 	)

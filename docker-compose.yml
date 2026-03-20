@@ -61,6 +61,7 @@ services:
     environment:
       GRPC_PORT: "50051"
       FROM_EMAIL: "${FROM_EMAIL}"
+      FROM_EMAIL_AUTH: "${FROM_EMAIL_AUTH}"
       FROM_EMAIL_PASSWORD: "${FROM_EMAIL_PASSWORD}"
       FROM_EMAIL_SMTP: "${FROM_EMAIL_SMTP}"
       SMTP_ADDR: "${SMTP_ADDR}"
