@@ -2,7 +2,6 @@ package bank
 
 import (
 	"context"
-	"database/sql"
 	"regexp"
 	"testing"
 	"time"
@@ -29,20 +28,10 @@ func (s *testNotificationServer) SendCardConfirmationEmail(_ context.Context, _ 
 
 func TestCreateCardSuccess(t *testing.T) {
 	server, mock, db := newTestServer(t)
-	defer func(db *sql.DB) {
-		err := db.Close()
-		if err != nil {
-			t.Fatalf("failed to close db: %v", err)
-		}
-	}(db)
+	defer func() { _ = db.Close() }()
 
 	accountNumber := "123456789"
 	email := "danilo@banka.raf"
-
-	mock.ExpectClose()
-	if err := mock.ExpectationsWereMet(); err != nil {
-		t.Fatalf("sql expectations: %v", err)
-	}
 
 	mock.ExpectQuery(regexp.QuoteMeta(`SELECT id, number, name, owner, balance, currency, active, owner_type, account_type, maintainance_cost, daily_limit, monthly_limit, daily_expenditure, monthly_expenditure, created_by, created_at, valid_until FROM accounts WHERE number = $1`)).
 		WithArgs(accountNumber).
@@ -84,12 +73,7 @@ func TestCreateCardSuccess(t *testing.T) {
 
 func TestRequestCardSuccess(t *testing.T) {
 	server, mock, db := newTestServer(t)
-	defer func(db *sql.DB) {
-		err := db.Close()
-		if err != nil {
-			t.Fatalf("failed to close db: %v", err)
-		}
-	}(db)
+	defer func() { _ = db.Close() }()
 
 	notificationServer := &testNotificationServer{}
 	addr, stop := startNotificationTestServer(t, notificationServer)
@@ -133,12 +117,7 @@ func TestRequestCardSuccess(t *testing.T) {
 
 func TestRequestCardLimitReached(t *testing.T) {
 	server, mock, db := newTestServer(t)
-	defer func(db *sql.DB) {
-		err := db.Close()
-		if err != nil {
-			t.Fatalf("failed to close db: %v", err)
-		}
-	}(db)
+	defer func() { _ = db.Close() }()
 
 	ctx := metadata.NewIncomingContext(context.Background(), metadata.Pairs("user-email", "test@mail.com"))
 
@@ -166,12 +145,7 @@ func TestRequestCardLimitReached(t *testing.T) {
 
 func TestConfirmCardSuccess(t *testing.T) {
 	server, mock, db := newTestServer(t)
-	defer func(db *sql.DB) {
-		err := db.Close()
-		if err != nil {
-			t.Fatalf("failed to close db: %v", err)
-		}
-	}(db)
+	defer func() { _ = db.Close() }()
 
 	notificationServer := &testNotificationServer{}
 	addr, stop := startNotificationTestServer(t, notificationServer)
@@ -202,12 +176,7 @@ func TestConfirmCardSuccess(t *testing.T) {
 
 func TestBlockCardSuccess(t *testing.T) {
 	server, mock, db := newTestServer(t)
-	defer func(db *sql.DB) {
-		err := db.Close()
-		if err != nil {
-			t.Fatalf("failed to close db: %v", err)
-		}
-	}(db)
+	defer func() { _ = db.Close() }()
 
 	mock.ExpectExec(regexp.QuoteMeta(`UPDATE cards SET status = $1 WHERE id = $2`)).
 		WithArgs(Blocked, int64(1)).

@@ -359,11 +359,6 @@ func TestCreateAccountNumberCollisionRetryPath(t *testing.T) {
 	createdAt := time.Date(2026, 3, 19, 0, 0, 0, 0, time.UTC)
 	validUntil := time.Date(2030, 3, 19, 0, 0, 0, 0, time.UTC)
 
-	mock.ExpectClose()
-	if err := mock.ExpectationsWereMet(); err != nil {
-		t.Fatalf("sql expectations: %v", err)
-	}
-
 	mock.ExpectBegin()
 	mock.ExpectQuery(regexp.QuoteMeta(`SELECT EXISTS(SELECT 1 FROM clients WHERE id = $1)`)).
 		WithArgs(int64(1)).
