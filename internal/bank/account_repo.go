@@ -66,7 +66,7 @@ func (s *Server) UpdateAccountLimitsRecord(accountNumber string, dailyLimit *int
 	return nil
 }
 
-func (s *Server) GetActiveAccountsByOwnerID(ownerID uint64) ([]Account, error) {
+func (s *Server) GetActiveAccountsByOwnerID(ownerID int64) ([]Account, error) {
 	var accounts []Account
 	result := s.db_gorm.Where(&Account{Owner: int64(ownerID), Active: true}).
 		Order("balance DESC").

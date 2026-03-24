@@ -5,88 +5,62 @@ import (
 	"os"
 	"strings"
 
-	bankpb "github.com/RAF-SI-2025/Banka-3-Backend/gen/bank"
-	userpb "github.com/RAF-SI-2025/Banka-3-Backend/gen/user"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/credentials/insecure"
 	"google.golang.org/grpc/metadata"
 	"google.golang.org/grpc/status"
+
+	bankpb "github.com/RAF-SI-2025/Banka-3-Backend/gen/bank"
+	userpb "github.com/RAF-SI-2025/Banka-3-Backend/gen/user"
 )
 
+type callerIdentity struct {
+	Email      string
+	ClientID   int64
+	IsClient   bool
+	IsEmployee bool
+}
+
 func (s *Server) ListAccounts(ctx context.Context, req *bankpb.ListAccountsRequest) (*bankpb.ListAccountsResponse, error) {
-	email, err := s.getEmailFromMetadata(ctx)
+	caller, err := s.resolveCaller(ctx)
 	if err != nil {
 		return nil, err
 	}
 
-	userClient, conn, err := s.getUserServiceClient()
-	if err != nil {
-		return nil, status.Error(codes.Internal, "user service connection failed")
-	}
-	defer func(conn *grpc.ClientConn) {
-		_ = conn.Close()
-	}(conn)
-
-	empResp, err := userClient.GetEmployeeByEmail(ctx, &userpb.GetEmployeeByEmailRequest{Email: email})
-	if err == nil && empResp != nil {
+	if caller.IsEmployee {
 		accounts, err := s.GetAccountsForEmployee(req.FirstName, req.LastName, req.AccountNumber)
 		if err != nil {
 			return nil, status.Error(codes.Internal, "failed to fetch accounts")
 		}
-		return &bankpb.ListAccountsResponse{Accounts: s.mapSliceToProto(accounts)}, nil
+
+		return &bankpb.ListAccountsResponse{
+			Accounts: s.mapSliceToProto(accounts),
+		}, nil
 	}
 
-	clientResp, err := userClient.GetClients(ctx, &userpb.GetClientsRequest{Email: email})
-	if err != nil {
-		return nil, status.Error(codes.Internal, "failed to query user service")
-	}
-	if len(clientResp.Clients) == 0 {
-		return nil, status.Error(codes.NotFound, "client not found")
+	if caller.IsClient {
+		accounts, err := s.GetActiveAccountsByOwnerID(caller.ClientID)
+		if err != nil {
+			return nil, status.Error(codes.Internal, "failed to fetch client accounts")
+		}
+
+		return &bankpb.ListAccountsResponse{
+			Accounts: s.mapSliceToProto(accounts),
+		}, nil
 	}
 
-	accounts, err := s.GetActiveAccountsByOwnerID(uint64(clientResp.Clients[0].Id))
-	if err != nil {
-		return nil, status.Error(codes.Internal, "failed to fetch client accounts")
-	}
-
-	return &bankpb.ListAccountsResponse{Accounts: s.mapSliceToProto(accounts)}, nil
+	return nil, status.Error(codes.PermissionDenied, "access denied")
 }
 
 func (s *Server) GetAccountDetails(ctx context.Context, req *bankpb.GetAccountDetailsRequest) (*bankpb.GetAccountDetailsResponse, error) {
-	email, err := s.getEmailFromMetadata(ctx)
-	if err != nil {
-		return nil, err
-	}
-
 	acc, err := s.GetAccountByNumber(req.AccountNumber)
 	if err != nil {
 		return nil, status.Error(codes.NotFound, "account not found")
 	}
 
-	userClient, conn, err := s.getUserServiceClient()
-	if err != nil {
-		return nil, status.Error(codes.Internal, "user service connection failed")
-	}
-	defer func(conn *grpc.ClientConn) {
-		_ = conn.Close()
-	}(conn)
-
-	authorized := false
-	clientResp, err := userClient.GetClients(ctx, &userpb.GetClientsRequest{Email: email})
-	if err == nil && len(clientResp.Clients) > 0 && acc.Owner == clientResp.Clients[0].Id {
-		authorized = true
-	}
-
-	if !authorized {
-		empResp, err := userClient.GetEmployeeByEmail(ctx, &userpb.GetEmployeeByEmailRequest{Email: email})
-		if err == nil && empResp != nil {
-			authorized = true
-		}
-	}
-
-	if !authorized {
-		return nil, status.Error(codes.PermissionDenied, "access denied")
+	if err := s.authorizeAccountAccess(ctx, acc); err != nil {
+		return nil, err
 	}
 
 	pbAccount := s.mapToAccountProto(*acc)
@@ -94,39 +68,13 @@ func (s *Server) GetAccountDetails(ctx context.Context, req *bankpb.GetAccountDe
 }
 
 func (s *Server) ListClientTransactions(ctx context.Context, req *bankpb.ListClientTranasctionsRequest) (*bankpb.ListClientTransactionsResponse, error) {
-	email, err := s.getEmailFromMetadata(ctx)
-	if err != nil {
-		return nil, err
-	}
-
 	acc, err := s.GetAccountByNumber(req.AccountNumber)
 	if err != nil {
 		return nil, status.Error(codes.NotFound, "account not found")
 	}
 
-	userClient, conn, err := s.getUserServiceClient()
-	if err != nil {
-		return nil, status.Error(codes.Internal, "user service connection failed")
-	}
-	defer func(conn *grpc.ClientConn) {
-		_ = conn.Close()
-	}(conn)
-
-	authorized := false
-	clientResp, err := userClient.GetClients(ctx, &userpb.GetClientsRequest{Email: email})
-	if err == nil && len(clientResp.Clients) > 0 && acc.Owner == clientResp.Clients[0].Id {
-		authorized = true
-	}
-
-	if !authorized {
-		empResp, err := userClient.GetEmployeeByEmail(ctx, &userpb.GetEmployeeByEmailRequest{Email: email})
-		if err == nil && empResp != nil {
-			authorized = true
-		}
-	}
-
-	if !authorized {
-		return nil, status.Error(codes.PermissionDenied, "unauthorized to view these transactions")
+	if err := s.authorizeAccountAccess(ctx, acc); err != nil {
+		return nil, err
 	}
 
 	transactions, err := s.GetFilteredTransactions(req.AccountNumber, req.Date, req.Amount, req.Status)
@@ -137,7 +85,7 @@ func (s *Server) ListClientTransactions(ctx context.Context, req *bankpb.ListCli
 	return &bankpb.ListClientTransactionsResponse{Transactions: transactions}, nil
 }
 
-func (s *Server) UpdateAccountName(_ context.Context, req *bankpb.UpdateAccountNameRequest) (*bankpb.UpdateAccountNameResponse, error) {
+func (s *Server) UpdateAccountName(ctx context.Context, req *bankpb.UpdateAccountNameRequest) (*bankpb.UpdateAccountNameResponse, error) {
 	accountNumber := strings.TrimSpace(req.AccountNumber)
 	name := strings.TrimSpace(req.Name)
 
@@ -151,6 +99,10 @@ func (s *Server) UpdateAccountName(_ context.Context, req *bankpb.UpdateAccountN
 	account, err := s.GetAccountByNumber(accountNumber)
 	if err != nil {
 		return nil, status.Error(codes.NotFound, "account not found")
+	}
+
+	if err := s.authorizeAccountAccess(ctx, account); err != nil {
+		return nil, err
 	}
 
 	exists, err := s.AccountNameExistsForOwner(account.Owner, name, accountNumber)
@@ -171,7 +123,7 @@ func (s *Server) UpdateAccountName(_ context.Context, req *bankpb.UpdateAccountN
 	return &bankpb.UpdateAccountNameResponse{}, nil
 }
 
-func (s *Server) UpdateAccountLimits(_ context.Context, req *bankpb.UpdateAccountLimitsRequest) (*bankpb.UpdateAccountLimitsResponse, error) {
+func (s *Server) UpdateAccountLimits(ctx context.Context, req *bankpb.UpdateAccountLimitsRequest) (*bankpb.UpdateAccountLimitsResponse, error) {
 	accountNumber := strings.TrimSpace(req.AccountNumber)
 	if accountNumber == "" {
 		return nil, status.Error(codes.InvalidArgument, "account number is required")
@@ -181,9 +133,13 @@ func (s *Server) UpdateAccountLimits(_ context.Context, req *bankpb.UpdateAccoun
 		return nil, status.Error(codes.InvalidArgument, "at least one limit must be provided")
 	}
 
-	_, err := s.GetAccountByNumber(accountNumber)
+	account, err := s.GetAccountByNumber(accountNumber)
 	if err != nil {
 		return nil, status.Error(codes.NotFound, "account not found")
+	}
+
+	if err := s.authorizeAccountAccess(ctx, account); err != nil {
+		return nil, err
 	}
 
 	if req.DailyLimit != nil && *req.DailyLimit < 0 {
@@ -204,15 +160,75 @@ func (s *Server) UpdateAccountLimits(_ context.Context, req *bankpb.UpdateAccoun
 	return &bankpb.UpdateAccountLimitsResponse{}, nil
 }
 
+func (s *Server) authorizeAccountAccess(ctx context.Context, acc *Account) error {
+	caller, err := s.resolveCaller(ctx)
+	if err != nil {
+		return err
+	}
+
+	if caller.IsEmployee {
+		return nil
+	}
+
+	if caller.IsClient && acc.Owner == caller.ClientID {
+		return nil
+	}
+
+	return status.Error(codes.PermissionDenied, "access denied")
+}
+
+func (s *Server) resolveCaller(ctx context.Context) (*callerIdentity, error) {
+	email, err := s.getEmailFromMetadata(ctx)
+	if err != nil {
+		return nil, err
+	}
+
+	userClient, conn, err := s.getUserServiceClient()
+	if err != nil {
+		return nil, status.Error(codes.Internal, "user service connection failed")
+	}
+	defer func(conn *grpc.ClientConn) {
+		_ = conn.Close()
+	}(conn)
+
+	empResp, err := userClient.GetEmployeeByEmail(ctx, &userpb.GetEmployeeByEmailRequest{
+		Email: email,
+	})
+	if err == nil && empResp != nil {
+		return &callerIdentity{
+			Email:      email,
+			IsEmployee: true,
+		}, nil
+	}
+
+	clientResp, err := userClient.GetClients(ctx, &userpb.GetClientsRequest{
+		Email: email,
+	})
+	if err != nil {
+		return nil, status.Error(codes.Internal, "failed to query user service")
+	}
+	if len(clientResp.Clients) == 0 {
+		return nil, status.Error(codes.NotFound, "client not found")
+	}
+
+	return &callerIdentity{
+		Email:    email,
+		ClientID: int64(clientResp.Clients[0].Id),
+		IsClient: true,
+	}, nil
+}
+
 func (s *Server) getEmailFromMetadata(ctx context.Context) (string, error) {
 	md, ok := metadata.FromIncomingContext(ctx)
 	if !ok {
 		return "", status.Error(codes.Unauthenticated, "metadata missing")
 	}
+
 	emails := md.Get("user-email")
-	if len(emails) == 0 {
+	if len(emails) == 0 || strings.TrimSpace(emails[0]) == "" {
 		return "", status.Error(codes.Unauthenticated, "user-email missing")
 	}
+
 	return emails[0], nil
 }
 
@@ -221,6 +237,7 @@ func (s *Server) getUserServiceClient() (userpb.UserServiceClient, *grpc.ClientC
 	if addr == "" {
 		addr = "user:50051"
 	}
+
 	conn, err := grpc.NewClient(addr, grpc.WithTransportCredentials(insecure.NewCredentials()))
 	return userpb.NewUserServiceClient(conn), conn, err
 }

@@ -730,7 +730,7 @@ func (s *Server) GetAccountByNumber(c *gin.Context) {
 func (s *Server) UpdateAccountName(c *gin.Context) {
 	var uri accountNumberURI
 	if err := c.ShouldBindUri(&uri); err != nil {
-		c.String(http.StatusBadRequest, "account number is required")
+		writeBindError(c, err)
 		return
 	}
 
@@ -743,6 +743,10 @@ func (s *Server) UpdateAccountName(c *gin.Context) {
 	ctx, cancel := context.WithTimeout(c.Request.Context(), 5*time.Second)
 	defer cancel()
 
+	ctx = metadata.NewOutgoingContext(ctx, metadata.Pairs(
+		"user-email", c.GetString("email"),
+	))
+
 	_, err := s.BankClient.UpdateAccountName(ctx, &bankpb.UpdateAccountNameRequest{
 		AccountNumber: uri.AccountNumber,
 		Name:          req.Name,
@@ -752,15 +756,13 @@ func (s *Server) UpdateAccountName(c *gin.Context) {
 		return
 	}
 
-	c.JSON(http.StatusOK, gin.H{
-		"message": "Name updated",
-	})
+	c.JSON(http.StatusOK, gin.H{"message": "Name updated"})
 }
 
 func (s *Server) UpdateAccountLimits(c *gin.Context) {
 	var uri accountNumberURI
 	if err := c.ShouldBindUri(&uri); err != nil {
-		c.String(http.StatusBadRequest, "account number is required")
+		writeBindError(c, err)
 		return
 	}
 
@@ -773,6 +775,10 @@ func (s *Server) UpdateAccountLimits(c *gin.Context) {
 	ctx, cancel := context.WithTimeout(c.Request.Context(), 5*time.Second)
 	defer cancel()
 
+	ctx = metadata.NewOutgoingContext(ctx, metadata.Pairs(
+		"user-email", c.GetString("email"),
+	))
+
 	_, err := s.BankClient.UpdateAccountLimits(ctx, &bankpb.UpdateAccountLimitsRequest{
 		AccountNumber: uri.AccountNumber,
 		DailyLimit:    req.DailyLimit,
@@ -783,9 +789,7 @@ func (s *Server) UpdateAccountLimits(c *gin.Context) {
 		return
 	}
 
-	c.JSON(http.StatusOK, gin.H{
-		"message": "Limits updated",
-	})
+	c.JSON(http.StatusOK, gin.H{"message": "Limits updated"})
 }
 
 func (s *Server) GetLoans(c *gin.Context) {
