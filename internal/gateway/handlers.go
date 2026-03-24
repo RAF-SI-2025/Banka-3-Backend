@@ -774,7 +774,16 @@ func (s *Server) CreateLoanRequest(c *gin.Context) {
 }
 
 func (s *Server) GetCards(c *gin.Context) {
-	ctx, cancel := context.WithTimeout(c.Request.Context(), 5*time.Second)
+	email, exists := c.Get("email")
+	if !exists {
+		c.JSON(http.StatusUnauthorized, gin.H{"error": "user email not found in token"})
+		return
+	}
+
+	md := metadata.Pairs("user-email", email.(string))
+	ctx := metadata.NewOutgoingContext(c.Request.Context(), md)
+
+	ctx, cancel := context.WithTimeout(ctx, 5*time.Second)
 	defer cancel()
 
 	resp, err := s.BankClient.GetCards(ctx, &bankpb.GetCardsRequest{})
@@ -783,7 +792,12 @@ func (s *Server) GetCards(c *gin.Context) {
 		return
 	}
 
-	c.JSON(http.StatusOK, resp.Cards)
+	cards := resp.Cards
+	if cards == nil {
+		cards = []*bankpb.CardResponse{}
+	}
+
+	c.JSON(http.StatusOK, cards)
 }
 
 func (s *Server) RequestCard(c *gin.Context) {
