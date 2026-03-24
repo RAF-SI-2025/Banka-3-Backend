@@ -112,3 +112,33 @@ func TestLoginCorrectCreds(t *testing.T) {
 		t.Fatalf("unmet sql expectations: %v", err)
 	}
 }
+
+func TestLoginReturnsErrorWhenRefreshTokenPersistFails(t *testing.T) {
+	server, mock, db := newTestServer(t)
+	defer func() { _ = db.Close() }()
+
+	email := "admin@banka.raf"
+	mockPassword := HashPassword("password", []byte{3, 2, 1})
+	mock.ExpectQuery(regexp.QuoteMeta(`
+		SELECT email, password, salt_password FROM employees WHERE email = $1
+		UNION ALL
+		SELECT email, password, salt_password FROM clients WHERE email = $1
+		LIMIT 1
+	`)).
+		WithArgs(email).
+		WillReturnRows(sqlmock.NewRows([]string{"email", "password", "salt_password"}).AddRow(email, mockPassword, []byte{3, 2, 1}))
+
+	mock.ExpectExec(regexp.QuoteMeta(`
+		INSERT INTO refresh_tokens VALUES ($1, $2, $3, FALSE)
+		ON CONFLICT (email) DO UPDATE SET (hashed_token, valid_until, revoked) = (excluded.hashed_token, excluded.valid_until, excluded.revoked)
+	`)).WithArgs(email, sqlmock.AnyArg(), sqlmock.AnyArg()).WillReturnError(context.DeadlineExceeded)
+
+	_, err := server.Login(context.Background(), &userpb.LoginRequest{Email: email, Password: "password"})
+	if err == nil {
+		t.Fatalf("expected error")
+	}
+
+	if err := mock.ExpectationsWereMet(); err != nil {
+		t.Fatalf("unmet sql expectations: %v", err)
+	}
+}

@@ -23,6 +23,18 @@ type testNotificationServer struct {
 	setRequests   []*notificationpb.PasswordLinkMailRequest
 }
 
+type unsuccessfulNotificationServer struct {
+	notificationpb.UnimplementedNotificationServiceServer
+}
+
+func (s *unsuccessfulNotificationServer) SendPasswordResetEmail(_ context.Context, _ *notificationpb.PasswordLinkMailRequest) (*notificationpb.SuccessResponse, error) {
+	return &notificationpb.SuccessResponse{Successful: false}, nil
+}
+
+func (s *unsuccessfulNotificationServer) SendInitialPasswordSetEmail(_ context.Context, _ *notificationpb.PasswordLinkMailRequest) (*notificationpb.SuccessResponse, error) {
+	return &notificationpb.SuccessResponse{Successful: false}, nil
+}
+
 func (s *testNotificationServer) SendPasswordResetEmail(_ context.Context, req *notificationpb.PasswordLinkMailRequest) (*notificationpb.SuccessResponse, error) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
@@ -271,6 +283,80 @@ func TestSetPasswordWithTokenInvalidOrExpiredToken(t *testing.T) {
 	}
 	if status.Code(err) != codes.InvalidArgument {
 		t.Fatalf("expected InvalidArgument, got %v", status.Code(err))
+	}
+
+	if err := mock.ExpectationsWereMet(); err != nil {
+		t.Fatalf("unmet sql expectations: %v", err)
+	}
+}
+
+func TestRequestPasswordResetReturnsInternalWhenNotificationServiceReportsUnsuccessful(t *testing.T) {
+	server, mock, db := newTestServer(t)
+	defer func() { _ = db.Close() }()
+
+	notificationServer := &unsuccessfulNotificationServer{}
+	addr, stop := startNotificationTestServer(t, notificationServer)
+	defer stop()
+
+	t.Setenv("NOTIFICATION_GRPC_ADDR", addr)
+	t.Setenv("PASSWORD_RESET_BASE_URL", "https://frontend/reset-password")
+
+	email := "admin@banka.raf"
+	mock.ExpectQuery(regexp.QuoteMeta(`
+		SELECT email, password, salt_password FROM employees WHERE email = $1
+		UNION ALL
+		SELECT email, password, salt_password FROM clients WHERE email = $1
+		LIMIT 1
+	`)).
+		WithArgs(email).
+		WillReturnRows(sqlmock.NewRows([]string{"email", "password", "salt_password"}).AddRow(email, []byte{1}, []byte{2}))
+	mock.ExpectExec("INSERT INTO password_action_tokens").
+		WithArgs(email, passwordActionReset, sqlmock.AnyArg(), sqlmock.AnyArg()).
+		WillReturnResult(sqlmock.NewResult(0, 1))
+
+	_, err := server.RequestPasswordReset(context.Background(), &userpb.PasswordActionRequest{Email: email})
+	if err == nil {
+		t.Fatalf("expected error")
+	}
+	if status.Code(err) != codes.Internal {
+		t.Fatalf("expected Internal, got %v", status.Code(err))
+	}
+
+	if err := mock.ExpectationsWereMet(); err != nil {
+		t.Fatalf("unmet sql expectations: %v", err)
+	}
+}
+
+func TestRequestInitialPasswordSetReturnsInternalWhenNotificationServiceReportsUnsuccessful(t *testing.T) {
+	server, mock, db := newTestServer(t)
+	defer func() { _ = db.Close() }()
+
+	notificationServer := &unsuccessfulNotificationServer{}
+	addr, stop := startNotificationTestServer(t, notificationServer)
+	defer stop()
+
+	t.Setenv("NOTIFICATION_GRPC_ADDR", addr)
+	t.Setenv("PASSWORD_SET_BASE_URL", "https://frontend/set-password")
+
+	email := "admin@banka.raf"
+	mock.ExpectQuery(regexp.QuoteMeta(`
+		SELECT email, password, salt_password FROM employees WHERE email = $1
+		UNION ALL
+		SELECT email, password, salt_password FROM clients WHERE email = $1
+		LIMIT 1
+	`)).
+		WithArgs(email).
+		WillReturnRows(sqlmock.NewRows([]string{"email", "password", "salt_password"}).AddRow(email, []byte{1}, []byte{2}))
+	mock.ExpectExec("INSERT INTO password_action_tokens").
+		WithArgs(email, passwordActionInitialSet, sqlmock.AnyArg(), sqlmock.AnyArg()).
+		WillReturnResult(sqlmock.NewResult(0, 1))
+
+	_, err := server.RequestInitialPasswordSet(context.Background(), &userpb.PasswordActionRequest{Email: email})
+	if err == nil {
+		t.Fatalf("expected error")
+	}
+	if status.Code(err) != codes.Internal {
+		t.Fatalf("expected Internal, got %v", status.Code(err))
 	}
 
 	if err := mock.ExpectationsWereMet(); err != nil {
