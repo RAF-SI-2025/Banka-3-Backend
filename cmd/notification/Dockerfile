@@ -1,4 +1,3 @@
-# --- build stage ---
 FROM golang:1.25-alpine AS build
 
 WORKDIR /app
@@ -12,8 +11,6 @@ RUN --mount=type=cache,target=/go/pkg/mod \
     --mount=type=cache,target=/root/.cache/go-build \
     CGO_ENABLED=0 GOOS=linux go build -o /notification ./cmd/notification
 
-
-# --- runtime stage ---
 FROM alpine:3.19
 
 COPY --from=build /notification /notification

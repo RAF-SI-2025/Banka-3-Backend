@@ -1,10 +1,10 @@
-.git
-.github
-.gitignore
-.env
-.env.*
-*.md
-LICENSE
-Makefile
-docker-compose.yml
-scripts/
+# Ignore everything
+*
+
+# Allow only what the build needs
+!go.mod
+!go.sum
+!cmd/
+!internal/
+!gen/
+!proto/
