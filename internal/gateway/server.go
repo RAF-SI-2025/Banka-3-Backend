@@ -14,6 +14,7 @@ import (
 
 type Server struct {
 	UserClient         userpb.UserServiceClient
+	TOTPClient         userpb.TOTPServiceClient
 	NotificationClient notificationpb.NotificationServiceClient
 	BankClient         bankpb.BankServiceClient
 	ExchangeClinet     exchangepb.ExchangeServiceClient
@@ -68,6 +69,7 @@ func NewServer() (*Server, error) {
 
 	return &Server{
 		UserClient:         userpb.NewUserServiceClient(userConn),
+		TOTPClient:         userpb.NewTOTPServiceClient(userConn),
 		NotificationClient: notificationpb.NewNotificationServiceClient(notificationConn),
 		BankClient:         bankpb.NewBankServiceClient(bankConn),
 		ExchangeClinet:     exchangepb.NewExchangeServiceClient(exchangeConn),

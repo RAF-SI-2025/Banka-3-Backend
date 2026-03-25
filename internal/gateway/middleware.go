@@ -58,3 +58,36 @@ func AuthenticatedMiddleware(user userpb.UserServiceClient) gin.HandlerFunc {
 		c.Next()
 	}
 }
+
+func TOTPMiddleware(totp userpb.TOTPServiceClient) gin.HandlerFunc {
+	return func(c *gin.Context) {
+		key, keyPresent := c.Get("email")
+		if !keyPresent || key == "" {
+			c.AbortWithStatus(http.StatusUnauthorized)
+			return
+		}
+		email, ok := key.(string)
+		if !ok {
+			c.AbortWithStatus(http.StatusUnauthorized)
+			return
+		}
+		header := c.GetHeader("TOTP")
+		if header == "" {
+			c.AbortWithStatus(http.StatusUnauthorized)
+			return
+		}
+		resp, err := totp.VerifyCode(context.Background(), &userpb.VerifyCodeRequest{
+			Email: email,
+			Code:  header,
+		})
+		if err != nil {
+			c.AbortWithStatusJSON(http.StatusUnauthorized, gin.H{"message": "user doesn't have TOTP setup"})
+			return
+		}
+		if !resp.Valid {
+			c.AbortWithStatus(http.StatusUnauthorized)
+			return
+		}
+		c.Next()
+	}
+}

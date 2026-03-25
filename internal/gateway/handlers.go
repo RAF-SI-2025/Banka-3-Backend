@@ -9,6 +9,7 @@ import (
 
 	exchangepb "github.com/RAF-SI-2025/Banka-3-Backend/gen/exchange"
 	"github.com/gin-gonic/gin"
+	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/metadata"
 	"google.golang.org/grpc/status"
 
@@ -24,6 +25,8 @@ func SetupApi(router *gin.Engine, server *Server) {
 		api.POST("/login", server.Login)
 		api.POST("/logout", AuthenticatedMiddleware(server.UserClient), server.Logout)
 		api.POST("/token/refresh", server.Refresh)
+		api.POST("/totp/setup/begin", AuthenticatedMiddleware(server.UserClient), server.TOTPSetupBegin)
+		api.POST("/totp/setup/confirm", AuthenticatedMiddleware(server.UserClient), server.TOTPSetupConfirm)
 	}
 
 	recipients := api.Group("/recipients", AuthenticatedMiddleware(server.UserClient))
@@ -88,7 +91,13 @@ func SetupApi(router *gin.Engine, server *Server) {
 		loans.GET("/:loanNumber", server.GetLoanByNumber)
 	}
 
-	api.POST("/loan-requests", AuthenticatedMiddleware(server.UserClient), server.CreateLoanRequest)
+	loanRequests := api.Group("/loan-requests", AuthenticatedMiddleware(server.UserClient))
+	{
+		loanRequests.POST("", server.CreateLoanRequest)
+		loanRequests.GET("", server.GetLoanRequests)
+		loanRequests.PATCH("/:id/approve", server.ApproveLoanRequest)
+		loanRequests.PATCH("/:id/reject", server.RejectLoanRequest)
+	}
 
 	cards := api.Group("/cards")
 	{
@@ -155,6 +164,31 @@ func (s *Server) getAuthenticatedClientID(c *gin.Context) (int64, bool) {
 	}
 
 	return resp.Clients[0].Id, true
+}
+
+func (s *Server) getAuthenticatedEmployeeID(c *gin.Context) (int64, bool) {
+	email := strings.TrimSpace(c.GetString("email"))
+	if email == "" {
+		c.JSON(http.StatusUnauthorized, gin.H{
+			"error": "authentication required",
+		})
+		return 0, false
+	}
+
+	ctx, cancel := context.WithTimeout(c.Request.Context(), 5*time.Second)
+	defer cancel()
+
+	resp, err := s.UserClient.GetEmployeeByEmail(ctx, &userpb.GetEmployeeByEmailRequest{
+		Email: email,
+	})
+	if err != nil {
+		c.JSON(http.StatusForbidden, gin.H{
+			"error": "authenticated user is not an employee",
+		})
+		return 0, false
+	}
+
+	return resp.Id, true
 }
 
 func (s *Server) Login(c *gin.Context) {
@@ -792,27 +826,7 @@ func (s *Server) UpdateAccountLimits(c *gin.Context) {
 	c.JSON(http.StatusOK, gin.H{"message": "Limits updated"})
 }
 
-func (s *Server) GetLoans(c *gin.Context) {
-	var query getLoansQuery
-	if err := c.ShouldBindQuery(&query); err != nil {
-		writeBindError(c, err)
-		return
-	}
-
-	ctx, cancel := context.WithTimeout(c.Request.Context(), 5*time.Second)
-	defer cancel()
-
-	resp, err := s.BankClient.GetLoans(ctx, &bankpb.GetLoansRequest{
-		ClientEmail:   c.GetString("email"),
-		LoanType:      query.LoanType,
-		AccountNumber: query.AccountNumber,
-		Status:        query.Status,
-	})
-	if err != nil {
-		writeGRPCError(c, err)
-		return
-	}
-
+func loanListResponse(resp *bankpb.GetLoansResponse) []gin.H {
 	loans := make([]gin.H, 0, len(resp.Loans))
 	for _, loan := range resp.Loans {
 		loans = append(loans, gin.H{
@@ -832,8 +846,57 @@ func (s *Server) GetLoans(c *gin.Context) {
 			"status":                  loan.Status,
 		})
 	}
+	return loans
+}
 
-	c.JSON(http.StatusOK, loans)
+func (s *Server) GetLoans(c *gin.Context) {
+	var query getLoansQuery
+	if err := c.ShouldBindQuery(&query); err != nil {
+		writeBindError(c, err)
+		return
+	}
+
+	ctx, cancel := context.WithTimeout(c.Request.Context(), 5*time.Second)
+	defer cancel()
+
+	email := c.GetString("email")
+
+	// Try employee first; if not an employee, fall back to client view
+	_, err := s.UserClient.GetEmployeeByEmail(ctx, &userpb.GetEmployeeByEmailRequest{Email: email})
+	if err == nil {
+		// Employee: get all loans
+		resp, err := s.BankClient.GetAllLoans(ctx, &bankpb.GetAllLoansRequest{
+			LoanType:      query.LoanType,
+			AccountNumber: query.AccountNumber,
+			Status:        query.Status,
+		})
+		if err != nil {
+			writeGRPCError(c, err)
+			return
+		}
+		c.JSON(http.StatusOK, loanListResponse(resp))
+		return
+	}
+
+	// If the user service returned something other than NotFound, it's a real error
+	if code := status.Code(err); code != codes.NotFound {
+		writeGRPCError(c, err)
+		return
+	}
+
+	// Client view
+	resp, err := s.BankClient.GetLoans(ctx, &bankpb.GetLoansRequest{
+		ClientEmail:   email,
+		LoanType:      query.LoanType,
+		AccountNumber: query.AccountNumber,
+		Status:        query.Status,
+	})
+	if err != nil {
+		writeGRPCError(c, err)
+		return
+	}
+
+	c.JSON(http.StatusOK, loanListResponse(resp))
 }
 
 func (s *Server) GetLoanByNumber(c *gin.Context) {
@@ -884,12 +947,18 @@ func (s *Server) CreateLoanRequest(c *gin.Context) {
 	defer cancel()
 
 	_, err := s.BankClient.CreateLoanRequest(ctx, &bankpb.CreateLoanRequestRequest{
-		ClientEmail:     c.GetString("email"),
-		AccountNumber:   req.AccountNumber,
-		LoanType:        req.LoanType,
-		Amount:          req.Amount,
-		RepaymentPeriod: req.RepaymentPeriod,
-		Currency:        req.Currency,
+		ClientEmail:      c.GetString("email"),
+		AccountNumber:    req.AccountNumber,
+		LoanType:         req.LoanType,
+		Amount:           req.Amount,
+		RepaymentPeriod:  req.RepaymentPeriod,
+		Currency:         req.Currency,
+		Purpose:          req.Purpose,
+		Salary:           req.Salary,
+		EmploymentStatus: req.EmploymentStatus,
+		EmploymentPeriod: req.EmploymentPeriod,
+		PhoneNumber:      req.PhoneNumber,
+		InterestRateType: req.InterestRateType,
 	})
 	if err != nil {
 		writeGRPCError(c, err)
@@ -897,6 +966,105 @@ func (s *Server) CreateLoanRequest(c *gin.Context) {
 	}
 
 	c.Status(http.StatusCreated)
+}
+
+func (s *Server) GetLoanRequests(c *gin.Context) {
+	_, ok := s.getAuthenticatedEmployeeID(c)
+	if !ok {
+		return
+	}
+
+	var query getLoanRequestsQuery
+	if err := c.ShouldBindQuery(&query); err != nil {
+		writeBindError(c, err)
+		return
+	}
+
+	ctx, cancel := context.WithTimeout(c.Request.Context(), 5*time.Second)
+	defer cancel()
+
+	resp, err := s.BankClient.GetLoanRequests(ctx, &bankpb.GetLoanRequestsRequest{
+		LoanType:      query.LoanType,
+		AccountNumber: query.AccountNumber,
+	})
+	if err != nil {
+		writeGRPCError(c, err)
+		return
+	}
+
+	requests := make([]gin.H, 0, len(resp.LoanRequests))
+	for _, r := range resp.LoanRequests {
+		requests = append(requests, gin.H{
+			"id":                 r.Id,
+			"loan_type":          r.LoanType,
+			"amount":             r.Amount,
+			"currency":           r.Currency,
+			"purpose":            r.Purpose,
+			"salary":             r.Salary,
+			"employment_status":  r.EmploymentStatus,
+			"employment_period":  r.EmploymentPeriod,
+			"phone_number":       r.PhoneNumber,
+			"repayment_period":   r.RepaymentPeriod,
+			"account_number":     r.AccountNumber,
+			"status":             r.Status,
+			"interest_rate_type": r.InterestRateType,
+			"submission_date":    r.SubmissionDate,
+		})
+	}
+
+	c.JSON(http.StatusOK, requests)
+}
+
+func (s *Server) ApproveLoanRequest(c *gin.Context) {
+	_, ok := s.getAuthenticatedEmployeeID(c)
+	if !ok {
+		return
+	}
+
+	var uri loanRequestIDURI
+	if err := c.ShouldBindUri(&uri); err != nil {
+		c.String(http.StatusBadRequest, "loan request id is required and must be a valid integer")
+		return
+	}
+
+	ctx, cancel := context.WithTimeout(c.Request.Context(), 5*time.Second)
+	defer cancel()
+
+	_, err := s.BankClient.ApproveLoanRequest(ctx, &bankpb.ApproveLoanRequestRequest{
+		Id: uri.ID,
+	})
+	if err != nil {
+		writeGRPCError(c, err)
+		return
+	}
+
+	c.Status(http.StatusOK)
+}
+
+func (s *Server) RejectLoanRequest(c *gin.Context) {
+	_, ok := s.getAuthenticatedEmployeeID(c)
+	if !ok {
+		return
+	}
+
+	var uri loanRequestIDURI
+	if err := c.ShouldBindUri(&uri); err != nil {
+		c.String(http.StatusBadRequest, "loan request id is required and must be a valid integer")
+		return
+	}
+
+	ctx, cancel := context.WithTimeout(c.Request.Context(), 5*time.Second)
+	defer cancel()
+
+	_, err := s.BankClient.RejectLoanRequest(ctx, &bankpb.RejectLoanRequestRequest{
+		Id: uri.ID,
+	})
+	if err != nil {
+		writeGRPCError(c, err)
+		return
+	}
+
+	c.Status(http.StatusOK)
 }
 
 func (s *Server) GetCards(c *gin.Context) {
@@ -1316,4 +1484,60 @@ func (s *Server) ConvertMoney(c *gin.Context) {
 	}
 
 	c.JSON(http.StatusOK, resp)
+}
+
+func (s *Server) TOTPSetupBegin(c *gin.Context) {
+	key, keyPresent := c.Get("email")
+	if !keyPresent {
+		c.JSON(http.StatusUnauthorized, gin.H{"error": "user email not found in token"})
+		return
+	}
+	email, ok := key.(string)
+	if !ok {
+		c.JSON(http.StatusUnauthorized, gin.H{"error": "user email not found in token"})
+		return
+	}
+	resp, err := s.TOTPClient.EnrollBegin(context.Background(), &userpb.EnrollBeginRequest{
+		Email: email,
+	})
+	if err != nil {
+		writeGRPCError(c, err)
+		return
+	}
+	c.JSON(http.StatusAccepted, gin.H{
+		"url": resp.Url,
+	})
+}
+
+func (s *Server) TOTPSetupConfirm(c *gin.Context) {
+	var req TOTPSetupConfirmRequest
+	if err := c.BindJSON(&req); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
+	}
+	key, keyPresent := c.Get("email")
+	if !keyPresent {
+		c.JSON(http.StatusUnauthorized, gin.H{"error": "user email not found in token"})
+		return
+	}
+	email, ok := key.(string)
+	if !ok {
+		c.JSON(http.StatusUnauthorized, gin.H{"error": "user email not found in token"})
+		return
+	}
+	resp, err := s.TOTPClient.EnrollConfirm(context.Background(), &userpb.EnrollConfirmRequest{
+		Email: email,
+		Code:  req.Code,
+	})
+	if err != nil {
+		writeGRPCError(c, err)
+		return
+	}
+	if resp.Success {
+		c.Status(200)
+	} else {
+		c.JSON(http.StatusUnauthorized, gin.H{
+			"message": "wrong code",
+		})
+	}
 }

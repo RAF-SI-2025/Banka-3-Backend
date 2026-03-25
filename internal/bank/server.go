@@ -1137,6 +1137,32 @@ func parseLoanType(value string) (loan_type, error) {
 	}
 }
 
+func parseInterestRateType(value string) (interest_rate_type, error) {
+	switch strings.ToLower(strings.TrimSpace(value)) {
+	case "fixed", "fiksna", "":
+		return Fixed, nil
+	case "variable", "varijabilna":
+		return Variable, nil
+	default:
+		return "", status.Error(codes.InvalidArgument, "invalid interest_rate_type")
+	}
+}
+
+func parseEmploymentStatus(value string) (employment_status, error) {
+	switch strings.ToLower(strings.TrimSpace(value)) {
+	case "full_time":
+		return Full_time, nil
+	case "temporary":
+		return Temporary, nil
+	case "unemployed":
+		return Unemployed, nil
+	case "":
+		return "", nil
+	default:
+		return "", status.Error(codes.InvalidArgument, "invalid employment_status")
+	}
+}
+
 func (s *Server) GetLoans(ctx context.Context, req *bankpb.GetLoansRequest) (*bankpb.GetLoansResponse, error) {
 	clientEmail := strings.TrimSpace(req.ClientEmail)
 	if clientEmail == "" {
@@ -1292,14 +1318,30 @@ func (s *Server) CreateLoanRequest(ctx context.Context, req *bankpb.CreateLoanRe
 		return nil, status.Error(codes.Internal, "failed to retrieve currency")
 	}
 
+	interestRateType, err := parseInterestRateType(req.InterestRateType)
+	if err != nil {
+		return nil, err
+	}
+
+	empStatus, err := parseEmploymentStatus(req.EmploymentStatus)
+	if err != nil {
+		return nil, err
+	}
+
 	loanRequest := &LoanRequest{
-		Type:             normalizedType,
-		Currency_id:      currency.Id,
-		Amount:           req.Amount,
-		Repayment_period: int64(req.RepaymentPeriod),
-		Account_id:       account.Id,
-		Status:           LoanRequestPending,
-		Submission_date:  time.Now(),
+		Type:               normalizedType,
+		Currency_id:        currency.Id,
+		Amount:             req.Amount,
+		Repayment_period:   int64(req.RepaymentPeriod),
+		Account_id:         account.Id,
+		Status:             LoanRequestPending,
+		Submission_date:    time.Now(),
+		Purpose:            strings.TrimSpace(req.Purpose),
+		Salary:             req.Salary,
+		Employment_status:  empStatus,
+		Employment_period:  req.EmploymentPeriod,
+		Phone_number:       strings.TrimSpace(req.PhoneNumber),
+		Interest_rate_type: interestRateType,
 	}
 
 	if err := s.createLoanRequest(loanRequest); err != nil {
@@ -1307,4 +1349,203 @@ func (s *Server) CreateLoanRequest(ctx context.Context, req *bankpb.CreateLoanRe
 	}
 
 	return &bankpb.CreateLoanRequestResponse{}, nil
+}
+
+func (s *Server) GetLoanRequests(_ context.Context, req *bankpb.GetLoanRequestsRequest) (*bankpb.GetLoanRequestsResponse, error) {
+	loanType := ""
+	if strings.TrimSpace(req.LoanType) != "" {
+		parsed, err := parseLoanType(req.LoanType)
+		if err != nil {
+			return nil, err
+		}
+		loanType = string(parsed)
+	}
+
+	requests, err := s.getLoanRequests(loanType, strings.TrimSpace(req.AccountNumber))
+	if err != nil {
+		return nil, status.Error(codes.Internal, "failed to retrieve loan requests")
+	}
+
+	result := make([]*bankpb.LoanRequestView, 0, len(requests))
+	for _, r := range requests {
+		result = append(result, &bankpb.LoanRequestView{
+			Id:               r.Id,
+			LoanType:         r.LoanType,
+			Amount:           r.Amount,
+			Currency:         r.Currency,
+			Purpose:          r.Purpose,
+			Salary:           r.Salary,
+			EmploymentStatus: r.EmploymentStatus,
+			EmploymentPeriod: r.EmploymentPeriod,
+			PhoneNumber:      r.PhoneNumber,
+			RepaymentPeriod:  r.RepaymentPeriod,
+			AccountNumber:    r.AccountNumber,
+			Status:           r.Status,
+			InterestRateType: r.InterestRateType,
+			SubmissionDate:   r.SubmissionDate,
+		})
+	}
+
+	return &bankpb.GetLoanRequestsResponse{LoanRequests: result}, nil
+}
+
+func (s *Server) ApproveLoanRequest(_ context.Context, req *bankpb.ApproveLoanRequestRequest) (*bankpb.ApproveLoanRequestResponse, error) {
+	if req.Id <= 0 {
+		return nil, status.Error(codes.InvalidArgument, "invalid loan request id")
+	}
+
+	loanReq, err := s.getLoanRequestByID(req.Id)
+	if err != nil {
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			return nil, status.Error(codes.NotFound, "loan request not found")
+		}
+		return nil, status.Error(codes.Internal, "failed to retrieve loan request")
+	}
+
+	if loanReq.Status != LoanRequestPending {
+		return nil, status.Error(codes.InvalidArgument, "loan request is not pending")
+	}
+
+	// Fetch account for the loan
+	var account Account
+	if err := s.db_gorm.First(&account, loanReq.Account_id).Error; err != nil {
+		return nil, status.Error(codes.Internal, "failed to retrieve account")
+	}
+
+	// Fetch currency
+	var currency Currency
+	if err := s.db_gorm.First(&currency, loanReq.Currency_id).Error; err != nil {
+		return nil, status.Error(codes.Internal, "failed to retrieve currency")
+	}
+
+	now := time.Now()
+	dateEnd := now.AddDate(0, int(loanReq.Repayment_period), 0)
+	monthlyPayment := loanReq.Amount / float64(loanReq.Repayment_period)
+	nextPaymentDue := now.AddDate(0, 1, 0)
+
+	loan := &Loan{
+		Account_id:         loanReq.Account_id,
+		Amount:             loanReq.Amount,
+		Currency_id:        loanReq.Currency_id,
+		Installments:       loanReq.Repayment_period,
+		Interest_rate:      0, // placeholder - #101 adds proper calculation
+		Date_signed:        now,
+		Date_end:           dateEnd,
+		Monthly_payment:    monthlyPayment,
+		Next_payment_due:   nextPaymentDue,
+		Remaining_debt:     loanReq.Amount,
+		Type:               loanReq.Type,
+		Loan_status:        Approved,
+		Interest_rate_type: loanReq.Interest_rate_type,
+	}
+
+	installment := &LoanInstallment{
+		Installment_amount: float32(monthlyPayment),
+		Interest_rate:      0,
+		Currency_id:        loanReq.Currency_id,
+		Due_date:           nextPaymentDue,
+		Paid_date:          time.Time{},
+		Status:             Due,
+	}
+
+	err = s.db_gorm.Transaction(func(tx *gorm.DB) error {
+		if err := tx.Create(loan).Error; err != nil {
+			return err
+		}
+		installment.Loan_id = loan.Id
+		if err := tx.Create(installment).Error; err != nil {
+			return err
+		}
+		if err := tx.Model(&LoanRequest{}).Where("id = ?", req.Id).Update("status", LoanRequestApproved).Error; err != nil {
+			return err
+		}
+		return nil
+	})
+	if err != nil {
+		return nil, status.Error(codes.Internal, "failed to approve loan request")
+	}
+
+	return &bankpb.ApproveLoanRequestResponse{}, nil
+}
+
+func (s *Server) RejectLoanRequest(_ context.Context, req *bankpb.RejectLoanRequestRequest) (*bankpb.RejectLoanRequestResponse, error) {
+	if req.Id <= 0 {
+		return nil, status.Error(codes.InvalidArgument, "invalid loan request id")
+	}
+
+	loanReq, err := s.getLoanRequestByID(req.Id)
+	if err != nil {
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			return nil, status.Error(codes.NotFound, "loan request not found")
+		}
+		return nil, status.Error(codes.Internal, "failed to retrieve loan request")
+	}
+
+	if loanReq.Status != LoanRequestPending {
+		return nil, status.Error(codes.InvalidArgument, "loan request is not pending")
+	}
+
+	if err := s.updateLoanRequestStatus(req.Id, LoanRequestRejected); err != nil {
+		return nil, status.Error(codes.Internal, "failed to reject loan request")
+	}
+
+	return &bankpb.RejectLoanRequestResponse{}, nil
+}
+
+func (s *Server) GetAllLoans(_ context.Context, req *bankpb.GetAllLoansRequest) (*bankpb.GetLoansResponse, error) {
+	loanType := ""
+	if strings.TrimSpace(req.LoanType) != "" {
+		parsed, err := parseLoanType(req.LoanType)
+		if err != nil {
+			return nil, err
+		}
+		loanType = string(parsed)
+	}
+
+	loanStatus := ""
+	if strings.TrimSpace(req.Status) != "" {
+		switch strings.ToLower(strings.TrimSpace(req.Status)) {
+		case "approved":
+			loanStatus = string(Approved)
+		case "rejected":
+			loanStatus = string(Rejected)
+		case "paid":
+			loanStatus = string(Paid)
+		case "late":
+			loanStatus = string(Late)
+		default:
+			return nil, status.Error(codes.InvalidArgument, "invalid status")
+		}
+	}
+
+	loans, err := s.getAllLoans(
+		loanType,
+		strings.TrimSpace(req.AccountNumber),
+		loanStatus,
+	)
+	if err != nil {
+		return nil, status.Error(codes.Internal, "failed to retrieve loans")
+	}
+
+	responseLoans := make([]*bankpb.Loan, 0, len(loans))
+	for _, loan := range loans {
+		responseLoans = append(responseLoans, &bankpb.Loan{
+			LoanNumber:            loan.LoanNumber,
+			LoanType:              loan.LoanType,
+			AccountNumber:         loan.AccountNumber,
+			LoanAmount:            loan.LoanAmount,
+			RepaymentPeriod:       loan.RepaymentPeriod,
+			NominalRate:           loan.NominalRate,
+			EffectiveRate:         loan.EffectiveRate,
+			AgreementDate:         loan.AgreementDate,
+			MaturityDate:          loan.MaturityDate,
+			NextInstallmentAmount: loan.NextInstallmentAmount,
+			NextInstallmentDate:   loan.NextInstallmentDate,
+			RemainingDebt:         loan.RemainingDebt,
+			Currency:              loan.Currency,
+			Status:                loan.Status,
+		})
+	}
+
+	return &bankpb.GetLoansResponse{Loans: responseLoans}, nil
 }

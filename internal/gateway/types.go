@@ -89,11 +89,26 @@ type createEmployeeAccountRequest struct {
 }
 
 type createLoanRequestRequest struct {
-	AccountNumber   string  `json:"account_number" binding:"required"`
-	LoanType        string  `json:"loan_type" binding:"required"`
-	Amount          float64 `json:"amount" binding:"required"`
-	RepaymentPeriod int32   `json:"repayment_period" binding:"required"`
-	Currency        string  `json:"currency" binding:"required"`
+	AccountNumber    string  `json:"account_number" binding:"required"`
+	LoanType         string  `json:"loan_type" binding:"required"`
+	Amount           float64 `json:"amount" binding:"required"`
+	RepaymentPeriod  int32   `json:"repayment_period" binding:"required"`
+	Currency         string  `json:"currency" binding:"required"`
+	Purpose          string  `json:"purpose"`
+	Salary           float64 `json:"salary"`
+	EmploymentStatus string  `json:"employment_status"`
+	EmploymentPeriod int64   `json:"employment_period"`
+	PhoneNumber      string  `json:"phone_number"`
+	InterestRateType string  `json:"interest_rate_type"`
+}
+
+type getLoanRequestsQuery struct {
+	LoanType      string `form:"loan_type"`
+	AccountNumber string `form:"account_number"`
+}
+
+type loanRequestIDURI struct {
+	ID int64 `uri:"id" binding:"required"`
 }
 
 type getLoansQuery struct {
@@ -205,6 +220,10 @@ type conversionRequest struct {
 	FromCurrency string  `json:"from_currency" binding:"required"`
 	ToCurrency   string  `json:"to_currency" binding:"required"`
 	Amount       float64 `json:"amount" binding:"required,gt=0"`
+}
+
+type TOTPSetupConfirmRequest struct {
+	Code string `json:"code" binding:"required"`
 }
 
 type paymentRequest struct {

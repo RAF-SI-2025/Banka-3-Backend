@@ -1,0 +1,10 @@
+# Ignore everything
+*
+
+# Allow only what the build needs
+!go.mod
+!go.sum
+!cmd/
+!internal/
+!gen/
+!proto/

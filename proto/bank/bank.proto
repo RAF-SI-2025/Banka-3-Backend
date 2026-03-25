@@ -37,6 +37,11 @@ service BankService {
   rpc GetLoanByNumber(GetLoanByNumberRequest) returns (Loan);
   rpc CreateLoanRequest(CreateLoanRequestRequest) returns (CreateLoanRequestResponse);
 
+  rpc GetLoanRequests(GetLoanRequestsRequest) returns (GetLoanRequestsResponse);
+  rpc ApproveLoanRequest(ApproveLoanRequestRequest) returns (ApproveLoanRequestResponse);
+  rpc RejectLoanRequest(RejectLoanRequestRequest) returns (RejectLoanRequestResponse);
+  rpc GetAllLoans(GetAllLoansRequest) returns (GetLoansResponse);
+
   rpc TransferMoneyBetweenAccounts(TransferRequest) returns (TransferResponse);
   rpc PayoutMoneyToOtherAccount(PaymentRequest) returns (PaymentResponse);
 
@@ -431,6 +436,56 @@ message CreateLoanRequestRequest {
   double amount = 4;
   int32 repayment_period = 5;
   string currency = 6;
+  string purpose = 7;
+  double salary = 8;
+  string employment_status = 9;
+  int64 employment_period = 10;
+  string phone_number = 11;
+  string interest_rate_type = 12;
 }
 
 message CreateLoanRequestResponse {} // intentionally empty
+
+message LoanRequestView {
+  int64 id = 1;
+  string loan_type = 2;
+  double amount = 3;
+  string currency = 4;
+  string purpose = 5;
+  double salary = 6;
+  string employment_status = 7;
+  int64 employment_period = 8;
+  string phone_number = 9;
+  int32 repayment_period = 10;
+  string account_number = 11;
+  string status = 12;
+  string interest_rate_type = 13;
+  string submission_date = 14;
+}
+
+message GetLoanRequestsRequest {
+  string loan_type = 1;
+  string account_number = 2;
+}
+
+message GetLoanRequestsResponse {
+  repeated LoanRequestView loan_requests = 1;
+}
+
+message ApproveLoanRequestRequest {
+  int64 id = 1;
+}
+
+message ApproveLoanRequestResponse {}
+
+message RejectLoanRequestRequest {
+  int64 id = 1;
+}
+
+message RejectLoanRequestResponse {}
+
+message GetAllLoansRequest {
+  string loan_type = 1;
+  string account_number = 2;
+  string status = 3;
+}

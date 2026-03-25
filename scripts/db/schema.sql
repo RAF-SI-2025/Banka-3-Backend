@@ -246,17 +246,21 @@ CREATE TABLE IF NOT EXISTS loan_request (
     repayment_period    BIGINT               NOT NULL,
     account_id          BIGINT               REFERENCES accounts(id) ON UPDATE CASCADE ON DELETE RESTRICT,
     status              loan_request_status  NOT NULL DEFAULT 'pending',
-    submission_date     TIMESTAMP            NOT NULL DEFAULT NOW()
+    submission_date     TIMESTAMP            NOT NULL DEFAULT NOW(),
+    purpose             VARCHAR(255),
+    salary              DECIMAL(20, 2),
+    employment_status   employment_status,
+    employment_period   BIGINT,
+    phone_number        VARCHAR(32),
+    interest_rate_type  interest_rate_type   NOT NULL DEFAULT 'fixed'
 );
 
 CREATE TABLE IF NOT EXISTS verification_codes (
-    id              BIGSERIAL   PRIMARY KEY,
-    client_id       BIGINT      REFERENCES clients(id) ON UPDATE CASCADE ON DELETE CASCADE,
-    transaction_id  BIGINT      REFERENCES payments(transaction_id) ON UPDATE CASCADE ON DELETE RESTRICT,
-    valid_until     TIMESTAMP   NOT NULL,
-    tries           INT         NOT NULL DEFAULT 0,
-    valid           BOOLEAN     NOT NULL DEFAULT TRUE,
-    used            BOOLEAN     NOT NULL DEFAULT FALSE
+    client_id       BIGINT      PRIMARY KEY REFERENCES clients(id) ON DELETE CASCADE,
+    enabled         BOOLEAN     NOT NULL DEFAULT FALSE,
+    secret          VARCHAR(32),
+    temp_secret     VARCHAR(32),
+    temp_created_at TIMESTAMP   NOT NULL DEFAULT NOW()
 );
 
 CREATE TABLE IF NOT EXISTS exchange_rates (

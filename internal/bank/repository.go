@@ -703,3 +703,121 @@ func (s *Server) getLoanByIDForClient(clientEmail string, loanID int64) (*loanVi
 func (s *Server) createLoanRequest(req *LoanRequest) error {
 	return s.db_gorm.Create(req).Error
 }
+
+type loanRequestView struct {
+	Id               int64   `gorm:"column:id"`
+	LoanType         string  `gorm:"column:loan_type"`
+	Amount           float64 `gorm:"column:amount"`
+	Currency         string  `gorm:"column:currency"`
+	Purpose          string  `gorm:"column:purpose"`
+	Salary           float64 `gorm:"column:salary"`
+	EmploymentStatus string  `gorm:"column:employment_status"`
+	EmploymentPeriod int64   `gorm:"column:employment_period"`
+	PhoneNumber      string  `gorm:"column:phone_number"`
+	RepaymentPeriod  int32   `gorm:"column:repayment_period"`
+	AccountNumber    string  `gorm:"column:account_number"`
+	Status           string  `gorm:"column:status"`
+	InterestRateType string  `gorm:"column:interest_rate_type"`
+	SubmissionDate   string  `gorm:"column:submission_date"`
+}
+
+func (s *Server) getLoanRequests(loanType, accountNumber string) ([]loanRequestView, error) {
+	var requests []loanRequestView
+
+	query := s.db_gorm.
+		Model(&LoanRequest{}).
+		Joins("JOIN accounts ON accounts.id = loan_request.account_id").
+		Joins("JOIN currencies ON currencies.id = loan_request.currency_id").
+		Select(`
+			loan_request.id,
+			loan_request.type::text AS loan_type,
+			loan_request.amount,
+			currencies.label AS currency,
+			COALESCE(loan_request.purpose, '') AS purpose,
+			COALESCE(loan_request.salary, 0) AS salary,
+			COALESCE(loan_request.employment_status::text, '') AS employment_status,
+			COALESCE(loan_request.employment_period, 0) AS employment_period,
+			COALESCE(loan_request.phone_number, '') AS phone_number,
+			loan_request.repayment_period,
+			accounts.number AS account_number,
+			loan_request.status::text AS status,
+			loan_request.interest_rate_type::text AS interest_rate_type,
+			TO_CHAR(loan_request.submission_date, 'YYYY-MM-DD"T"HH24:MI:SS') AS submission_date
+		`)
+
+	if loanType != "" {
+		query = query.Where("loan_request.type = ?", loanType)
+	}
+
+	if accountNumber != "" {
+		query = query.Where("accounts.number = ?", accountNumber)
+	}
+
+	err := query.
+		Order("loan_request.submission_date DESC").
+		Scan(&requests).Error
+	if err != nil {
+		return nil, err
+	}
+
+	return requests, nil
+}
+
+func (s *Server) getLoanRequestByID(id int64) (*LoanRequest, error) {
+	var req LoanRequest
+	err := s.db_gorm.First(&req, id).Error
+	if err != nil {
+		return nil, err
+	}
+	return &req, nil
+}
+
+func (s *Server) updateLoanRequestStatus(id int64, newStatus loan_request_status) error {
+	return s.db_gorm.Model(&LoanRequest{}).Where("id = ?", id).Update("status", newStatus).Error
+}
+
+func (s *Server) getAllLoans(loanType, accountNumber, loanStatus string) ([]loanView, error) {
+	var loans []loanView
+
+	query := s.db_gorm.
+		Model(&Loan{}).
+		Joins("JOIN accounts ON accounts.id = loans.account_id").
+		Joins("JOIN currencies ON currencies.id = loans.currency_id").
+		Select(`
+			CAST(loans.id AS text) AS loan_number,
+			loans.type::text AS loan_type,
+			accounts.number AS account_number,
+			loans.amount AS loan_amount,
+			loans.installments AS repayment_period,
+			loans.interest_rate AS nominal_rate,
+			0 AS effective_rate,
+			TO_CHAR(loans.date_signed, 'YYYY-MM-DD') AS agreement_date,
+			TO_CHAR(loans.date_end, 'YYYY-MM-DD') AS maturity_date,
+			loans.monthly_payment AS next_installment_amount,
+			TO_CHAR(loans.next_payment_due, 'YYYY-MM-DD') AS next_installment_date,
+			loans.remaining_debt AS remaining_debt,
+			currencies.label AS currency,
+			loans.loan_status::text AS status
+		`)
+
+	if loanType != "" {
+		query = query.Where("loans.type = ?", loanType)
+	}
+
+	if accountNumber != "" {
+		query = query.Where("accounts.number = ?", accountNumber)
+	}
+
+	if loanStatus != "" {
+		query = query.Where("loans.loan_status = ?", loanStatus)
+	}
+
+	err := query.
+		Order("accounts.number").
+		Scan(&loans).Error
+	if err != nil {
+		return nil, err
+	}
+
+	return loans, nil
+}
