@@ -1343,6 +1343,7 @@ func (s *Server) PayoutMoneyToOtherAccount(
 		Status:          "realized",
 		Timestamp:       time.Now().Format("2006-01-02 15:04:05"), //standard layout of Go, don't change this date, it's layout, not hardcode
 	}, nil
+}
 func (s *Server) TransferMoneyBetweenAccounts(
 	ctx context.Context,
 	req *bankpb.TransferRequest,
