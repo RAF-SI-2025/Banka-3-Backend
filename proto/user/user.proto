@@ -113,6 +113,8 @@ message CreateEmployeeRequest {
   string position = 9;
   string department = 10;
   string password = 11;
+  bool active = 12;
+  repeated string permissions = 13;
 }
 
 message CreateClientRequest {

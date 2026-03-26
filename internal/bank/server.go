@@ -381,11 +381,19 @@ func (s *Server) GetCards(ctx context.Context, _ *bankpb.GetCardsRequest) (*bank
 }
 
 func (s *Server) BlockCard(_ context.Context, req *bankpb.BlockCardRequest) (*bankpb.BlockCardResponse, error) {
-	if req.CardId <= 0 {
-		return nil, status.Error(codes.InvalidArgument, "invalid card id")
+	var cardID int64
+
+	if req.CardNumber != "" {
+		card, err := s.GetCardByNumberRecord(req.CardNumber)
+		if err != nil {
+			return &bankpb.BlockCardResponse{Success: false}, status.Error(codes.NotFound, "card not found")
+		}
+		cardID = card.Id
+	} else {
+		return nil, status.Error(codes.InvalidArgument, "card_number is required")
 	}
 
-	err := s.BlockCardRecord(req.CardId)
+	err := s.BlockCardRecord(cardID)
 	if err != nil {
 		return &bankpb.BlockCardResponse{Success: false}, status.Error(codes.NotFound, "card not found")
 	}

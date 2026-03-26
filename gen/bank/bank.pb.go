@@ -357,6 +357,7 @@ func (x *GetCardsResponse) GetCards() []*CardResponse {
 type BlockCardRequest struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
 	CardId        int64                  `protobuf:"varint,1,opt,name=card_id,json=cardId,proto3" json:"card_id,omitempty"`
+	CardNumber    string                 `protobuf:"bytes,2,opt,name=card_number,json=cardNumber,proto3" json:"card_number,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -396,6 +397,13 @@ func (x *BlockCardRequest) GetCardId() int64 {
 		return x.CardId
 	}
 	return 0
+}
+
+func (x *BlockCardRequest) GetCardNumber() string {
+	if x != nil {
+		return x.CardNumber
+	}
+	return ""
 }
 
 type BlockCardResponse struct {
@@ -4409,9 +4417,11 @@ const file_bank_bank_proto_rawDesc = "" +
 	"\x13ConfirmCardResponse\"\x11\n" +
 	"\x0fGetCardsRequest\"<\n" +
 	"\x10GetCardsResponse\x12(\n" +
-	"\x05cards\x18\x01 \x03(\v2\x12.bank.CardResponseR\x05cards\"+\n" +
+	"\x05cards\x18\x01 \x03(\v2\x12.bank.CardResponseR\x05cards\"L\n" +
 	"\x10BlockCardRequest\x12\x17\n" +
-	"\acard_id\x18\x01 \x01(\x03R\x06cardId\"-\n" +
+	"\acard_id\x18\x01 \x01(\x03R\x06cardId\x12\x1f\n" +
+	"\vcard_number\x18\x02 \x01(\tR\n" +
+	"cardNumber\"-\n" +
 	"\x11BlockCardResponse\x12\x18\n" +
 	"\asuccess\x18\x01 \x01(\bR\asuccess\"\xb9\x02\n" +
 	"\fCardResponse\x12\x17\n" +

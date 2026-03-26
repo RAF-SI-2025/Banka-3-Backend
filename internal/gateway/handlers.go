@@ -40,10 +40,10 @@ func SetupApi(router *gin.Engine, server *Server) {
 	transactions := api.Group("/transactions", AuthenticatedMiddleware(server.UserClient))
 	{
 		transactions.GET("", server.GetTransactions)
-		transactions.GET("/:id", server.GetTransactionByID)
-		transactions.GET("/:id/pdf", server.GenerateTransactionPDF)
-		transactions.POST("/payments", server.PayoutMoneyToOtherAccount)
-		transactions.POST("/transfers", server.TransferMoneyBetweenAccounts)
+		transactions.GET("/:id", server.GetTransactionByID)         //TODO visak, stvari koje nisu u api spec
+		transactions.GET("/:id/pdf", server.GenerateTransactionPDF) //TODO visak, stvari koje nisu u api spec
+		transactions.POST("/payment", server.PayoutMoneyToOtherAccount)
+		transactions.POST("/transfer", server.TransferMoneyBetweenAccounts)
 	}
 
 	passwordReset := api.Group("/password-reset")
@@ -59,13 +59,13 @@ func SetupApi(router *gin.Engine, server *Server) {
 		clients.PUT("/:id", server.UpdateClient)
 	}
 
-	employees := api.Group("/employees")
+	employees := api.Group("/employees", AuthenticatedMiddleware(server.UserClient))
 	{
 		employees.POST("", server.CreateEmployeeAccount)
-		employees.GET("/:id", server.GetEmployeeByID)
-		employees.DELETE("/:id", server.DeleteEmployeeByID)
+		employees.GET("/:employeeId", server.GetEmployeeByID)
+		employees.DELETE("/:employeeId", server.DeleteEmployeeByID)
 		employees.GET("", server.GetEmployees)
-		employees.PUT("/:id", server.UpdateEmployee)
+		employees.PATCH("/:employeeId", server.UpdateEmployee)
 	}
 
 	companies := api.Group("/companies")
@@ -102,15 +102,16 @@ func SetupApi(router *gin.Engine, server *Server) {
 	cards := api.Group("/cards")
 	{
 		cards.GET("", AuthenticatedMiddleware(server.UserClient), server.GetCards)
-		cards.POST("/request", AuthenticatedMiddleware(server.UserClient), server.RequestCard)
-		cards.GET("/confirm", server.ConfirmCard)
-		cards.PATCH("/:id/block", AuthenticatedMiddleware(server.UserClient), server.BlockCard)
+		cards.POST("", AuthenticatedMiddleware(server.UserClient), server.RequestCard)
+		cards.GET("/confirm", server.ConfirmCard) //TODO visak, stvari koje nisu u api spec
+		cards.PATCH("/:cardNumber/block", AuthenticatedMiddleware(server.UserClient), server.BlockCard)
 	}
+
+	api.GET("/exchange-rates", AuthenticatedMiddleware(server.UserClient), server.GetExchangeRates)
 
 	exchange := api.Group("/exchange")
 	{
-		exchange.GET("/rates", server.GetExchangeRates)
-		exchange.POST("/convert", server.ConvertMoney)
+		exchange.POST("/convert", server.ConvertMoney) //TODO visak, stvari koje nisu u api spec
 	}
 }
 
@@ -133,7 +134,7 @@ func (s *Server) Logout(c *gin.Context) {
 		return
 	}
 
-	c.Status(http.StatusAccepted)
+	c.JSON(http.StatusOK, gin.H{"message": "Logged out"})
 }
 
 func (s *Server) getAuthenticatedClientID(c *gin.Context) (int64, bool) {
@@ -210,9 +211,22 @@ func (s *Server) Login(c *gin.Context) {
 		return
 	}
 
+	// Look up permissions: employee gets permissions from profile, client gets empty array
+	var permissions []string
+	empResp, empErr := s.UserClient.GetEmployeeByEmail(ctx, &userpb.GetEmployeeByEmailRequest{
+		Email: req.Email,
+	})
+	if empErr == nil {
+		permissions = empResp.Permissions
+	}
+	if permissions == nil {
+		permissions = []string{}
+	}
+
 	c.JSON(http.StatusOK, gin.H{
-		"access_token":  resp.AccessToken,
-		"refresh_token": resp.RefreshToken,
+		"accessToken":  resp.AccessToken,
+		"refreshToken": resp.RefreshToken,
+		"permissions":  permissions,
 	})
 }
 
@@ -309,9 +323,7 @@ func (s *Server) GetClients(c *gin.Context) {
 		clients = append(clients, clientResponse(client))
 	}
 
-	c.JSON(http.StatusOK, gin.H{
-		"clients": clients,
-	})
+	c.JSON(http.StatusOK, clients)
 }
 
 func (s *Server) UpdateClient(c *gin.Context) {
@@ -345,7 +357,21 @@ func (s *Server) UpdateClient(c *gin.Context) {
 		return
 	}
 
-	c.JSON(http.StatusOK, resp)
+	if !resp.Valid {
+		c.JSON(http.StatusUnprocessableEntity, gin.H{"error": resp.Response})
+		return
+	}
+
+	c.JSON(http.StatusOK, gin.H{
+		"id":            uri.ClientID,
+		"first_name":    req.FirstName,
+		"last_name":     req.LastName,
+		"date_of_birth": req.DateOfBirth,
+		"gender":        req.Gender,
+		"email":         req.Email,
+		"phone_number":  req.PhoneNumber,
+		"address":       req.Address,
+	})
 }
 
 func (s *Server) CreateEmployeeAccount(c *gin.Context) {
@@ -355,13 +381,24 @@ func (s *Server) CreateEmployeeAccount(c *gin.Context) {
 		return
 	}
 
+	// Parse birth_date string to unix timestamp for proto
+	var birthDateUnix int64
+	if req.BirthDate != "" {
+		t, err := time.Parse(time.DateOnly, req.BirthDate)
+		if err != nil {
+			c.JSON(http.StatusBadRequest, gin.H{"error": "invalid birth_date format, expected YYYY-MM-DD"})
+			return
+		}
+		birthDateUnix = t.Unix()
+	}
+
 	ctx, cancel := context.WithTimeout(c.Request.Context(), 5*time.Second)
 	defer cancel()
 
 	resp, err := s.UserClient.CreateEmployeeAccount(ctx, &userpb.CreateEmployeeRequest{
 		FirstName:   req.FirstName,
 		LastName:    req.LastName,
-		BirthDate:   req.BirthDate,
+		BirthDate:   birthDateUnix,
 		Gender:      req.Gender,
 		Email:       req.Email,
 		PhoneNumber: req.PhoneNumber,
@@ -370,13 +407,34 @@ func (s *Server) CreateEmployeeAccount(c *gin.Context) {
 		Position:    req.Position,
 		Department:  req.Department,
 		Password:    req.Password,
+		Active:      req.Active,
+		Permissions: req.Permissions,
 	})
 	if err != nil {
 		writeGRPCError(c, err)
 		return
 	}
 
-	c.JSON(http.StatusCreated, resp)
+	perms := resp.Permissions
+	if perms == nil {
+		perms = []string{}
+	}
+
+	c.JSON(http.StatusCreated, gin.H{
+		"id":          resp.Id,
+		"first_name":  resp.FirstName,
+		"last_name":   resp.LastName,
+		"email":       resp.Email,
+		"position":    resp.Position,
+		"phone":       resp.PhoneNumber,
+		"active":      resp.Active,
+		"birth_date":  time.Unix(resp.BirthDate, 0).Format(time.DateOnly),
+		"gender":      resp.Gender,
+		"address":     resp.Address,
+		"username":    resp.Username,
+		"department":  resp.Department,
+		"permissions": perms,
+	})
 }
 
 func companyResponse(company *bankpb.Company) gin.H {
@@ -453,9 +511,7 @@ func (s *Server) GetCompanies(c *gin.Context) {
 		companies = append(companies, companyResponse(company))
 	}
 
-	c.JSON(http.StatusOK, gin.H{
-		"companies": companies,
-	})
+	c.JSON(http.StatusOK, companies)
 }
 
 func (s *Server) UpdateCompany(c *gin.Context) {
@@ -496,31 +552,77 @@ func (s *Server) CreateAccount(c *gin.Context) {
 		return
 	}
 
+	employeeID, ok := s.getAuthenticatedEmployeeID(c)
+	if !ok {
+		return
+	}
+
+	// TEKUCI -> checking, DEVIZNI -> foreign
+	var accountType string
+	var currency string
+	var maintainanceCost int64
+	switch strings.ToUpper(req.AccountType) {
+	case "TEKUCI":
+		accountType = "checking"
+		currency = "RSD"
+		maintainanceCost = 25500
+	case "DEVIZNI":
+		accountType = "foreign"
+		currency = req.Currency
+		maintainanceCost = 0
+	default:
+		c.JSON(http.StatusBadRequest, gin.H{"error": "account_type must be TEKUCI or DEVIZNI"})
+		return
+	}
+
+	var ownerType string
+	subtypeLower := strings.ToLower(req.Subtype)
+	if strings.Contains(subtypeLower, "business") || strings.Contains(subtypeLower, "poslovni") {
+		ownerType = "business"
+	} else {
+		ownerType = "personal"
+	}
+
+	name := fmt.Sprintf("%s-%s", accountType, req.Subtype)
+
+	validUntil := time.Now().AddDate(5, 0, 0).Unix()
+
 	ctx, cancel := context.WithTimeout(c.Request.Context(), 5*time.Second)
 	defer cancel()
 
 	resp, err := s.BankClient.CreateAccount(ctx, &bankpb.CreateAccountRequest{
-		Name:             req.Name,
-		Owner:            req.Owner,
-		Currency:         req.Currency,
-		OwnerType:        req.OwnerType,
-		AccountType:      req.AccountType,
-		MaintainanceCost: req.MaintainanceCost,
-		DailyLimit:       req.DailyLimit,
-		MonthlyLimit:     req.MonthlyLimit,
-		CreatedBy:        req.CreatedBy,
-		ValidUntil:       req.ValidUntil,
+		Name:             name,
+		Owner:            req.ClientID,
+		Currency:         currency,
+		OwnerType:        ownerType,
+		AccountType:      accountType,
+		MaintainanceCost: maintainanceCost,
+		DailyLimit:       int64(req.DailyLimit),
+		MonthlyLimit:     int64(req.MonthlyLimit),
+		CreatedBy:        employeeID,
+		ValidUntil:       validUntil,
 	})
 	if err != nil {
 		writeGRPCError(c, err)
 		return
 	}
 
-	c.JSON(http.StatusCreated, gin.H{
-		"valid":          resp.Valid,
-		"account_number": resp.AccountNumber,
-		"error":          resp.Error,
+	if !resp.Valid {
+		c.JSON(http.StatusUnprocessableEntity, gin.H{"error": resp.Error})
+		return
+	}
+
+	detailResp, err := s.BankClient.GetAccountDetails(ctx, &bankpb.GetAccountDetailsRequest{
+		AccountNumber: resp.AccountNumber,
 	})
+	if err != nil {
+		c.JSON(http.StatusCreated, gin.H{
+			"account_number": resp.AccountNumber,
+		})
+		return
+	}
+
+	c.JSON(http.StatusCreated, accountResponse(detailResp.Account))
 }
 
 func (s *Server) GetEmployeeByID(c *gin.Context) {
@@ -541,20 +643,25 @@ func (s *Server) GetEmployeeByID(c *gin.Context) {
 		return
 	}
 
+	perms := resp.Permissions
+	if perms == nil {
+		perms = []string{}
+	}
+
 	c.JSON(http.StatusOK, gin.H{
-		"id":           resp.Id,
-		"first_name":   resp.FirstName,
-		"last_name":    resp.LastName,
-		"birth_date":   time.Unix(resp.BirthDate, 0).Format(time.DateOnly),
-		"gender":       resp.Gender,
-		"email":        resp.Email,
-		"phone_number": resp.PhoneNumber,
-		"address":      resp.Address,
-		"username":     resp.Username,
-		"position":     resp.Position,
-		"department":   resp.Department,
-		"active":       resp.Active,
-		"permissions":  resp.Permissions,
+		"id":          resp.Id,
+		"first_name":  resp.FirstName,
+		"last_name":   resp.LastName,
+		"birth_date":  time.Unix(resp.BirthDate, 0).Format(time.DateOnly),
+		"gender":      resp.Gender,
+		"email":       resp.Email,
+		"phone":       resp.PhoneNumber,
+		"address":     resp.Address,
+		"username":    resp.Username,
+		"position":    resp.Position,
+		"department":  resp.Department,
+		"active":      resp.Active,
+		"permissions": perms,
 	})
 }
 
@@ -599,10 +706,21 @@ func (s *Server) GetEmployees(c *gin.Context) {
 		return
 	}
 	if resp.Employees != nil {
-		c.JSON(http.StatusOK, resp.Employees)
+		employees := make([]gin.H, 0, len(resp.Employees))
+		for _, e := range resp.Employees {
+			employees = append(employees, gin.H{
+				"id":         e.Id,
+				"first_name": e.FirstName,
+				"last_name":  e.LastName,
+				"email":      e.Email,
+				"position":   e.Position,
+				"phone":      e.PhoneNumber,
+				"active":     e.Active,
+			})
+		}
+		c.JSON(http.StatusOK, employees)
 	} else {
-		empty := make([]string, 0)
-		c.JSON(http.StatusOK, empty)
+		c.JSON(http.StatusOK, []gin.H{})
 	}
 }
 
@@ -620,10 +738,9 @@ func (s *Server) UpdateEmployee(c *gin.Context) {
 	}
 	ctx, cancel := context.WithTimeout(c.Request.Context(), 5*time.Second)
 	defer cancel()
-	println("please")
+
 	resp, err := s.UserClient.UpdateEmployee(ctx, &userpb.UpdateEmployeeRequest{
 		Id:          uri.EmployeeID,
-		FirstName:   req.FirstName,
 		LastName:    req.LastName,
 		Gender:      req.Gender,
 		PhoneNumber: req.PhoneNumber,
@@ -635,8 +752,29 @@ func (s *Server) UpdateEmployee(c *gin.Context) {
 	})
 	if err != nil {
 		writeGRPCError(c, err)
+		return
 	}
-	c.JSON(http.StatusOK, resp)
+
+	perms := resp.Permissions
+	if perms == nil {
+		perms = []string{}
+	}
+
+	c.JSON(http.StatusOK, gin.H{
+		"id":          resp.Id,
+		"first_name":  resp.FirstName,
+		"last_name":   resp.LastName,
+		"birth_date":  time.Unix(resp.BirthDate, 0).Format(time.DateOnly),
+		"gender":      resp.Gender,
+		"email":       resp.Email,
+		"phone":       resp.PhoneNumber,
+		"address":     resp.Address,
+		"username":    resp.Username,
+		"position":    resp.Position,
+		"department":  resp.Department,
+		"active":      resp.Active,
+		"permissions": perms,
+	})
 }
 
 func (s *Server) RequestPasswordReset(c *gin.Context) {
@@ -704,6 +842,26 @@ func (s *Server) TransferMoneyBetweenAccounts(c *gin.Context) {
 	c.Status(http.StatusNotImplemented)
 }
 
+func accountResponse(a *bankpb.Account) gin.H {
+	return gin.H{
+		"account_number":    a.AccountNumber,
+		"account_name":      a.AccountName,
+		"owner_id":          a.OwnerId,
+		"balance":           a.Balance,
+		"available_balance": a.AvailableBalance,
+		"employee_id":       a.EmployeeId,
+		"creation_date":     time.Unix(a.CreationDate, 0).Format(time.RFC3339),
+		"expiration_date":   time.Unix(a.ExpirationDate, 0).Format(time.RFC3339),
+		"currency":          a.Currency,
+		"status":            a.Status,
+		"account_type":      a.AccountType,
+		"daily_limit":       a.DailyLimit,
+		"monthly_limit":     a.MonthlyLimit,
+		"daily_spending":    a.DailySpending,
+		"monthly_spending":  a.MonthlySpending,
+	}
+}
+
 func (s *Server) GetAccounts(c *gin.Context) {
 	var query getAccountsQuery
 	if err := c.ShouldBindQuery(&query); err != nil {
@@ -728,9 +886,9 @@ func (s *Server) GetAccounts(c *gin.Context) {
 		return
 	}
 
-	accounts := resp.Accounts
-	if accounts == nil {
-		accounts = []*bankpb.Account{}
+	accounts := make([]gin.H, 0, len(resp.Accounts))
+	for _, a := range resp.Accounts {
+		accounts = append(accounts, accountResponse(a))
 	}
 
 	c.JSON(http.StatusOK, accounts)
@@ -758,7 +916,7 @@ func (s *Server) GetAccountByNumber(c *gin.Context) {
 		return
 	}
 
-	c.JSON(http.StatusOK, resp)
+	c.JSON(http.StatusOK, accountResponse(resp.Account))
 }
 
 func (s *Server) UpdateAccountName(c *gin.Context) {
@@ -995,20 +1153,13 @@ func (s *Server) GetLoanRequests(c *gin.Context) {
 	requests := make([]gin.H, 0, len(resp.LoanRequests))
 	for _, r := range resp.LoanRequests {
 		requests = append(requests, gin.H{
-			"id":                 r.Id,
-			"loan_type":          r.LoanType,
-			"amount":             r.Amount,
-			"currency":           r.Currency,
-			"purpose":            r.Purpose,
-			"salary":             r.Salary,
-			"employment_status":  r.EmploymentStatus,
-			"employment_period":  r.EmploymentPeriod,
-			"phone_number":       r.PhoneNumber,
-			"repayment_period":   r.RepaymentPeriod,
-			"account_number":     r.AccountNumber,
-			"status":             r.Status,
-			"interest_rate_type": r.InterestRateType,
-			"submission_date":    r.SubmissionDate,
+			"id":              r.Id,
+			"status":          r.Status,
+			"loan_type":       r.LoanType,
+			"loan_amount":     r.Amount,
+			"purpose":         r.Purpose,
+			"account_number":  r.AccountNumber,
+			"submission_date": r.SubmissionDate,
 		})
 	}
 
@@ -1086,9 +1237,19 @@ func (s *Server) GetCards(c *gin.Context) {
 		return
 	}
 
-	cards := resp.Cards
-	if cards == nil {
-		cards = []*bankpb.CardResponse{}
+	cards := make([]gin.H, 0, len(resp.Cards))
+	for _, card := range resp.Cards {
+		cards = append(cards, gin.H{
+			"card_number":     card.CardNumber,
+			"card_type":       card.CardType,
+			"card_name":       card.CardBrand,
+			"creation_date":   card.CreationDate,
+			"expiration_date": card.ExpirationDate,
+			"account_number":  card.AccountNumber,
+			"cvv":             card.Cvv,
+			"limit":           card.Limit,
+			"status":          card.Status,
+		})
 	}
 
 	c.JSON(http.StatusOK, cards)
@@ -1113,10 +1274,9 @@ func (s *Server) RequestCard(c *gin.Context) {
 	ctx, cancel := context.WithTimeout(ctx, 5*time.Second)
 	defer cancel()
 
-	resp, err := s.BankClient.RequestCard(ctx, &bankpb.RequestCardRequest{
+	_, err := s.BankClient.RequestCard(ctx, &bankpb.RequestCardRequest{
 		AccountNumber: req.AccountNumber,
 		CardType:      req.CardType,
-		CardBrand:     req.CardBrand,
 	})
 
 	if err != nil {
@@ -1124,7 +1284,10 @@ func (s *Server) RequestCard(c *gin.Context) {
 		return
 	}
 
-	c.JSON(http.StatusAccepted, resp)
+	c.JSON(http.StatusCreated, gin.H{
+		"account_number": req.AccountNumber,
+		"card_type":      req.CardType,
+	})
 }
 
 func (s *Server) ConfirmCard(c *gin.Context) {
@@ -1151,22 +1314,22 @@ func (s *Server) ConfirmCard(c *gin.Context) {
 func (s *Server) BlockCard(c *gin.Context) {
 	var uri blockCardURI
 	if err := c.ShouldBindUri(&uri); err != nil {
-		c.String(http.StatusBadRequest, "card id is required and must be a valid integer")
+		c.String(http.StatusBadRequest, "card number is required")
 		return
 	}
 
 	ctx, cancel := context.WithTimeout(c.Request.Context(), 5*time.Second)
 	defer cancel()
 
-	resp, err := s.BankClient.BlockCard(ctx, &bankpb.BlockCardRequest{
-		CardId: uri.CardID,
+	_, err := s.BankClient.BlockCard(ctx, &bankpb.BlockCardRequest{
+		CardNumber: uri.CardNumber,
 	})
 	if err != nil {
 		writeGRPCError(c, err)
 		return
 	}
 
-	c.JSON(http.StatusOK, resp)
+	c.Status(http.StatusOK)
 }
 
 func (s *Server) GetPaymentRecipients(c *gin.Context) {
@@ -1196,9 +1359,7 @@ func (s *Server) GetPaymentRecipients(c *gin.Context) {
 		})
 	}
 
-	c.JSON(http.StatusOK, gin.H{
-		"recipients": recipients,
-	})
+	c.JSON(http.StatusOK, recipients)
 }
 
 func (s *Server) CreatePaymentRecipient(c *gin.Context) {
@@ -1227,11 +1388,9 @@ func (s *Server) CreatePaymentRecipient(c *gin.Context) {
 	}
 
 	c.JSON(http.StatusCreated, gin.H{
-		"recipient": gin.H{
-			"id":             resp.Recipient.Id,
-			"name":           resp.Recipient.Name,
-			"account_number": resp.Recipient.AccountNumber,
-		},
+		"id":             resp.Recipient.Id,
+		"name":           resp.Recipient.Name,
+		"account_number": resp.Recipient.AccountNumber,
 	})
 }
 
@@ -1258,7 +1417,7 @@ func (s *Server) UpdatePaymentRecipient(c *gin.Context) {
 	ctx, cancel := context.WithTimeout(c.Request.Context(), 5*time.Second)
 	defer cancel()
 
-	resp, err := s.BankClient.UpdatePaymentRecipient(ctx, &bankpb.UpdatePaymentRecipientRequest{
+	_, err := s.BankClient.UpdatePaymentRecipient(ctx, &bankpb.UpdatePaymentRecipientRequest{
 		Id:            uri.ID,
 		ClientId:      clientID,
 		Name:          req.Name,
@@ -1269,13 +1428,7 @@ func (s *Server) UpdatePaymentRecipient(c *gin.Context) {
 		return
 	}
 
-	c.JSON(http.StatusOK, gin.H{
-		"recipient": gin.H{
-			"id":             resp.Recipient.Id,
-			"name":           resp.Recipient.Name,
-			"account_number": resp.Recipient.AccountNumber,
-		},
-	})
+	c.JSON(http.StatusOK, gin.H{"message": "Recipient updated"})
 }
 
 func (s *Server) DeletePaymentRecipient(c *gin.Context) {
@@ -1295,7 +1448,7 @@ func (s *Server) DeletePaymentRecipient(c *gin.Context) {
 	ctx, cancel := context.WithTimeout(c.Request.Context(), 5*time.Second)
 	defer cancel()
 
-	resp, err := s.BankClient.DeletePaymentRecipient(ctx, &bankpb.DeletePaymentRecipientRequest{
+	_, err := s.BankClient.DeletePaymentRecipient(ctx, &bankpb.DeletePaymentRecipientRequest{
 		Id:       uri.ID,
 		ClientId: clientID,
 	})
@@ -1304,9 +1457,7 @@ func (s *Server) DeletePaymentRecipient(c *gin.Context) {
 		return
 	}
 
-	c.JSON(http.StatusOK, gin.H{
-		"success": resp.Success,
-	})
+	c.Status(http.StatusNoContent)
 }
 
 func (s *Server) GetTransactions(c *gin.Context) {
@@ -1316,38 +1467,20 @@ func (s *Server) GetTransactions(c *gin.Context) {
 		return
 	}
 
-	clientID, ok := s.getAuthenticatedClientID(c)
-	if !ok {
-		return
-	}
-
-	if query.Page <= 0 {
-		query.Page = 1
-	}
-	if query.PageSize <= 0 {
-		query.PageSize = 10
-	}
-	if query.SortBy == "" {
-		query.SortBy = "timestamp"
-	}
-	if query.SortOrder == "" {
-		query.SortOrder = "desc"
-	}
+	email := c.GetString("email")
 
 	ctx, cancel := context.WithTimeout(c.Request.Context(), 5*time.Second)
 	defer cancel()
 
-	resp, err := s.BankClient.GetTransactions(ctx, &bankpb.GetTransactionsRequest{
-		ClientId:   clientID,
-		DateFrom:   query.DateFrom,
-		DateTo:     query.DateTo,
-		AmountFrom: query.AmountFrom,
-		AmountTo:   query.AmountTo,
-		Status:     query.Status,
-		Page:       query.Page,
-		PageSize:   query.PageSize,
-		SortBy:     query.SortBy,
-		SortOrder:  query.SortOrder,
+	ctx = metadata.NewOutgoingContext(ctx, metadata.Pairs(
+		"user-email", email,
+	))
+
+	resp, err := s.BankClient.ListClientTransactions(ctx, &bankpb.ListClientTranasctionsRequest{
+		AccountNumber: query.AccountNumber,
+		Date:          query.Date,
+		Amount:        int64(query.Amount),
+		Status:        query.Status,
 	})
 	if err != nil {
 		writeGRPCError(c, err)
@@ -1357,31 +1490,21 @@ func (s *Server) GetTransactions(c *gin.Context) {
 	transactions := make([]gin.H, 0, len(resp.Transactions))
 	for _, t := range resp.Transactions {
 		transactions = append(transactions, gin.H{
-			"id":                t.Id,
-			"type":              t.Type,
-			"from_account":      t.FromAccount,
-			"to_account":        t.ToAccount,
-			"start_amount":      t.StartAmount,
-			"end_amount":        t.EndAmount,
-			"commission":        t.Commission,
-			"status":            t.Status,
-			"timestamp":         t.Timestamp,
-			"recipient_id":      t.RecipientId,
-			"transaction_code":  t.TransactionCode,
-			"call_number":       t.CallNumber,
-			"reason":            t.Reason,
-			"start_currency_id": t.StartCurrencyId,
-			"exchange_rate":     t.ExchangeRate,
+			"from_account":     t.FromAccount,
+			"to_account":       t.ToAccount,
+			"initial_amount":   t.InitialAmount,
+			"final_amount":     t.FinalAmount,
+			"fee":              t.Fee,
+			"currency":         t.Currency,
+			"payment_code":     t.PaymentCode,
+			"reference_number": t.ReferenceNumber,
+			"purpose":          t.Purpose,
+			"status":           t.Status,
+			"timestamp":        time.Unix(t.Timestamp, 0).Format(time.RFC3339),
 		})
 	}
 
-	c.JSON(http.StatusOK, gin.H{
-		"transactions": transactions,
-		"page":         resp.Page,
-		"page_size":    resp.PageSize,
-		"total":        resp.Total,
-		"total_pages":  resp.TotalPages,
-	})
+	c.JSON(http.StatusOK, transactions)
 }
 
 func (s *Server) GetTransactionByID(c *gin.Context) {
@@ -1476,7 +1599,32 @@ func (s *Server) GetExchangeRates(c *gin.Context) {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": st.Message()})
 		return
 	}
-	c.JSON(http.StatusOK, resp)
+
+	rates := make([]gin.H, 0, len(resp.Rates))
+	for _, r := range resp.Rates {
+		// If proto doesn't have buy/sell/middle yet, derive at gateway
+		middleRate := r.MiddleRate
+		buyRate := r.BuyRate
+		sellRate := r.SellRate
+		if middleRate == 0 {
+			middleRate = r.Rate
+		}
+		if buyRate == 0 {
+			buyRate = r.Rate * 0.995
+		}
+		if sellRate == 0 {
+			sellRate = r.Rate * 1.005
+		}
+
+		rates = append(rates, gin.H{
+			"currencyCode": r.Code,
+			"buyRate":      buyRate,
+			"sellRate":     sellRate,
+			"middleRate":   middleRate,
+		})
+	}
+
+	c.JSON(http.StatusOK, rates)
 }
 
 func (s *Server) ConvertMoney(c *gin.Context) {

@@ -782,6 +782,8 @@ type CreateEmployeeRequest struct {
 	Position      string                 `protobuf:"bytes,9,opt,name=position,proto3" json:"position,omitempty"`
 	Department    string                 `protobuf:"bytes,10,opt,name=department,proto3" json:"department,omitempty"`
 	Password      string                 `protobuf:"bytes,11,opt,name=password,proto3" json:"password,omitempty"`
+	Active        bool                   `protobuf:"varint,12,opt,name=active,proto3" json:"active,omitempty"`
+	Permissions   []string               `protobuf:"bytes,13,rep,name=permissions,proto3" json:"permissions,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -891,6 +893,20 @@ func (x *CreateEmployeeRequest) GetPassword() string {
 		return x.Password
 	}
 	return ""
+}
+
+func (x *CreateEmployeeRequest) GetActive() bool {
+	if x != nil {
+		return x.Active
+	}
+	return false
+}
+
+func (x *CreateEmployeeRequest) GetPermissions() []string {
+	if x != nil {
+		return x.Permissions
+	}
+	return nil
 }
 
 type CreateClientRequest struct {
@@ -1989,7 +2005,7 @@ const file_user_user_proto_rawDesc = "" +
 	"\x1cSetPasswordWithTokenResponse\x12\x1e\n" +
 	"\n" +
 	"successful\x18\x01 \x01(\bR\n" +
-	"successful\"\xd1\x02\n" +
+	"successful\"\x8b\x03\n" +
 	"\x15CreateEmployeeRequest\x12\x1d\n" +
 	"\n" +
 	"first_name\x18\x01 \x01(\tR\tfirstName\x12\x1b\n" +
@@ -2006,7 +2022,9 @@ const file_user_user_proto_rawDesc = "" +
 	"department\x18\n" +
 	" \x01(\tR\n" +
 	"department\x12\x1a\n" +
-	"\bpassword\x18\v \x01(\tR\bpassword\"\xf7\x01\n" +
+	"\bpassword\x18\v \x01(\tR\bpassword\x12\x16\n" +
+	"\x06active\x18\f \x01(\bR\x06active\x12 \n" +
+	"\vpermissions\x18\r \x03(\tR\vpermissions\"\xf7\x01\n" +
 	"\x13CreateClientRequest\x12\x1d\n" +
 	"\n" +
 	"first_name\x18\x01 \x01(\tR\tfirstName\x12\x1b\n" +
