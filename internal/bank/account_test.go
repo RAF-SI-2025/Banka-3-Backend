@@ -126,22 +126,22 @@ func TestListClientTransactions(t *testing.T) {
 	gormDB := setupMockGorm(t, sqlDB)
 	server := &Server{db_gorm: gormDB}
 
-	userSrv := &testUserServer{isEmployee: true}
+	userSrv := &testUserServer{isEmployee: false, clientID: 10, clientMail: "client@mail.com"}
 	addr, stop := startUserMock(userSrv)
 	defer stop()
 	_ = os.Setenv("USER_SERVICE_ADDR", addr)
 
-	ctx := metadata.NewIncomingContext(context.Background(), metadata.Pairs("user-email", "emp@banka.rs"))
+	ctx := metadata.NewIncomingContext(context.Background(), metadata.Pairs("user-email", "client@mail.com"))
 
 	t.Run("Success", func(t *testing.T) {
-		mock.ExpectQuery(`SELECT \* FROM "accounts" WHERE "accounts"."number" = \$1`).
-			WithArgs("123", 1).
-			WillReturnRows(sqlmock.NewRows([]string{"number", "owner"}).AddRow("123", 1))
+		mock.ExpectQuery(`SELECT \* FROM "accounts" WHERE "accounts"\."owner" = \$1 AND "accounts"\."active" = \$2`).
+			WithArgs(int64(10), true).
+			WillReturnRows(sqlmock.NewRows([]string{"number", "owner"}).AddRow("123", 10))
 
-		mock.ExpectQuery(`SELECT \* FROM "payments" WHERE from_account = \$1 OR to_account = \$2`).
+		mock.ExpectQuery(`SELECT \* FROM "payments" WHERE \(from_account IN \(\$1\) OR to_account IN \(\$2\)\)`).
 			WillReturnRows(sqlmock.NewRows([]string{"transaction_id", "status", "timestamp"}).AddRow(1, "realized", time.Now()))
 
-		mock.ExpectQuery(`SELECT \* FROM "transfers" WHERE from_account = \$1 OR to_account = \$2`).
+		mock.ExpectQuery(`SELECT \* FROM "transfers" WHERE \(from_account IN \(\$1\) OR to_account IN \(\$2\)\)`).
 			WillReturnRows(sqlmock.NewRows([]string{"transaction_id", "timestamp"}).AddRow(2, time.Now()))
 
 		resp, err := server.ListClientTransactions(ctx, &bankpb.ListClientTranasctionsRequest{AccountNumber: "123"})

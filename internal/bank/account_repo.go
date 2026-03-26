@@ -114,11 +114,14 @@ func (s *Server) GetCompanyByOwnerID(ownerID int64) (*Company, error) {
 	return &company, nil
 }
 
-func (s *Server) GetFilteredTransactions(accNumber string, date string, amount int64, status string) ([]*bankpb.ClientTransaction, error) {
+func (s *Server) GetFilteredTransactions(accNumbers []string, accountNumber string, date string, amount int64, status string) ([]*bankpb.ClientTransaction, error) {
 	var pbTransactions []*bankpb.ClientTransaction
 
 	var payments []Payment
-	payQuery := s.db_gorm.Model(&Payment{}).Where("from_account = ? OR to_account = ?", accNumber, accNumber)
+	payQuery := s.db_gorm.Model(&Payment{}).Where("from_account IN ? OR to_account IN ?", accNumbers, accNumbers)
+	if accountNumber != "" {
+		payQuery = payQuery.Where("from_account = ? OR to_account = ?", accountNumber, accountNumber)
+	}
 	if date != "" {
 		payQuery = payQuery.Where("DATE(timestamp) = ?", date)
 	}
@@ -146,7 +149,10 @@ func (s *Server) GetFilteredTransactions(accNumber string, date string, amount i
 	}
 
 	var transfers []Transfer
-	transQuery := s.db_gorm.Model(&Transfer{}).Where("from_account = ? OR to_account = ?", accNumber, accNumber)
+	transQuery := s.db_gorm.Model(&Transfer{}).Where("from_account IN ? OR to_account IN ?", accNumbers, accNumbers)
+	if accountNumber != "" {
+		transQuery = transQuery.Where("from_account = ? OR to_account = ?", accountNumber, accountNumber)
+	}
 	if date != "" {
 		transQuery = transQuery.Where("DATE(timestamp) = ?", date)
 	}

@@ -68,16 +68,30 @@ func (s *Server) GetAccountDetails(ctx context.Context, req *bankpb.GetAccountDe
 }
 
 func (s *Server) ListClientTransactions(ctx context.Context, req *bankpb.ListClientTranasctionsRequest) (*bankpb.ListClientTransactionsResponse, error) {
-	acc, err := s.GetAccountByNumber(req.AccountNumber)
+	caller, err := s.resolveCaller(ctx)
 	if err != nil {
-		return nil, status.Error(codes.NotFound, "account not found")
-	}
-
-	if err := s.authorizeAccountAccess(ctx, acc); err != nil {
 		return nil, err
 	}
 
-	transactions, err := s.GetFilteredTransactions(req.AccountNumber, req.Date, req.Amount, req.Status)
+	if !caller.IsClient {
+		return nil, status.Error(codes.PermissionDenied, "access denied")
+	}
+
+	accounts, err := s.GetActiveAccountsByOwnerID(caller.ClientID)
+	if err != nil {
+		return nil, status.Error(codes.Internal, "failed to fetch client accounts")
+	}
+
+	var accNumbers []string
+	for _, a := range accounts {
+		accNumbers = append(accNumbers, a.Number)
+	}
+
+	if len(accNumbers) == 0 {
+		return &bankpb.ListClientTransactionsResponse{}, nil
+	}
+
+	transactions, err := s.GetFilteredTransactions(accNumbers, req.AccountNumber, req.Date, req.Amount, req.Status)
 	if err != nil {
 		return nil, status.Error(codes.Internal, "failed to fetch transactions")
 	}
