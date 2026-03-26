@@ -43,8 +43,9 @@ func SetupApi(router *gin.Engine, server *Server) {
 		transactions.GET("", server.GetTransactions)
 		transactions.GET("/:id", server.GetTransactionByID)         //TODO visak, stvari koje nisu u api spec
 		transactions.GET("/:id/pdf", server.GenerateTransactionPDF) //TODO visak, stvari koje nisu u api spec
-		transactions.POST("/payment", server.PayoutMoneyToOtherAccount)
-		transactions.POST("/transfer", server.TransferMoneyBetweenAccounts)
+
+		transactions.POST("/payment", AuthenticatedMiddleware(server.UserClient), TOTPMiddleware(server.TOTPClient), server.PayoutMoneyToOtherAccount)
+		transactions.POST("/transfer", AuthenticatedMiddleware(server.UserClient), TOTPMiddleware(server.TOTPClient), server.TransferMoneyBetweenAccounts)
 	}
 
 	passwordReset := api.Group("/password-reset")

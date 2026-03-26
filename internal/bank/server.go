@@ -1255,7 +1255,7 @@ func loanViewToProto(loan *loanView) *bankpb.Loan {
 	}
 }
 
-func (s *Server) GetLoans(ctx context.Context, req *bankpb.GetLoansRequest) (*bankpb.GetLoansResponse, error) {
+func (s *Server) GetLoans(_ context.Context, req *bankpb.GetLoansRequest) (*bankpb.GetLoansResponse, error) {
 	clientEmail := strings.TrimSpace(req.ClientEmail)
 	if clientEmail == "" {
 		return nil, status.Error(codes.Unauthenticated, "client email required")
@@ -1299,7 +1299,7 @@ func (s *Server) GetLoans(ctx context.Context, req *bankpb.GetLoansRequest) (*ba
 	}, nil
 }
 
-func (s *Server) GetLoanByNumber(ctx context.Context, req *bankpb.GetLoanByNumberRequest) (*bankpb.Loan, error) {
+func (s *Server) GetLoanByNumber(_ context.Context, req *bankpb.GetLoanByNumberRequest) (*bankpb.Loan, error) {
 	clientEmail := strings.TrimSpace(req.ClientEmail)
 	if clientEmail == "" {
 		return nil, status.Error(codes.Unauthenticated, "client email required")
@@ -1326,7 +1326,7 @@ func (s *Server) GetLoanByNumber(ctx context.Context, req *bankpb.GetLoanByNumbe
 	return loanViewToProto(loan), nil
 }
 
-func (s *Server) CreateLoanRequest(ctx context.Context, req *bankpb.CreateLoanRequestRequest) (*bankpb.CreateLoanRequestResponse, error) {
+func (s *Server) CreateLoanRequest(_ context.Context, req *bankpb.CreateLoanRequestRequest) (*bankpb.CreateLoanRequestResponse, error) {
 	clientEmail := strings.TrimSpace(req.ClientEmail)
 	if clientEmail == "" {
 		return nil, status.Error(codes.Unauthenticated, "client email required")
@@ -1407,7 +1407,7 @@ func (s *Server) CreateLoanRequest(ctx context.Context, req *bankpb.CreateLoanRe
 }
 
 func (s *Server) PayoutMoneyToOtherAccount(
-	ctx context.Context,
+	_ context.Context,
 	req *bankpb.PaymentRequest,
 ) (*bankpb.PaymentResponse, error) {
 
@@ -1441,8 +1441,9 @@ func (s *Server) PayoutMoneyToOtherAccount(
 		Timestamp:       time.Now().Format("2006-01-02 15:04:05"), //standard layout of Go, don't change this date, it's layout, not hardcode
 	}, nil
 }
+
 func (s *Server) TransferMoneyBetweenAccounts(
-	ctx context.Context,
+	_ context.Context,
 	req *bankpb.TransferRequest,
 ) (*bankpb.TransferResponse, error) {
 
@@ -1454,48 +1455,32 @@ func (s *Server) TransferMoneyBetweenAccounts(
 		return nil, status.Error(codes.InvalidArgument, "amount must be greater than zero")
 	}
 
-	transfer, err := s.CreateTransfer(req.FromAccount, req.ToAccount, int64(req.Amount))
+	transfer, err := s.CreateTransfer(req.FromAccount, req.ToAccount, req.Amount)
 	if err != nil {
+		log.Printf("bank/server.go: failed to create transfer: %v", err)
 		switch {
 		case strings.Contains(err.Error(), "same account"):
-			{
-				log.Println("bank/server.go: same account")
-				return nil, status.Error(codes.InvalidArgument, err.Error())
-			}
-		case strings.Contains(err.Error(), "currency mismatch"):
-			{
-				log.Println("bank/server.go: currency mismatch")
-				return nil, status.Error(codes.InvalidArgument, err.Error())
-			}
+			return nil, status.Error(codes.InvalidArgument, err.Error())
 		case strings.Contains(err.Error(), "insufficient funds"):
-			{
-				log.Println("bank/server.go: insufficient funds")
-				return nil, status.Error(codes.InvalidArgument, err.Error())
-			}
+			return nil, status.Error(codes.InvalidArgument, err.Error())
+		case strings.Contains(err.Error(), "exchange error"):
+			return nil, status.Error(codes.Unavailable, "exchange service currently unavailable")
 		default:
-			{
-				log.Println("bank/server.go: failed to create transfer")
-				return nil, status.Error(codes.Internal, "failed to create transfer")
-			}
+			return nil, status.Error(codes.Internal, "failed to create transfer")
 		}
 	}
 
 	err = s.ConfirmTransfer(transfer.Transaction_id, "123456")
 	if err != nil {
+		log.Printf("bank/server.go: transfer confirmation failed: %v", err)
 		switch {
 		case strings.Contains(err.Error(), "insufficient funds"):
-			{
-				log.Println("bank/server.go: insufficient funds")
-				return nil, status.Error(codes.FailedPrecondition, "insufficient funds")
-			}
+			return nil, status.Error(codes.FailedPrecondition, "insufficient funds")
 		default:
-			{
-				log.Println("bank/server.go: transfer confirmation failed")
-				return nil, status.Error(codes.Internal, "transfer confirmation failed")
-			}
-
+			return nil, status.Error(codes.Internal, "transfer confirmation failed")
 		}
 	}
+
 	res := &bankpb.TransferResponse{
 		FromAccount:     transfer.From_account,
 		ToAccount:       transfer.To_account,
@@ -1505,15 +1490,16 @@ func (s *Server) TransferMoneyBetweenAccounts(
 		Currency:        strconv.FormatInt(transfer.Start_currency_id, 10),
 		PaymentCode:     "",
 		ReferenceNumber: "",
-		Purpose:         "",
+		Purpose:         req.Description,
 		Status:          "realized",
-		Timestamp:       fmt.Sprintf("%d", transfer.Timestamp.Unix()),
+		Timestamp:       fmt.Sprintf("%d", time.Now().Unix()),
 	}
+
 	return res, nil
 }
 
 func (s *Server) GetTransfersHistoryForUserEmail(
-	ctx context.Context,
+	_ context.Context,
 	req *bankpb.TransferHistoryRequest) (*bankpb.TransferHistoryResponse, error) {
 	res, err := s.GetTransferHistory(req.Email, req.Page, req.PageSize)
 	if err != nil {

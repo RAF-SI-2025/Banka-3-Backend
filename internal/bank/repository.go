@@ -1,6 +1,7 @@
 package bank
 
 import (
+	"context"
 	cryptorand "crypto/rand"
 	"database/sql"
 	"errors"
@@ -27,6 +28,8 @@ var ErrAccountNumberGenerationFailed = errors.New("account number generation fai
 var ErrAccountNotFound = errors.New("account not found")
 var ErrInsufficientFunds = errors.New("insufficient funds")
 var ErrLimitExceeded = errors.New("limit exceeded")
+
+const commission_rate = 0.01
 
 func scanCompany(scanner interface {
 	Scan(dest ...any) error
@@ -982,11 +985,12 @@ func (s *Server) ProcessPayment(from_account string, to_account string, start_am
 	}
 	return payment, nil
 }
-func (s *Server) CreateTransfer(fromAccount, toAccount string, amount int64) (*Transfer, error) {
 
+func (s *Server) CreateTransfer(fromAccount, toAccount string, amount int64) (*Transfer, error) {
 	if fromAccount == toAccount {
 		return nil, errors.New("cannot transfer to same account")
 	}
+
 	fromAcc, err := s.GetAccountByNumberRecord(fromAccount)
 	if err != nil {
 		return nil, err
@@ -995,13 +999,37 @@ func (s *Server) CreateTransfer(fromAccount, toAccount string, amount int64) (*T
 	if err != nil {
 		return nil, err
 	}
+
+	var finalAmount = amount
+	var exchangeRate = 1.0
+	var commission int64 = 0
+
+	// Multi-currency logic: Always route through RSD if currencies differ
 	if fromAcc.Currency != toAcc.Currency {
-		return nil, errors.New("currency mismatch")
+		ctx := context.Background()
+
+		// Source -> RSD
+		resp1, err := s.callConvertMoney(ctx, fromAcc.Currency, "RSD", float64(amount))
+		if err != nil {
+			return nil, fmt.Errorf("exchange error (source to RSD): %v", err)
+		}
+
+		// RSD -> Target
+		resp2, err := s.callConvertMoney(ctx, "RSD", toAcc.Currency, resp1.ConvertedAmount)
+		if err != nil {
+			return nil, fmt.Errorf("exchange error (RSD to destination): %v", err)
+		}
+
+		commission = int64(float64(amount) * commission_rate)
+		finalAmount = int64(resp2.ConvertedAmount)
+		exchangeRate = resp2.ExchangeRate
 	}
+
 	currency, err := s.getCurrencyByLabel(fromAcc.Currency)
 	if err != nil {
 		return nil, err
 	}
+
 	tx, err := s.database.Begin()
 	if err != nil {
 		return nil, err
@@ -1011,112 +1039,105 @@ func (s *Server) CreateTransfer(fromAccount, toAccount string, amount int64) (*T
 	if fromAcc.Balance < amount {
 		return nil, errors.New("insufficient funds")
 	}
+
 	row := tx.QueryRow(`
     INSERT INTO transfers (
-        from_account,
-        to_account,
-        start_amount,
-        end_amount,
-        start_currency_id,
-        exchange_rate,
-        commission,
-        status
+        from_account, to_account, start_amount, end_amount,
+        start_currency_id, exchange_rate, commission, status
     )
-    VALUES ($1, $2, $3, $4, $5, NULL, 0, 'pending')
+    VALUES ($1, $2, $3, $4, $5, $6, $7, 'pending')
     RETURNING transaction_id, from_account, to_account,
               start_amount, end_amount,
               start_currency_id, exchange_rate,
               commission, status, timestamp
-`, fromAccount, toAccount, amount, amount, currency.Id)
+`, fromAccount, toAccount, amount, finalAmount, currency.Id, exchangeRate, commission)
+
 	transfer, err := scanTransfer(row)
 	if err != nil {
-		log.Println("greska u skeniranju transfera")
 		return nil, err
 	}
+
 	if err := tx.Commit(); err != nil {
-		log.Println("greska u komitovanju")
 		return nil, err
 	}
 	return transfer, nil
 }
 
 func (s *Server) ConfirmTransfer(transferID int64, verificationCode string) error {
-
 	if verificationCode == "" {
 		return errors.New("verification code required")
 	}
 
 	tx, err := s.database.Begin()
 	if err != nil {
-		log.Println("bank/server.go error when beginning transaction")
 		return err
 	}
-	defer func() {
-		_ = tx.Rollback()
-	}()
-	var transfer Transfer
+	defer func() { _ = tx.Rollback() }()
 
+	var t Transfer
 	err = tx.QueryRow(`
-		SELECT transaction_id, from_account, to_account, start_amount, status
-		FROM transfers
-		WHERE transaction_id = $1
-	`, transferID).Scan(
-		&transfer.Transaction_id,
-		&transfer.From_account,
-		&transfer.To_account,
-		&transfer.Start_amount,
-		&transfer.Status,
-	)
+		SELECT transaction_id, from_account, to_account, start_amount, end_amount, status
+		FROM transfers WHERE transaction_id = $1
+	`, transferID).Scan(&t.Transaction_id, &t.From_account, &t.To_account, &t.Start_amount, &t.End_amount, &t.Status)
 	if err != nil {
-		log.Println("bank/server.go error when executing query (ConfirmTransfer)")
 		return err
 	}
 
-	if transfer.Status != "pending" {
-		log.Println("bank/server.go transfer already processed (ConfirmTransfer)")
+	if t.Status != "pending" {
 		return errors.New("transfer already processed")
 	}
 
-	amount := transfer.Start_amount
+	// Fetch account currencies to determine if we need the bank intermediary
+	fromAcc, _ := s.GetAccountByNumberRecord(t.From_account)
+	toAcc, _ := s.GetAccountByNumberRecord(t.To_account)
 
-	// skini pare
-	res, err := tx.Exec(`
-		UPDATE accounts
-		SET balance = balance - $1
-		WHERE number = $2 AND balance >= $1
-	`, amount, transfer.From_account)
+	if fromAcc.Currency != toAcc.Currency {
+		// Multi-currency => Involve Bank Accounts
+		// We use the system email from seed.sql to find the bank's accounts
+		systemEmail := "system@banka3.rs"
+
+		// 1. Debit Client (Source Currency)
+		res, _ := tx.Exec(`UPDATE accounts SET balance = balance - $1 WHERE number = $2 AND balance >= $1`, t.Start_amount, t.From_account)
+		if aff, _ := res.RowsAffected(); aff == 0 {
+			return errors.New("insufficient funds")
+		}
+
+		// 2. Credit Bank (Source Currency)
+		_, err = tx.Exec(`UPDATE accounts SET balance = balance + $1 WHERE currency = $2 AND owner = (SELECT id FROM clients WHERE email = $3)`,
+			t.Start_amount, fromAcc.Currency, systemEmail)
+		if err != nil {
+			return err
+		}
+
+		// 3. Debit Bank (Target Currency)
+		_, err = tx.Exec(`UPDATE accounts SET balance = balance - $1 WHERE currency = $2 AND owner = (SELECT id FROM clients WHERE email = $3)`,
+			t.End_amount, toAcc.Currency, systemEmail)
+		if err != nil {
+			return err
+		}
+
+		// 4. Credit Client (Target Currency)
+		_, err = tx.Exec(`UPDATE accounts SET balance = balance + $1 WHERE number = $2`, t.End_amount, t.To_account)
+		if err != nil {
+			return err
+		}
+
+	} else {
+		// Same currency: Standard direct transfer
+		res, _ := tx.Exec(`UPDATE accounts SET balance = balance - $1 WHERE number = $2 AND balance >= $1`, t.Start_amount, t.From_account)
+		if aff, _ := res.RowsAffected(); aff == 0 {
+			return errors.New("insufficient funds")
+		}
+		_, err = tx.Exec(`UPDATE accounts SET balance = balance + $1 WHERE number = $2`, t.Start_amount, t.To_account)
+		if err != nil {
+			return err
+		}
+	}
+
+	_, err = tx.Exec(`UPDATE transfers SET status = 'realized' WHERE transaction_id = $1`, t.Transaction_id)
 	if err != nil {
 		return err
 	}
-
-	rows, _ := res.RowsAffected()
-	if rows == 0 {
-		log.Println("bank/server.go insufficient funds (ConfirmTransfer)")
-		return errors.New("insufficient funds")
-	}
-
-	// dodaj pare
-	_, err = tx.Exec(`
-		UPDATE accounts
-		SET balance = balance + $1
-		WHERE number = $2
-	`, amount, transfer.To_account)
-	if err != nil {
-		log.Println("bank/server.go error when adding money (ConfirmTransfer)")
-		return err
-	}
-
-	// update status
-	_, err = tx.Exec(`
-		UPDATE transfers
-		SET status = 'completed'
-		WHERE transaction_id = $1
-	`, transfer.Transaction_id)
-	if err != nil {
-		log.Println("bank/server.go error when updating status (ConfirmTransfer)")
-		return err
-	}
-
 	return tx.Commit()
 }
 
