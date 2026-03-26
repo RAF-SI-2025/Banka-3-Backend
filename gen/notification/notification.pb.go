@@ -281,6 +281,82 @@ func (x *CardCreatedMailRequest) GetToAddr() string {
 	return ""
 }
 
+type LoanPaymentFailedMailRequest struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	ToAddr        string                 `protobuf:"bytes,1,opt,name=to_addr,json=toAddr,proto3" json:"to_addr,omitempty"`
+	LoanNumber    string                 `protobuf:"bytes,2,opt,name=loan_number,json=loanNumber,proto3" json:"loan_number,omitempty"`
+	Amount        string                 `protobuf:"bytes,3,opt,name=amount,proto3" json:"amount,omitempty"`
+	Currency      string                 `protobuf:"bytes,4,opt,name=currency,proto3" json:"currency,omitempty"`
+	DueDate       string                 `protobuf:"bytes,5,opt,name=due_date,json=dueDate,proto3" json:"due_date,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *LoanPaymentFailedMailRequest) Reset() {
+	*x = LoanPaymentFailedMailRequest{}
+	mi := &file_notification_notification_proto_msgTypes[5]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *LoanPaymentFailedMailRequest) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*LoanPaymentFailedMailRequest) ProtoMessage() {}
+
+func (x *LoanPaymentFailedMailRequest) ProtoReflect() protoreflect.Message {
+	mi := &file_notification_notification_proto_msgTypes[5]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use LoanPaymentFailedMailRequest.ProtoReflect.Descriptor instead.
+func (*LoanPaymentFailedMailRequest) Descriptor() ([]byte, []int) {
+	return file_notification_notification_proto_rawDescGZIP(), []int{5}
+}
+
+func (x *LoanPaymentFailedMailRequest) GetToAddr() string {
+	if x != nil {
+		return x.ToAddr
+	}
+	return ""
+}
+
+func (x *LoanPaymentFailedMailRequest) GetLoanNumber() string {
+	if x != nil {
+		return x.LoanNumber
+	}
+	return ""
+}
+
+func (x *LoanPaymentFailedMailRequest) GetAmount() string {
+	if x != nil {
+		return x.Amount
+	}
+	return ""
+}
+
+func (x *LoanPaymentFailedMailRequest) GetCurrency() string {
+	if x != nil {
+		return x.Currency
+	}
+	return ""
+}
+
+func (x *LoanPaymentFailedMailRequest) GetDueDate() string {
+	if x != nil {
+		return x.DueDate
+	}
+	return ""
+}
+
 type SuccessResponse struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
 	Successful    bool                   `protobuf:"varint,1,opt,name=successful,proto3" json:"successful,omitempty"`
@@ -290,7 +366,7 @@ type SuccessResponse struct {
 
 func (x *SuccessResponse) Reset() {
 	*x = SuccessResponse{}
-	mi := &file_notification_notification_proto_msgTypes[5]
+	mi := &file_notification_notification_proto_msgTypes[6]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -302,7 +378,7 @@ func (x *SuccessResponse) String() string {
 func (*SuccessResponse) ProtoMessage() {}
 
 func (x *SuccessResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_notification_notification_proto_msgTypes[5]
+	mi := &file_notification_notification_proto_msgTypes[6]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -315,7 +391,7 @@ func (x *SuccessResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use SuccessResponse.ProtoReflect.Descriptor instead.
 func (*SuccessResponse) Descriptor() ([]byte, []int) {
-	return file_notification_notification_proto_rawDescGZIP(), []int{5}
+	return file_notification_notification_proto_rawDescGZIP(), []int{6}
 }
 
 func (x *SuccessResponse) GetSuccessful() bool {
@@ -344,18 +420,26 @@ const file_notification_notification_proto_rawDesc = "" +
 	"\ato_addr\x18\x01 \x01(\tR\x06toAddr\x12\x12\n" +
 	"\x04link\x18\x02 \x01(\tR\x04link\"1\n" +
 	"\x16CardCreatedMailRequest\x12\x17\n" +
-	"\ato_addr\x18\x01 \x01(\tR\x06toAddr\"1\n" +
+	"\ato_addr\x18\x01 \x01(\tR\x06toAddr\"\xa7\x01\n" +
+	"\x1cLoanPaymentFailedMailRequest\x12\x17\n" +
+	"\ato_addr\x18\x01 \x01(\tR\x06toAddr\x12\x1f\n" +
+	"\vloan_number\x18\x02 \x01(\tR\n" +
+	"loanNumber\x12\x16\n" +
+	"\x06amount\x18\x03 \x01(\tR\x06amount\x12\x1a\n" +
+	"\bcurrency\x18\x04 \x01(\tR\bcurrency\x12\x19\n" +
+	"\bdue_date\x18\x05 \x01(\tR\adueDate\"1\n" +
 	"\x0fSuccessResponse\x12\x1e\n" +
 	"\n" +
 	"successful\x18\x01 \x01(\bR\n" +
-	"successful2\xd8\x04\n" +
+	"successful2\xc1\x05\n" +
 	"\x13NotificationService\x12]\n" +
 	"\x15SendConfirmationEmail\x12%.notification.ConfirmationMailRequest\x1a\x1d.notification.SuccessResponse\x12Y\n" +
 	"\x13SendActivationEmail\x12#.notification.ActivationMailRequest\x1a\x1d.notification.SuccessResponse\x12^\n" +
 	"\x16SendPasswordResetEmail\x12%.notification.PasswordLinkMailRequest\x1a\x1d.notification.SuccessResponse\x12c\n" +
 	"\x1bSendInitialPasswordSetEmail\x12%.notification.PasswordLinkMailRequest\x1a\x1d.notification.SuccessResponse\x12e\n" +
 	"\x19SendCardConfirmationEmail\x12).notification.CardConfirmationMailRequest\x1a\x1d.notification.SuccessResponse\x12[\n" +
-	"\x14SendCardCreatedEmail\x12$.notification.CardCreatedMailRequest\x1a\x1d.notification.SuccessResponseB9Z7github.com/RAF-SI-2025/Banka-3-Backend/gen/notificationb\x06proto3"
+	"\x14SendCardCreatedEmail\x12$.notification.CardCreatedMailRequest\x1a\x1d.notification.SuccessResponse\x12g\n" +
+	"\x1aSendLoanPaymentFailedEmail\x12*.notification.LoanPaymentFailedMailRequest\x1a\x1d.notification.SuccessResponseB9Z7github.com/RAF-SI-2025/Banka-3-Backend/gen/notificationb\x06proto3"
 
 var (
 	file_notification_notification_proto_rawDescOnce sync.Once
@@ -369,14 +453,15 @@ func file_notification_notification_proto_rawDescGZIP() []byte {
 	return file_notification_notification_proto_rawDescData
 }
 
-var file_notification_notification_proto_msgTypes = make([]protoimpl.MessageInfo, 6)
+var file_notification_notification_proto_msgTypes = make([]protoimpl.MessageInfo, 7)
 var file_notification_notification_proto_goTypes = []any{
-	(*ConfirmationMailRequest)(nil),     // 0: notification.ConfirmationMailRequest
-	(*ActivationMailRequest)(nil),       // 1: notification.ActivationMailRequest
-	(*PasswordLinkMailRequest)(nil),     // 2: notification.PasswordLinkMailRequest
-	(*CardConfirmationMailRequest)(nil), // 3: notification.CardConfirmationMailRequest
-	(*CardCreatedMailRequest)(nil),      // 4: notification.CardCreatedMailRequest
-	(*SuccessResponse)(nil),             // 5: notification.SuccessResponse
+	(*ConfirmationMailRequest)(nil),      // 0: notification.ConfirmationMailRequest
+	(*ActivationMailRequest)(nil),        // 1: notification.ActivationMailRequest
+	(*PasswordLinkMailRequest)(nil),      // 2: notification.PasswordLinkMailRequest
+	(*CardConfirmationMailRequest)(nil),  // 3: notification.CardConfirmationMailRequest
+	(*CardCreatedMailRequest)(nil),       // 4: notification.CardCreatedMailRequest
+	(*LoanPaymentFailedMailRequest)(nil), // 5: notification.LoanPaymentFailedMailRequest
+	(*SuccessResponse)(nil),              // 6: notification.SuccessResponse
 }
 var file_notification_notification_proto_depIdxs = []int32{
 	0, // 0: notification.NotificationService.SendConfirmationEmail:input_type -> notification.ConfirmationMailRequest
@@ -385,14 +470,16 @@ var file_notification_notification_proto_depIdxs = []int32{
 	2, // 3: notification.NotificationService.SendInitialPasswordSetEmail:input_type -> notification.PasswordLinkMailRequest
 	3, // 4: notification.NotificationService.SendCardConfirmationEmail:input_type -> notification.CardConfirmationMailRequest
 	4, // 5: notification.NotificationService.SendCardCreatedEmail:input_type -> notification.CardCreatedMailRequest
-	5, // 6: notification.NotificationService.SendConfirmationEmail:output_type -> notification.SuccessResponse
-	5, // 7: notification.NotificationService.SendActivationEmail:output_type -> notification.SuccessResponse
-	5, // 8: notification.NotificationService.SendPasswordResetEmail:output_type -> notification.SuccessResponse
-	5, // 9: notification.NotificationService.SendInitialPasswordSetEmail:output_type -> notification.SuccessResponse
-	5, // 10: notification.NotificationService.SendCardConfirmationEmail:output_type -> notification.SuccessResponse
-	5, // 11: notification.NotificationService.SendCardCreatedEmail:output_type -> notification.SuccessResponse
-	6, // [6:12] is the sub-list for method output_type
-	0, // [0:6] is the sub-list for method input_type
+	5, // 6: notification.NotificationService.SendLoanPaymentFailedEmail:input_type -> notification.LoanPaymentFailedMailRequest
+	6, // 7: notification.NotificationService.SendConfirmationEmail:output_type -> notification.SuccessResponse
+	6, // 8: notification.NotificationService.SendActivationEmail:output_type -> notification.SuccessResponse
+	6, // 9: notification.NotificationService.SendPasswordResetEmail:output_type -> notification.SuccessResponse
+	6, // 10: notification.NotificationService.SendInitialPasswordSetEmail:output_type -> notification.SuccessResponse
+	6, // 11: notification.NotificationService.SendCardConfirmationEmail:output_type -> notification.SuccessResponse
+	6, // 12: notification.NotificationService.SendCardCreatedEmail:output_type -> notification.SuccessResponse
+	6, // 13: notification.NotificationService.SendLoanPaymentFailedEmail:output_type -> notification.SuccessResponse
+	7, // [7:14] is the sub-list for method output_type
+	0, // [0:7] is the sub-list for method input_type
 	0, // [0:0] is the sub-list for extension type_name
 	0, // [0:0] is the sub-list for extension extendee
 	0, // [0:0] is the sub-list for field type_name
@@ -409,7 +496,7 @@ func file_notification_notification_proto_init() {
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
 			RawDescriptor: unsafe.Slice(unsafe.StringData(file_notification_notification_proto_rawDesc), len(file_notification_notification_proto_rawDesc)),
 			NumEnums:      0,
-			NumMessages:   6,
+			NumMessages:   7,
 			NumExtensions: 0,
 			NumServices:   1,
 		},

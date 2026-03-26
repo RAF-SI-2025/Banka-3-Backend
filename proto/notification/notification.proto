@@ -11,6 +11,7 @@ service NotificationService {
   rpc SendInitialPasswordSetEmail(PasswordLinkMailRequest) returns (SuccessResponse);
   rpc SendCardConfirmationEmail(CardConfirmationMailRequest) returns (SuccessResponse);
   rpc SendCardCreatedEmail(CardCreatedMailRequest) returns (SuccessResponse);
+  rpc SendLoanPaymentFailedEmail(LoanPaymentFailedMailRequest) returns (SuccessResponse);
 }
 
 message ConfirmationMailRequest {
@@ -36,6 +37,14 @@ message CardConfirmationMailRequest {
 
 message CardCreatedMailRequest {
   string to_addr = 1;
+}
+
+message LoanPaymentFailedMailRequest {
+  string to_addr = 1;
+  string loan_number = 2;
+  string amount = 3;
+  string currency = 4;
+  string due_date = 5;
 }
 
 message SuccessResponse {bool successful = 1;}

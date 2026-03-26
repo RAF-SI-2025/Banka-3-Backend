@@ -175,6 +175,41 @@ func (s *Server) SendCardConfirmationEmail(_ context.Context, req *notification.
 	return &notification.SuccessResponse{Successful: true}, nil
 }
 
+func (s *Server) SendLoanPaymentFailedEmail(_ context.Context, req *notification.LoanPaymentFailedMailRequest) (*notification.SuccessResponse, error) {
+	to := strings.Split(req.ToAddr, ",")
+	templ, err := template.ParseFiles("templates/loan_payment_failed.html")
+	if err != nil {
+		log.Println("Cannot parse loan_payment_failed.html:", err)
+		return &notification.SuccessResponse{Successful: false}, nil
+	}
+
+	data := struct {
+		LoanNumber string
+		Amount     string
+		Currency   string
+		DueDate    string
+	}{
+		LoanNumber: req.LoanNumber,
+		Amount:     req.Amount,
+		Currency:   req.Currency,
+		DueDate:    req.DueDate,
+	}
+
+	var rendered bytes.Buffer
+	if err := templ.Execute(&rendered, data); err != nil {
+		log.Println("Cannot execute loan_payment_failed.html:", err)
+		return &notification.SuccessResponse{Successful: false}, nil
+	}
+
+	err = s.sender.Send(to, "Neuspela naplata rate kredita - Banka 3", rendered.String())
+	if err != nil {
+		log.Println("Couldn't send loan payment failed email:", err)
+		return &notification.SuccessResponse{Successful: false}, nil
+	}
+
+	return &notification.SuccessResponse{Successful: true}, nil
+}
+
 func (s *Server) SendCardCreatedEmail(_ context.Context, req *notification.CardCreatedMailRequest) (*notification.SuccessResponse, error) {
 	to := strings.Split(req.ToAddr, ",")
 	templ, err := template.ParseFiles("templates/card_created.html")

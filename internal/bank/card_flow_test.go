@@ -178,12 +178,17 @@ func TestBlockCardSuccess(t *testing.T) {
 	server, mock, db := newTestServer(t)
 	defer func() { _ = db.Close() }()
 
+	mock.ExpectQuery(`SELECT id, number, type, brand, creation_date, valid_until, account_number, cvv, card_limit, status`).
+		WithArgs("1234567890123456").
+		WillReturnRows(sqlmock.NewRows([]string{"id", "number", "type", "brand", "creation_date", "valid_until", "account_number", "cvv", "card_limit", "status"}).
+			AddRow(int64(1), "1234567890123456", "debit", "visa", time.Now(), time.Now().AddDate(5, 0, 0), "111000000000000011", "123", int64(100000), "active"))
+
 	mock.ExpectExec(regexp.QuoteMeta(`UPDATE cards SET status = $1 WHERE id = $2`)).
 		WithArgs(Blocked, int64(1)).
 		WillReturnResult(sqlmock.NewResult(1, 1))
 
 	resp, err := server.BlockCard(context.Background(), &bankpb.BlockCardRequest{
-		CardId: 1,
+		CardNumber: "1234567890123456",
 	})
 
 	if err != nil {

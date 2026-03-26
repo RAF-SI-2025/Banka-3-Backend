@@ -1,0 +1,37 @@
+syntax = "proto3";
+
+package user;
+
+option go_package = "github.com/RAF-SI-2025/Banka-3-Backend/gen/user";
+
+service TOTPService {
+  rpc VerifyCode(VerifyCodeRequest) returns (VerifyCodeResponse);
+  rpc EnrollBegin(EnrollBeginRequest) returns (EnrollBeginResponse);
+  rpc EnrollConfirm(EnrollConfirmRequest) returns (EnrollConfirmResponse);
+}
+
+message VerifyCodeRequest {
+  string email = 1;
+  string code = 2;
+}
+
+message VerifyCodeResponse {
+  bool valid = 1;
+}
+
+message EnrollBeginRequest {
+  string email = 1;
+}
+
+message EnrollBeginResponse {
+  string url = 1;
+}
+
+message EnrollConfirmRequest {
+  string email = 1;
+  string code = 2;
+}
+
+message EnrollConfirmResponse {
+  bool success = 1;
+}

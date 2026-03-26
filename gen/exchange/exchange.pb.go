@@ -25,6 +25,9 @@ type CurrencyRate struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
 	Code          string                 `protobuf:"bytes,1,opt,name=code,proto3" json:"code,omitempty"`
 	Rate          float64                `protobuf:"fixed64,2,opt,name=rate,proto3" json:"rate,omitempty"`
+	BuyRate       float64                `protobuf:"fixed64,3,opt,name=buy_rate,json=buyRate,proto3" json:"buy_rate,omitempty"`
+	SellRate      float64                `protobuf:"fixed64,4,opt,name=sell_rate,json=sellRate,proto3" json:"sell_rate,omitempty"`
+	MiddleRate    float64                `protobuf:"fixed64,5,opt,name=middle_rate,json=middleRate,proto3" json:"middle_rate,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -69,6 +72,27 @@ func (x *CurrencyRate) GetCode() string {
 func (x *CurrencyRate) GetRate() float64 {
 	if x != nil {
 		return x.Rate
+	}
+	return 0
+}
+
+func (x *CurrencyRate) GetBuyRate() float64 {
+	if x != nil {
+		return x.BuyRate
+	}
+	return 0
+}
+
+func (x *CurrencyRate) GetSellRate() float64 {
+	if x != nil {
+		return x.SellRate
+	}
+	return 0
+}
+
+func (x *CurrencyRate) GetMiddleRate() float64 {
+	if x != nil {
+		return x.MiddleRate
 	}
 	return 0
 }
@@ -277,10 +301,14 @@ var File_exchange_exchange_proto protoreflect.FileDescriptor
 
 const file_exchange_exchange_proto_rawDesc = "" +
 	"\n" +
-	"\x17exchange/exchange.proto\x12\bexchange\"6\n" +
+	"\x17exchange/exchange.proto\x12\bexchange\"\x8f\x01\n" +
 	"\fCurrencyRate\x12\x12\n" +
 	"\x04code\x18\x01 \x01(\tR\x04code\x12\x12\n" +
-	"\x04rate\x18\x02 \x01(\x01R\x04rate\"\x19\n" +
+	"\x04rate\x18\x02 \x01(\x01R\x04rate\x12\x19\n" +
+	"\bbuy_rate\x18\x03 \x01(\x01R\abuyRate\x12\x1b\n" +
+	"\tsell_rate\x18\x04 \x01(\x01R\bsellRate\x12\x1f\n" +
+	"\vmiddle_rate\x18\x05 \x01(\x01R\n" +
+	"middleRate\"\x19\n" +
 	"\x17ExchangeRateListRequest\"k\n" +
 	"\x18ExchangeRateListResponse\x12,\n" +
 	"\x05rates\x18\x01 \x03(\v2\x16.exchange.CurrencyRateR\x05rates\x12!\n" +

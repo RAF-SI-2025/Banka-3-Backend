@@ -2,6 +2,10 @@
 
 Projekat iz predmeta na RAF-u. Go/gRPC mikroservisi + Postgres.
 
+## API
+
+Api specifikacija se nalazi [ovde](https://ivan-klikovac.github.io/raf-banka3-api/)
+
 ## Potrebno
 
 - [Docker](https://docs.docker.com/get-docker/)
@@ -70,7 +74,7 @@ ciju sifru mozete na discordu u vidu pinnovane poruke. Sadrzaj ovog fajla ce
 takodje biti dostupan na discordu tako da korisnik nije primoran da koristi gpg.
 
 Za one koji imaju gpg (verovatno svi koji koriste linux, potreban je za package management)
-dovoljno je izvrsiti sledecu komandu kako bi dekriptovali fajl: 
+dovoljno je izvrsiti sledecu komandu kako bi dekriptovali fajl:
 `gpg --decrypt -o .env .env.example.gpg` nakon cega ce gpg promptovati za sifru preko GUI-a
 ili TUI-a u zavisnosti od podesavanja.
 

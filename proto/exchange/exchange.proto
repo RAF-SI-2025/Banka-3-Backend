@@ -12,6 +12,9 @@ service ExchangeService {
 message CurrencyRate {
   string code = 1;
   double rate = 2;
+  double buy_rate = 3;
+  double sell_rate = 4;
+  double middle_rate = 5;
 }
 
 message ExchangeRateListRequest {}

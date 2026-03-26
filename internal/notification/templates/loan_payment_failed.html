@@ -1,0 +1,48 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <style>
+    .container {
+      font-family: 'Segoe UI', sans-serif;
+      padding: 30px;
+      border: 1px solid #e0e0e0;
+      border-radius: 8px;
+      max-width: 500px;
+      margin: auto;
+      text-align: center;
+    }
+
+    .error-badge {
+      display: inline-block;
+      padding: 8px 16px;
+      background-color: #fce8e6;
+      color: #c5221f;
+      border-radius: 20px;
+      font-weight: bold;
+      margin-bottom: 15px;
+    }
+
+    .info {
+      color: #555;
+      line-height: 1.6;
+    }
+  </style>
+  <title>banka 3</title>
+</head>
+<body>
+<div class="container">
+  <div class="error-badge">NEUSPELA NAPLATA</div>
+  <h2 style="color: #333;">Naplata rate kredita nije uspela</h2>
+  <p class="info">
+    Naplata rate za kredit broj <strong>{{.LoanNumber}}</strong> u iznosu od
+    <strong>{{.Amount}} {{.Currency}}</strong> sa rokom dospeća
+    <strong>{{.DueDate}}</strong> nije uspela zbog nedovoljno sredstava na računu.
+  </p>
+  <p class="info">
+    Ponovni pokušaj naplate biće izvršen za 3 dana. Molimo Vas da obezbedite
+    dovoljno sredstava na računu.
+  </p>
+  <p style="margin-top: 30px; font-weight: bold; color: #0052cc;">Vaša Banka 3</p>
+</div>
+</body>
+</html>

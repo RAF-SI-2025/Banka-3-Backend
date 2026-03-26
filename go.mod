@@ -7,6 +7,7 @@ require (
 	github.com/gin-gonic/gin v1.12.0
 	github.com/golang-jwt/jwt/v5 v5.3.1
 	github.com/jackc/pgx/v5 v5.9.1
+	github.com/pquerna/otp v1.5.0
 	github.com/stretchr/testify v1.11.1
 	github.com/theplant/luhn v0.0.0-20170224032821-81a1a381387a
 	google.golang.org/grpc v1.79.3
@@ -16,6 +17,7 @@ require (
 )
 
 require (
+	github.com/boombuler/barcode v1.0.1 // indirect
 	github.com/davecgh/go-spew v1.1.1 // indirect
 	github.com/pmezard/go-difflib v1.0.0 // indirect
 	gopkg.in/yaml.v3 v3.0.1 // indirect

@@ -461,3 +461,84 @@ func (s *Server) UpdateEmployee_(emp *Employee) (*Employee, error) {
 
 	return &updated, nil
 }
+
+var ErrUserNotFound = errors.New("user not found")
+
+func (s *TOTPServer) getUserIdByEmail(email string) (*uint64, error) {
+	query := `
+		SELECT id FROM employees WHERE email = $1
+		UNION ALL
+		SELECT id FROM clients WHERE email = $1
+		LIMIT 1
+	`
+
+	var id uint64
+
+	err := s.db.QueryRow(query, email).Scan(&id)
+	if err == sql.ErrNoRows {
+		return nil, ErrUserNotFound
+	}
+	if err != nil {
+		return nil, err
+	}
+	return &id, nil
+}
+
+func (s *TOTPServer) SetTempTOTPSecret(id uint64, secret string) error {
+	_, err := s.db.Exec(`
+		INSERT INTO verification_codes (client_id, temp_secret, temp_created_at)
+		VALUES ($1, $2, NOW())
+		ON CONFLICT (client_id)
+		DO UPDATE SET
+			temp_secret = EXCLUDED.temp_secret,
+			temp_created_at = NOW()
+	`, id, secret)
+	return err
+}
+
+func (s *TOTPServer) GetTempSecret(tx *sql.Tx, id uint64) (*string, error) {
+	var temp_secret string
+	row := tx.QueryRow(`
+		SELECT temp_secret
+		FROM verification_codes
+		WHERE client_id = $1
+		FOR UPDATE
+	`, id)
+	if row == nil {
+		return nil, ErrUserNotFound
+	}
+	err := row.Scan(&temp_secret)
+	if err != nil {
+		return nil, err
+	}
+	return &temp_secret, nil
+}
+
+func (s *TOTPServer) GetSecret(id uint64) (*string, error) {
+	var secret string
+	row := s.db.QueryRow(`
+		SELECT secret
+		FROM verification_codes
+		WHERE client_id = $1 AND enabled = TRUE
+	`, id)
+	err := row.Scan(&secret)
+	if err != nil {
+		return nil, ErrUserNotFound
+	}
+	return &secret, nil
+}
+
+func (s *TOTPServer) EnableTOTP(tx *sql.Tx, id uint64, tempSecret string) error {
+	_, err := tx.Exec(`
+		UPDATE verification_codes
+		SET enabled = TRUE,
+		    secret = $1,
+		    temp_secret = NULL
+		WHERE client_id = $2
+	`, tempSecret, id)
+
+	if err != nil {
+		return err
+	}
+	return nil
+}

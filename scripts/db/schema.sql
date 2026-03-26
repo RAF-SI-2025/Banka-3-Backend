@@ -191,7 +191,7 @@ CREATE TABLE IF NOT EXISTS transfers (
     start_currency_id   BIGINT          REFERENCES currencies(id) ON UPDATE CASCADE ON DELETE RESTRICT,
     exchange_rate       DECIMAL(20,2),
     commission          BIGINT          NOT NULL,
-    status              VARCHAR(20)     NOT NULL DEFAULT 'realized' CHECK (status IN ('realized', 'rejected', 'pending')),
+    status              VARCHAR(20)     NOT NULL DEFAULT 'pending' CHECK  (status IN ('pending', 'completed', 'rejected')),
     timestamp           TIMESTAMP       NOT NULL DEFAULT NOW()
 );
 
@@ -207,15 +207,16 @@ CREATE TYPE interest_rate_type AS ENUM ('fixed', 'variable');
 CREATE TABLE IF NOT EXISTS loans (
     id                  BIGSERIAL           PRIMARY KEY,
     account_id          BIGINT              REFERENCES accounts(id) ON UPDATE CASCADE ON DELETE RESTRICT,
-    amount              DECIMAL(12, 2)      NOT NULL,
+    amount              BIGINT              NOT NULL,
     currency_id         BIGSERIAL           REFERENCES currencies(id) ON UPDATE CASCADE ON DELETE RESTRICT,
     installments        BIGINT              NOT NULL,
+    nominal_rate        DECIMAL (5, 2)      NOT NULL,
     interest_rate       DECIMAL (5, 2)      NOT NULL,
     date_signed         DATE                NOT NULL,
     date_end            DATE                NOT NULL,
-    monthly_payment     DECIMAL(20, 2)      NOT NULL,
+    monthly_payment     BIGINT              NOT NULL,
     next_payment_due    DATE                NOT NULL,
-    remaining_debt      DECIMAL(20, 2)      NOT NULL,
+    remaining_debt      BIGINT              NOT NULL,
     type                loan_type           NOT NULL,
     loan_status         loan_status         NOT NULL DEFAULT 'approved',
     interest_rate_type  interest_rate_type  NOT NULL
@@ -226,7 +227,7 @@ CREATE TYPE installment_status AS ENUM ('paid', 'due', 'late');
 CREATE TABLE IF NOT EXISTS loan_installment (
     id                  BIGSERIAL           PRIMARY KEY,
     loan_id             BIGINT              REFERENCES loans(id) ON UPDATE CASCADE ON DELETE CASCADE,
-    installment_amount  DECIMAL(20,2)       NOT NULL,
+    installment_amount  BIGINT              NOT NULL,
     interest_rate       DECIMAL(5, 2)       NOT NULL,
     currency_id         BIGSERIAL           REFERENCES currencies(id) ON UPDATE CASCADE ON DELETE RESTRICT,
     due_date            DATE                NOT NULL,
@@ -242,21 +243,25 @@ CREATE TABLE IF NOT EXISTS loan_request (
     id                  BIGSERIAL            PRIMARY KEY,
     type                loan_type            NOT NULL,
     currency_id         BIGINT               REFERENCES currencies(id) ON UPDATE CASCADE ON DELETE RESTRICT,
-    amount              DECIMAL(20, 2)       NOT NULL,
+    amount              BIGINT               NOT NULL,
     repayment_period    BIGINT               NOT NULL,
     account_id          BIGINT               REFERENCES accounts(id) ON UPDATE CASCADE ON DELETE RESTRICT,
     status              loan_request_status  NOT NULL DEFAULT 'pending',
-    submission_date     TIMESTAMP            NOT NULL DEFAULT NOW()
+    submission_date     TIMESTAMP            NOT NULL DEFAULT NOW(),
+    purpose             VARCHAR(255),
+    salary              BIGINT,
+    employment_status   employment_status,
+    employment_period   BIGINT,
+    phone_number        VARCHAR(32),
+    interest_rate_type  interest_rate_type   NOT NULL DEFAULT 'fixed'
 );
 
 CREATE TABLE IF NOT EXISTS verification_codes (
-    id              BIGSERIAL   PRIMARY KEY,
-    client_id       BIGINT      REFERENCES clients(id) ON UPDATE CASCADE ON DELETE CASCADE,
-    transaction_id  BIGINT      REFERENCES payments(transaction_id) ON UPDATE CASCADE ON DELETE RESTRICT,
-    valid_until     TIMESTAMP   NOT NULL,
-    tries           INT         NOT NULL DEFAULT 0,
-    valid           BOOLEAN     NOT NULL DEFAULT TRUE,
-    used            BOOLEAN     NOT NULL DEFAULT FALSE
+    client_id       BIGINT      PRIMARY KEY REFERENCES clients(id) ON DELETE CASCADE,
+    enabled         BOOLEAN     NOT NULL DEFAULT FALSE,
+    secret          VARCHAR(32),
+    temp_secret     VARCHAR(32),
+    temp_created_at TIMESTAMP   NOT NULL DEFAULT NOW()
 );
 
 CREATE TABLE IF NOT EXISTS exchange_rates (

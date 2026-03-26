@@ -53,6 +53,9 @@ func main() {
 
 	bankService := internalBank.NewServer(db, gorm_db)
 
+	stopScheduler := bankService.StartScheduler()
+	defer stopScheduler()
+
 	srv := grpc.NewServer()
 	bank.RegisterBankServiceServer(srv, bankService)
 	reflection.Register(srv)

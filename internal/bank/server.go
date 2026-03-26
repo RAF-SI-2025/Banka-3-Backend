@@ -5,6 +5,7 @@ import (
 	"context"
 	"database/sql"
 	"fmt"
+	"log"
 	"math"
 	"strconv"
 	"strings"
@@ -191,6 +192,14 @@ func mapCardToProto(card *Card) *bankpb.CardResponse {
 	}
 }
 
+func mapCardsToProto(cards []Card) []*bankpb.CardResponse {
+	pbCards := make([]*bankpb.CardResponse, 0, len(cards))
+	for i := range cards {
+		pbCards = append(pbCards, mapCardToProto(&cards[i]))
+	}
+	return pbCards
+}
+
 func (s *Server) checkCardLimit(userEmail string, accountNumber string) error {
 	isAuth, _ := s.IsAuthorizedParty(userEmail, accountNumber)
 	limit := 2
@@ -327,16 +336,65 @@ func (s *Server) ConfirmCard(ctx context.Context, req *bankpb.ConfirmCardRequest
 	return &bankpb.ConfirmCardResponse{}, nil
 }
 
-func (s *Server) GetCards(_ context.Context, _ *bankpb.GetCardsRequest) (*bankpb.GetCardsResponse, error) {
-	return nil, status.Error(codes.Unimplemented, "not implemented yet")
+func (s *Server) GetCards(ctx context.Context, _ *bankpb.GetCardsRequest) (*bankpb.GetCardsResponse, error) {
+	md, ok := metadata.FromIncomingContext(ctx)
+	if !ok {
+		return nil, status.Error(codes.Unauthenticated, "metadata missing")
+	}
+
+	emails := md.Get("user-email")
+	if len(emails) == 0 || strings.TrimSpace(emails[0]) == "" {
+		return nil, status.Error(codes.Unauthenticated, "email missing in metadata")
+	}
+	userEmail := emails[0]
+
+	isEmployee, err := s.IsEmployeeByEmail(userEmail)
+	if err != nil {
+		return nil, status.Error(codes.Internal, "failed to resolve caller")
+	}
+
+	var cards []Card
+
+	if isEmployee {
+		cards, err = s.GetCardsForEmployee()
+		if err != nil {
+			return nil, status.Error(codes.Internal, "failed to fetch cards")
+		}
+
+		return &bankpb.GetCardsResponse{
+			Cards: mapCardsToProto(cards),
+		}, nil
+	}
+
+	clientID, err := s.GetClientIDByEmail(userEmail)
+	if err != nil {
+		return nil, status.Error(codes.NotFound, "client not found")
+	}
+
+	cards, err = s.GetCardsByOwnerID(clientID)
+	if err != nil {
+		return nil, status.Error(codes.Internal, "failed to fetch cards")
+	}
+
+	return &bankpb.GetCardsResponse{
+		Cards: mapCardsToProto(cards),
+	}, nil
 }
 
 func (s *Server) BlockCard(_ context.Context, req *bankpb.BlockCardRequest) (*bankpb.BlockCardResponse, error) {
-	if req.CardId <= 0 {
-		return nil, status.Error(codes.InvalidArgument, "invalid card id")
+	var cardID int64
+
+	if req.CardNumber != "" {
+		card, err := s.GetCardByNumberRecord(req.CardNumber)
+		if err != nil {
+			return &bankpb.BlockCardResponse{Success: false}, status.Error(codes.NotFound, "card not found")
+		}
+		cardID = card.Id
+	} else {
+		return nil, status.Error(codes.InvalidArgument, "card_number is required")
 	}
 
-	err := s.BlockCardRecord(req.CardId)
+	err := s.BlockCardRecord(cardID)
 	if err != nil {
 		return &bankpb.BlockCardResponse{Success: false}, status.Error(codes.NotFound, "card not found")
 	}
@@ -1137,7 +1195,67 @@ func parseLoanType(value string) (loan_type, error) {
 	}
 }
 
-func (s *Server) GetLoans(ctx context.Context, req *bankpb.GetLoansRequest) (*bankpb.GetLoansResponse, error) {
+func parseInterestRateType(value string) (interest_rate_type, error) {
+	switch strings.ToLower(strings.TrimSpace(value)) {
+	case "fixed", "fiksna", "":
+		return Fixed, nil
+	case "variable", "varijabilna":
+		return Variable, nil
+	default:
+		return "", status.Error(codes.InvalidArgument, "invalid interest_rate_type")
+	}
+}
+
+func parseEmploymentStatus(value string) (employment_status, error) {
+	switch strings.ToLower(strings.TrimSpace(value)) {
+	case "full_time":
+		return Full_time, nil
+	case "temporary":
+		return Temporary, nil
+	case "unemployed":
+		return Unemployed, nil
+	case "":
+		return "", nil
+	default:
+		return "", status.Error(codes.InvalidArgument, "invalid employment_status")
+	}
+}
+
+func parseLoanStatus(value string) (loan_status, error) {
+	switch strings.ToLower(strings.TrimSpace(value)) {
+	case "approved":
+		return Approved, nil
+	case "rejected":
+		return Rejected, nil
+	case "paid":
+		return Paid, nil
+	case "late":
+		return Late, nil
+	default:
+		return "", status.Error(codes.InvalidArgument, "invalid status")
+	}
+}
+
+func loanViewToProto(loan *loanView) *bankpb.Loan {
+	return &bankpb.Loan{
+		LoanNumber:            loan.LoanNumber,
+		LoanType:              loan.LoanType,
+		AccountNumber:         loan.AccountNumber,
+		LoanAmount:            loan.LoanAmount,
+		RepaymentPeriod:       loan.RepaymentPeriod,
+		NominalRate:           loan.NominalRate,
+		EffectiveRate:         loan.EffectiveRate,
+		AgreementDate:         loan.AgreementDate,
+		MaturityDate:          loan.MaturityDate,
+		NextInstallmentAmount: loan.NextInstallmentAmount,
+		NextInstallmentDate:   loan.NextInstallmentDate,
+		RemainingDebt:         loan.RemainingDebt,
+		Currency:              loan.Currency,
+		Status:                loan.Status,
+	}
+}
+
+func (s *Server) GetLoans(_ context.Context, req *bankpb.GetLoansRequest) (*bankpb.GetLoansResponse, error) {
 	clientEmail := strings.TrimSpace(req.ClientEmail)
 	if clientEmail == "" {
 		return nil, status.Error(codes.Unauthenticated, "client email required")
@@ -1154,18 +1272,11 @@ func (s *Server) GetLoans(ctx context.Context, req *bankpb.GetLoansRequest) (*ba
 
 	loanStatus := ""
 	if strings.TrimSpace(req.Status) != "" {
-		switch strings.ToLower(strings.TrimSpace(req.Status)) {
-		case "approved":
-			loanStatus = string(Approved)
-		case "rejected":
-			loanStatus = string(Rejected)
-		case "paid":
-			loanStatus = string(Paid)
-		case "late":
-			loanStatus = string(Late)
-		default:
-			return nil, status.Error(codes.InvalidArgument, "invalid status")
+		parsed, err := parseLoanStatus(req.Status)
+		if err != nil {
+			return nil, err
 		}
+		loanStatus = string(parsed)
 	}
 
 	loans, err := s.getLoansForClient(
@@ -1179,23 +1290,8 @@ func (s *Server) GetLoans(ctx context.Context, req *bankpb.GetLoansRequest) (*ba
 	}
 
 	responseLoans := make([]*bankpb.Loan, 0, len(loans))
-	for _, loan := range loans {
-		responseLoans = append(responseLoans, &bankpb.Loan{
-			LoanNumber:            loan.LoanNumber,
-			LoanType:              loan.LoanType,
-			AccountNumber:         loan.AccountNumber,
-			LoanAmount:            loan.LoanAmount,
-			RepaymentPeriod:       loan.RepaymentPeriod,
-			NominalRate:           loan.NominalRate,
-			EffectiveRate:         loan.EffectiveRate,
-			AgreementDate:         loan.AgreementDate,
-			MaturityDate:          loan.MaturityDate,
-			NextInstallmentAmount: loan.NextInstallmentAmount,
-			NextInstallmentDate:   loan.NextInstallmentDate,
-			RemainingDebt:         loan.RemainingDebt,
-			Currency:              loan.Currency,
-			Status:                loan.Status,
-		})
+	for i := range loans {
+		responseLoans = append(responseLoans, loanViewToProto(&loans[i]))
 	}
 
 	return &bankpb.GetLoansResponse{
@@ -1203,7 +1299,7 @@ func (s *Server) GetLoans(ctx context.Context, req *bankpb.GetLoansRequest) (*ba
 	}, nil
 }
 
-func (s *Server) GetLoanByNumber(ctx context.Context, req *bankpb.GetLoanByNumberRequest) (*bankpb.Loan, error) {
+func (s *Server) GetLoanByNumber(_ context.Context, req *bankpb.GetLoanByNumberRequest) (*bankpb.Loan, error) {
 	clientEmail := strings.TrimSpace(req.ClientEmail)
 	if clientEmail == "" {
 		return nil, status.Error(codes.Unauthenticated, "client email required")
@@ -1227,25 +1323,10 @@ func (s *Server) GetLoanByNumber(ctx context.Context, req *bankpb.GetLoanByNumbe
 		return nil, status.Error(codes.Internal, "failed to retrieve loan")
 	}
 
-	return &bankpb.Loan{
-		LoanNumber:            loan.LoanNumber,
-		LoanType:              loan.LoanType,
-		AccountNumber:         loan.AccountNumber,
-		LoanAmount:            loan.LoanAmount,
-		RepaymentPeriod:       loan.RepaymentPeriod,
-		NominalRate:           loan.NominalRate,
-		EffectiveRate:         loan.EffectiveRate,
-		AgreementDate:         loan.AgreementDate,
-		MaturityDate:          loan.MaturityDate,
-		NextInstallmentAmount: loan.NextInstallmentAmount,
-		NextInstallmentDate:   loan.NextInstallmentDate,
-		RemainingDebt:         loan.RemainingDebt,
-		Currency:              loan.Currency,
-		Status:                loan.Status,
-	}, nil
+	return loanViewToProto(loan), nil
 }
 
-func (s *Server) CreateLoanRequest(ctx context.Context, req *bankpb.CreateLoanRequestRequest) (*bankpb.CreateLoanRequestResponse, error) {
+func (s *Server) CreateLoanRequest(_ context.Context, req *bankpb.CreateLoanRequestRequest) (*bankpb.CreateLoanRequestResponse, error) {
 	clientEmail := strings.TrimSpace(req.ClientEmail)
 	if clientEmail == "" {
 		return nil, status.Error(codes.Unauthenticated, "client email required")
@@ -1292,14 +1373,30 @@ func (s *Server) CreateLoanRequest(ctx context.Context, req *bankpb.CreateLoanRe
 		return nil, status.Error(codes.Internal, "failed to retrieve currency")
 	}
 
+	interestRateType, err := parseInterestRateType(req.InterestRateType)
+	if err != nil {
+		return nil, err
+	}
+
+	empStatus, err := parseEmploymentStatus(req.EmploymentStatus)
+	if err != nil {
+		return nil, err
+	}
+
 	loanRequest := &LoanRequest{
-		Type:             normalizedType,
-		Currency_id:      currency.Id,
-		Amount:           req.Amount,
-		Repayment_period: int64(req.RepaymentPeriod),
-		Account_id:       account.Id,
-		Status:           LoanRequestPending,
-		Submission_date:  time.Now(),
+		Type:               normalizedType,
+		Currency_id:        currency.Id,
+		Amount:             req.Amount,
+		Repayment_period:   int64(req.RepaymentPeriod),
+		Account_id:         account.Id,
+		Status:             LoanRequestPending,
+		Submission_date:    time.Now(),
+		Purpose:            strings.TrimSpace(req.Purpose),
+		Salary:             req.Salary,
+		Employment_status:  empStatus,
+		Employment_period:  req.EmploymentPeriod,
+		Phone_number:       strings.TrimSpace(req.PhoneNumber),
+		Interest_rate_type: interestRateType,
 	}
 
 	if err := s.createLoanRequest(loanRequest); err != nil {
@@ -1307,4 +1404,295 @@ func (s *Server) CreateLoanRequest(ctx context.Context, req *bankpb.CreateLoanRe
 	}
 
 	return &bankpb.CreateLoanRequestResponse{}, nil
+}
+
+func (s *Server) PayoutMoneyToOtherAccount(
+	_ context.Context,
+	req *bankpb.PaymentRequest,
+) (*bankpb.PaymentResponse, error) {
+
+	payment, currency, err := s.ProcessPayment(req.SenderAccount, req.RecipientAccount,
+		req.Amount, req.PaymentCode, req.ReferenceNumber, req.Purpose)
+
+	if err != nil {
+		log.Printf("bank/server.go: payment failed: %v", err)
+		switch {
+		case errors.Is(err, ErrAccountNotFound):
+			return nil, status.Error(codes.NotFound, "account not found")
+		case errors.Is(err, ErrInsufficientFunds):
+			return nil, status.Error(codes.FailedPrecondition, "insufficient funds")
+		case strings.Contains(err.Error(), "exchange error"):
+			return nil, status.Error(codes.Unavailable, "exchange service unavailable")
+		default:
+			return nil, status.Error(codes.Internal, "internal error")
+		}
+	}
+
+	return &bankpb.PaymentResponse{
+		FromAccount:     payment.From_account,
+		ToAccount:       payment.To_account,
+		InitialAmount:   payment.Start_amount,
+		FinalAmount:     payment.End_amount,
+		Fee:             payment.Commission,
+		Currency:        strconv.FormatInt(currency.Id, 10),
+		PaymentCode:     req.PaymentCode,
+		ReferenceNumber: req.ReferenceNumber,
+		Purpose:         req.Purpose,
+		Status:          "realized",
+		Timestamp:       time.Now().Format("2006-01-02 15:04:05"),
+	}, nil
+}
+
+func (s *Server) TransferMoneyBetweenAccounts(
+	_ context.Context,
+	req *bankpb.TransferRequest,
+) (*bankpb.TransferResponse, error) {
+
+	if strings.TrimSpace(req.FromAccount) == "" || strings.TrimSpace(req.ToAccount) == "" {
+		return nil, status.Error(codes.InvalidArgument, "account numbers are required")
+	}
+
+	if req.Amount <= 0 {
+		return nil, status.Error(codes.InvalidArgument, "amount must be greater than zero")
+	}
+
+	transfer, err := s.CreateTransfer(req.FromAccount, req.ToAccount, req.Amount)
+	if err != nil {
+		log.Printf("bank/server.go: failed to create transfer: %v", err)
+		switch {
+		case strings.Contains(err.Error(), "same account"):
+			return nil, status.Error(codes.InvalidArgument, err.Error())
+		case strings.Contains(err.Error(), "insufficient funds"):
+			return nil, status.Error(codes.InvalidArgument, err.Error())
+		case strings.Contains(err.Error(), "exchange error"):
+			return nil, status.Error(codes.Unavailable, "exchange service currently unavailable")
+		default:
+			return nil, status.Error(codes.Internal, "failed to create transfer")
+		}
+	}
+
+	err = s.ConfirmTransfer(transfer.Transaction_id, "123456")
+	if err != nil {
+		log.Printf("bank/server.go: transfer confirmation failed: %v", err)
+		switch {
+		case strings.Contains(err.Error(), "insufficient funds"):
+			return nil, status.Error(codes.FailedPrecondition, "insufficient funds")
+		default:
+			return nil, status.Error(codes.Internal, "transfer confirmation failed")
+		}
+	}
+
+	res := &bankpb.TransferResponse{
+		FromAccount:     transfer.From_account,
+		ToAccount:       transfer.To_account,
+		InitialAmount:   transfer.Start_amount,
+		FinalAmount:     transfer.End_amount,
+		Fee:             transfer.Commission,
+		Currency:        strconv.FormatInt(transfer.Start_currency_id, 10),
+		PaymentCode:     "",
+		ReferenceNumber: "",
+		Purpose:         req.Description,
+		Status:          "realized",
+		Timestamp:       fmt.Sprintf("%d", time.Now().Unix()),
+	}
+
+	return res, nil
+}
+
+func (s *Server) GetTransfersHistoryForUserEmail(
+	_ context.Context,
+	req *bankpb.TransferHistoryRequest) (*bankpb.TransferHistoryResponse, error) {
+	res, err := s.GetTransferHistory(req.Email, req.Page, req.PageSize)
+	if err != nil {
+		return nil, status.Error(codes.Internal, "failed to get transfer history")
+		//return &bankpb.TransferHistoryResponse{History: nil}, err
+	}
+	return res, nil
+}
+
+func (s *Server) GetLoanRequests(_ context.Context, req *bankpb.GetLoanRequestsRequest) (*bankpb.GetLoanRequestsResponse, error) {
+	loanType := ""
+	if strings.TrimSpace(req.LoanType) != "" {
+		parsed, err := parseLoanType(req.LoanType)
+		if err != nil {
+			return nil, err
+		}
+		loanType = string(parsed)
+	}
+
+	requests, err := s.getLoanRequests(loanType, strings.TrimSpace(req.AccountNumber))
+	if err != nil {
+		return nil, status.Error(codes.Internal, "failed to retrieve loan requests")
+	}
+
+	result := make([]*bankpb.LoanRequestView, 0, len(requests))
+	for _, r := range requests {
+		result = append(result, &bankpb.LoanRequestView{
+			Id:               r.Id,
+			LoanType:         r.LoanType,
+			Amount:           r.Amount,
+			Currency:         r.Currency,
+			Purpose:          r.Purpose,
+			Salary:           r.Salary,
+			EmploymentStatus: r.EmploymentStatus,
+			EmploymentPeriod: r.EmploymentPeriod,
+			PhoneNumber:      r.PhoneNumber,
+			RepaymentPeriod:  r.RepaymentPeriod,
+			AccountNumber:    r.AccountNumber,
+			Status:           r.Status,
+			InterestRateType: r.InterestRateType,
+			SubmissionDate:   r.SubmissionDate,
+		})
+	}
+
+	return &bankpb.GetLoanRequestsResponse{LoanRequests: result}, nil
+}
+
+func (s *Server) ApproveLoanRequest(_ context.Context, req *bankpb.ApproveLoanRequestRequest) (*bankpb.ApproveLoanRequestResponse, error) {
+	if req.Id <= 0 {
+		return nil, status.Error(codes.InvalidArgument, "invalid loan request id")
+	}
+
+	loanReq, err := s.getLoanRequestByID(req.Id)
+	if err != nil {
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			return nil, status.Error(codes.NotFound, "loan request not found")
+		}
+		return nil, status.Error(codes.Internal, "failed to retrieve loan request")
+	}
+
+	if loanReq.Status != LoanRequestPending {
+		return nil, status.Error(codes.InvalidArgument, "loan request is not pending")
+	}
+
+	var account Account
+	if err := s.db_gorm.First(&account, loanReq.Account_id).Error; err != nil {
+		return nil, status.Error(codes.Internal, "failed to retrieve account")
+	}
+
+	// Fetch currency
+	var currency Currency
+	if err := s.db_gorm.First(&currency, loanReq.Currency_id).Error; err != nil {
+		return nil, status.Error(codes.Internal, "failed to retrieve currency")
+	}
+
+	// Calculate interest rate
+	rateToRSD, err := s.getExchangeRateToRSD(currency.Label)
+	if err != nil {
+		return nil, status.Error(codes.Internal, "failed to retrieve exchange rate")
+	}
+	amountRSD := int64(float64(loanReq.Amount) * rateToRSD)
+	baseRate := BaseAnnualRate(amountRSD)
+	margin := MarginForLoanType(loanReq.Type)
+	annualRate := baseRate + margin
+
+	now := time.Now()
+	dateEnd := now.AddDate(0, int(loanReq.Repayment_period), 0)
+	monthlyPayment := CalculateAnnuity(loanReq.Amount, annualRate, loanReq.Repayment_period)
+	nextPaymentDue := now.AddDate(0, 1, 0)
+
+	loan := &Loan{
+		Account_id:         loanReq.Account_id,
+		Amount:             loanReq.Amount,
+		Currency_id:        loanReq.Currency_id,
+		Installments:       loanReq.Repayment_period,
+		Nominal_rate:       float32(annualRate),
+		Interest_rate:      float32(annualRate),
+		Date_signed:        now,
+		Date_end:           dateEnd,
+		Monthly_payment:    monthlyPayment,
+		Next_payment_due:   nextPaymentDue,
+		Remaining_debt:     loanReq.Amount,
+		Type:               loanReq.Type,
+		Loan_status:        Approved,
+		Interest_rate_type: loanReq.Interest_rate_type,
+	}
+
+	installment := &LoanInstallment{
+		Installment_amount: monthlyPayment,
+		Interest_rate:      float32(annualRate),
+		Currency_id:        loanReq.Currency_id,
+		Due_date:           nextPaymentDue,
+		Paid_date:          time.Time{},
+		Status:             Due,
+	}
+
+	err = s.db_gorm.Transaction(func(tx *gorm.DB) error {
+		if err := tx.Create(loan).Error; err != nil {
+			return err
+		}
+		installment.Loan_id = loan.Id
+		if err := tx.Create(installment).Error; err != nil {
+			return err
+		}
+		if err := tx.Model(&LoanRequest{}).Where("id = ?", req.Id).Update("status", LoanRequestApproved).Error; err != nil {
+			return err
+		}
+		return nil
+	})
+	if err != nil {
+		return nil, status.Error(codes.Internal, "failed to approve loan request")
+	}
+
+	return &bankpb.ApproveLoanRequestResponse{}, nil
+}
+
+func (s *Server) RejectLoanRequest(_ context.Context, req *bankpb.RejectLoanRequestRequest) (*bankpb.RejectLoanRequestResponse, error) {
+	if req.Id <= 0 {
+		return nil, status.Error(codes.InvalidArgument, "invalid loan request id")
+	}
+
+	loanReq, err := s.getLoanRequestByID(req.Id)
+	if err != nil {
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			return nil, status.Error(codes.NotFound, "loan request not found")
+		}
+		return nil, status.Error(codes.Internal, "failed to retrieve loan request")
+	}
+
+	if loanReq.Status != LoanRequestPending {
+		return nil, status.Error(codes.InvalidArgument, "loan request is not pending")
+	}
+
+	if err := s.updateLoanRequestStatus(req.Id, LoanRequestRejected); err != nil {
+		return nil, status.Error(codes.Internal, "failed to reject loan request")
+	}
+
+	return &bankpb.RejectLoanRequestResponse{}, nil
+}
+
+func (s *Server) GetAllLoans(_ context.Context, req *bankpb.GetAllLoansRequest) (*bankpb.GetLoansResponse, error) {
+	loanType := ""
+	if strings.TrimSpace(req.LoanType) != "" {
+		parsed, err := parseLoanType(req.LoanType)
+		if err != nil {
+			return nil, err
+		}
+		loanType = string(parsed)
+	}
+
+	loanStatus := ""
+	if strings.TrimSpace(req.Status) != "" {
+		parsed, err := parseLoanStatus(req.Status)
+		if err != nil {
+			return nil, err
+		}
+		loanStatus = string(parsed)
+	}
+
+	loans, err := s.getAllLoans(
+		loanType,
+		strings.TrimSpace(req.AccountNumber),
+		loanStatus,
+	)
+	if err != nil {
+		return nil, status.Error(codes.Internal, "failed to retrieve loans")
+	}
+
+	responseLoans := make([]*bankpb.Loan, 0, len(loans))
+	for i := range loans {
+		responseLoans = append(responseLoans, loanViewToProto(&loans[i]))
+	}
+
+	return &bankpb.GetLoansResponse{Loans: responseLoans}, nil
 }

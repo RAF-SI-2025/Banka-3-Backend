@@ -2,6 +2,7 @@ package bank
 
 import (
 	"context"
+	"fmt"
 	"regexp"
 	"testing"
 	"time"
@@ -10,272 +11,413 @@ import (
 	bankpb "github.com/RAF-SI-2025/Banka-3-Backend/gen/bank"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
-	"gorm.io/driver/postgres"
-	"gorm.io/gorm"
 )
 
-func newGormTestServer(t *testing.T) (*Server, sqlmock.Sqlmock) {
-	t.Helper()
+// ---------------------------------------------------------------------------
+// GetLoanRequests
+// ---------------------------------------------------------------------------
 
-	sqlDB, mock, err := sqlmock.New()
+func TestGetLoanRequests_Success(t *testing.T) {
+	server, mock, db := newGormTestServer(t)
+	defer func() { _ = db.Close() }()
+
+	rows := sqlmock.NewRows([]string{
+		"id", "loan_type", "amount", "currency", "purpose", "salary",
+		"employment_status", "employment_period", "phone_number",
+		"repayment_period", "account_number", "status", "interest_rate_type",
+		"submission_date",
+	}).AddRow(
+		int64(1), "cash", int64(10_000_00), "RSD", "home repair", int64(50_000_00),
+		"full_time", int64(24), "0611234567",
+		int32(12), "12345678901234567890", "pending", "fixed",
+		"2026-03-01T10:00:00",
+	)
+
+	mock.ExpectQuery(`SELECT`).WillReturnRows(rows)
+
+	resp, err := server.GetLoanRequests(context.Background(), &bankpb.GetLoanRequestsRequest{})
 	if err != nil {
-		t.Fatalf("sqlmock.New: %v", err)
+		t.Fatalf("unexpected error: %v", err)
 	}
-	t.Cleanup(func() { _ = sqlDB.Close() })
-
-	gormDB, err := gorm.Open(postgres.New(postgres.Config{Conn: sqlDB}), &gorm.Config{})
-	if err != nil {
-		t.Fatalf("gorm.Open: %v", err)
+	if len(resp.LoanRequests) != 1 {
+		t.Fatalf("expected 1 loan request, got %d", len(resp.LoanRequests))
+	}
+	lr := resp.LoanRequests[0]
+	if lr.Id != 1 || lr.LoanType != "cash" || lr.Purpose != "home repair" {
+		t.Fatalf("unexpected loan request: %+v", lr)
 	}
 
-	return NewServer(nil, gormDB), mock
+	if err := mock.ExpectationsWereMet(); err != nil {
+		t.Fatalf("unmet expectations: %v", err)
+	}
 }
 
-func loanRows() *sqlmock.Rows {
-	return sqlmock.NewRows([]string{
-		"loan_number", "loan_type", "account_number", "loan_amount", "repayment_period", "nominal_rate", "effective_rate",
-		"agreement_date", "maturity_date", "next_installment_amount", "next_installment_date", "remaining_debt", "currency", "status",
+func TestGetLoanRequests_Empty(t *testing.T) {
+	server, mock, db := newGormTestServer(t)
+	defer func() { _ = db.Close() }()
+
+	rows := sqlmock.NewRows([]string{
+		"id", "loan_type", "amount", "currency", "purpose", "salary",
+		"employment_status", "employment_period", "phone_number",
+		"repayment_period", "account_number", "status", "interest_rate_type",
+		"submission_date",
 	})
+
+	mock.ExpectQuery(`SELECT`).WillReturnRows(rows)
+
+	resp, err := server.GetLoanRequests(context.Background(), &bankpb.GetLoanRequestsRequest{})
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if len(resp.LoanRequests) != 0 {
+		t.Fatalf("expected 0 loan requests, got %d", len(resp.LoanRequests))
+	}
+
+	if err := mock.ExpectationsWereMet(); err != nil {
+		t.Fatalf("unmet expectations: %v", err)
+	}
 }
 
-func TestGetLoansSuccess(t *testing.T) {
-	server, mock := newGormTestServer(t)
+func TestGetLoanRequests_DBError(t *testing.T) {
+	server, mock, db := newGormTestServer(t)
+	defer func() { _ = db.Close() }()
 
-	mock.ExpectQuery(regexp.QuoteMeta(`FROM "loans" JOIN accounts ON accounts.id = loans.account_id JOIN clients ON clients.id = accounts.owner JOIN currencies ON currencies.id = loans.currency_id WHERE clients.email = $1 ORDER BY loans.id DESC`)).
-		WithArgs("client@test.com").
-		WillReturnRows(loanRows().AddRow("55", "cash", "ACC-1", 100000.0, 24, 5.2, 0.0, "2025-01-01", "2027-01-01", 4500.0, "2026-04-01", 80000.0, "RSD", "approved"))
+	mock.ExpectQuery(`SELECT`).WillReturnError(fmt.Errorf("db error"))
 
-	resp, err := server.GetLoans(context.Background(), &bankpb.GetLoansRequest{ClientEmail: "client@test.com"})
+	_, err := server.GetLoanRequests(context.Background(), &bankpb.GetLoanRequestsRequest{})
+	if err == nil {
+		t.Fatalf("expected error, got nil")
+	}
+	if status.Code(err) != codes.Internal {
+		t.Fatalf("expected Internal, got %v", status.Code(err))
+	}
+
+	if err := mock.ExpectationsWereMet(); err != nil {
+		t.Fatalf("unmet expectations: %v", err)
+	}
+}
+
+// ---------------------------------------------------------------------------
+// ApproveLoanRequest
+// ---------------------------------------------------------------------------
+
+func TestApproveLoanRequest_Success(t *testing.T) {
+	server, mock, db := newGormTestServer(t)
+	defer func() { _ = db.Close() }()
+
+	now := time.Now()
+
+	// getLoanRequestByID
+	loanReqRows := sqlmock.NewRows([]string{
+		"id", "type", "currency_id", "amount", "repayment_period",
+		"account_id", "status", "submission_date",
+		"purpose", "salary", "employment_status", "employment_period",
+		"phone_number", "interest_rate_type",
+	}).AddRow(
+		int64(1), "cash", int64(1), int64(10_000_00), int64(12),
+		int64(1), "pending", now,
+		"repair", int64(50_000_00), "full_time", int64(24),
+		"0611234567", "fixed",
+	)
+	mock.ExpectQuery(regexp.QuoteMeta(`SELECT * FROM "loan_request" WHERE "loan_request"."id" = $1`)).
+		WithArgs(int64(1), 1).
+		WillReturnRows(loanReqRows)
+
+	// Fetch account
+	accountRows := sqlmock.NewRows([]string{
+		"id", "number", "name", "owner", "balance", "created_by", "created_at",
+		"valid_until", "currency", "active", "owner_type", "account_type",
+		"maintainance_cost", "daily_limit", "monthly_limit", "daily_expenditure",
+		"monthly_expenditure",
+	}).AddRow(
+		int64(1), "12345678901234567890", "Main", int64(1), int64(0), int64(1), now,
+		now.AddDate(3, 0, 0), "RSD", true, "personal", "checking",
+		int64(0), int64(0), int64(0), int64(0), int64(0),
+	)
+	mock.ExpectQuery(regexp.QuoteMeta(`SELECT * FROM "accounts" WHERE "accounts"."id" = $1`)).
+		WithArgs(int64(1), 1).
+		WillReturnRows(accountRows)
+
+	// Fetch currency
+	currencyRows := sqlmock.NewRows([]string{
+		"id", "label", "name", "symbol", "countries", "description", "active",
+	}).AddRow(int64(1), "RSD", "Serbian Dinar", "din", "Serbia", "Serbian Dinar", true)
+	mock.ExpectQuery(regexp.QuoteMeta(`SELECT * FROM "currencies" WHERE "currencies"."id" = $1`)).
+		WithArgs(int64(1), 1).
+		WillReturnRows(currencyRows)
+
+	// Transaction: create loan, create installment, update loan request
+	mock.ExpectBegin()
+	mock.ExpectQuery(`INSERT INTO "loans"`).
+		WillReturnRows(sqlmock.NewRows([]string{"id"}).AddRow(int64(1)))
+	mock.ExpectQuery(`INSERT INTO "loan_installment"`).
+		WillReturnRows(sqlmock.NewRows([]string{"id"}).AddRow(int64(1)))
+	mock.ExpectExec(`UPDATE "loan_request"`).
+		WillReturnResult(sqlmock.NewResult(0, 1))
+	mock.ExpectCommit()
+
+	resp, err := server.ApproveLoanRequest(context.Background(), &bankpb.ApproveLoanRequestRequest{Id: 1})
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if resp == nil {
+		t.Fatalf("expected non-nil response")
+	}
+
+	if err := mock.ExpectationsWereMet(); err != nil {
+		t.Fatalf("unmet expectations: %v", err)
+	}
+}
+
+func TestApproveLoanRequest_NotFound(t *testing.T) {
+	server, mock, db := newGormTestServer(t)
+	defer func() { _ = db.Close() }()
+
+	mock.ExpectQuery(regexp.QuoteMeta(`SELECT * FROM "loan_request" WHERE "loan_request"."id" = $1`)).
+		WithArgs(int64(999), 1).
+		WillReturnRows(sqlmock.NewRows([]string{
+			"id", "type", "currency_id", "amount", "repayment_period",
+			"account_id", "status", "submission_date",
+			"purpose", "salary", "employment_status", "employment_period",
+			"phone_number", "interest_rate_type",
+		}))
+
+	_, err := server.ApproveLoanRequest(context.Background(), &bankpb.ApproveLoanRequestRequest{Id: 999})
+	if err == nil {
+		t.Fatalf("expected error, got nil")
+	}
+	if status.Code(err) != codes.NotFound {
+		t.Fatalf("expected NotFound, got %v", status.Code(err))
+	}
+
+	if err := mock.ExpectationsWereMet(); err != nil {
+		t.Fatalf("unmet expectations: %v", err)
+	}
+}
+
+func TestApproveLoanRequest_AlreadyProcessed(t *testing.T) {
+	server, mock, db := newGormTestServer(t)
+	defer func() { _ = db.Close() }()
+
+	now := time.Now()
+	loanReqRows := sqlmock.NewRows([]string{
+		"id", "type", "currency_id", "amount", "repayment_period",
+		"account_id", "status", "submission_date",
+		"purpose", "salary", "employment_status", "employment_period",
+		"phone_number", "interest_rate_type",
+	}).AddRow(
+		int64(1), "cash", int64(1), int64(10_000_00), int64(12),
+		int64(1), "approved", now,
+		"", int64(0), "", int64(0), "", "fixed",
+	)
+	mock.ExpectQuery(regexp.QuoteMeta(`SELECT * FROM "loan_request" WHERE "loan_request"."id" = $1`)).
+		WithArgs(int64(1), 1).
+		WillReturnRows(loanReqRows)
+
+	_, err := server.ApproveLoanRequest(context.Background(), &bankpb.ApproveLoanRequestRequest{Id: 1})
+	if err == nil {
+		t.Fatalf("expected error, got nil")
+	}
+	if status.Code(err) != codes.InvalidArgument {
+		t.Fatalf("expected InvalidArgument, got %v", status.Code(err))
+	}
+
+	if err := mock.ExpectationsWereMet(); err != nil {
+		t.Fatalf("unmet expectations: %v", err)
+	}
+}
+
+func TestApproveLoanRequest_InvalidID(t *testing.T) {
+	server, _, db := newGormTestServer(t)
+	defer func() { _ = db.Close() }()
+
+	_, err := server.ApproveLoanRequest(context.Background(), &bankpb.ApproveLoanRequestRequest{Id: 0})
+	if err == nil {
+		t.Fatalf("expected error, got nil")
+	}
+	if status.Code(err) != codes.InvalidArgument {
+		t.Fatalf("expected InvalidArgument, got %v", status.Code(err))
+	}
+}
+
+// ---------------------------------------------------------------------------
+// RejectLoanRequest
+// ---------------------------------------------------------------------------
+
+func TestRejectLoanRequest_Success(t *testing.T) {
+	server, mock, db := newGormTestServer(t)
+	defer func() { _ = db.Close() }()
+
+	now := time.Now()
+	loanReqRows := sqlmock.NewRows([]string{
+		"id", "type", "currency_id", "amount", "repayment_period",
+		"account_id", "status", "submission_date",
+		"purpose", "salary", "employment_status", "employment_period",
+		"phone_number", "interest_rate_type",
+	}).AddRow(
+		int64(1), "cash", int64(1), int64(10_000_00), int64(12),
+		int64(1), "pending", now,
+		"", int64(0), "", int64(0), "", "fixed",
+	)
+	mock.ExpectQuery(regexp.QuoteMeta(`SELECT * FROM "loan_request" WHERE "loan_request"."id" = $1`)).
+		WithArgs(int64(1), 1).
+		WillReturnRows(loanReqRows)
+
+	mock.ExpectBegin()
+	mock.ExpectExec(`UPDATE "loan_request"`).
+		WillReturnResult(sqlmock.NewResult(0, 1))
+	mock.ExpectCommit()
+
+	resp, err := server.RejectLoanRequest(context.Background(), &bankpb.RejectLoanRequestRequest{Id: 1})
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if resp == nil {
+		t.Fatalf("expected non-nil response")
+	}
+
+	if err := mock.ExpectationsWereMet(); err != nil {
+		t.Fatalf("unmet expectations: %v", err)
+	}
+}
+
+func TestRejectLoanRequest_NotFound(t *testing.T) {
+	server, mock, db := newGormTestServer(t)
+	defer func() { _ = db.Close() }()
+
+	mock.ExpectQuery(regexp.QuoteMeta(`SELECT * FROM "loan_request" WHERE "loan_request"."id" = $1`)).
+		WithArgs(int64(999), 1).
+		WillReturnRows(sqlmock.NewRows([]string{
+			"id", "type", "currency_id", "amount", "repayment_period",
+			"account_id", "status", "submission_date",
+			"purpose", "salary", "employment_status", "employment_period",
+			"phone_number", "interest_rate_type",
+		}))
+
+	_, err := server.RejectLoanRequest(context.Background(), &bankpb.RejectLoanRequestRequest{Id: 999})
+	if err == nil {
+		t.Fatalf("expected error, got nil")
+	}
+	if status.Code(err) != codes.NotFound {
+		t.Fatalf("expected NotFound, got %v", status.Code(err))
+	}
+
+	if err := mock.ExpectationsWereMet(); err != nil {
+		t.Fatalf("unmet expectations: %v", err)
+	}
+}
+
+func TestRejectLoanRequest_AlreadyProcessed(t *testing.T) {
+	server, mock, db := newGormTestServer(t)
+	defer func() { _ = db.Close() }()
+
+	now := time.Now()
+	loanReqRows := sqlmock.NewRows([]string{
+		"id", "type", "currency_id", "amount", "repayment_period",
+		"account_id", "status", "submission_date",
+		"purpose", "salary", "employment_status", "employment_period",
+		"phone_number", "interest_rate_type",
+	}).AddRow(
+		int64(1), "cash", int64(1), int64(10_000_00), int64(12),
+		int64(1), "rejected", now,
+		"", int64(0), "", int64(0), "", "fixed",
+	)
+	mock.ExpectQuery(regexp.QuoteMeta(`SELECT * FROM "loan_request" WHERE "loan_request"."id" = $1`)).
+		WithArgs(int64(1), 1).
+		WillReturnRows(loanReqRows)
+
+	_, err := server.RejectLoanRequest(context.Background(), &bankpb.RejectLoanRequestRequest{Id: 1})
+	if err == nil {
+		t.Fatalf("expected error, got nil")
+	}
+	if status.Code(err) != codes.InvalidArgument {
+		t.Fatalf("expected InvalidArgument, got %v", status.Code(err))
+	}
+
+	if err := mock.ExpectationsWereMet(); err != nil {
+		t.Fatalf("unmet expectations: %v", err)
+	}
+}
+
+// ---------------------------------------------------------------------------
+// GetAllLoans
+// ---------------------------------------------------------------------------
+
+func TestGetAllLoans_Success(t *testing.T) {
+	server, mock, db := newGormTestServer(t)
+	defer func() { _ = db.Close() }()
+
+	rows := sqlmock.NewRows([]string{
+		"loan_number", "loan_type", "account_number", "loan_amount",
+		"repayment_period", "nominal_rate", "effective_rate",
+		"agreement_date", "maturity_date", "next_installment_amount",
+		"next_installment_date", "remaining_debt", "currency", "status",
+	}).AddRow(
+		"1", "cash", "12345678901234567890", int64(10_000_00),
+		int32(12), 5.0, 0.0,
+		"2026-03-01", "2027-03-01", int64(83_333),
+		"2026-04-01", int64(10_000_00), "RSD", "approved",
+	)
+
+	mock.ExpectQuery(`SELECT`).WillReturnRows(rows)
+
+	resp, err := server.GetAllLoans(context.Background(), &bankpb.GetAllLoansRequest{})
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
 	if len(resp.Loans) != 1 {
 		t.Fatalf("expected 1 loan, got %d", len(resp.Loans))
 	}
-	if resp.Loans[0].LoanNumber != "55" || resp.Loans[0].Status != "approved" {
-		t.Fatalf("unexpected loan response: %+v", resp.Loans[0])
+	if resp.Loans[0].LoanNumber != "1" || resp.Loans[0].LoanType != "cash" {
+		t.Fatalf("unexpected loan: %+v", resp.Loans[0])
 	}
 
 	if err := mock.ExpectationsWereMet(); err != nil {
-		t.Fatalf("unmet sql expectations: %v", err)
+		t.Fatalf("unmet expectations: %v", err)
 	}
 }
 
-func TestGetLoansValidation(t *testing.T) {
-	server, mock := newGormTestServer(t)
+func TestGetAllLoans_Empty(t *testing.T) {
+	server, mock, db := newGormTestServer(t)
+	defer func() { _ = db.Close() }()
 
-	_, err := server.GetLoans(context.Background(), &bankpb.GetLoansRequest{ClientEmail: ""})
-	if status.Code(err) != codes.Unauthenticated {
-		t.Fatalf("expected Unauthenticated, got %v", status.Code(err))
-	}
+	rows := sqlmock.NewRows([]string{
+		"loan_number", "loan_type", "account_number", "loan_amount",
+		"repayment_period", "nominal_rate", "effective_rate",
+		"agreement_date", "maturity_date", "next_installment_amount",
+		"next_installment_date", "remaining_debt", "currency", "status",
+	})
 
-	_, err = server.GetLoans(context.Background(), &bankpb.GetLoansRequest{ClientEmail: "a@b.rs", LoanType: "BAD"})
-	if status.Code(err) != codes.InvalidArgument {
-		t.Fatalf("expected InvalidArgument for loan type, got %v", status.Code(err))
-	}
+	mock.ExpectQuery(`SELECT`).WillReturnRows(rows)
 
-	_, err = server.GetLoans(context.Background(), &bankpb.GetLoansRequest{ClientEmail: "a@b.rs", Status: "BAD"})
-	if status.Code(err) != codes.InvalidArgument {
-		t.Fatalf("expected InvalidArgument for status, got %v", status.Code(err))
-	}
-
-	if err := mock.ExpectationsWereMet(); err != nil {
-		t.Fatalf("unmet sql expectations: %v", err)
-	}
-}
-
-func TestGetLoanByNumberValidationAndNotFound(t *testing.T) {
-	server, mock := newGormTestServer(t)
-
-	_, err := server.GetLoanByNumber(context.Background(), &bankpb.GetLoanByNumberRequest{ClientEmail: "", LoanNumber: "1"})
-	if status.Code(err) != codes.Unauthenticated {
-		t.Fatalf("expected Unauthenticated, got %v", status.Code(err))
-	}
-
-	_, err = server.GetLoanByNumber(context.Background(), &bankpb.GetLoanByNumberRequest{ClientEmail: "a@b.rs", LoanNumber: ""})
-	if status.Code(err) != codes.InvalidArgument {
-		t.Fatalf("expected InvalidArgument for empty loan number, got %v", status.Code(err))
-	}
-
-	_, err = server.GetLoanByNumber(context.Background(), &bankpb.GetLoanByNumberRequest{ClientEmail: "a@b.rs", LoanNumber: "abc"})
-	if status.Code(err) != codes.InvalidArgument {
-		t.Fatalf("expected InvalidArgument for invalid loan number, got %v", status.Code(err))
-	}
-
-	mock.ExpectQuery(regexp.QuoteMeta(`FROM "loans" JOIN accounts ON accounts.id = loans.account_id JOIN clients ON clients.id = accounts.owner JOIN currencies ON currencies.id = loans.currency_id WHERE clients.email = $1 AND loans.id = $2`)).
-		WithArgs("a@b.rs", int64(999), sqlmock.AnyArg()).
-		WillReturnRows(loanRows())
-
-	_, err = server.GetLoanByNumber(context.Background(), &bankpb.GetLoanByNumberRequest{ClientEmail: "a@b.rs", LoanNumber: "999"})
-	if status.Code(err) != codes.NotFound {
-		t.Fatalf("expected NotFound, got %v", status.Code(err))
-	}
-
-	if err := mock.ExpectationsWereMet(); err != nil {
-		t.Fatalf("unmet sql expectations: %v", err)
-	}
-}
-
-func TestGetLoanByNumberSuccess(t *testing.T) {
-	server, mock := newGormTestServer(t)
-
-	mock.ExpectQuery(regexp.QuoteMeta(`FROM "loans" JOIN accounts ON accounts.id = loans.account_id JOIN clients ON clients.id = accounts.owner JOIN currencies ON currencies.id = loans.currency_id WHERE clients.email = $1 AND loans.id = $2`)).
-		WithArgs("a@b.rs", int64(12), sqlmock.AnyArg()).
-		WillReturnRows(loanRows().AddRow("12", "car", "ACC-1", 5000.0, 12, 4.5, 0.0, "2025-01-01", "2026-01-01", 430.0, "2026-04-01", 3000.0, "EUR", "approved"))
-
-	resp, err := server.GetLoanByNumber(context.Background(), &bankpb.GetLoanByNumberRequest{ClientEmail: "a@b.rs", LoanNumber: "12"})
+	resp, err := server.GetAllLoans(context.Background(), &bankpb.GetAllLoansRequest{})
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
-	if resp == nil || resp.LoanNumber != "12" || resp.LoanType != "car" {
-		t.Fatalf("unexpected response: %+v", resp)
+	if len(resp.Loans) != 0 {
+		t.Fatalf("expected 0 loans, got %d", len(resp.Loans))
 	}
 
 	if err := mock.ExpectationsWereMet(); err != nil {
-		t.Fatalf("unmet sql expectations: %v", err)
+		t.Fatalf("unmet expectations: %v", err)
 	}
 }
 
-func TestCreateLoanRequestSuccessAndCurrencyMismatch(t *testing.T) {
-	server, mock := newGormTestServer(t)
+func TestGetAllLoans_DBError(t *testing.T) {
+	server, mock, db := newGormTestServer(t)
+	defer func() { _ = db.Close() }()
 
-	accountRows := sqlmock.NewRows([]string{
-		"id", "number", "name", "owner", "balance", "created_by", "created_at", "valid_until", "currency", "active", "owner_type", "account_type", "maintainance_cost", "daily_limit", "monthly_limit", "daily_expenditure", "monthly_expenditure",
-	}).AddRow(int64(10), "ACC-1", "acc", int64(5), int64(0), int64(1), time.Now(), time.Now().AddDate(1, 0, 0), "RSD", true, "personal", "checking", int64(0), int64(0), int64(0), int64(0), int64(0))
+	mock.ExpectQuery(`SELECT`).WillReturnError(fmt.Errorf("db error"))
 
-	mock.ExpectQuery(regexp.QuoteMeta(`FROM "accounts" JOIN clients ON clients.id = accounts.owner WHERE clients.email = $1 AND accounts.number = $2 ORDER BY "accounts"."id" LIMIT $3`)).
-		WithArgs("client@test.com", "ACC-1", 1).
-		WillReturnRows(accountRows)
-
-	currencyRows := sqlmock.NewRows([]string{"id", "label", "name", "symbol", "countries", "description", "active"}).
-		AddRow(int64(1), "RSD", "Dinar", "RSD", "RS", "Serbian dinar", true)
-	mock.ExpectQuery(regexp.QuoteMeta(`SELECT * FROM "currencies" WHERE label = $1 ORDER BY "currencies"."id" LIMIT $2`)).
-		WithArgs("RSD", 1).
-		WillReturnRows(currencyRows)
-
-	mock.ExpectBegin()
-	mock.ExpectQuery(regexp.QuoteMeta(`INSERT INTO "loan_request" ("type","currency_id","amount","repayment_period","account_id","status","submission_date") VALUES ($1,$2,$3,$4,$5,$6,$7) RETURNING "id"`)).
-		WithArgs("cash", int64(1), 10000.0, int64(12), int64(10), "pending", sqlmock.AnyArg()).
-		WillReturnRows(sqlmock.NewRows([]string{"id"}).AddRow(int64(101)))
-	mock.ExpectCommit()
-
-	_, err := server.CreateLoanRequest(context.Background(), &bankpb.CreateLoanRequestRequest{
-		ClientEmail:     "client@test.com",
-		AccountNumber:   "ACC-1",
-		Currency:        "RSD",
-		Amount:          10000,
-		RepaymentPeriod: 12,
-		LoanType:        "GOTOVINSKI",
-	})
-	if err != nil {
-		t.Fatalf("unexpected error: %v", err)
+	_, err := server.GetAllLoans(context.Background(), &bankpb.GetAllLoansRequest{})
+	if err == nil {
+		t.Fatalf("expected error, got nil")
 	}
-
-	accountRowsMismatch := sqlmock.NewRows([]string{
-		"id", "number", "name", "owner", "balance", "created_by", "created_at", "valid_until", "currency", "active", "owner_type", "account_type", "maintainance_cost", "daily_limit", "monthly_limit", "daily_expenditure", "monthly_expenditure",
-	}).AddRow(int64(11), "ACC-2", "acc", int64(5), int64(0), int64(1), time.Now(), time.Now().AddDate(1, 0, 0), "EUR", true, "personal", "checking", int64(0), int64(0), int64(0), int64(0), int64(0))
-
-	mock.ExpectQuery(regexp.QuoteMeta(`FROM "accounts" JOIN clients ON clients.id = accounts.owner WHERE clients.email = $1 AND accounts.number = $2 ORDER BY "accounts"."id" LIMIT $3`)).
-		WithArgs("client@test.com", "ACC-2", 1).
-		WillReturnRows(accountRowsMismatch)
-
-	_, err = server.CreateLoanRequest(context.Background(), &bankpb.CreateLoanRequestRequest{
-		ClientEmail:     "client@test.com",
-		AccountNumber:   "ACC-2",
-		Currency:        "RSD",
-		Amount:          10000,
-		RepaymentPeriod: 12,
-		LoanType:        "GOTOVINSKI",
-	})
-	if status.Code(err) != codes.InvalidArgument {
-		t.Fatalf("expected InvalidArgument for currency mismatch, got %v", status.Code(err))
+	if status.Code(err) != codes.Internal {
+		t.Fatalf("expected Internal, got %v", status.Code(err))
 	}
 
 	if err := mock.ExpectationsWereMet(); err != nil {
-		t.Fatalf("unmet sql expectations: %v", err)
-	}
-}
-
-func TestCreateLoanRequestValidation(t *testing.T) {
-	server, mock := newGormTestServer(t)
-
-	_, err := server.CreateLoanRequest(context.Background(), &bankpb.CreateLoanRequestRequest{ClientEmail: ""})
-	if status.Code(err) != codes.Unauthenticated {
-		t.Fatalf("expected Unauthenticated, got %v", status.Code(err))
-	}
-
-	_, err = server.CreateLoanRequest(context.Background(), &bankpb.CreateLoanRequestRequest{ClientEmail: "a@b.rs", Currency: "RSD", Amount: 1, RepaymentPeriod: 1, LoanType: "GOTOVINSKI"})
-	if status.Code(err) != codes.InvalidArgument {
-		t.Fatalf("expected InvalidArgument for account number, got %v", status.Code(err))
-	}
-
-	_, err = server.CreateLoanRequest(context.Background(), &bankpb.CreateLoanRequestRequest{ClientEmail: "a@b.rs", AccountNumber: "A", Amount: 1, RepaymentPeriod: 1, LoanType: "GOTOVINSKI"})
-	if status.Code(err) != codes.InvalidArgument {
-		t.Fatalf("expected InvalidArgument for currency, got %v", status.Code(err))
-	}
-
-	_, err = server.CreateLoanRequest(context.Background(), &bankpb.CreateLoanRequestRequest{ClientEmail: "a@b.rs", AccountNumber: "A", Currency: "RSD", Amount: 0, RepaymentPeriod: 1, LoanType: "GOTOVINSKI"})
-	if status.Code(err) != codes.InvalidArgument {
-		t.Fatalf("expected InvalidArgument for amount, got %v", status.Code(err))
-	}
-
-	_, err = server.CreateLoanRequest(context.Background(), &bankpb.CreateLoanRequestRequest{ClientEmail: "a@b.rs", AccountNumber: "A", Currency: "RSD", Amount: 1, RepaymentPeriod: 0, LoanType: "GOTOVINSKI"})
-	if status.Code(err) != codes.InvalidArgument {
-		t.Fatalf("expected InvalidArgument for repayment period, got %v", status.Code(err))
-	}
-
-	_, err = server.CreateLoanRequest(context.Background(), &bankpb.CreateLoanRequestRequest{ClientEmail: "a@b.rs", AccountNumber: "A", Currency: "RSD", Amount: 1, RepaymentPeriod: 1, LoanType: "bad"})
-	if status.Code(err) != codes.InvalidArgument {
-		t.Fatalf("expected InvalidArgument for loan type, got %v", status.Code(err))
-	}
-
-	if err := mock.ExpectationsWereMet(); err != nil {
-		t.Fatalf("unmet sql expectations: %v", err)
-	}
-}
-
-func TestCreateLoanRequestAccountAndCurrencyErrors(t *testing.T) {
-	server, mock := newGormTestServer(t)
-
-	mock.ExpectQuery(regexp.QuoteMeta(`FROM "accounts" JOIN clients ON clients.id = accounts.owner WHERE clients.email = $1 AND accounts.number = $2 ORDER BY "accounts"."id" LIMIT $3`)).
-		WithArgs("a@b.rs", "ACC-1", 1).
-		WillReturnRows(sqlmock.NewRows([]string{"id", "number", "name", "owner", "balance", "created_by", "created_at", "valid_until", "currency", "active", "owner_type", "account_type", "maintainance_cost", "daily_limit", "monthly_limit", "daily_expenditure", "monthly_expenditure"}))
-
-	_, err := server.CreateLoanRequest(context.Background(), &bankpb.CreateLoanRequestRequest{
-		ClientEmail:     "a@b.rs",
-		AccountNumber:   "ACC-1",
-		Currency:        "RSD",
-		Amount:          10,
-		RepaymentPeriod: 1,
-		LoanType:        "GOTOVINSKI",
-	})
-	if status.Code(err) != codes.NotFound {
-		t.Fatalf("expected NotFound for missing account, got %v", status.Code(err))
-	}
-
-	accountRows := sqlmock.NewRows([]string{"id", "number", "name", "owner", "balance", "created_by", "created_at", "valid_until", "currency", "active", "owner_type", "account_type", "maintainance_cost", "daily_limit", "monthly_limit", "daily_expenditure", "monthly_expenditure"}).
-		AddRow(int64(1), "ACC-1", "acc", int64(1), int64(0), int64(1), time.Now(), time.Now().AddDate(1, 0, 0), "RSD", true, "personal", "checking", int64(0), int64(0), int64(0), int64(0), int64(0))
-	mock.ExpectQuery(regexp.QuoteMeta(`FROM "accounts" JOIN clients ON clients.id = accounts.owner WHERE clients.email = $1 AND accounts.number = $2 ORDER BY "accounts"."id" LIMIT $3`)).
-		WithArgs("a@b.rs", "ACC-1", 1).
-		WillReturnRows(accountRows)
-
-	mock.ExpectQuery(regexp.QuoteMeta(`SELECT * FROM "currencies" WHERE label = $1 ORDER BY "currencies"."id" LIMIT $2`)).
-		WithArgs("RSD", 1).
-		WillReturnRows(sqlmock.NewRows([]string{"id", "label", "name", "symbol", "countries", "description", "active"}))
-
-	_, err = server.CreateLoanRequest(context.Background(), &bankpb.CreateLoanRequestRequest{
-		ClientEmail:     "a@b.rs",
-		AccountNumber:   "ACC-1",
-		Currency:        "RSD",
-		Amount:          10,
-		RepaymentPeriod: 1,
-		LoanType:        "GOTOVINSKI",
-	})
-	if status.Code(err) != codes.InvalidArgument {
-		t.Fatalf("expected InvalidArgument for unsupported currency, got %v", status.Code(err))
-	}
-
-	if err := mock.ExpectationsWereMet(); err != nil {
-		t.Fatalf("unmet sql expectations: %v", err)
+		t.Fatalf("unmet expectations: %v", err)
 	}
 }
