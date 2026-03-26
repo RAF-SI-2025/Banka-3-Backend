@@ -191,6 +191,14 @@ func mapCardToProto(card *Card) *bankpb.CardResponse {
 	}
 }
 
+func mapCardsToProto(cards []Card) []*bankpb.CardResponse {
+	pbCards := make([]*bankpb.CardResponse, 0, len(cards))
+	for i := range cards {
+		pbCards = append(pbCards, mapCardToProto(&cards[i]))
+	}
+	return pbCards
+}
+
 func (s *Server) checkCardLimit(userEmail string, accountNumber string) error {
 	isAuth, _ := s.IsAuthorizedParty(userEmail, accountNumber)
 	limit := 2
@@ -327,8 +335,49 @@ func (s *Server) ConfirmCard(ctx context.Context, req *bankpb.ConfirmCardRequest
 	return &bankpb.ConfirmCardResponse{}, nil
 }
 
-func (s *Server) GetCards(_ context.Context, _ *bankpb.GetCardsRequest) (*bankpb.GetCardsResponse, error) {
-	return nil, status.Error(codes.Unimplemented, "not implemented yet")
+func (s *Server) GetCards(ctx context.Context, _ *bankpb.GetCardsRequest) (*bankpb.GetCardsResponse, error) {
+	md, ok := metadata.FromIncomingContext(ctx)
+	if !ok {
+		return nil, status.Error(codes.Unauthenticated, "metadata missing")
+	}
+
+	emails := md.Get("user-email")
+	if len(emails) == 0 || strings.TrimSpace(emails[0]) == "" {
+		return nil, status.Error(codes.Unauthenticated, "email missing in metadata")
+	}
+	userEmail := emails[0]
+
+	isEmployee, err := s.IsEmployeeByEmail(userEmail)
+	if err != nil {
+		return nil, status.Error(codes.Internal, "failed to resolve caller")
+	}
+
+	var cards []Card
+
+	if isEmployee {
+		cards, err = s.GetCardsForEmployee()
+		if err != nil {
+			return nil, status.Error(codes.Internal, "failed to fetch cards")
+		}
+
+		return &bankpb.GetCardsResponse{
+			Cards: mapCardsToProto(cards),
+		}, nil
+	}
+
+	clientID, err := s.GetClientIDByEmail(userEmail)
+	if err != nil {
+		return nil, status.Error(codes.NotFound, "client not found")
+	}
+
+	cards, err = s.GetCardsByOwnerID(clientID)
+	if err != nil {
+		return nil, status.Error(codes.Internal, "failed to fetch cards")
+	}
+
+	return &bankpb.GetCardsResponse{
+		Cards: mapCardsToProto(cards),
+	}, nil
 }
 
 func (s *Server) BlockCard(_ context.Context, req *bankpb.BlockCardRequest) (*bankpb.BlockCardResponse, error) {

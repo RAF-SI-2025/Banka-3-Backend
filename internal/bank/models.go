@@ -146,7 +146,7 @@ type (
 		Type           card_type   `gorm:"column:type;type:card_type;not null;default:'debit'"`
 		Brand          card_brand  `gorm:"column:brand;type:card_brand;not null"`
 		Creation_date  time.Time   `gorm:"column:creation_date;not null;autoCreateTime"`
-		Valid_until    time.Time   `gorm:"column:created_at;not null;autoCreateTime"`
+		Valid_until    time.Time   `gorm:"column:valid_until;not null"`
 		Account_number string      `gorm:"column:account_number;type:varchar(20);references accounts(number)"`
 		Cvv            string      `gorm:"column:cvv;type:varchar(7);not null"`
 		Card_limit     int64       `gorm:"column:card_limit;type:bigint"`

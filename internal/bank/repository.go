@@ -379,6 +379,69 @@ func (s *Server) GetCardByIDRecord(id int64) (*Card, error) {
 	return scanCard(row)
 }
 
+func (s *Server) IsEmployeeByEmail(email string) (bool, error) {
+	var count int64
+
+	err := s.db_gorm.
+		Table("employees").
+		Where("email = ?", email).
+		Count(&count).Error
+	if err != nil {
+		return false, err
+	}
+
+	return count > 0, nil
+}
+
+func (s *Server) GetClientIDByEmail(email string) (int64, error) {
+	type clientRow struct {
+		Id int64 `gorm:"column:id"`
+	}
+
+	var client clientRow
+
+	err := s.db_gorm.
+		Table("clients").
+		Select("id").
+		Where("email = ?", email).
+		Take(&client).Error
+	if err != nil {
+		return 0, err
+	}
+
+	return client.Id, nil
+}
+
+func (s *Server) GetCardsByOwnerID(ownerID int64) ([]Card, error) {
+	var cards []Card
+
+	err := s.db_gorm.
+		Model(&Card{}).
+		Joins("JOIN accounts ON accounts.number = cards.account_number").
+		Where("accounts.owner = ?", ownerID).
+		Order("cards.id DESC").
+		Find(&cards).Error
+	if err != nil {
+		return nil, err
+	}
+
+	return cards, nil
+}
+
+func (s *Server) GetCardsForEmployee() ([]Card, error) {
+	var cards []Card
+
+	err := s.db_gorm.
+		Model(&Card{}).
+		Order("id DESC").
+		Find(&cards).Error
+	if err != nil {
+		return nil, err
+	}
+
+	return cards, nil
+}
+
 func scanAccount(scanner interface {
 	Scan(dest ...any) error
 }) (*Account, error) {
