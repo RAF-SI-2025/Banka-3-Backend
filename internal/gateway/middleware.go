@@ -3,6 +3,7 @@ package gateway
 import (
 	"context"
 	"net/http"
+	"slices"
 	"strings"
 	"time"
 
@@ -73,5 +74,30 @@ func TOTPMiddleware(totp userpb.TOTPServiceClient) gin.HandlerFunc {
 			return
 		}
 		c.Next()
+	}
+}
+
+func PermissionMiddleware(user userpb.UserServiceClient) func(...string) gin.HandlerFunc {
+	return func(permissions ...string) gin.HandlerFunc {
+		return func(c *gin.Context) {
+			email, exists := c.Get("email")
+			if !exists {
+				c.AbortWithStatus(401)
+				return
+			}
+
+			emp, err := user.GetEmployeeByEmail(c, &userpb.GetEmployeeByEmailRequest{
+				Email: email.(string),
+			})
+			if err != nil {
+				c.AbortWithStatus(403)
+			}
+			for _, perm := range permissions {
+				if !slices.Contains(emp.Permissions, perm) {
+					c.AbortWithStatus(403)
+				}
+			}
+			c.Next()
+		}
 	}
 }
