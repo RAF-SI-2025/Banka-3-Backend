@@ -177,6 +177,49 @@ func TestUpdateClientInvalidGenderReturnsInvalidArgument(t *testing.T) {
 	}
 }
 
+func TestUpdateClientRejectsNonPositiveID(t *testing.T) {
+	server, mock, db := newGormTestServer(t)
+	defer func() { _ = db.Close() }()
+
+	_, err := server.UpdateClient(context.Background(), &userpb.UpdateClientRequest{
+		Id:    0,
+		Email: "a@banka.raf",
+	})
+	if err == nil {
+		t.Fatalf("expected error, got nil")
+	}
+	if status.Code(err) != codes.InvalidArgument {
+		t.Fatalf("expected InvalidArgument, got %v", status.Code(err))
+	}
+
+	if err := mock.ExpectationsWereMet(); err != nil {
+		t.Fatalf("unmet sql expectations: %v", err)
+	}
+}
+
+func TestUpdateClientReturnsInvalidArgumentWhenNoFieldsProvided(t *testing.T) {
+	server, mock, db := newGormTestServer(t)
+	defer func() { _ = db.Close() }()
+
+	date := time.Date(1990, 5, 20, 0, 0, 0, 0, time.UTC)
+	mock.ExpectQuery("SELECT id, first_name, last_name, date_of_birth, gender, email, phone_number, address").
+		WithArgs(int64(1)).
+		WillReturnRows(sqlmockClientRows().
+			AddRow(uint64(1), "Petar", "Petrovic", date, "M", "petar@primer.raf", "+381645555555", "Njegoseva 25"))
+
+	_, err := server.UpdateClient(context.Background(), &userpb.UpdateClientRequest{Id: 1})
+	if err == nil {
+		t.Fatalf("expected error, got nil")
+	}
+	if status.Code(err) != codes.InvalidArgument {
+		t.Fatalf("expected InvalidArgument, got %v", status.Code(err))
+	}
+
+	if err := mock.ExpectationsWereMet(); err != nil {
+		t.Fatalf("unmet sql expectations: %v", err)
+	}
+}
+
 func sqlmockClientRows() *sqlmock.Rows {
 	return sqlmock.NewRows([]string{"id", "first_name", "last_name", "date_of_birth", "gender", "email", "phone_number", "address"})
 }

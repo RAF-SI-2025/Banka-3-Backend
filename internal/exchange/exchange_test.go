@@ -21,6 +21,7 @@ func newTestServer(t *testing.T) (*Server, sqlmock.Sqlmock, *sql.DB) {
 	if err != nil {
 		t.Fatalf("sqlmock.New: %v", err)
 	}
+	t.Cleanup(func() { _ = db.Close() })
 
 	gormDB, err := gorm.Open(postgres.New(postgres.Config{
 		Conn: db,
@@ -33,10 +34,7 @@ func newTestServer(t *testing.T) (*Server, sqlmock.Sqlmock, *sql.DB) {
 }
 
 func TestConvertMoney(t *testing.T) {
-	s, mock, db := newTestServer(t)
-	defer func(db *sql.DB) {
-		_ = db.Close()
-	}(db)
+	s, mock, _ := newTestServer(t)
 
 	ctx := context.Background()
 	now := time.Now()
@@ -80,16 +78,53 @@ func TestConvertMoney(t *testing.T) {
 		require.NotNil(t, resp)
 		assert.InDelta(t, 10.0, resp.ConvertedAmount, 0.0000001)
 	})
+
+	t.Run("Error_InvalidAmount", func(t *testing.T) {
+		_, err := s.ConvertMoney(ctx, &exchangepb.ConversionRequest{
+			FromCurrency: "EUR",
+			ToCurrency:   "USD",
+			Amount:       0,
+		})
+		assert.Error(t, err)
+	})
+
+	t.Run("Error_FromNotFound", func(t *testing.T) {
+		mock.ExpectQuery(`SELECT \* FROM "exchange_rates"`).
+			WithArgs("XXX", 1).
+			WillReturnRows(sqlmock.NewRows([]string{"currency_code", "rate_to_rsd", "updated_at", "valid_until"}))
+
+		_, err := s.ConvertMoney(ctx, &exchangepb.ConversionRequest{
+			FromCurrency: "XXX",
+			ToCurrency:   "USD",
+			Amount:       100,
+		})
+		assert.Error(t, err)
+	})
+
+	t.Run("Error_ToNotFound", func(t *testing.T) {
+		mock.ExpectQuery(`SELECT \* FROM "exchange_rates"`).
+			WithArgs("EUR", 1).
+			WillReturnRows(sqlmock.NewRows([]string{"currency_code", "rate_to_rsd", "updated_at", "valid_until"}).
+				AddRow("EUR", 117.0, now, future))
+		mock.ExpectQuery(`SELECT \* FROM "exchange_rates"`).
+			WithArgs("YYY", 1).
+			WillReturnRows(sqlmock.NewRows([]string{"currency_code", "rate_to_rsd", "updated_at", "valid_until"}))
+
+		_, err := s.ConvertMoney(ctx, &exchangepb.ConversionRequest{
+			FromCurrency: "EUR",
+			ToCurrency:   "YYY",
+			Amount:       100,
+		})
+		assert.Error(t, err)
+	})
 }
 
 func TestGetExchangeRates(t *testing.T) {
-	s, mock, db := newTestServer(t)
-	defer func(db *sql.DB) {
-		_ = db.Close()
-	}(db)
+	s, mock, _ := newTestServer(t)
 
 	now := time.Now()
 	future := now.Add(time.Hour)
+	past := now.Add(-time.Hour)
 
 	t.Run("Success_Valid_Rates", func(t *testing.T) {
 		mock.ExpectQuery(`SELECT \* FROM "exchange_rates"`).
@@ -107,13 +142,50 @@ func TestGetExchangeRates(t *testing.T) {
 		}
 		assert.True(t, foundRSD)
 	})
+
+	t.Run("Rates_Expired_RefreshFail", func(t *testing.T) {
+		t.Setenv("EXCHANGE_RATE_API_KEY", "") // force fetchAndStoreRates to fail
+
+		mock.ExpectQuery(`SELECT \* FROM "exchange_rates"`).
+			WillReturnRows(sqlmock.NewRows([]string{"currency_code", "rate_to_rsd", "updated_at", "valid_until"}).
+				AddRow("EUR", 117.0, now, past)) // expired
+
+		mock.ExpectQuery(`SELECT \* FROM "exchange_rates"`).
+			WillReturnRows(sqlmock.NewRows([]string{"currency_code", "rate_to_rsd", "updated_at", "valid_until"}).
+				AddRow("EUR", 117.0, now, past))
+
+		resp, err := s.GetExchangeRates(context.Background(), nil)
+		assert.NoError(t, err)
+		assert.NotEmpty(t, resp.Rates)
+	})
+
+	t.Run("Rates_Expired_RefreshFail_API_Error", func(t *testing.T) {
+		t.Setenv("EXCHANGE_RATE_API_KEY", "invalid_key") // force API error response
+
+		mock.ExpectQuery(`SELECT \* FROM "exchange_rates"`).
+			WillReturnRows(sqlmock.NewRows([]string{"currency_code", "rate_to_rsd", "updated_at", "valid_until"}).
+				AddRow("EUR", 117.0, now, past)) // expired
+
+		mock.ExpectQuery(`SELECT \* FROM "exchange_rates"`).
+			WillReturnRows(sqlmock.NewRows([]string{"currency_code", "rate_to_rsd", "updated_at", "valid_until"}).
+				AddRow("EUR", 117.0, now, past))
+
+		resp, err := s.GetExchangeRates(context.Background(), nil)
+		assert.NoError(t, err)
+		assert.NotEmpty(t, resp.Rates)
+	})
+
+	t.Run("Error_GetRatesFail", func(t *testing.T) {
+		mock.ExpectQuery(`SELECT \* FROM "exchange_rates"`).
+			WillReturnError(fmt.Errorf("db error"))
+
+		_, err := s.GetExchangeRates(context.Background(), nil)
+		assert.Error(t, err)
+	})
 }
 
 func TestUpdateRatesRecord(t *testing.T) {
-	s, mock, db := newTestServer(t)
-	defer func(db *sql.DB) {
-		_ = db.Close()
-	}(db)
+	s, mock, _ := newTestServer(t)
 
 	future := time.Now().Add(24 * time.Hour)
 

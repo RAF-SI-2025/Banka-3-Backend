@@ -18,6 +18,7 @@ func newTestServer(t *testing.T) (*Server, sqlmock.Sqlmock, *sql.DB) {
 	if err != nil {
 		t.Fatalf("sqlmock.New: %v", err)
 	}
+	t.Cleanup(func() { _ = db.Close() })
 	return NewServer(db, nil), mock, db
 }
 
