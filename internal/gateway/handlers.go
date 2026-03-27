@@ -1189,7 +1189,6 @@ func (s *Server) GetLoans(c *gin.Context) {
 func (s *Server) GetLoanByNumber(c *gin.Context) {
 	var uri getLoanByNumberURI
 	if err := c.ShouldBindUri(&uri); err != nil {
-		log.Printf("[GetLoanByNumber] ERROR: Invalid loan number: %v", err)
 		c.String(http.StatusBadRequest, "loan number is required")
 		return
 	}
@@ -1197,20 +1196,15 @@ func (s *Server) GetLoanByNumber(c *gin.Context) {
 	ctx, cancel := context.WithTimeout(c.Request.Context(), 5*time.Second)
 	defer cancel()
 
-	email := c.GetString("email")
-	log.Printf("[GetLoanByNumber] Request from user: %s for loan: %s", email, uri.LoanNumber)
-
 	resp, err := s.BankClient.GetLoanByNumber(ctx, &bankpb.GetLoanByNumberRequest{
-		ClientEmail: email,
+		ClientEmail: c.GetString("email"),
 		LoanNumber:  uri.LoanNumber,
 	})
 	if err != nil {
-		log.Printf("[GetLoanByNumber] ERROR: Failed to get loan %s for user %s: %v", uri.LoanNumber, email, err)
 		writeGRPCError(c, err)
 		return
 	}
 
-	log.Printf("[GetLoanByNumber] SUCCESS: User %s retrieved loan %s", email, uri.LoanNumber)
 	c.JSON(http.StatusOK, gin.H{
 		"loan_number":             resp.LoanNumber,
 		"loan_type":               resp.LoanType,

@@ -1316,34 +1316,12 @@ func (s *Server) GetLoanByNumber(_ context.Context, req *bankpb.GetLoanByNumberR
 		return nil, status.Error(codes.InvalidArgument, "invalid loan number")
 	}
 
-	log.Printf("[GetLoanByNumber] Looking up loan %d for client email: %s", loanID, clientEmail)
-
-	var loan *loanView
-	var clientLookupErr error
-
-	loan, clientLookupErr = s.getLoanByIDForClient(clientEmail, loanID)
-
-	if clientLookupErr != nil {
-		if errors.Is(clientLookupErr, gorm.ErrRecordNotFound) {
-			// Check if this might be an employee (email not in clients table)
-			// Try unrestricted lookup for employees
-			log.Printf("[GetLoanByNumber] Client lookup failed for %s, trying employee lookup", clientEmail)
-			loan, err = s.getLoanByID(loanID)
-			if err != nil {
-				if errors.Is(err, gorm.ErrRecordNotFound) {
-					log.Printf("[GetLoanByNumber] Loan %d not found", loanID)
-					return nil, status.Error(codes.NotFound, "loan not found")
-				}
-				log.Printf("[GetLoanByNumber] ERROR fetching loan %d: %v", loanID, err)
-				return nil, status.Error(codes.Internal, fmt.Sprintf("failed to retrieve loan: %v", err))
-			}
-			log.Printf("[GetLoanByNumber] SUCCESS: Found loan %d for employee %s", loanID, clientEmail)
-		} else {
-			log.Printf("[GetLoanByNumber] ERROR fetching loan %d for client %s: %v", loanID, clientEmail, clientLookupErr)
-			return nil, status.Error(codes.Internal, fmt.Sprintf("failed to retrieve loan: %v", clientLookupErr))
+	loan, err := s.getLoanByIDForClient(clientEmail, loanID)
+	if err != nil {
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			return nil, status.Error(codes.NotFound, "loan not found")
 		}
-	} else {
-		log.Printf("[GetLoanByNumber] SUCCESS: Found loan %d for client %s", loanID, clientEmail)
+		return nil, status.Error(codes.Internal, "failed to retrieve loan")
 	}
 
 	return loanViewToProto(loan), nil

@@ -577,27 +577,6 @@ FROM loans l, currencies cur, accounts a
 WHERE l.account_id = a.id AND a.number = '333000112345678910' AND cur.label = 'RSD';
 
 -------------------------------------------------------------------------------
--- Sample loan requests (pending approval)
--------------------------------------------------------------------------------
-INSERT INTO loan_request (type, currency_id, amount, repayment_period, account_id, status, purpose, salary, employment_status, employment_period, phone_number, interest_rate_type)
-SELECT 'GOTOVINSKI', cur.id, 500000, 12, a.id, 'pending', 'Wedding expenses', 600000, 'full_time', 24, '0612345678', 'fixed'
-FROM accounts a, currencies cur
-WHERE a.number = '333000112345678910' AND cur.label = 'RSD'
-ON CONFLICT DO NOTHING;
-
-INSERT INTO loan_request (type, currency_id, amount, repayment_period, account_id, status, purpose, salary, employment_status, employment_period, phone_number, interest_rate_type)
-SELECT 'STAMBENI', cur.id, 15000000, 240, a.id, 'pending', 'Apartment renovation', 800000, 'full_time', 48, '0618765432', 'variable'
-FROM accounts a, currencies cur
-WHERE a.number = '333000198765432110' AND cur.label = 'RSD'
-ON CONFLICT DO NOTHING;
-
-INSERT INTO loan_request (type, currency_id, amount, repayment_period, account_id, status, purpose, salary, employment_status, employment_period, phone_number, interest_rate_type)
-SELECT 'AUTO', cur.id, 2500000, 60, a.id, 'pending', 'Used car purchase', 750000, 'full_time', 36, '0619998887', 'fixed'
-FROM accounts a, currencies cur
-WHERE a.number = '333000155555555510' AND cur.label = 'RSD'
-ON CONFLICT DO NOTHING;
-
--------------------------------------------------------------------------------
 -- Activity codes & companies (existing + new)
 -------------------------------------------------------------------------------
 INSERT INTO activity_codes (code, sector, branch)

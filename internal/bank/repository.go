@@ -824,38 +824,6 @@ func (s *Server) getLoanByIDForClient(clientEmail string, loanID int64) (*loanVi
 	return &loan, nil
 }
 
-func (s *Server) getLoanByID(loanID int64) (*loanView, error) {
-	var loan loanView
-
-	err := s.db_gorm.
-		Model(&Loan{}).
-		Joins("JOIN accounts ON accounts.id = loans.account_id").
-		Joins("JOIN currencies ON currencies.id = loans.currency_id").
-		Where("loans.id = ?", loanID).
-		Select(`
-			CAST(loans.id AS text) AS loan_number,
-			loans.type::text AS loan_type,
-			accounts.number AS account_number,
-			loans.amount AS loan_amount,
-			loans.installments AS repayment_period,
-			loans.nominal_rate AS nominal_rate,
-			(POWER(1 + loans.interest_rate / 100.0 / 12.0, 12) - 1) * 100 AS effective_rate,
-			TO_CHAR(loans.date_signed, 'YYYY-MM-DD') AS agreement_date,
-			TO_CHAR(loans.date_end, 'YYYY-MM-DD') AS maturity_date,
-			loans.monthly_payment AS next_installment_amount,
-			TO_CHAR(loans.next_payment_due, 'YYYY-MM-DD') AS next_installment_date,
-			loans.remaining_debt AS remaining_debt,
-			currencies.label AS currency,
-			loans.loan_status::text AS status
-		`).
-		Take(&loan).Error
-	if err != nil {
-		return nil, err
-	}
-
-	return &loan, nil
-}
-
 func (s *Server) createLoanRequest(req *LoanRequest) error {
 	return s.db_gorm.Create(req).Error
 }
