@@ -32,8 +32,11 @@ func SetupApi(router *gin.Engine, server *Server) {
 		api.POST("/login", server.Login)
 		api.POST("/logout", auth, server.Logout)
 		api.POST("/token/refresh", server.Refresh)
-		api.POST("/totp/setup/begin", auth, server.TOTPSetupBegin)
-		api.POST("/totp/setup/confirm", auth, server.TOTPSetupConfirm)
+
+		t := api.Group("/totp", auth)
+		t.POST("/setup/begin", server.TOTPSetupBegin)
+		t.POST("/setup/confirm", server.TOTPSetupConfirm)
+		t.GET("/status", server.TOTPStatus)
 	}
 
 	recipients := api.Group("/recipients", auth)

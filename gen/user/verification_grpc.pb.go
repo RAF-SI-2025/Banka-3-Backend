@@ -22,6 +22,7 @@ const (
 	TOTPService_VerifyCode_FullMethodName    = "/user.TOTPService/VerifyCode"
 	TOTPService_EnrollBegin_FullMethodName   = "/user.TOTPService/EnrollBegin"
 	TOTPService_EnrollConfirm_FullMethodName = "/user.TOTPService/EnrollConfirm"
+	TOTPService_TOTPStatus_FullMethodName    = "/user.TOTPService/TOTPStatus"
 )
 
 // TOTPServiceClient is the client API for TOTPService service.
@@ -31,6 +32,7 @@ type TOTPServiceClient interface {
 	VerifyCode(ctx context.Context, in *VerifyCodeRequest, opts ...grpc.CallOption) (*VerifyCodeResponse, error)
 	EnrollBegin(ctx context.Context, in *EnrollBeginRequest, opts ...grpc.CallOption) (*EnrollBeginResponse, error)
 	EnrollConfirm(ctx context.Context, in *EnrollConfirmRequest, opts ...grpc.CallOption) (*EnrollConfirmResponse, error)
+	TOTPStatus(ctx context.Context, in *TOTPStatusRequest, opts ...grpc.CallOption) (*TOTPStatusResponse, error)
 }
 
 type tOTPServiceClient struct {
@@ -71,6 +73,16 @@ func (c *tOTPServiceClient) EnrollConfirm(ctx context.Context, in *EnrollConfirm
 	return out, nil
 }
 
+func (c *tOTPServiceClient) TOTPStatus(ctx context.Context, in *TOTPStatusRequest, opts ...grpc.CallOption) (*TOTPStatusResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(TOTPStatusResponse)
+	err := c.cc.Invoke(ctx, TOTPService_TOTPStatus_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
 // TOTPServiceServer is the server API for TOTPService service.
 // All implementations must embed UnimplementedTOTPServiceServer
 // for forward compatibility.
@@ -78,6 +90,7 @@ type TOTPServiceServer interface {
 	VerifyCode(context.Context, *VerifyCodeRequest) (*VerifyCodeResponse, error)
 	EnrollBegin(context.Context, *EnrollBeginRequest) (*EnrollBeginResponse, error)
 	EnrollConfirm(context.Context, *EnrollConfirmRequest) (*EnrollConfirmResponse, error)
+	TOTPStatus(context.Context, *TOTPStatusRequest) (*TOTPStatusResponse, error)
 	mustEmbedUnimplementedTOTPServiceServer()
 }
 
@@ -96,6 +109,9 @@ func (UnimplementedTOTPServiceServer) EnrollBegin(context.Context, *EnrollBeginR
 }
 func (UnimplementedTOTPServiceServer) EnrollConfirm(context.Context, *EnrollConfirmRequest) (*EnrollConfirmResponse, error) {
 	return nil, status.Error(codes.Unimplemented, "method EnrollConfirm not implemented")
+}
+func (UnimplementedTOTPServiceServer) TOTPStatus(context.Context, *TOTPStatusRequest) (*TOTPStatusResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method TOTPStatus not implemented")
 }
 func (UnimplementedTOTPServiceServer) mustEmbedUnimplementedTOTPServiceServer() {}
 func (UnimplementedTOTPServiceServer) testEmbeddedByValue()                     {}
@@ -172,6 +188,24 @@ func _TOTPService_EnrollConfirm_Handler(srv interface{}, ctx context.Context, de
 	return interceptor(ctx, in, info, handler)
 }
 
+func _TOTPService_TOTPStatus_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(TOTPStatusRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(TOTPServiceServer).TOTPStatus(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: TOTPService_TOTPStatus_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(TOTPServiceServer).TOTPStatus(ctx, req.(*TOTPStatusRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
 // TOTPService_ServiceDesc is the grpc.ServiceDesc for TOTPService service.
 // It's only intended for direct use with grpc.RegisterService,
 // and not to be introspected or modified (even as a copy)
@@ -190,6 +224,10 @@ var TOTPService_ServiceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "EnrollConfirm",
 			Handler:    _TOTPService_EnrollConfirm_Handler,
+		},
+		{
+			MethodName: "TOTPStatus",
+			Handler:    _TOTPService_TOTPStatus_Handler,
 		},
 	},
 	Streams:  []grpc.StreamDesc{},

@@ -220,6 +220,24 @@ func scanClient(scanner interface {
 	return &client, nil
 }
 
+func (s *Server) GetClientByEmail(email string) (*Client, error) {
+	row := s.database.QueryRow(`
+		SELECT id, first_name, last_name, date_of_birth, gender, email, phone_number, address
+		FROM clients
+		WHERE email = $1
+	`, email)
+
+	client, err := scanClient(row)
+	if err == sql.ErrNoRows {
+		return nil, ErrClientNotFound
+	}
+	if err != nil {
+		return nil, fmt.Errorf("getting client by id: %w", err)
+	}
+
+	return client, nil
+}
+
 func (s *Server) GetClientByID(id int64) (*Client, error) {
 	row := s.database.QueryRow(`
 		SELECT id, first_name, last_name, date_of_birth, gender, email, phone_number, address
@@ -463,28 +481,8 @@ func (s *Server) UpdateEmployee_(emp *Employee) (*Employee, error) {
 
 var ErrUserNotFound = errors.New("user not found")
 
-func (s *TOTPServer) getUserIdByEmail(email string) (*uint64, error) {
-	query := `
-		SELECT id FROM employees WHERE email = $1
-		UNION ALL
-		SELECT id FROM clients WHERE email = $1
-		LIMIT 1
-	`
-
-	var id uint64
-
-	err := s.db.QueryRow(query, email).Scan(&id)
-	if err == sql.ErrNoRows {
-		return nil, ErrUserNotFound
-	}
-	if err != nil {
-		return nil, err
-	}
-	return &id, nil
-}
-
-func (s *TOTPServer) SetTempTOTPSecret(id uint64, secret string) error {
-	_, err := s.db.Exec(`
+func (s *Server) SetTempTOTPSecret(id uint64, secret string) error {
+	_, err := s.database.Exec(`
 		INSERT INTO verification_codes (client_id, temp_secret, temp_created_at)
 		VALUES ($1, $2, NOW())
 		ON CONFLICT (client_id)
@@ -495,7 +493,7 @@ func (s *TOTPServer) SetTempTOTPSecret(id uint64, secret string) error {
 	return err
 }
 
-func (s *TOTPServer) GetTempSecret(tx *sql.Tx, id uint64) (*string, error) {
+func (s *Server) GetTempSecret(tx *sql.Tx, id uint64) (*string, error) {
 	var temp_secret string
 	row := tx.QueryRow(`
 		SELECT temp_secret
@@ -513,9 +511,9 @@ func (s *TOTPServer) GetTempSecret(tx *sql.Tx, id uint64) (*string, error) {
 	return &temp_secret, nil
 }
 
-func (s *TOTPServer) GetSecret(id uint64) (*string, error) {
+func (s *Server) GetSecret(id uint64) (*string, error) {
 	var secret string
-	row := s.db.QueryRow(`
+	row := s.database.QueryRow(`
 		SELECT secret
 		FROM verification_codes
 		WHERE client_id = $1 AND enabled = TRUE
@@ -527,7 +525,7 @@ func (s *TOTPServer) GetSecret(id uint64) (*string, error) {
 	return &secret, nil
 }
 
-func (s *TOTPServer) EnableTOTP(tx *sql.Tx, id uint64, tempSecret string) error {
+func (s *Server) EnableTOTP(tx *sql.Tx, id uint64, tempSecret string) error {
 	_, err := tx.Exec(`
 		UPDATE verification_codes
 		SET enabled = TRUE,
@@ -540,4 +538,18 @@ func (s *TOTPServer) EnableTOTP(tx *sql.Tx, id uint64, tempSecret string) error 
 		return err
 	}
 	return nil
+}
+
+func (s *Server) totpStatus(id uint64) (*bool, error) {
+	var active bool
+	row := s.database.QueryRow(`
+		SELECT enabled
+		FROM verification_codes
+		WHERE client_id = $1
+	`, id)
+	err := row.Scan(&active)
+	if err != nil {
+		return nil, ErrUserNotFound
+	}
+	return &active, nil
 }

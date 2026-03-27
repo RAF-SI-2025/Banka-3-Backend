@@ -301,6 +301,94 @@ func (x *EnrollConfirmResponse) GetSuccess() bool {
 	return false
 }
 
+type TOTPStatusRequest struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	Email         string                 `protobuf:"bytes,1,opt,name=email,proto3" json:"email,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *TOTPStatusRequest) Reset() {
+	*x = TOTPStatusRequest{}
+	mi := &file_user_verification_proto_msgTypes[6]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *TOTPStatusRequest) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*TOTPStatusRequest) ProtoMessage() {}
+
+func (x *TOTPStatusRequest) ProtoReflect() protoreflect.Message {
+	mi := &file_user_verification_proto_msgTypes[6]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use TOTPStatusRequest.ProtoReflect.Descriptor instead.
+func (*TOTPStatusRequest) Descriptor() ([]byte, []int) {
+	return file_user_verification_proto_rawDescGZIP(), []int{6}
+}
+
+func (x *TOTPStatusRequest) GetEmail() string {
+	if x != nil {
+		return x.Email
+	}
+	return ""
+}
+
+type TOTPStatusResponse struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	Active        bool                   `protobuf:"varint,1,opt,name=active,proto3" json:"active,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *TOTPStatusResponse) Reset() {
+	*x = TOTPStatusResponse{}
+	mi := &file_user_verification_proto_msgTypes[7]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *TOTPStatusResponse) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*TOTPStatusResponse) ProtoMessage() {}
+
+func (x *TOTPStatusResponse) ProtoReflect() protoreflect.Message {
+	mi := &file_user_verification_proto_msgTypes[7]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use TOTPStatusResponse.ProtoReflect.Descriptor instead.
+func (*TOTPStatusResponse) Descriptor() ([]byte, []int) {
+	return file_user_verification_proto_rawDescGZIP(), []int{7}
+}
+
+func (x *TOTPStatusResponse) GetActive() bool {
+	if x != nil {
+		return x.Active
+	}
+	return false
+}
+
 var File_user_verification_proto protoreflect.FileDescriptor
 
 const file_user_verification_proto_rawDesc = "" +
@@ -319,12 +407,18 @@ const file_user_verification_proto_rawDesc = "" +
 	"\x05email\x18\x01 \x01(\tR\x05email\x12\x12\n" +
 	"\x04code\x18\x02 \x01(\tR\x04code\"1\n" +
 	"\x15EnrollConfirmResponse\x12\x18\n" +
-	"\asuccess\x18\x01 \x01(\bR\asuccess2\xdc\x01\n" +
+	"\asuccess\x18\x01 \x01(\bR\asuccess\")\n" +
+	"\x11TOTPStatusRequest\x12\x14\n" +
+	"\x05email\x18\x01 \x01(\tR\x05email\",\n" +
+	"\x12TOTPStatusResponse\x12\x16\n" +
+	"\x06active\x18\x01 \x01(\bR\x06active2\x9d\x02\n" +
 	"\vTOTPService\x12?\n" +
 	"\n" +
 	"VerifyCode\x12\x17.user.VerifyCodeRequest\x1a\x18.user.VerifyCodeResponse\x12B\n" +
 	"\vEnrollBegin\x12\x18.user.EnrollBeginRequest\x1a\x19.user.EnrollBeginResponse\x12H\n" +
-	"\rEnrollConfirm\x12\x1a.user.EnrollConfirmRequest\x1a\x1b.user.EnrollConfirmResponseB1Z/github.com/RAF-SI-2025/Banka-3-Backend/gen/userb\x06proto3"
+	"\rEnrollConfirm\x12\x1a.user.EnrollConfirmRequest\x1a\x1b.user.EnrollConfirmResponse\x12?\n" +
+	"\n" +
+	"TOTPStatus\x12\x17.user.TOTPStatusRequest\x1a\x18.user.TOTPStatusResponseB1Z/github.com/RAF-SI-2025/Banka-3-Backend/gen/userb\x06proto3"
 
 var (
 	file_user_verification_proto_rawDescOnce sync.Once
@@ -338,7 +432,7 @@ func file_user_verification_proto_rawDescGZIP() []byte {
 	return file_user_verification_proto_rawDescData
 }
 
-var file_user_verification_proto_msgTypes = make([]protoimpl.MessageInfo, 6)
+var file_user_verification_proto_msgTypes = make([]protoimpl.MessageInfo, 8)
 var file_user_verification_proto_goTypes = []any{
 	(*VerifyCodeRequest)(nil),     // 0: user.VerifyCodeRequest
 	(*VerifyCodeResponse)(nil),    // 1: user.VerifyCodeResponse
@@ -346,16 +440,20 @@ var file_user_verification_proto_goTypes = []any{
 	(*EnrollBeginResponse)(nil),   // 3: user.EnrollBeginResponse
 	(*EnrollConfirmRequest)(nil),  // 4: user.EnrollConfirmRequest
 	(*EnrollConfirmResponse)(nil), // 5: user.EnrollConfirmResponse
+	(*TOTPStatusRequest)(nil),     // 6: user.TOTPStatusRequest
+	(*TOTPStatusResponse)(nil),    // 7: user.TOTPStatusResponse
 }
 var file_user_verification_proto_depIdxs = []int32{
 	0, // 0: user.TOTPService.VerifyCode:input_type -> user.VerifyCodeRequest
 	2, // 1: user.TOTPService.EnrollBegin:input_type -> user.EnrollBeginRequest
 	4, // 2: user.TOTPService.EnrollConfirm:input_type -> user.EnrollConfirmRequest
-	1, // 3: user.TOTPService.VerifyCode:output_type -> user.VerifyCodeResponse
-	3, // 4: user.TOTPService.EnrollBegin:output_type -> user.EnrollBeginResponse
-	5, // 5: user.TOTPService.EnrollConfirm:output_type -> user.EnrollConfirmResponse
-	3, // [3:6] is the sub-list for method output_type
-	0, // [0:3] is the sub-list for method input_type
+	6, // 3: user.TOTPService.TOTPStatus:input_type -> user.TOTPStatusRequest
+	1, // 4: user.TOTPService.VerifyCode:output_type -> user.VerifyCodeResponse
+	3, // 5: user.TOTPService.EnrollBegin:output_type -> user.EnrollBeginResponse
+	5, // 6: user.TOTPService.EnrollConfirm:output_type -> user.EnrollConfirmResponse
+	7, // 7: user.TOTPService.TOTPStatus:output_type -> user.TOTPStatusResponse
+	4, // [4:8] is the sub-list for method output_type
+	0, // [0:4] is the sub-list for method input_type
 	0, // [0:0] is the sub-list for extension type_name
 	0, // [0:0] is the sub-list for extension extendee
 	0, // [0:0] is the sub-list for field type_name
@@ -372,7 +470,7 @@ func file_user_verification_proto_init() {
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
 			RawDescriptor: unsafe.Slice(unsafe.StringData(file_user_verification_proto_rawDesc), len(file_user_verification_proto_rawDesc)),
 			NumEnums:      0,
-			NumMessages:   6,
+			NumMessages:   8,
 			NumExtensions: 0,
 			NumServices:   1,
 		},

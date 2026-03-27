@@ -38,6 +38,7 @@ const (
 
 type Server struct {
 	userpb.UnimplementedUserServiceServer
+	userpb.UnimplementedTOTPServiceServer
 	accessJwtSecret  string
 	refreshJwtSecret string
 	database         *sql.DB

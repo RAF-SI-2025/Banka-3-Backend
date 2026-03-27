@@ -8,6 +8,7 @@ service TOTPService {
   rpc VerifyCode(VerifyCodeRequest) returns (VerifyCodeResponse);
   rpc EnrollBegin(EnrollBeginRequest) returns (EnrollBeginResponse);
   rpc EnrollConfirm(EnrollConfirmRequest) returns (EnrollConfirmResponse);
+  rpc TOTPStatus(TOTPStatusRequest) returns (TOTPStatusResponse);
 }
 
 message VerifyCodeRequest {
@@ -34,4 +35,12 @@ message EnrollConfirmRequest {
 
 message EnrollConfirmResponse {
   bool success = 1;
+}
+
+message TOTPStatusRequest {
+  string email = 1;
+}
+
+message TOTPStatusResponse {
+  bool active = 1;
 }

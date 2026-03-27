@@ -45,3 +45,17 @@ func (s *Server) TOTPSetupConfirm(c *gin.Context) {
 		})
 	}
 }
+
+func (s *Server) TOTPStatus(c *gin.Context) {
+	email := c.GetString("email")
+	resp, err := s.TOTPClient.TOTPStatus(context.Background(), &userpb.TOTPStatusRequest{
+		Email: email,
+	})
+	if err != nil {
+		writeGRPCError(c, err)
+		return
+	}
+	c.JSON(http.StatusOK, gin.H{
+		"active": resp.Active,
+	})
+}

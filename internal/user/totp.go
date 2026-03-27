@@ -13,24 +13,17 @@ import (
 	userpb "github.com/RAF-SI-2025/Banka-3-Backend/gen/user"
 )
 
-type TOTPServer struct {
-	userpb.UnimplementedTOTPServiceServer
-	db *sql.DB
-}
-
-func NewTotpServer(database *sql.DB) *TOTPServer {
-	return &TOTPServer{db: database}
-}
-
-func (s *TOTPServer) VerifyCode(_ context.Context, req *userpb.VerifyCodeRequest) (*userpb.VerifyCodeResponse, error) {
-	userId, err := s.getUserIdByEmail(req.Email)
+func (s *Server) VerifyCode(_ context.Context, req *userpb.VerifyCodeRequest) (*userpb.VerifyCodeResponse, error) {
+	client, err := s.GetClientByEmail(req.Email)
 	if err != nil {
 		if errors.Is(err, ErrUserNotFound) {
 			return nil, status.Error(codes.NotFound, err.Error())
 		}
 		return nil, err
 	}
-	secret, err := s.GetSecret(*userId)
+	userId := client.Id
+
+	secret, err := s.GetSecret(userId)
 	if err != nil {
 		if errors.Is(err, ErrUserNotFound) {
 			return nil, status.Error(codes.Unauthenticated, "user doesn't have TOTP set up")
@@ -47,8 +40,8 @@ func (s *TOTPServer) VerifyCode(_ context.Context, req *userpb.VerifyCodeRequest
 	}
 	return &userpb.VerifyCodeResponse{Valid: valid}, nil
 }
-func (s *TOTPServer) EnrollBegin(_ context.Context, req *userpb.EnrollBeginRequest) (*userpb.EnrollBeginResponse, error) {
-	userId, err := s.getUserIdByEmail(req.Email)
+func (s *Server) EnrollBegin(_ context.Context, req *userpb.EnrollBeginRequest) (*userpb.EnrollBeginResponse, error) {
+	client, err := s.GetClientByEmail(req.Email)
 	if err != nil {
 		if errors.Is(err, ErrUserNotFound) {
 			return nil, status.Error(codes.NotFound, err.Error())
@@ -59,6 +52,7 @@ func (s *TOTPServer) EnrollBegin(_ context.Context, req *userpb.EnrollBeginReque
 		Issuer:      "Banka3",
 		AccountName: req.Email,
 	})
+	userId := client.Id
 
 	if err != nil {
 		return nil, err
@@ -66,7 +60,7 @@ func (s *TOTPServer) EnrollBegin(_ context.Context, req *userpb.EnrollBeginReque
 
 	secret := key.Secret()
 
-	err = s.SetTempTOTPSecret(*userId, secret)
+	err = s.SetTempTOTPSecret(userId, secret)
 	if err != nil {
 		return nil, err
 	}
@@ -75,22 +69,23 @@ func (s *TOTPServer) EnrollBegin(_ context.Context, req *userpb.EnrollBeginReque
 		Url: key.URL(),
 	}, nil
 }
-func (s *TOTPServer) EnrollConfirm(_ context.Context, req *userpb.EnrollConfirmRequest) (*userpb.EnrollConfirmResponse, error) {
-	userId, err := s.getUserIdByEmail(req.Email)
+func (s *Server) EnrollConfirm(_ context.Context, req *userpb.EnrollConfirmRequest) (*userpb.EnrollConfirmResponse, error) {
+	client, err := s.GetClientByEmail(req.Email)
 	if err != nil {
 		if errors.Is(err, ErrUserNotFound) {
 			return nil, status.Error(codes.NotFound, err.Error())
 		}
 		return nil, err
 	}
+	userId := client.Id
 
-	tx, err := s.db.Begin()
+	tx, err := s.database.Begin()
 	if err != nil {
 		return nil, err
 	}
 	defer func() { _ = tx.Rollback() }()
 
-	tempSecret, err := s.GetTempSecret(tx, *userId)
+	tempSecret, err := s.GetTempSecret(tx, userId)
 	if err != nil {
 		if errors.Is(err, ErrUserNotFound) {
 			return nil, status.Error(codes.NotFound, err.Error())
@@ -106,7 +101,7 @@ func (s *TOTPServer) EnrollConfirm(_ context.Context, req *userpb.EnrollConfirmR
 		}, nil
 	}
 
-	err = s.EnableTOTP(tx, *userId, *tempSecret)
+	err = s.EnableTOTP(tx, userId, *tempSecret)
 	if err != nil {
 		return nil, err
 	}
@@ -117,5 +112,28 @@ func (s *TOTPServer) EnrollConfirm(_ context.Context, req *userpb.EnrollConfirmR
 	}
 	return &userpb.EnrollConfirmResponse{
 		Success: true,
+	}, nil
+}
+
+func (s *Server) TOTPStatus(_ context.Context, req *userpb.TOTPStatusRequest) (*userpb.TOTPStatusResponse, error) {
+	client, err := s.GetClientByEmail(req.Email)
+	if err != nil {
+		if errors.Is(err, ErrUserNotFound) {
+			return nil, status.Error(codes.NotFound, err.Error())
+		}
+		return nil, err
+	}
+	userId := client.Id
+	active, err := s.totpStatus(userId)
+	if err != nil {
+		if errors.Is(err, ErrUserNotFound) || errors.Is(err, sql.ErrNoRows) {
+			return &userpb.TOTPStatusResponse{
+				Active: false,
+			}, nil
+		}
+		return nil, err
+	}
+	return &userpb.TOTPStatusResponse{
+		Active: *active,
 	}, nil
 }
