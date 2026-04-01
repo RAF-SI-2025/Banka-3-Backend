@@ -61,6 +61,7 @@ func (s *Server) RequestCard(c *gin.Context) {
 	_, err := s.BankClient.RequestCard(ctx, &bankpb.RequestCardRequest{
 		AccountNumber: req.AccountNumber,
 		CardType:      req.CardType,
+		CardBrand:     req.CardBrand,
 	})
 
 	if err != nil {
@@ -71,6 +72,7 @@ func (s *Server) RequestCard(c *gin.Context) {
 	c.JSON(http.StatusCreated, gin.H{
 		"account_number": req.AccountNumber,
 		"card_type":      req.CardType,
+		"card_brand":     req.CardBrand,
 	})
 }
 

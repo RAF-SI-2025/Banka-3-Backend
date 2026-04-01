@@ -92,6 +92,11 @@ func PermissionMiddleware(user userpb.UserServiceClient) func(...string) gin.Han
 			if err != nil {
 				c.AbortWithStatus(403)
 			}
+
+			if slices.Contains(emp.Permissions, "admin") {
+				c.Next()
+			}
+
 			for _, perm := range permissions {
 				if !slices.Contains(emp.Permissions, perm) {
 					c.AbortWithStatus(403)

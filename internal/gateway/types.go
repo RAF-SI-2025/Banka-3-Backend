@@ -207,6 +207,7 @@ type transactionTypeQuery struct {
 type requestCardRequest struct {
 	AccountNumber string `json:"account_number" binding:"required"`
 	CardType      string `json:"card_type" binding:"required"`
+	CardBrand     string `json:"card_brand" binding:"required"`
 }
 
 type confirmCardQuery struct {
