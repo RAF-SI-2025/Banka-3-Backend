@@ -7,12 +7,12 @@ import (
 	"errors"
 	"fmt"
 	"log"
-	"strconv"
-	"strings"
+	"reflect"
 	"time"
 
 	"github.com/golang-jwt/jwt/v5"
 	"github.com/jackc/pgx/v5/pgconn"
+	"gorm.io/gorm"
 )
 
 type User struct {
@@ -20,6 +20,15 @@ type User struct {
 	hashedPassword []byte
 	salt           []byte
 }
+
+type (
+
+	// I am indeed aware (unlike most)
+	// That these are in fact the same type
+	// But We should disambiguate what purpose
+	// these are used for
+	user_restrictions = map[string]string
+)
 
 var ErrInvalidPasswordActionToken = errors.New("invalid or expired password token")
 
@@ -200,150 +209,40 @@ func (s *Server) RevokeRefreshTokensByEmail(tx *sql.Tx, email string) error {
 	return nil
 }
 
-func scanClient(scanner interface {
-	Scan(dest ...any) error
-}) (*Client, error) {
-	var client Client
-	err := scanner.Scan(
-		&client.Id,
-		&client.First_name,
-		&client.Last_name,
-		&client.Date_of_birth,
-		&client.Gender,
-		&client.Email,
-		&client.Phone_number,
-		&client.Address,
-	)
-	if err != nil {
-		return nil, err
+
+func GetAllUsersFromModel[T Client | Employee](user T, s *Server, constraints user_restrictions) ([]T, error) {
+	add_constraints := func(query *gorm.DB, restrictions user_restrictions) *gorm.DB {
+		for _, key := range restrictions {
+			if restrictions[key] != "" {
+				switch key {
+				case "email", "position":
+					query = query.Where(key+"= ?", restrictions[key])
+				default:
+					query = query.Where(key+"ILIKE ?", "%"+restrictions[key]+"%")
+				}
+			}
+		}
+		return query
 	}
-	return &client, nil
-}
-
-func (s *Server) GetClientByEmail(email string) (*Client, error) {
-	row := s.database.QueryRow(`
-		SELECT id, first_name, last_name, date_of_birth, gender, email, phone_number, address
-		FROM clients
-		WHERE email = $1
-	`, email)
-
-	client, err := scanClient(row)
-	if err == sql.ErrNoRows {
-		return nil, ErrClientNotFound
-	}
-	if err != nil {
-		return nil, fmt.Errorf("getting client by id: %w", err)
-	}
-
-	return client, nil
-}
-
-func (s *Server) GetClientByID(id int64) (*Client, error) {
-	row := s.database.QueryRow(`
-		SELECT id, first_name, last_name, date_of_birth, gender, email, phone_number, address
-		FROM clients
-		WHERE id = $1
-	`, id)
-
-	client, err := scanClient(row)
-	if err == sql.ErrNoRows {
-		return nil, ErrClientNotFound
-	}
-	if err != nil {
-		return nil, fmt.Errorf("getting client by id: %w", err)
-	}
-
-	return client, nil
-}
-
-func (s *Server) GetAllClients(firstName string, lastName string, email string) ([]Client, error) {
-	query := `SELECT id, first_name, last_name, date_of_birth, gender, email, phone_number, address FROM clients`
-
-	var conditions []string
-	var args []interface{}
-
-	if firstName != "" {
-		conditions = append(conditions, "first_name = $"+strconv.Itoa(len(args)+1))
-		args = append(args, firstName)
-	}
-	if lastName != "" {
-		conditions = append(conditions, "last_name = $"+strconv.Itoa(len(args)+1))
-		args = append(args, lastName)
-	}
-	if email != "" {
-		conditions = append(conditions, "email = $"+strconv.Itoa(len(args)+1))
-		args = append(args, email)
-	}
-
-	if len(conditions) > 0 {
-		query += " WHERE " + strings.Join(conditions, " AND ")
-	}
-	query += " ORDER BY last_name ASC, first_name ASC"
-
-	rows, err := s.database.Query(query, args...)
-	if err != nil {
-		return nil, fmt.Errorf("listing clients: %w", err)
-	}
-	defer func() { _ = rows.Close() }()
-
-	var clients []Client
-	for rows.Next() {
-		client, err := scanClient(rows)
+	switch any(user).(type) {
+	case Client, Employee:
+		var users []T
+		var query *gorm.DB
+		if reflect.TypeOf(any(user)) == reflect.TypeFor[Employee](){
+			query = s.db_gorm.Model(&user).Preload("Permissions")
+		} else {
+			query = s.db_gorm.Model(&user)
+		}
+		query = add_constraints(query, constraints)
+		err := query.Find(&users).Error
 		if err != nil {
-			return nil, fmt.Errorf("scanning client: %w", err)
+			return nil, err
 		}
-		clients = append(clients, *client)
-	}
-	if err := rows.Err(); err != nil {
-		return nil, fmt.Errorf("iterating clients: %w", err)
-	}
+		return users, nil
 
-	return clients, nil
-}
-
-func (s *Server) UpdateClientRecord(client *Client) error {
-	updates := map[string]any{}
-
-	if strings.TrimSpace(client.First_name) != "" {
-		updates["first_name"] = strings.TrimSpace(client.First_name)
+	default:
+		return nil, fmt.Errorf("Called with a type which is neither Client nor employee")
 	}
-	if strings.TrimSpace(client.Last_name) != "" {
-		updates["last_name"] = strings.TrimSpace(client.Last_name)
-	}
-	if !client.Date_of_birth.IsZero() {
-		updates["date_of_birth"] = client.Date_of_birth
-	}
-	if strings.TrimSpace(client.Gender) != "" {
-		updates["gender"] = strings.TrimSpace(client.Gender)
-	}
-	if strings.TrimSpace(client.Email) != "" {
-		updates["email"] = strings.TrimSpace(client.Email)
-	}
-	if strings.TrimSpace(client.Phone_number) != "" {
-		updates["phone_number"] = strings.TrimSpace(client.Phone_number)
-	}
-	if strings.TrimSpace(client.Address) != "" {
-		updates["address"] = strings.TrimSpace(client.Address)
-	}
-
-	if len(updates) == 0 {
-		return ErrClientNoFieldsToUpdate
-	}
-
-	updates["updated_at"] = time.Now()
-
-	result := s.db_gorm.Model(&Client{}).Where("id = ?", client.Id).Updates(updates)
-	if result.Error != nil {
-		if isUniqueViolation(result.Error) {
-			return ErrClientEmailExists
-		}
-		return fmt.Errorf("updating client: %w", result.Error)
-	}
-	if result.RowsAffected == 0 {
-		return ErrClientNotFound
-	}
-
-	return nil
 }
 
 func isUniqueViolation(err error) bool {
@@ -360,124 +259,76 @@ func create_user_from_model[T Client | Employee](user T, s *Server) error {
 	return nil
 }
 
-func (s *Server) getEmployeeByEmail(email string) (*Employee, error) {
-	var employee Employee
-	err := s.db_gorm.Preload("Permissions").Where("email = ?", email).First(&employee).Error
+func getUserByAttribute[T Client | Employee](user T, s *Server, attribute_name string, attribute_value any) (*T, error) {
+	var ret T
+	err := s.db_gorm.Preload("Permissions").Where(attribute_name+"= ?", attribute_value).First(&ret).Error
 	if err != nil {
+		log.Println("Error from getEmployeeByAttribute: ", err)
 		return nil, err
 	}
-	for _, perm := range employee.Permissions {
-		println(perm.Name)
-	}
-	return &employee, nil
+
+	log.Println(ret)
+	return &ret, nil
 }
 
-func (s *Server) getEmployeeById(id int64) (*Employee, error) {
-	var employee Employee
-	err := s.db_gorm.Preload("Permissions").Where("id = ?", id).First(&employee).Error
-	if err != nil {
-		return nil, err
-	}
-	for _, perm := range employee.Permissions {
-		println(perm.Name)
-	}
-	return &employee, nil
-}
-
-func (s *Server) deleteEmployee(id int64) error {
-	resp := s.db_gorm.Delete(&Employee{}, id)
-	if resp.RowsAffected == 0 {
+func deleteUser[T Client | Employee](user T, s *Server) error{
+	result := s.db_gorm.Delete(&user)
+	if result.RowsAffected == 0 {
 		return ErrEmployeeNotFound
+	} else if result.Error != nil {
+		log.Println("Error in deleteUser: ", result.Error)
 	}
 	return nil
+
 }
 
-func (s *Server) GetAllEmployees(email *string, name *string, lastName *string, position *string) ([]Employee, error) {
-	var employees []Employee
-	query := s.db_gorm.Model(&Employee{}).Preload("Permissions")
-
-	if email != nil && *email != "" {
-		query = query.Where("email = ?", *email)
+func userExists[T Client | Employee](user T, s *Server) bool{
+	result := s.db_gorm.First(&user)
+	if errors.Is(result.Error, gorm.ErrRecordNotFound){
+		return false
+	} else if result.Error != nil{
+		log.Println("Error occured in userExists: ", result.Error)
+		return false
 	}
-
-	if name != nil && *name != "" {
-		query = query.Where("first_name ILIKE ?", "%"+*name+"%")
-	}
-
-	if lastName != nil && *lastName != "" {
-		query = query.Where("last_name ILIKE ?", "%"+*lastName+"%")
-	}
-
-	if position != nil && *position != "" {
-		query = query.Where("position = ?", *position)
-	}
-
-	query = query.Where("active = true")
-
-	err := query.Find(&employees).Error
-	if err != nil {
-		return nil, err
-	}
-
-	return employees, nil
+	return true
 }
 
-func (s *Server) UpdateEmployee_(emp *Employee) (*Employee, error) {
-
-	updates := map[string]any{
-		"last_name":    emp.Last_name,
-		"gender":       emp.Gender,
-		"phone_number": emp.Phone_number,
-		"address":      emp.Address,
-		"position":     emp.Position,
-		"department":   emp.Department,
-		"active":       emp.Active,
+func updateUserRecord[T Client | Employee](user T, s *Server) (*T, error) {
+	find_perm_by_name := func(perm_name string) uint64 {
+		var perms Permission
+		s.db_gorm.First(&perms, "name = ?", perm_name)
+		return perms.Id
 	}
 
-	tx := s.db_gorm.Begin()
+	var result *gorm.DB
+	switch any(user).(type) {
+	case Client:
+		if userExists(user, s) == true {
+			result = s.db_gorm.Model(&user).Updates(user)
+		}
 
-	if err := tx.Model(&Employee{}).
-		Where("id = ?", emp.Id).
-		Updates(updates).Error; err != nil {
-		tx.Rollback()
-		return nil, ErrEmployeeNotFound
+	case Employee:
+		for index, val := range any(user).(Employee).Permissions {
+			any(user).(Employee).Permissions[index].Id = find_perm_by_name(val.Name)
+		}
+		if userExists(user, s){
+			result = s.db_gorm.Model(&user).Updates(user)
+		}
+	}
+	
+	if result.Error != nil {
+		if isUniqueViolation(result.Error) {
+			return nil, ErrClientEmailExists
+		}
+		return nil, fmt.Errorf("updating user record: %w", result.Error)
+	}
+	if result.RowsAffected == 0 {
+		return nil, ErrClientNotFound
 	}
 
-	var perms []Permission
-	var names []string
-
-	for _, p := range emp.Permissions {
-		names = append(names, p.Name)
-	}
-
-	if err := tx.
-		Where("name IN ?", names).
-		Find(&perms).Error; err != nil {
-		tx.Rollback()
-		return nil, ErrUnknownPermission
-	}
-
-	if err := tx.Model(emp).
-		Association("Permissions").
-		Replace(&perms); err != nil {
-		tx.Rollback()
-		return nil, ErrEmployeeNotFound
-	}
-
-	var updated Employee
-	if err := tx.
-		Preload("Permissions").
-		First(&updated, emp.Id).Error; err != nil {
-		tx.Rollback()
-		return nil, ErrEmployeeNotFound
-	}
-
-	if err := tx.Commit().Error; err != nil {
-		return nil, err
-	}
-
-	return &updated, nil
+	return &user, nil
 }
+
 
 var ErrUserNotFound = errors.New("user not found")
 
