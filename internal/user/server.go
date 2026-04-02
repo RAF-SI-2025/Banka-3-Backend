@@ -106,7 +106,6 @@ func (client Client) toProtobuff() *userpb.Client {
 	}
 }
 
-
 func (s *Server) GetEmployeeByEmail(_ context.Context, req *userpb.GetEmployeeByEmailRequest) (*userpb.GetEmployeeResponse, error) {
 	resp, err := getUserByAttribute(Employee{}, s, "email", req.Email)
 	if err != nil {
@@ -239,8 +238,8 @@ func (s *Server) UpdateClient(_ context.Context, req *userpb.UpdateClientRequest
 	ref := reflect.ValueOf(&client).Elem()
 	for i := 0; i < ref.NumField(); i++ {
 		field := ref.Field(i)
-		if field.Type() == reflect.TypeFor[string](){
-			if !field.CanSet(){
+		if field.Type() == reflect.TypeFor[string]() {
+			if !field.CanSet() {
 				log.Println("cannot set the value of struct field")
 				// This need not be an error, but it will also probably
 				// never happen
@@ -248,14 +247,13 @@ func (s *Server) UpdateClient(_ context.Context, req *userpb.UpdateClientRequest
 			}
 			field.SetString(strings.TrimSpace(field.String()))
 		}
-		
+
 	}
-	
+
 	if req.DateOfBirth != 0 {
 		client.Date_of_birth = time.Unix(req.DateOfBirth, 0)
 	}
 
-	
 	_, err := updateUserRecord(client, s)
 	if err != nil {
 		switch {

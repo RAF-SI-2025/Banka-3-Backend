@@ -209,7 +209,6 @@ func (s *Server) RevokeRefreshTokensByEmail(tx *sql.Tx, email string) error {
 	return nil
 }
 
-
 func GetAllUsersFromModel[T Client | Employee](user T, s *Server, constraints user_restrictions) ([]T, error) {
 	add_constraints := func(query *gorm.DB, restrictions user_restrictions) *gorm.DB {
 		for _, key := range restrictions {
@@ -228,7 +227,7 @@ func GetAllUsersFromModel[T Client | Employee](user T, s *Server, constraints us
 	case Client, Employee:
 		var users []T
 		var query *gorm.DB
-		if reflect.TypeOf(any(user)) == reflect.TypeFor[Employee](){
+		if reflect.TypeOf(any(user)) == reflect.TypeFor[Employee]() {
 			query = s.db_gorm.Model(&user).Preload("Permissions")
 		} else {
 			query = s.db_gorm.Model(&user)
@@ -271,7 +270,7 @@ func getUserByAttribute[T Client | Employee](user T, s *Server, attribute_name s
 	return &ret, nil
 }
 
-func deleteUser[T Client | Employee](user T, s *Server) error{
+func deleteUser[T Client | Employee](user T, s *Server) error {
 	result := s.db_gorm.Delete(&user)
 	if result.RowsAffected == 0 {
 		return ErrEmployeeNotFound
@@ -282,11 +281,11 @@ func deleteUser[T Client | Employee](user T, s *Server) error{
 
 }
 
-func userExists[T Client | Employee](user T, s *Server) bool{
+func userExists[T Client | Employee](user T, s *Server) bool {
 	result := s.db_gorm.First(&user)
-	if errors.Is(result.Error, gorm.ErrRecordNotFound){
+	if errors.Is(result.Error, gorm.ErrRecordNotFound) {
 		return false
-	} else if result.Error != nil{
+	} else if result.Error != nil {
 		log.Println("Error occured in userExists: ", result.Error)
 		return false
 	}
@@ -311,11 +310,11 @@ func updateUserRecord[T Client | Employee](user T, s *Server) (*T, error) {
 		for index, val := range any(user).(Employee).Permissions {
 			any(user).(Employee).Permissions[index].Id = find_perm_by_name(val.Name)
 		}
-		if userExists(user, s){
+		if userExists(user, s) {
 			result = s.db_gorm.Model(&user).Updates(user)
 		}
 	}
-	
+
 	if result.Error != nil {
 		if isUniqueViolation(result.Error) {
 			return nil, ErrClientEmailExists
@@ -328,7 +327,6 @@ func updateUserRecord[T Client | Employee](user T, s *Server) (*T, error) {
 
 	return &user, nil
 }
-
 
 var ErrUserNotFound = errors.New("user not found")
 
