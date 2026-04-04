@@ -14,6 +14,7 @@ import (
 	"github.com/pquerna/otp/totp"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
+	"gorm.io/gorm"
 
 	notificationpb "github.com/RAF-SI-2025/Banka-3-Backend/gen/notification"
 	userpb "github.com/RAF-SI-2025/Banka-3-Backend/gen/user"
@@ -22,6 +23,7 @@ import (
 type TOTPServer struct {
 	userpb.UnimplementedTOTPServiceServer
 	db                  *sql.DB
+	gorm                *gorm.DB
 	notificationService notificationpb.NotificationServiceClient
 	totpDisableUrl      string
 }
@@ -30,14 +32,15 @@ const (
 	totpDisableAction = "totp_disable"
 )
 
-func NewTotpServer(database *sql.DB, notif notificationpb.NotificationServiceClient) *TOTPServer {
+func NewTotpServer(conn *Connections) *TOTPServer {
 	baseURL := os.Getenv("TOTP_DISABLE_BASE_URL")
 	if baseURL == "" {
 		log.Fatalf("No url set for disabling TOTP!")
 	}
 	return &TOTPServer{
-		db:                  database,
-		notificationService: notif,
+		db:                  conn.Sql_db,
+		notificationService: conn.NotificationClient,
+		gorm:                conn.Gorm,
 		totpDisableUrl:      baseURL,
 	}
 }

@@ -24,9 +24,16 @@ import (
 	"google.golang.org/grpc/status"
 	"gorm.io/gorm"
 
+	"github.com/RAF-SI-2025/Banka-3-Backend/gen/notification"
 	notificationpb "github.com/RAF-SI-2025/Banka-3-Backend/gen/notification"
 	userpb "github.com/RAF-SI-2025/Banka-3-Backend/gen/user"
 )
+
+type Connections struct {
+	NotificationClient notification.NotificationServiceClient
+	Sql_db             *sql.DB
+	Gorm               *gorm.DB
+}
 
 const (
 	passwordActionReset      = "reset"
@@ -62,12 +69,12 @@ func HashPassword(password string, salt []byte) []byte {
 	return hashed.Sum(nil)
 }
 
-func NewServer(accessJwtSecret string, refreshJwtSecret string, database *sql.DB, gorm_db *gorm.DB) *Server {
+func NewServer(accessJwtSecret string, refreshJwtSecret string, conn *Connections) *Server {
 	return &Server{
 		accessJwtSecret:  accessJwtSecret,
 		refreshJwtSecret: refreshJwtSecret,
-		database:         database,
-		db_gorm:          gorm_db,
+		database:         conn.Sql_db,
+		db_gorm:          conn.Gorm,
 	}
 }
 

@@ -19,24 +19,6 @@ import (
 	internalUser "github.com/RAF-SI-2025/Banka-3-Backend/internal/user"
 )
 
-type Connections struct {
-	notificationClient notification.NotificationServiceClient
-}
-
-func connect() (*Connections, error) {
-	notificationAddr := os.Getenv("NOTIFICATION_GRPC_ADDR")
-	if notificationAddr == "" {
-		notificationAddr = "notification:50051"
-	}
-	notificationConn, err := grpc.NewClient(notificationAddr, grpc.WithTransportCredentials(insecure.NewCredentials()))
-	if err != nil {
-		return nil, err
-	}
-	return &Connections{
-		notificationClient: notification.NewNotificationServiceClient(notificationConn),
-	}, nil
-}
-
 func connect_to_db_gorm() *gorm.DB {
 	dsn := os.Getenv("DATABASE_URL")
 	gorm_db, gorm_err := gorm.Open(postgres.Open(dsn), &gorm.Config{})
@@ -52,7 +34,28 @@ func connectToDB() *sql.DB {
 	if err != nil {
 		log.Fatal(err)
 	}
+
+	log.Println("connected to database...")
 	return db
+}
+
+func connect() (*internalUser.Connections, error) {
+	notificationAddr := os.Getenv("NOTIFICATION_GRPC_ADDR")
+	if notificationAddr == "" {
+		notificationAddr = "notification:50051"
+	}
+	notificationConn, err := grpc.NewClient(notificationAddr, grpc.WithTransportCredentials(insecure.NewCredentials()))
+	if err != nil {
+		return nil, err
+	}
+
+	db := connectToDB()
+	gorm := connect_to_db_gorm()
+	return &internalUser.Connections{
+		NotificationClient: notification.NewNotificationServiceClient(notificationConn),
+		Sql_db:             db,
+		Gorm:               gorm,
+	}, nil
 }
 
 func main() {
@@ -66,15 +69,9 @@ func main() {
 		log.Fatalf("failed to listen: %v", err)
 	}
 
-	db := connectToDB()
-	gorm_db := connect_to_db_gorm()
-	//gorm_db.AutoMigrate(&internalUser.Clients{}, &internalUser.Employees{});
-	log.Println("connected to database...")
-	defer func() { _ = db.Close() }()
-
 	connections, err := connect()
 	if err != nil {
-		log.Fatalf("couldn't connect to serive")
+		log.Fatalf("couldn't connect to services")
 	}
 
 	accessJwtSecret, accessSecretSet := os.LookupEnv("ACCESS_JWT_SECRET")
@@ -83,8 +80,8 @@ func main() {
 		log.Fatalf("JWT secrets not set, exiting...")
 	}
 
-	userService := internalUser.NewServer(accessJwtSecret, refreshJwtSecret, db, gorm_db)
-	totpService := internalUser.NewTotpServer(db, connections.notificationClient)
+	userService := internalUser.NewServer(accessJwtSecret, refreshJwtSecret, connections)
+	totpService := internalUser.NewTotpServer(connections)
 
 	srv := grpc.NewServer()
 	user.RegisterUserServiceServer(srv, userService)
