@@ -307,17 +307,19 @@ func updateUserRecord[T Client | Employee](user T, s *Server) (*T, error) {
 	var result *gorm.DB
 	switch any(user).(type) {
 	case Client:
-		if userExists(user, s) {
-			result = s.db_gorm.Model(&user).Updates(user)
+		if !userExists(user, s) {
+			return nil, ErrClientNotFound
 		}
+		result = s.db_gorm.Model(&user).Updates(user)
 
 	case Employee:
 		for index, val := range any(user).(Employee).Permissions {
 			any(user).(Employee).Permissions[index].Id = find_perm_by_name(val.Name)
 		}
-		if userExists(user, s) {
-			result = s.db_gorm.Model(&user).Updates(user)
+		if !userExists(user, s) {
+			return nil, ErrClientNotFound
 		}
+		result = s.db_gorm.Model(&user).Updates(user)
 	}
 
 	if result.Error != nil {
