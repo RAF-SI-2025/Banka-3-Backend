@@ -28,14 +28,7 @@ func (s *Server) Login(c *gin.Context) {
 		return
 	}
 
-	// Look up permissions: employee gets permissions from profile, client gets empty array
-	var permissions []string
-	empResp, empErr := s.UserClient.GetEmployeeByEmail(ctx, &userpb.GetEmployeeByEmailRequest{
-		Email: req.Email,
-	})
-	if empErr == nil {
-		permissions = empResp.Permissions
-	}
+	permissions := resp.Permissions
 	if permissions == nil {
 		permissions = []string{}
 	}
@@ -82,9 +75,15 @@ func (s *Server) Refresh(c *gin.Context) {
 		return
 	}
 
+	permissions := resp.Permissions
+	if permissions == nil {
+		permissions = []string{}
+	}
+
 	c.JSON(http.StatusOK, gin.H{
 		"access_token":  resp.AccessToken,
 		"refresh_token": resp.RefreshToken,
+		"permissions":   permissions,
 	})
 }
 
@@ -138,6 +137,14 @@ func (s *Server) ConfirmPasswordReset(c *gin.Context) {
 }
 
 func (s *Server) getAuthenticatedClientID(c *gin.Context) (int64, bool) {
+	role := c.GetString("role")
+	if role != "client" {
+		c.JSON(http.StatusForbidden, gin.H{
+			"error": "authenticated user is not a client",
+		})
+		return 0, false
+	}
+
 	email := c.GetString("email")
 
 	ctx, cancel := context.WithTimeout(c.Request.Context(), 5*time.Second)

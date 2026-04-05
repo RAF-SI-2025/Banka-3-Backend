@@ -40,6 +40,8 @@ func AuthenticatedMiddleware(user userpb.UserServiceClient) gin.HandlerFunc {
 		c.Set("email", resp.Sub)
 		c.Set("exp", resp.Exp)
 		c.Set("iat", resp.Iat)
+		c.Set("permissions", resp.Permissions)
+		c.Set("role", resp.Role)
 		c.Next()
 	}
 }
@@ -77,32 +79,43 @@ func TOTPMiddleware(totp userpb.TOTPServiceClient) gin.HandlerFunc {
 	}
 }
 
-func PermissionMiddleware(user userpb.UserServiceClient) func(...string) gin.HandlerFunc {
-	return func(permissions ...string) gin.HandlerFunc {
+func PermissionMiddleware() func(...string) gin.HandlerFunc {
+	return func(required ...string) gin.HandlerFunc {
 		return func(c *gin.Context) {
-			email, exists := c.Get("email")
-			if !exists {
-				c.AbortWithStatus(401)
-				return
-			}
+			permsVal, permsExists := c.Get("permissions")
+			roleVal, roleExists := c.Get("role")
 
-			emp, err := user.GetEmployeeByEmail(c, &userpb.GetEmployeeByEmailRequest{
-				Email: email.(string),
-			})
-			if err != nil {
-				c.AbortWithStatus(403)
-				return
-			}
+			userPerms, _ := permsVal.([]string)
+			userRole, _ := roleVal.(string)
 
-			if slices.Contains(emp.Permissions, "admin") {
+			// Admin permission bypasses all checks
+			if slices.Contains(userPerms, "admin") {
 				c.Next()
 				return
 			}
 
-			for _, perm := range permissions {
-				if !slices.Contains(emp.Permissions, perm) {
-					c.AbortWithStatus(403)
-					return
+			for _, req := range required {
+				if strings.HasPrefix(req, "role:") {
+					// Role check: "role:client", "role:employee", "role:client|employee"
+					if !roleExists || userRole == "" {
+						c.AbortWithStatus(403)
+						return
+					}
+					allowedRoles := strings.Split(req[5:], "|")
+					if !slices.Contains(allowedRoles, userRole) {
+						c.AbortWithStatus(403)
+						return
+					}
+				} else {
+					// Permission check
+					if !permsExists {
+						c.AbortWithStatus(403)
+						return
+					}
+					if !slices.Contains(userPerms, req) {
+						c.AbortWithStatus(403)
+						return
+					}
 				}
 			}
 			c.Next()

@@ -40,6 +40,8 @@ message ValidateTokenResponse {
   string sub = 1;
   int64 iat = 2;
   int64 exp = 3;
+  repeated string permissions = 4;
+  string role = 5;
 }
 
 
@@ -50,6 +52,8 @@ message RefreshRequest {
 message RefreshResponse {
   string access_token = 1;
   string refresh_token = 2;
+  repeated string permissions = 3;
+  string role = 4;
 }
 
 message EmployeeResponse {
@@ -77,6 +81,8 @@ message LoginRequest {
 message LoginResponse {
   string access_token = 1;
   string refresh_token = 2;
+  repeated string permissions = 3;
+  string role = 4;
 }
 
 message PasswordActionRequest {

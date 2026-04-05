@@ -24,7 +24,7 @@ func SetupApi(router *gin.Engine, server *Server) {
 	setupCors(router)
 	api := router.Group("/api")
 
-	secured := PermissionMiddleware(server.UserClient)
+	secured := PermissionMiddleware()
 	auth := AuthenticatedMiddleware(server.UserClient)
 	totp := TOTPMiddleware(server.TOTPClient)
 
@@ -38,7 +38,7 @@ func SetupApi(router *gin.Engine, server *Server) {
 		api.POST("/totp/disable/confirm", auth, server.TOTPDisableConfirm)
 	}
 
-	recipients := api.Group("/recipients", auth)
+	recipients := api.Group("/recipients", auth, secured("role:client"))
 	{
 		recipients.GET("", server.GetPaymentRecipients)
 		recipients.POST("", server.CreatePaymentRecipient)
@@ -49,11 +49,11 @@ func SetupApi(router *gin.Engine, server *Server) {
 	transactions := api.Group("/transactions", auth)
 	{
 		transactions.GET("", server.GetTransactions)
-		transactions.GET("/:id", server.GetTransactionByID)         //TODO visak, stvari koje nisu u api spec
-		transactions.GET("/:id/pdf", server.GenerateTransactionPDF) //TODO visak, stvari koje nisu u api spec
+		transactions.GET("/:id", server.GetTransactionByID)
+		transactions.GET("/:id/pdf", server.GenerateTransactionPDF)
 
-		transactions.POST("/payment", totp, server.PayoutMoneyToOtherAccount)
-		transactions.POST("/transfer", totp, server.TransferMoneyBetweenAccounts)
+		transactions.POST("/payment", secured("role:client"), totp, server.PayoutMoneyToOtherAccount)
+		transactions.POST("/transfer", secured("role:client"), totp, server.TransferMoneyBetweenAccounts)
 	}
 
 	passwordReset := api.Group("/password-reset")
@@ -62,14 +62,14 @@ func SetupApi(router *gin.Engine, server *Server) {
 		passwordReset.POST("/confirm", server.ConfirmPasswordReset)
 	}
 
-	clients := api.Group("/clients")
+	clients := api.Group("/clients", auth)
 	{
-		clients.POST("", server.CreateClientAccount)
-		clients.GET("", server.GetClients)
+		clients.POST("", secured("role:employee"), server.CreateClientAccount)
+		clients.GET("", secured("role:employee"), server.GetClients)
 		clients.PUT("/:id", server.UpdateClient)
 	}
 
-	employees := api.Group("/employees", auth)
+	employees := api.Group("/employees", auth, secured("role:employee"))
 	{
 		employees.POST("", server.CreateEmployeeAccount)
 		employees.GET("/:employeeId", server.GetEmployeeByID)
@@ -78,7 +78,7 @@ func SetupApi(router *gin.Engine, server *Server) {
 		employees.PATCH("/:employeeId", server.UpdateEmployee)
 	}
 
-	companies := api.Group("/companies")
+	companies := api.Group("/companies", auth)
 	{
 		companies.POST("", server.CreateCompany)
 		companies.GET("", server.GetCompanies)
@@ -88,7 +88,7 @@ func SetupApi(router *gin.Engine, server *Server) {
 
 	accounts := api.Group("/accounts", auth)
 	{
-		accounts.POST("", server.CreateAccount)
+		accounts.POST("", secured("role:employee"), server.CreateAccount)
 		accounts.GET("", server.GetAccounts)
 		accounts.GET("/:accountNumber", server.GetAccountByNumber)
 		accounts.PATCH("/:accountNumber/name", server.UpdateAccountName)
@@ -103,17 +103,17 @@ func SetupApi(router *gin.Engine, server *Server) {
 
 	loanRequests := api.Group("/loan-requests", auth)
 	{
-		loanRequests.POST("", server.CreateLoanRequest)
+		loanRequests.POST("", secured("role:client"), server.CreateLoanRequest)
 		loanRequests.GET("", server.GetLoanRequests)
-		loanRequests.PATCH("/:id/approve", auth, secured("manage_contracts"), server.ApproveLoanRequest)
-		loanRequests.PATCH("/:id/reject", server.RejectLoanRequest)
+		loanRequests.PATCH("/:id/approve", secured("role:employee", "manage_contracts"), server.ApproveLoanRequest)
+		loanRequests.PATCH("/:id/reject", secured("role:employee", "manage_contracts"), server.RejectLoanRequest)
 	}
 
 	cards := api.Group("/cards")
 	{
 		cards.GET("", auth, server.GetCards)
 		cards.POST("", auth, server.RequestCard)
-		cards.GET("/confirm", server.ConfirmCard) //TODO visak, stvari koje nisu u api spec
+		cards.GET("/confirm", server.ConfirmCard)
 		cards.PATCH("/:cardNumber/block", auth, server.BlockCard)
 	}
 
@@ -121,7 +121,7 @@ func SetupApi(router *gin.Engine, server *Server) {
 
 	exchange := api.Group("/exchange")
 	{
-		exchange.POST("/convert", server.ConvertMoney) //TODO visak, stvari koje nisu u api spec
+		exchange.POST("/convert", auth, server.ConvertMoney)
 	}
 }
 

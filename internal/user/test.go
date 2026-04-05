@@ -46,6 +46,7 @@ func newTestServer(t *testing.T) (*Server, sqlmock.Sqlmock, *sql.DB) {
 		Sql_db:             db,
 		Gorm:               nil,
 		NotificationClient: nil,
+		Rdb:                nil,
 	}
 
 	return NewServer("access", "refresh", &conn), mock, db
@@ -70,6 +71,7 @@ func newGormTestServer(t *testing.T) (*Server, sqlmock.Sqlmock, *sql.DB) {
 		Sql_db:             db,
 		Gorm:               gormDB,
 		NotificationClient: nil,
+		Rdb:                nil,
 	}
 
 	return NewServer("access", "refresh", &conn), mock, db
