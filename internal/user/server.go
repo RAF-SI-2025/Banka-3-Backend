@@ -384,7 +384,11 @@ func (s *Server) Refresh(ctx context.Context, req *userpb.RefreshRequest) (*user
 		return nil, fmt.Errorf("generating refresh token: %w", err)
 	}
 
-	role, permissions := s.getRoleAndPermissions(email)
+	role, permissions, active := s.getRoleAndPermissions(email)
+
+	if !active {
+		return nil, status.Error(codes.Unauthenticated, "account deactivated")
+	}
 
 	newAccessToken, err := s.GenerateAccessToken(email)
 	if err != nil {
@@ -426,18 +430,19 @@ func (s *Server) Refresh(ctx context.Context, req *userpb.RefreshRequest) (*user
 	return &userpb.RefreshResponse{AccessToken: newAccessToken, RefreshToken: newSignedToken, Permissions: permissions, Role: role}, nil
 }
 
-// getRoleAndPermissions determines the role and permissions for a user by email.
+// getRoleAndPermissions determines the role, permissions, and active status for a user by email.
 // Employees get role "employee" with their DB permissions; clients get role "client" with empty permissions.
-func (s *Server) getRoleAndPermissions(email string) (string, []string) {
+// The active flag is only meaningful for employees; clients always return true.
+func (s *Server) getRoleAndPermissions(email string) (role string, permissions []string, active bool) {
 	emp, err := getUserByAttribute(Employee{}, s.db_gorm, "email", email)
 	if err == nil && emp != nil {
 		permissions := make([]string, len(emp.Permissions))
 		for i, v := range emp.Permissions {
 			permissions[i] = v.Name
 		}
-		return "employee", permissions
+		return "employee", permissions, emp.Active
 	}
-	return "client", []string{}
+	return "client", []string{}, true
 }
 
 func (s *Server) Login(ctx context.Context, req *userpb.LoginRequest) (*userpb.LoginResponse, error) {
@@ -448,14 +453,10 @@ func (s *Server) Login(ctx context.Context, req *userpb.LoginRequest) (*userpb.L
 	hashedPassword := HashPassword(req.Password, user.salt)
 
 	if bytes.Equal(hashedPassword, user.hashedPassword) {
-		role, permissions := s.getRoleAndPermissions(user.email)
+		role, permissions, active := s.getRoleAndPermissions(user.email)
 
-		// Reject login for deactivated employees
-		if role == "employee" {
-			emp, empErr := getUserByAttribute(Employee{}, s.db_gorm, "email", user.email)
-			if empErr == nil && emp != nil && !emp.Active {
-				return nil, status.Error(codes.Unauthenticated, "account deactivated")
-			}
+		if !active {
+			return nil, status.Error(codes.Unauthenticated, "account deactivated")
 		}
 
 		accessToken, err := s.GenerateAccessToken(user.email)
