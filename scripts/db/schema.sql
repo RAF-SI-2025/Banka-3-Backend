@@ -276,3 +276,36 @@ CREATE TABLE IF NOT EXISTS exchange_rates (
     updated_at    TIMESTAMP      NOT NULL DEFAULT NOW(),
     valid_until   TIMESTAMP      NOT NULL DEFAULT NOW()
 );
+
+-- Notify Redis when employee permissions change
+CREATE OR REPLACE FUNCTION notify_permission_change() RETURNS trigger AS $$
+DECLARE
+    emp_email TEXT;
+BEGIN
+    SELECT email INTO emp_email FROM employees
+    WHERE id = COALESCE(NEW.employee_id, OLD.employee_id);
+
+    IF emp_email IS NOT NULL THEN
+        PERFORM pg_notify('permission_change', emp_email);
+    END IF;
+    RETURN COALESCE(NEW, OLD);
+END;
+$$ LANGUAGE plpgsql;
+
+CREATE TRIGGER trg_permission_change
+    AFTER INSERT OR UPDATE OR DELETE ON employee_permissions
+    FOR EACH ROW EXECUTE FUNCTION notify_permission_change();
+
+-- Notify Redis when employee active status changes
+CREATE OR REPLACE FUNCTION notify_employee_status_change() RETURNS trigger AS $$
+BEGIN
+    IF OLD.active IS DISTINCT FROM NEW.active THEN
+        PERFORM pg_notify('permission_change', NEW.email);
+    END IF;
+    RETURN NEW;
+END;
+$$ LANGUAGE plpgsql;
+
+CREATE TRIGGER trg_employee_status_change
+    AFTER UPDATE ON employees
+    FOR EACH ROW EXECUTE FUNCTION notify_employee_status_change();

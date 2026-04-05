@@ -80,29 +80,42 @@ func TOTPMiddleware(totp userpb.TOTPServiceClient) gin.HandlerFunc {
 }
 
 func PermissionMiddleware() func(...string) gin.HandlerFunc {
-	return func(requiredPerms ...string) gin.HandlerFunc {
+	return func(required ...string) gin.HandlerFunc {
 		return func(c *gin.Context) {
-			permsVal, exists := c.Get("permissions")
-			if !exists {
-				c.AbortWithStatus(401)
-				return
-			}
+			permsVal, permsExists := c.Get("permissions")
+			roleVal, roleExists := c.Get("role")
 
-			userPerms, ok := permsVal.([]string)
-			if !ok {
-				c.AbortWithStatus(403)
-				return
-			}
+			userPerms, _ := permsVal.([]string)
+			userRole, _ := roleVal.(string)
 
+			// Admin permission bypasses all checks
 			if slices.Contains(userPerms, "admin") {
 				c.Next()
 				return
 			}
 
-			for _, perm := range requiredPerms {
-				if !slices.Contains(userPerms, perm) {
-					c.AbortWithStatus(403)
-					return
+			for _, req := range required {
+				if strings.HasPrefix(req, "role:") {
+					// Role check: "role:client", "role:employee", "role:client|employee"
+					if !roleExists || userRole == "" {
+						c.AbortWithStatus(403)
+						return
+					}
+					allowedRoles := strings.Split(req[5:], "|")
+					if !slices.Contains(allowedRoles, userRole) {
+						c.AbortWithStatus(403)
+						return
+					}
+				} else {
+					// Permission check
+					if !permsExists {
+						c.AbortWithStatus(403)
+						return
+					}
+					if !slices.Contains(userPerms, req) {
+						c.AbortWithStatus(403)
+						return
+					}
 				}
 			}
 			c.Next()

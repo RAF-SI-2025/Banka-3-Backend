@@ -304,22 +304,12 @@ func (s *Server) GenerateRefreshToken(email string) (string, error) {
 	return token.SignedString([]byte(s.refreshJwtSecret))
 }
 
-type accessTokenClaims struct {
-	jwt.RegisteredClaims
-	Permissions []string `json:"permissions"`
-	Role        string   `json:"role"`
-}
-
-func (s *Server) GenerateAccessToken(email string, role string, permissions []string) (string, error) {
+func (s *Server) GenerateAccessToken(email string) (string, error) {
 	now := time.Now()
-	claims := accessTokenClaims{
-		RegisteredClaims: jwt.RegisteredClaims{
-			Subject:   email,
-			ExpiresAt: jwt.NewNumericDate(now.Add(15 * time.Minute)),
-			IssuedAt:  jwt.NewNumericDate(now),
-		},
-		Permissions: permissions,
-		Role:        role,
+	claims := jwt.RegisteredClaims{
+		Subject:   email,
+		ExpiresAt: jwt.NewNumericDate(now.Add(15 * time.Minute)),
+		IssuedAt:  jwt.NewNumericDate(now),
 	}
 
 	token := jwt.NewWithClaims(jwt.SigningMethodHS256, claims)
@@ -327,7 +317,7 @@ func (s *Server) GenerateAccessToken(email string, role string, permissions []st
 }
 
 func validateJWTToken(tokenString, secret string) (*userpb.ValidateTokenResponse, error) {
-	claims := &accessTokenClaims{}
+	claims := &jwt.RegisteredClaims{}
 	token, err := jwt.ParseWithClaims(tokenString, claims, func(t *jwt.Token) (any, error) {
 		return []byte(secret), nil
 	})
@@ -349,17 +339,10 @@ func validateJWTToken(tokenString, secret string) (*userpb.ValidateTokenResponse
 		return nil, err
 	}
 
-	permissions := claims.Permissions
-	if permissions == nil {
-		permissions = []string{}
-	}
-
 	return &userpb.ValidateTokenResponse{
-		Sub:         sub,
-		Exp:         exp.Unix(),
-		Iat:         iat.Unix(),
-		Permissions: permissions,
-		Role:        claims.Role,
+		Sub: sub,
+		Exp: exp.Unix(),
+		Iat: iat.Unix(),
 	}, nil
 }
 
@@ -403,7 +386,7 @@ func (s *Server) Refresh(ctx context.Context, req *userpb.RefreshRequest) (*user
 
 	role, permissions := s.getRoleAndPermissions(email)
 
-	newAccessToken, err := s.GenerateAccessToken(email, role, permissions)
+	newAccessToken, err := s.GenerateAccessToken(email)
 	if err != nil {
 		return nil, fmt.Errorf("generating access token: %w", err)
 	}
@@ -475,7 +458,7 @@ func (s *Server) Login(ctx context.Context, req *userpb.LoginRequest) (*userpb.L
 			}
 		}
 
-		accessToken, err := s.GenerateAccessToken(user.email, role, permissions)
+		accessToken, err := s.GenerateAccessToken(user.email)
 		if err != nil {
 			return nil, err
 		}

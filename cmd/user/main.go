@@ -100,6 +100,10 @@ func main() {
 	userService := internalUser.NewServer(accessJwtSecret, refreshJwtSecret, connections)
 	totpService := internalUser.NewTotpServer(connections)
 
+	// Start PG listener for permission change notifications
+	databaseURL := os.Getenv("DATABASE_URL")
+	go internalUser.StartPGListener(context.Background(), databaseURL, userService)
+
 	srv := grpc.NewServer()
 	user.RegisterUserServiceServer(srv, userService)
 	user.RegisterTOTPServiceServer(srv, totpService)
