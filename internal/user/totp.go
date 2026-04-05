@@ -18,6 +18,7 @@ import (
 
 	notificationpb "github.com/RAF-SI-2025/Banka-3-Backend/gen/notification"
 	userpb "github.com/RAF-SI-2025/Banka-3-Backend/gen/user"
+	"github.com/RAF-SI-2025/Banka-3-Backend/internal/gateway"
 )
 
 type TOTPServer struct {
@@ -103,7 +104,7 @@ func (s *TOTPServer) EnrollBegin(_ context.Context, req *userpb.EnrollBeginReque
 		return nil, err
 	}
 	if *active {
-		return nil, status.Error(20, "totp already enabled")
+		return nil, status.Error(gateway.TotpAleadyEnabledCode, "totp already enabled")
 	}
 
 	key, err := totp.Generate(totp.GenerateOpts{

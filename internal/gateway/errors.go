@@ -8,6 +8,10 @@ import (
 	"google.golang.org/grpc/status"
 )
 
+const (
+	TotpAleadyEnabledCode = 20
+)
+
 func writeBindError(c *gin.Context, err error) {
 	c.JSON(http.StatusBadRequest, gin.H{
 		"error":   "invalid request body",
@@ -35,6 +39,8 @@ func writeGRPCError(c *gin.Context, err error) {
 		})
 	case codes.PermissionDenied:
 		c.String(http.StatusForbidden, st.Message())
+	case TotpAleadyEnabledCode:
+		c.String(http.StatusConflict, st.Message())
 	default:
 		c.String(http.StatusInternalServerError, st.Message())
 	}
