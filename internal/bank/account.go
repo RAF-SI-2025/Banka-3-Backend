@@ -2,8 +2,11 @@ package bank
 
 import (
 	"context"
+	"fmt"
 	"os"
+	"strconv"
 	"strings"
+	"time"
 
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/codes"
@@ -227,7 +230,7 @@ func (s *Server) resolveCaller(ctx context.Context) (*callerIdentity, error) {
 
 	return &callerIdentity{
 		Email:    email,
-		ClientID: int64(clientResp.Clients[0].Id),
+		ClientID: clientResp.Clients[0].Id,
 		IsClient: true,
 	}, nil
 }
@@ -287,4 +290,113 @@ func (s *Server) mapToAccountProto(a Account) *bankpb.Account {
 		DailySpending:    float64(a.Daily_expenditure),
 		MonthlySpending:  float64(a.Monthly_expenditure),
 	}
+}
+
+// CreateAccount orchestrates the account creation process and optional auto card creation.
+func (s *Server) CreateAccount(ctx context.Context, req *bankpb.CreateAccountRequest) (*bankpb.CreateAccountResponse, error) {
+	if err := validateCreateAccountInput(req); err != nil {
+		return nil, err
+	}
+
+	md, ok := metadata.FromIncomingContext(ctx)
+	if !ok {
+		return nil, status.Error(codes.Unauthenticated, "metadata missing")
+	}
+
+	// 1. Get Employee ID from context
+	idVals := md.Get("employee-id")
+	if len(idVals) == 0 {
+		return nil, status.Error(codes.Unauthenticated, "employee-id missing in context")
+	}
+	employeeID, err := strconv.ParseInt(idVals[0], 10, 64)
+	if err != nil {
+		return nil, status.Error(codes.InvalidArgument, "invalid employee-id format")
+	}
+
+	// 2. Get Email from context (needed for CreateCard)
+	emailVals := md.Get("user-email")
+	if len(emailVals) == 0 {
+		return nil, status.Error(codes.Unauthenticated, "user-email missing in context")
+	}
+	email := emailVals[0]
+
+	ownerType := Personal
+	subtypeLower := strings.ToLower(req.Subtype)
+	if strings.Contains(subtypeLower, "business") || strings.Contains(subtypeLower, "poslovni") {
+		ownerType = Business
+	}
+
+	account := Account{
+		Name:              fmt.Sprintf("%s-%s", req.AccountType, req.Subtype),
+		Owner:             req.ClientId,
+		Currency:          req.Currency,
+		Owner_type:        ownerType,
+		Account_type:      account_type(strings.ToLower(req.AccountType)),
+		Balance:           int64(req.InitialBalance * 100),
+		Daily_limit:       int64(req.DailyLimit),
+		Monthly_limit:     int64(req.MonthlyLimit),
+		Created_by:        employeeID,
+		Maintainance_cost: 0,
+	}
+
+	if req.BusinessInfo != nil {
+		account.CompanyName = req.BusinessInfo.CompanyName
+		account.RegistrationNumber = req.BusinessInfo.RegistrationNumber
+		account.PIB = req.BusinessInfo.Pib
+		account.ActivityCode = req.BusinessInfo.ActivityCode
+		account.Address = req.BusinessInfo.Address
+	}
+
+	created, err := s.CreateAccountRecord(account)
+	if err != nil {
+		return nil, status.Error(codes.Internal, "failed to save account record")
+	}
+
+	if req.CreateCard {
+		_, cardErr := s.CreateCard(ctx, &bankpb.CreateCardRequest{
+			Email:         email,
+			AccountNumber: created.Number,
+			CardType:      req.CardType,
+			CardBrand:     req.CardBrand,
+		})
+		if cardErr != nil {
+			fmt.Printf("warning: card creation failed for %s: %v\n", created.Number, cardErr)
+		}
+	}
+
+	return &bankpb.CreateAccountResponse{
+		AccountNumber:  created.Number,
+		AccountName:    created.Name,
+		OwnerId:        created.Owner,
+		Balance:        float64(created.Balance) / 100,
+		Currency:       created.Currency,
+		AccountType:    string(created.Account_type),
+		DailyLimit:     float64(created.Daily_limit),
+		MonthlyLimit:   float64(created.Monthly_limit),
+		ExpirationDate: created.Valid_until.Format(time.RFC3339),
+	}, nil
+}
+
+func validateCreateAccountInput(req *bankpb.CreateAccountRequest) error {
+	if req.ClientId <= 0 {
+		return status.Error(codes.InvalidArgument, "client_id must be positive")
+	}
+	if strings.TrimSpace(req.Currency) == "" {
+		return status.Error(codes.InvalidArgument, "currency is required")
+	}
+
+	accType := strings.ToLower(req.AccountType)
+	if accType != "checking" && accType != "foreign" && accType != "tekuci" && accType != "devizni" {
+		return status.Error(codes.InvalidArgument, "invalid account_type: must be checking or foreign")
+	}
+
+	if req.InitialBalance < 0 {
+		return status.Error(codes.InvalidArgument, "initial_balance cannot be negative")
+	}
+
+	subtypeLower := strings.ToLower(req.Subtype)
+	if (strings.Contains(subtypeLower, "business") || strings.Contains(subtypeLower, "poslovni")) && req.BusinessInfo == nil {
+		return status.Error(codes.InvalidArgument, "business_info is required for business accounts")
+	}
+	return nil
 }
