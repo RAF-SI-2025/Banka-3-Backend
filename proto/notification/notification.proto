@@ -12,7 +12,7 @@ service NotificationService {
   rpc SendCardConfirmationEmail(CardConfirmationMailRequest) returns (SuccessResponse);
   rpc SendCardCreatedEmail(CardCreatedMailRequest) returns (SuccessResponse);
   rpc SendLoanPaymentFailedEmail(LoanPaymentFailedMailRequest) returns (SuccessResponse);
-
+  rpc SendClientSetPasswordEmail(ActivationMailRequest) returns (SuccessResponse);
   rpc SendTOTPDisableEmail(SendTOTPDisableEmailRequest) returns (SuccessResponse);
 }
 

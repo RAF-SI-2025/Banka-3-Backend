@@ -486,7 +486,7 @@ const file_notification_notification_proto_rawDesc = "" +
 	"\x0fSuccessResponse\x12\x1e\n" +
 	"\n" +
 	"successful\x18\x01 \x01(\bR\n" +
-	"successful2\xa3\x06\n" +
+	"successful2\x85\a\n" +
 	"\x13NotificationService\x12]\n" +
 	"\x15SendConfirmationEmail\x12%.notification.ConfirmationMailRequest\x1a\x1d.notification.SuccessResponse\x12Y\n" +
 	"\x13SendActivationEmail\x12#.notification.ActivationMailRequest\x1a\x1d.notification.SuccessResponse\x12^\n" +
@@ -495,6 +495,7 @@ const file_notification_notification_proto_rawDesc = "" +
 	"\x19SendCardConfirmationEmail\x12).notification.CardConfirmationMailRequest\x1a\x1d.notification.SuccessResponse\x12[\n" +
 	"\x14SendCardCreatedEmail\x12$.notification.CardCreatedMailRequest\x1a\x1d.notification.SuccessResponse\x12g\n" +
 	"\x1aSendLoanPaymentFailedEmail\x12*.notification.LoanPaymentFailedMailRequest\x1a\x1d.notification.SuccessResponse\x12`\n" +
+	"\x1aSendClientSetPasswordEmail\x12#.notification.ActivationMailRequest\x1a\x1d.notification.SuccessResponse\x12`\n" +
 	"\x14SendTOTPDisableEmail\x12).notification.SendTOTPDisableEmailRequest\x1a\x1d.notification.SuccessResponseB9Z7github.com/RAF-SI-2025/Banka-3-Backend/gen/notificationb\x06proto3"
 
 var (
@@ -528,17 +529,19 @@ var file_notification_notification_proto_depIdxs = []int32{
 	4, // 4: notification.NotificationService.SendCardConfirmationEmail:input_type -> notification.CardConfirmationMailRequest
 	5, // 5: notification.NotificationService.SendCardCreatedEmail:input_type -> notification.CardCreatedMailRequest
 	6, // 6: notification.NotificationService.SendLoanPaymentFailedEmail:input_type -> notification.LoanPaymentFailedMailRequest
-	0, // 7: notification.NotificationService.SendTOTPDisableEmail:input_type -> notification.SendTOTPDisableEmailRequest
-	7, // 8: notification.NotificationService.SendConfirmationEmail:output_type -> notification.SuccessResponse
-	7, // 9: notification.NotificationService.SendActivationEmail:output_type -> notification.SuccessResponse
-	7, // 10: notification.NotificationService.SendPasswordResetEmail:output_type -> notification.SuccessResponse
-	7, // 11: notification.NotificationService.SendInitialPasswordSetEmail:output_type -> notification.SuccessResponse
-	7, // 12: notification.NotificationService.SendCardConfirmationEmail:output_type -> notification.SuccessResponse
-	7, // 13: notification.NotificationService.SendCardCreatedEmail:output_type -> notification.SuccessResponse
-	7, // 14: notification.NotificationService.SendLoanPaymentFailedEmail:output_type -> notification.SuccessResponse
-	7, // 15: notification.NotificationService.SendTOTPDisableEmail:output_type -> notification.SuccessResponse
-	8, // [8:16] is the sub-list for method output_type
-	0, // [0:8] is the sub-list for method input_type
+	2, // 7: notification.NotificationService.SendClientSetPasswordEmail:input_type -> notification.ActivationMailRequest
+	0, // 8: notification.NotificationService.SendTOTPDisableEmail:input_type -> notification.SendTOTPDisableEmailRequest
+	7, // 9: notification.NotificationService.SendConfirmationEmail:output_type -> notification.SuccessResponse
+	7, // 10: notification.NotificationService.SendActivationEmail:output_type -> notification.SuccessResponse
+	7, // 11: notification.NotificationService.SendPasswordResetEmail:output_type -> notification.SuccessResponse
+	7, // 12: notification.NotificationService.SendInitialPasswordSetEmail:output_type -> notification.SuccessResponse
+	7, // 13: notification.NotificationService.SendCardConfirmationEmail:output_type -> notification.SuccessResponse
+	7, // 14: notification.NotificationService.SendCardCreatedEmail:output_type -> notification.SuccessResponse
+	7, // 15: notification.NotificationService.SendLoanPaymentFailedEmail:output_type -> notification.SuccessResponse
+	7, // 16: notification.NotificationService.SendClientSetPasswordEmail:output_type -> notification.SuccessResponse
+	7, // 17: notification.NotificationService.SendTOTPDisableEmail:output_type -> notification.SuccessResponse
+	9, // [9:18] is the sub-list for method output_type
+	0, // [0:9] is the sub-list for method input_type
 	0, // [0:0] is the sub-list for extension type_name
 	0, // [0:0] is the sub-list for extension extendee
 	0, // [0:0] is the sub-list for field type_name
