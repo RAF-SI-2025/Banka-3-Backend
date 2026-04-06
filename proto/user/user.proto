@@ -22,6 +22,16 @@ service UserService {
   rpc GetClients(GetClientsRequest) returns (GetClientsResponse);
   rpc UpdateClient(UpdateClientRequest) returns (UpdateClientResponse);
   rpc CreateEmployeeAccount(CreateEmployeeRequest) returns (GetEmployeeResponse);
+  rpc GetUserPermissions(GetUserPermissionsRequest) returns (GetUserPermissionsResponse);
+}
+
+message GetUserPermissionsRequest {
+  string email = 1;
+}
+
+message GetUserPermissionsResponse {
+  string role = 1;
+  repeated string permissions = 2;
 }
 
 message DeleteEmployeeRequest {

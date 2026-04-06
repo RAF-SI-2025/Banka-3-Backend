@@ -19,6 +19,8 @@ func NoopMiddleware() gin.HandlerFunc {
 	}
 }
 
+// AuthenticatedMiddleware validates the JWT and checks that an active session exists.
+// It only sets identity fields (email, exp, iat) in context.
 func AuthenticatedMiddleware(user userpb.UserServiceClient) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		header := c.GetHeader("Authorization")
@@ -40,8 +42,6 @@ func AuthenticatedMiddleware(user userpb.UserServiceClient) gin.HandlerFunc {
 		c.Set("email", resp.Sub)
 		c.Set("exp", resp.Exp)
 		c.Set("iat", resp.Iat)
-		c.Set("permissions", resp.Permissions)
-		c.Set("role", resp.Role)
 		c.Next()
 	}
 }
@@ -79,14 +79,42 @@ func TOTPMiddleware(totp userpb.TOTPServiceClient) gin.HandlerFunc {
 	}
 }
 
-func PermissionMiddleware() func(...string) gin.HandlerFunc {
+// PermissionMiddleware fetches the user's role and permissions from the session store
+// and checks them against the required values.
+// Prefix "role:" checks the role (e.g. "role:client", "role:client|employee").
+// Plain strings check permissions (e.g. "manage_contracts").
+// The "admin" permission bypasses all checks.
+func PermissionMiddleware(user userpb.UserServiceClient) func(...string) gin.HandlerFunc {
 	return func(required ...string) gin.HandlerFunc {
 		return func(c *gin.Context) {
-			permsVal, permsExists := c.Get("permissions")
-			roleVal, roleExists := c.Get("role")
+			email := c.GetString("email")
+			if email == "" {
+				c.AbortWithStatus(http.StatusUnauthorized)
+				return
+			}
 
-			userPerms, _ := permsVal.([]string)
-			userRole, _ := roleVal.(string)
+			// Fetch role/permissions from Redis via gRPC (once per request)
+			var userRole string
+			var userPerms []string
+			if cached, exists := c.Get("role"); exists {
+				userRole, _ = cached.(string)
+				permsVal, _ := c.Get("permissions")
+				userPerms, _ = permsVal.([]string)
+			} else {
+				ctx, cancel := context.WithTimeout(c.Request.Context(), 5*time.Second)
+				defer cancel()
+				resp, err := user.GetUserPermissions(ctx, &userpb.GetUserPermissionsRequest{
+					Email: email,
+				})
+				if err != nil {
+					c.AbortWithStatus(http.StatusForbidden)
+					return
+				}
+				userRole = resp.Role
+				userPerms = resp.Permissions
+				c.Set("role", userRole)
+				c.Set("permissions", userPerms)
+			}
 
 			// Admin permission bypasses all checks
 			if slices.Contains(userPerms, "admin") {
@@ -97,23 +125,15 @@ func PermissionMiddleware() func(...string) gin.HandlerFunc {
 			for _, req := range required {
 				if strings.HasPrefix(req, "role:") {
 					// Role check: "role:client", "role:employee", "role:client|employee"
-					if !roleExists || userRole == "" {
-						c.AbortWithStatus(403)
-						return
-					}
 					allowedRoles := strings.Split(req[5:], "|")
 					if !slices.Contains(allowedRoles, userRole) {
-						c.AbortWithStatus(403)
+						c.AbortWithStatus(http.StatusForbidden)
 						return
 					}
 				} else {
 					// Permission check
-					if !permsExists {
-						c.AbortWithStatus(403)
-						return
-					}
 					if !slices.Contains(userPerms, req) {
-						c.AbortWithStatus(403)
+						c.AbortWithStatus(http.StatusForbidden)
 						return
 					}
 				}

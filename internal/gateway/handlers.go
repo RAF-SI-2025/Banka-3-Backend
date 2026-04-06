@@ -24,8 +24,8 @@ func SetupApi(router *gin.Engine, server *Server) {
 	setupCors(router)
 	api := router.Group("/api")
 
-	secured := PermissionMiddleware()
 	auth := AuthenticatedMiddleware(server.UserClient)
+	secured := PermissionMiddleware(server.UserClient)
 	totp := TOTPMiddleware(server.TOTPClient)
 
 	{

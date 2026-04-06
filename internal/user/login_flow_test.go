@@ -105,12 +105,9 @@ func TestLoginCorrectCreds(t *testing.T) {
 		t.Fatalf("expected to get tokens")
 	}
 
-	tokenResp, err := server.ValidateAccessToken(context.Background(), &userpb.ValidateTokenRequest{Token: accessToken})
+	_, err = server.ValidateAccessToken(context.Background(), &userpb.ValidateTokenRequest{Token: accessToken})
 	if err != nil {
 		t.Fatalf("couldn't validate access token: %v", err)
-	}
-	if tokenResp.Role != "client" {
-		t.Fatalf("expected role 'client', got '%s'", tokenResp.Role)
 	}
 
 	_, err = server.ValidateRefreshToken(context.Background(), &userpb.ValidateTokenRequest{Token: refreshToken})

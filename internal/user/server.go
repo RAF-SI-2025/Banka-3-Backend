@@ -367,9 +367,22 @@ func (s *Server) ValidateAccessToken(ctx context.Context, req *userpb.ValidateTo
 		return nil, status.Error(codes.Unauthenticated, "account deactivated")
 	}
 
-	resp.Role = session.Role
-	resp.Permissions = session.Permissions
 	return resp, nil
+}
+
+func (s *Server) GetUserPermissions(ctx context.Context, req *userpb.GetUserPermissionsRequest) (*userpb.GetUserPermissionsResponse, error) {
+	session, err := s.GetSession(ctx, req.Email)
+	if err != nil {
+		return nil, status.Error(codes.Unavailable, "session store unavailable")
+	}
+	if session == nil {
+		return nil, status.Error(codes.Unauthenticated, "no active session")
+	}
+
+	return &userpb.GetUserPermissionsResponse{
+		Role:        session.Role,
+		Permissions: session.Permissions,
+	}, nil
 }
 
 func (s *Server) Refresh(ctx context.Context, req *userpb.RefreshRequest) (*userpb.RefreshResponse, error) {
