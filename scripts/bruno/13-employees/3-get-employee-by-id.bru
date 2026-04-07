@@ -1,0 +1,31 @@
+meta {
+  name: Get Employee By ID
+  type: http
+  seq: 3
+}
+
+get {
+  url: {{baseUrl}}/api/employees/{{testEmployeeId}}
+  body: none
+  auth: none
+}
+
+headers {
+  Authorization: Bearer {{accessToken}}
+}
+
+tests {
+  test("status 200", function() {
+    expect(res.status).to.equal(200);
+  });
+  test("correct id", function() {
+    expect(res.body.id).to.equal(Number(bru.getEnvVar("testEmployeeId")));
+  });
+  test("has all fields", function() {
+    expect(res.body.first_name).to.equal("Jovan");
+    expect(res.body.last_name).to.equal("Jovanovic");
+    expect(res.body.email).to.be.a("string");
+    expect(res.body.position).to.equal("Teller");
+    expect(res.body.department).to.equal("Retail");
+  });
+}

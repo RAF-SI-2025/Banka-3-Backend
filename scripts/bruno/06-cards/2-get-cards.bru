@@ -1,0 +1,39 @@
+meta {
+  name: Get Cards
+  type: http
+  seq: 2
+}
+
+get {
+  url: {{baseUrl}}/api/cards
+  body: none
+  auth: none
+}
+
+headers {
+  Authorization: Bearer {{clientAccessToken}}
+}
+
+tests {
+  test("status 200", function() {
+    expect(res.status).to.equal(200);
+  });
+  test("returns array", function() {
+    expect(res.body).to.be.an("array");
+  });
+  test("cards have expected fields", function() {
+    if (res.body.length > 0) {
+      const card = res.body[0];
+      expect(card).to.have.property("card_number");
+      expect(card).to.have.property("card_type");
+      expect(card).to.have.property("account_number");
+      expect(card).to.have.property("status");
+    }
+  });
+}
+
+script:post-response {
+  if (res.body && res.body.length > 0) {
+    bru.setEnvVar("testCardNumber", res.body[0].card_number);
+  }
+}

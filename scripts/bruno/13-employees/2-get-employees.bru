@@ -1,0 +1,30 @@
+meta {
+  name: Get Employees
+  type: http
+  seq: 2
+}
+
+get {
+  url: {{baseUrl}}/api/employees
+  body: none
+  auth: none
+}
+
+headers {
+  Authorization: Bearer {{accessToken}}
+}
+
+tests {
+  test("status 200", function() {
+    expect(res.status).to.equal(200);
+  });
+  test("returns array", function() {
+    expect(res.body).to.be.an("array");
+  });
+  test("at least the admin employee exists", function() {
+    // Only active employees are returned; our new employee
+    // starts inactive until they set their password, so we
+    // just verify the list endpoint works and has the seed admin.
+    expect(res.body.length).to.be.greaterThan(0);
+  });
+}

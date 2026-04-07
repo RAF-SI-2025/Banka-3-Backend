@@ -1,0 +1,37 @@
+meta {
+  name: Login Client
+  type: http
+  seq: 2
+}
+
+post {
+  url: {{baseUrl}}/api/login
+  body: json
+  auth: none
+}
+
+body:json {
+  {
+    "email": "{{clientEmail}}",
+    "password": "{{clientPassword}}"
+  }
+}
+
+tests {
+  test("status 200", function() {
+    expect(res.status).to.equal(200);
+  });
+  test("has accessToken", function() {
+    expect(res.body.accessToken).to.be.a("string");
+  });
+  test("has refreshToken", function() {
+    expect(res.body.refreshToken).to.be.a("string");
+  });
+}
+
+script:post-response {
+  if (res.body && res.body.accessToken) {
+    bru.setEnvVar("clientAccessToken", res.body.accessToken);
+    bru.setEnvVar("clientRefreshToken", res.body.refreshToken);
+  }
+}

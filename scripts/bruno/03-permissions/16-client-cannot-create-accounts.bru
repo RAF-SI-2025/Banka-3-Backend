@@ -1,0 +1,31 @@
+meta {
+  name: 18-Client CANNOT Create Accounts
+  type: http
+  seq: 18
+}
+
+post {
+  url: {{baseUrl}}/api/accounts
+  body: json
+  auth: none
+}
+
+headers {
+  Authorization: Bearer {{clientAccessToken}}
+}
+
+body:json {
+  {
+    "client_id": 1,
+    "account_type": "TEKUCI",
+    "subtype": "licni",
+    "currency": "RSD",
+    "initial_balance": 1000
+  }
+}
+
+tests {
+  test("status 403", function() {
+    expect(res.status).to.equal(403);
+  });
+}

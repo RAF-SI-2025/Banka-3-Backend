@@ -1,0 +1,21 @@
+meta {
+  name: 11-Limited Emp CANNOT Approve Loans
+  type: http
+  seq: 11
+}
+
+patch {
+  url: {{baseUrl}}/api/loan-requests/999999/approve
+  body: none
+  auth: none
+}
+
+headers {
+  Authorization: Bearer {{limitedEmpToken}}
+}
+
+tests {
+  test("status 403", function() {
+    expect(res.status).to.equal(403);
+  });
+}

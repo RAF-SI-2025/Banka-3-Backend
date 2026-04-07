@@ -1,0 +1,21 @@
+meta {
+  name: 7-Limited Emp CANNOT Access Clients
+  type: http
+  seq: 7
+}
+
+get {
+  url: {{baseUrl}}/api/clients
+  body: none
+  auth: none
+}
+
+headers {
+  Authorization: Bearer {{limitedEmpToken}}
+}
+
+tests {
+  test("status 403", function() {
+    expect(res.status).to.equal(403);
+  });
+}

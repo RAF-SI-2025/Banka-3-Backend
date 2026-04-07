@@ -1,0 +1,43 @@
+meta {
+  name: Update Employee
+  type: http
+  seq: 4
+}
+
+patch {
+  url: {{baseUrl}}/api/employees/{{testEmployeeId}}
+  body: json
+  auth: none
+}
+
+headers {
+  Authorization: Bearer {{accessToken}}
+}
+
+body:json {
+  {
+    "last_name": "Jovanovic-Updated",
+    "gender": "M",
+    "phone": "+381641113333",
+    "address": "Nova adresa 5",
+    "position": "Senior Teller",
+    "department": "Retail",
+    "active": true,
+    "permissions": ["manage_employees", "manage_clients", "manage_accounts", "manage_companies", "manage_loans", "manage_cards", "trade_stocks", "view_stocks"]
+  }
+}
+
+tests {
+  test("status 200", function() {
+    expect(res.status).to.equal(200);
+  });
+  test("last_name updated", function() {
+    expect(res.body.last_name).to.equal("Jovanovic-Updated");
+  });
+  test("position updated", function() {
+    expect(res.body.position).to.equal("Senior Teller");
+  });
+  test("permissions updated", function() {
+    expect(res.body.permissions).to.include("trade_stocks");
+  });
+}

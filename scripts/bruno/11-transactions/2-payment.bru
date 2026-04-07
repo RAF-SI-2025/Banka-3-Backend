@@ -1,0 +1,37 @@
+meta {
+  name: Payment (requires TOTP)
+  type: http
+  seq: 2
+}
+
+post {
+  url: {{baseUrl}}/api/transactions/payment
+  body: json
+  auth: none
+}
+
+headers {
+  Authorization: Bearer {{clientAccessToken}}
+  TOTP: {{totpCode}}
+}
+
+body:json {
+  {
+    "sender_account": "{{testAccountNumber}}",
+    "recipient_account": "{{testAccountNumber2}}",
+    "recipient_name": "Bruno Test Recipient",
+    "amount": 1000,
+    "payment_code": "289",
+    "reference_number": "00-12345",
+    "purpose": "Bruno test payment"
+  }
+}
+
+tests {
+  test("status 200 (or 401 if TOTP not set up)", function() {
+    // Payment requires TOTP enrollment. If TOTP is not configured,
+    // this will return 401. A 200 means the payment went through.
+    // To fully test this, first enroll TOTP via /api/totp/setup/begin + confirm.
+    expect(res.status).to.be.oneOf([200, 401]);
+  });
+}

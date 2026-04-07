@@ -1,0 +1,21 @@
+meta {
+  name: Logout Client
+  type: http
+  seq: 2
+}
+
+post {
+  url: {{baseUrl}}/api/logout
+  body: none
+  auth: none
+}
+
+headers {
+  Authorization: Bearer {{clientAccessToken}}
+}
+
+tests {
+  test("status 200", function() {
+    expect(res.status).to.equal(200);
+  });
+}

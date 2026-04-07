@@ -1,0 +1,24 @@
+meta {
+  name: Login Invalid Credentials
+  type: http
+  seq: 3
+}
+
+post {
+  url: {{baseUrl}}/api/login
+  body: json
+  auth: none
+}
+
+body:json {
+  {
+    "email": "nonexistent@test.com",
+    "password": "wrongpassword"
+  }
+}
+
+tests {
+  test("should reject invalid credentials", function() {
+    expect(res.status).to.not.equal(200);
+  });
+}

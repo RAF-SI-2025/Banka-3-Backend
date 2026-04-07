@@ -1,0 +1,36 @@
+meta {
+  name: Get Clients (seed)
+  type: http
+  seq: 1
+}
+
+get {
+  url: {{baseUrl}}/api/clients
+  body: none
+  auth: none
+}
+
+headers {
+  Authorization: Bearer {{accessToken}}
+}
+
+tests {
+  test("status 200", function() {
+    expect(res.status).to.equal(200);
+  });
+  test("returns array with clients", function() {
+    expect(res.body).to.be.an("array");
+    expect(res.body.length).to.be.greaterThan(0);
+  });
+}
+
+script:post-response {
+  if (res.body && Array.isArray(res.body) && res.body.length > 0) {
+    const seed = res.body.find(c => c.email === "petar@primer.raf");
+    if (seed) {
+      bru.setEnvVar("testClientId", seed.id);
+    } else {
+      bru.setEnvVar("testClientId", res.body[0].id);
+    }
+  }
+}

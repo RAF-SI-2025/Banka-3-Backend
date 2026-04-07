@@ -1,0 +1,35 @@
+meta {
+  name: Update Account Name
+  type: http
+  seq: 6
+}
+
+script:pre-request {
+  const ts = Date.now();
+  bru.setEnvVar("uniqueAccountName", "My Main RSD Account " + ts);
+}
+
+patch {
+  url: {{baseUrl}}/api/accounts/{{testAccountNumber}}/name
+  body: json
+  auth: none
+}
+
+headers {
+  Authorization: Bearer {{accessToken}}
+}
+
+body:json {
+  {
+    "name": "{{uniqueAccountName}}"
+  }
+}
+
+tests {
+  test("status 200", function() {
+    expect(res.status).to.equal(200);
+  });
+  test("success message", function() {
+    expect(res.body.message).to.equal("Name updated");
+  });
+}

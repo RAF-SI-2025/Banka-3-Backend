@@ -1,0 +1,21 @@
+meta {
+  name: 14-Full Emp CANNOT Access Transactions
+  type: http
+  seq: 14
+}
+
+get {
+  url: {{baseUrl}}/api/transactions
+  body: none
+  auth: none
+}
+
+headers {
+  Authorization: Bearer {{fullEmpToken}}
+}
+
+tests {
+  test("status 403", function() {
+    expect(res.status).to.equal(403);
+  });
+}

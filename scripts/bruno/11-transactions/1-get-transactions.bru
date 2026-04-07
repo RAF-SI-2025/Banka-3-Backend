@@ -1,0 +1,24 @@
+meta {
+  name: Get Transactions
+  type: http
+  seq: 1
+}
+
+get {
+  url: {{baseUrl}}/api/transactions
+  body: none
+  auth: none
+}
+
+headers {
+  Authorization: Bearer {{clientAccessToken}}
+}
+
+tests {
+  test("status 200", function() {
+    expect(res.status).to.equal(200);
+  });
+  test("returns array", function() {
+    expect(res.body).to.be.an("array");
+  });
+}

@@ -1,0 +1,21 @@
+meta {
+  name: 15-Full Emp CANNOT Access Cards
+  type: http
+  seq: 15
+}
+
+get {
+  url: {{baseUrl}}/api/cards
+  body: none
+  auth: none
+}
+
+headers {
+  Authorization: Bearer {{fullEmpToken}}
+}
+
+tests {
+  test("status 403", function() {
+    expect(res.status).to.equal(403);
+  });
+}

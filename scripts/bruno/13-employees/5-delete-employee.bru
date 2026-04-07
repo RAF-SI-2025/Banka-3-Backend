@@ -1,0 +1,21 @@
+meta {
+  name: Delete Employee
+  type: http
+  seq: 5
+}
+
+delete {
+  url: {{baseUrl}}/api/employees/{{testEmployeeId}}
+  body: none
+  auth: none
+}
+
+headers {
+  Authorization: Bearer {{accessToken}}
+}
+
+tests {
+  test("status 204", function() {
+    expect(res.status).to.equal(204);
+  });
+}

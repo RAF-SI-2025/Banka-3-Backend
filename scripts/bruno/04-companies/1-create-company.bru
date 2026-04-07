@@ -1,0 +1,47 @@
+meta {
+  name: Create Company
+  type: http
+  seq: 1
+}
+
+post {
+  url: {{baseUrl}}/api/companies
+  body: json
+  auth: none
+}
+
+headers {
+  Authorization: Bearer {{accessToken}}
+}
+
+script:pre-request {
+  const ts = Date.now();
+  bru.setVar("regId", ts % 100000000);
+  bru.setVar("taxCode", (ts + 1) % 1000000000);
+}
+
+body:json {
+  {
+    "registered_id": {{regId}},
+    "name": "Bruno Test DOO",
+    "tax_code": {{taxCode}},
+    "activity_code_id": 1,
+    "address": "Trg Republike 5, Beograd, Srbija",
+    "owner_id": {{testClientId}}
+  }
+}
+
+tests {
+  test("status 200 or 201", function() {
+    expect(res.status).to.be.oneOf([200, 201]);
+  });
+  test("has company id", function() {
+    expect(res.body.id).to.be.a("number");
+  });
+}
+
+script:post-response {
+  if (res.body && res.body.id) {
+    bru.setEnvVar("testCompanyId", res.body.id);
+  }
+}

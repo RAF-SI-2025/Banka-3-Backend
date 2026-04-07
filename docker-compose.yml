@@ -11,11 +11,25 @@ services:
       - pgdata:/var/lib/postgresql/data
 
     healthcheck:
-      test: [ "CMD-SHELL", "pg_isready -U ${POSTGRES_USER} -d ${POSTGRES_DB}" ]
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER} -d ${POSTGRES_DB}"]
       interval: 2s
       timeout: 5s
       retries: 10
-    networks: [ banka ]
+    networks: [banka]
+
+  redis:
+    image: redis:7-alpine
+    command: redis-server --requirepass ${REDIS_PASSWORD} --appendonly yes
+    ports:
+      - "${REDIS_PORT:-6379}:6379"
+    volumes:
+      - redisdata:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "-a", "${REDIS_PASSWORD}", "ping"]
+      interval: 2s
+      timeout: 5s
+      retries: 10
+    networks: [banka]
 
   bank:
     container_name: bank
@@ -31,7 +45,7 @@ services:
     depends_on:
       postgres:
         condition: service_healthy
-    networks: [ banka ]
+    networks: [banka]
 
   exchange:
     container_name: exchange
@@ -47,7 +61,7 @@ services:
     depends_on:
       postgres:
         condition: service_healthy
-    networks: [ banka ]
+    networks: [banka]
 
   user:
     container_name: user
@@ -64,11 +78,15 @@ services:
       NOTIFICATION_GRPC_ADDR: ${NOTIFICATION_GRPC_ADDR:-notification:50051}
       PASSWORD_RESET_BASE_URL: ${PASSWORD_RESET_BASE_URL}
       PASSWORD_SET_BASE_URL: ${PASSWORD_SET_BASE_URL}
+      REDIS_ADDR: "redis:6379"
+      REDIS_PASSWORD: ${REDIS_PASSWORD}
       TOTP_DISABLE_BASE_URL: ${TOTP_DISABLE_BASE_URL}
     depends_on:
       postgres:
         condition: service_healthy
-    networks: [ banka ]
+      redis:
+        condition: service_healthy
+    networks: [banka]
 
   notification:
     container_name: notification
@@ -84,7 +102,7 @@ services:
       FROM_EMAIL_PASSWORD: "${FROM_EMAIL_PASSWORD}"
       FROM_EMAIL_SMTP: "${FROM_EMAIL_SMTP}"
       SMTP_ADDR: "${SMTP_ADDR}"
-    networks: [ banka ]
+    networks: [banka]
 
   gateway:
     container_name: gateway
@@ -104,10 +122,11 @@ services:
       - notification
       - bank
       - exchange
-    networks: [ banka ]
+    networks: [banka]
 
 volumes:
   pgdata:
+  redisdata:
 
 networks:
   banka:

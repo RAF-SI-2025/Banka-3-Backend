@@ -1,0 +1,25 @@
+meta {
+  name: Get Company By ID
+  type: http
+  seq: 3
+}
+
+get {
+  url: {{baseUrl}}/api/companies/{{testCompanyId}}
+  body: none
+  auth: none
+}
+
+headers {
+  Authorization: Bearer {{accessToken}}
+}
+
+tests {
+  test("status 200", function() {
+    expect(res.status).to.equal(200);
+  });
+  test("correct company returned", function() {
+    expect(res.body.id).to.equal(Number(bru.getEnvVar("testCompanyId")));
+    expect(res.body.name).to.equal("Bruno Test DOO");
+  });
+}

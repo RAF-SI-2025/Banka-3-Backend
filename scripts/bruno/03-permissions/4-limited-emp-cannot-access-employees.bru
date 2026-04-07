@@ -1,0 +1,21 @@
+meta {
+  name: 6-Limited Emp CANNOT Access Employees
+  type: http
+  seq: 6
+}
+
+get {
+  url: {{baseUrl}}/api/employees
+  body: none
+  auth: none
+}
+
+headers {
+  Authorization: Bearer {{limitedEmpToken}}
+}
+
+tests {
+  test("status 403", function() {
+    expect(res.status).to.equal(403);
+  });
+}

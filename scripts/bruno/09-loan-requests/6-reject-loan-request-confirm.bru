@@ -1,0 +1,21 @@
+meta {
+  name: Reject Loan Request Confirm
+  type: http
+  seq: 6
+}
+
+patch {
+  url: {{baseUrl}}/api/loan-requests/{{testRejectLoanRequestId}}/reject
+  body: none
+  auth: none
+}
+
+headers {
+  Authorization: Bearer {{accessToken}}
+}
+
+tests {
+  test("status 200", function() {
+    expect(res.status).to.equal(200);
+  });
+}

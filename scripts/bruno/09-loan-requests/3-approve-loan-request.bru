@@ -1,0 +1,21 @@
+meta {
+  name: Approve Loan Request (as Employee)
+  type: http
+  seq: 3
+}
+
+patch {
+  url: {{baseUrl}}/api/loan-requests/{{testLoanRequestId}}/approve
+  body: none
+  auth: none
+}
+
+headers {
+  Authorization: Bearer {{accessToken}}
+}
+
+tests {
+  test("status 200", function() {
+    expect(res.status).to.equal(200);
+  });
+}

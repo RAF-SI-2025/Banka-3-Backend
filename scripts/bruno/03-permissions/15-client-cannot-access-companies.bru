@@ -1,0 +1,21 @@
+meta {
+  name: 17-Client CANNOT Access Companies
+  type: http
+  seq: 17
+}
+
+get {
+  url: {{baseUrl}}/api/companies
+  body: none
+  auth: none
+}
+
+headers {
+  Authorization: Bearer {{clientAccessToken}}
+}
+
+tests {
+  test("status 403", function() {
+    expect(res.status).to.equal(403);
+  });
+}

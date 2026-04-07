@@ -937,7 +937,7 @@ func (s *Server) DecreaseAccountBalance(tx *sql.Tx, number string, amount int64)
 }
 func (s *Server) CreatePayment(tx *sql.Tx, from_account string, to_account string, start_amount int64,
 	end_amount int64, commission int64, transaction_code int64, call_number string,
-	reason string) (*Payment, error) {
+	reason string, status string) (*Payment, error) {
 	recipient_id, err := s.getOwnerFromAccount(tx, to_account)
 	if err != nil {
 		return nil, fmt.Errorf("get owner from account failed: %w", err)
@@ -959,7 +959,7 @@ func (s *Server) CreatePayment(tx *sql.Tx, from_account string, to_account strin
 		start_amount,
 		end_amount,
 		commission,
-		"realized",
+		status,
 		recipient_id,
 		transaction_code,
 		call_number,
@@ -1038,6 +1038,29 @@ func (s *Server) ProcessPayment(from_account string, to_account string, amount i
 	}
 	defer func() { _ = tx.Rollback() }()
 
+	//Helper funkcija za zapis odbijenog placanja
+	//Kreira placanje sa statusom "rejected"
+	//U slucaju da korisnik nema dovoljno na racunu ili da je uplata pukla iz nekog razloga
+	rejectPayment := func() {
+		_, err := s.CreatePayment(
+			tx,
+			from_account,
+			to_account,
+			amount,
+			finalAmount,
+			commission,
+			transaction_code,
+			call_number,
+			reason,
+			"rejected",
+		)
+		if err != nil {
+			log.Printf("failed to create rejected payment: %v", err)
+		}
+		if err := tx.Commit(); err != nil {
+			log.Printf("failed to commit rejected payment: %v", err)
+		}
+	}
 	// 2. Ažuriranje balansa
 	if fromAcc.Currency != toAcc.Currency {
 		// Razlicita valuta:
@@ -1045,6 +1068,7 @@ func (s *Server) ProcessPayment(from_account string, to_account string, amount i
 		systemEmail := "system@banka3.rs"
 		// A. Skini platiocu (Source)
 		if _, err := s.DecreaseAccountBalance(tx, from_account, amount); err != nil {
+			rejectPayment()
 			return nil, nil, err
 		}
 
@@ -1052,6 +1076,7 @@ func (s *Server) ProcessPayment(from_account string, to_account string, amount i
 		_, err = tx.Exec(`UPDATE accounts SET balance = balance + $1 WHERE currency = $2 AND owner = (SELECT id FROM clients WHERE email = $3)`,
 			amount, fromAcc.Currency, systemEmail)
 		if err != nil {
+			rejectPayment()
 			return nil, nil, fmt.Errorf("failed to credit bank source account: %w", err)
 		}
 
@@ -1059,26 +1084,30 @@ func (s *Server) ProcessPayment(from_account string, to_account string, amount i
 		_, err = tx.Exec(`UPDATE accounts SET balance = balance - $1 WHERE currency = $2 AND owner = (SELECT id FROM clients WHERE email = $3)`,
 			finalAmount, toAcc.Currency, systemEmail)
 		if err != nil {
+			rejectPayment()
 			return nil, nil, fmt.Errorf("failed to debit bank target account: %w", err)
 		}
 
 		// D. Dodaj primaocu (Target)
 		if _, err := s.IncreaseAccountBalance(tx, to_account, finalAmount); err != nil {
+			rejectPayment()
 			return nil, nil, err
 		}
 
 	} else {
 		// Ista valuta: Direktno
 		if _, err := s.DecreaseAccountBalance(tx, from_account, amount); err != nil {
+			rejectPayment()
 			return nil, nil, err
 		}
 		if _, err := s.IncreaseAccountBalance(tx, to_account, amount); err != nil {
+			rejectPayment()
 			return nil, nil, err
 		}
 	}
 
 	// 3. Kreiraj zapis o plaćanju
-	payment, err := s.CreatePayment(tx, from_account, to_account, amount, finalAmount, commission, transaction_code, call_number, reason)
+	payment, err := s.CreatePayment(tx, from_account, to_account, amount, finalAmount, commission, transaction_code, call_number, reason, "realized")
 	if err != nil {
 		return nil, nil, err
 	}
