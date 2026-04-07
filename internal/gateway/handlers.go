@@ -116,10 +116,10 @@ func SetupApi(router *gin.Engine, server *Server) {
 
 	cards := api.Group("/cards")
 	{
-		cards.GET("", auth, secured("role:client"), server.GetCards)
-		cards.POST("", auth, secured("role:client"), server.RequestCard)
-		cards.GET("/confirm", auth, secured("role:client"), server.ConfirmCard)
-		cards.PATCH("/:cardNumber/block", auth, secured("role:client"), server.BlockCard)
+		cards.GET("", auth, secured("role:client"), totp, server.GetCards)
+		cards.POST("", auth, secured("role:client"), totp, server.RequestCard)
+		cards.GET("/confirm", server.ConfirmCard) // Ovo se poziva linkom iz mejla, NE DODAJEMO AUTH OVDE!!!
+		cards.PATCH("/:cardNumber/block", auth, secured("role:client"), totp, server.BlockCard)
 	}
 
 	api.GET("/exchange-rates", auth, secured("role:client"), server.GetExchangeRates)
