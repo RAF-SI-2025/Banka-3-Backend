@@ -24,9 +24,20 @@ func main() {
 		log.Fatalf("failed to listen: %v", err)
 	}
 	grpcServer := grpc.NewServer()
-	//notification.RegisterNotificationServiceServer(grpcServer, &internalNotification.Server{})
-	smtpSender := &internalNotification.SMTPSender{}
-	server := internalNotification.NewServer(smtpSender)
+	backend := os.Getenv("BACKEND")
+
+	var sender internalNotification.EmailSender
+	switch backend {
+	case "SMTP":
+		sender = &internalNotification.SMTPSender{}
+	case "STDOUT":
+		sender = &internalNotification.StdoutSender{}
+	case "NOOP":
+		sender = &internalNotification.NoopSender{}
+	default:
+		sender = &internalNotification.SMTPSender{}
+	}
+	server := internalNotification.NewServer(sender)
 
 	notification.RegisterNotificationServiceServer(grpcServer, server)
 	reflection.Register(grpcServer)

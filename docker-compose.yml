@@ -96,6 +96,7 @@ services:
     ports:
       - "${NOTIFICATION_GRPC_PORT:-50052}:50051"
     environment:
+      BACKEND: "SMTP"
       GRPC_PORT: "50051"
       FROM_EMAIL: "${FROM_EMAIL}"
       FROM_EMAIL_AUTH: "${FROM_EMAIL_AUTH}"

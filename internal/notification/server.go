@@ -3,6 +3,7 @@ package notification
 import (
 	"bytes"
 	"context"
+	"fmt"
 	"html/template"
 	"log"
 	"net/smtp"
@@ -17,6 +18,30 @@ type EmailSender interface {
 }
 
 type SMTPSender struct{}
+type StdoutSender struct{}
+type NoopSender struct{}
+
+func (s *NoopSender) Send(to []string, subject string, body string) error {
+	return nil
+}
+
+func (s *StdoutSender) Send(to []string, subject string, body string) error {
+	for _, r := range to {
+		_, err := fmt.Printf("===================================\n")
+		if err != nil {
+			return err
+		}
+		_, err = fmt.Printf("Recepient: %s | Subject: %s\n", r, subject)
+		if err != nil {
+			return err
+		}
+		_, err = fmt.Print(body)
+		if err != nil {
+			return err
+		}
+	}
+	return nil
+}
 
 func (s *SMTPSender) Send(to []string, subject string, body string) error {
 	auth := smtp.PlainAuth(
