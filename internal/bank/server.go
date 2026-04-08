@@ -1482,9 +1482,19 @@ func (s *Server) PayoutMoneyToOtherAccount(
 }
 
 func (s *Server) TransferMoneyBetweenAccounts(
-	_ context.Context,
+	ctx context.Context,
 	req *bankpb.TransferRequest,
 ) (*bankpb.TransferResponse, error) {
+
+	// Authorization: verify that the caller owns the source account
+	email, err := s.getEmailFromMetadata(ctx)
+	if err != nil {
+		return nil, status.Error(codes.Unauthenticated, "unauthorized")
+	}
+	_, err = s.getOwnedAccountByNumber(email, req.FromAccount)
+	if err != nil {
+		return nil, status.Error(codes.Unauthenticated, "unauthorized")
+	}
 
 	if strings.TrimSpace(req.FromAccount) == "" || strings.TrimSpace(req.ToAccount) == "" {
 		return nil, status.Error(codes.InvalidArgument, "account numbers are required")
