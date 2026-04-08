@@ -67,6 +67,7 @@ func SetupApi(router *gin.Engine, server *Server) {
 		passwordReset.POST("/confirm", server.ConfirmPasswordReset)
 	}
 
+	api.GET("/clients/me", auth, secured("role:client"), server.GetMe) // van grupe
 	clients := api.Group("/clients", auth, secured("manage_clients"))
 	{
 		clients.POST("", server.CreateClientAccount)
