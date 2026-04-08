@@ -264,7 +264,7 @@ func (s *Server) SendClientSetPasswordEmail(_ context.Context, req *notification
 		log.Println("error in filling template :", err)
 		return &notification.SuccessResponse{Successful: false}, nil
 	}
-  err = s.sender.Send(to, "Set your Banka 3 password", rendered.String())
+	err = s.sender.Send(to, "Set your Banka 3 password", rendered.String())
 	if err != nil {
 		log.Println("Couldn't send client set password email:", err)
 		return &notification.SuccessResponse{Successful: false}, nil
