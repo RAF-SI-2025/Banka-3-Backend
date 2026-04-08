@@ -1498,9 +1498,24 @@ func (s *Server) TransferMoneyBetweenAccounts(
 	if err != nil {
 		log.Printf("bank/server.go: failed to create transfer: %v", err)
 		switch {
+		case errors.Is(err, ErrInsufficientFunds):
+			if transfer != nil {
+				return &bankpb.TransferResponse{
+					FromAccount:   transfer.From_account,
+					ToAccount:     transfer.To_account,
+					InitialAmount: transfer.Start_amount,
+					FinalAmount:   transfer.End_amount,
+					Fee:           transfer.Commission,
+					Currency:      strconv.FormatInt(transfer.Start_currency_id, 10),
+					PaymentCode:   "",
+					ReferenceNumber: "",
+					Purpose:       req.Description,
+					Status:        "rejected",
+					Timestamp:     fmt.Sprintf("%d", time.Now().Unix()),
+				}, nil
+			}
+			return nil, status.Error(codes.InvalidArgument, "insufficient funds")
 		case strings.Contains(err.Error(), "same account"):
-			return nil, status.Error(codes.InvalidArgument, err.Error())
-		case strings.Contains(err.Error(), "insufficient funds"):
 			return nil, status.Error(codes.InvalidArgument, err.Error())
 		case strings.Contains(err.Error(), "exchange error"):
 			return nil, status.Error(codes.Unavailable, "exchange service currently unavailable")

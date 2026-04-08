@@ -1176,6 +1176,8 @@ func (s *Server) CreateTransfer(fromAccount, toAccount string, amount int64) (*T
 		return nil, err
 	}
 
+	var transfer *Transfer
+
 	tx, err := s.database.Begin()
 	if err != nil {
 		return nil, err
@@ -1183,7 +1185,27 @@ func (s *Server) CreateTransfer(fromAccount, toAccount string, amount int64) (*T
 	defer func() { _ = tx.Rollback() }()
 
 	if fromAcc.Balance < amount {
-		return nil, errors.New("insufficient funds")
+		row := tx.QueryRow(`
+			INSERT INTO transfers (
+				from_account, to_account, start_amount, end_amount,
+				start_currency_id, exchange_rate, commission, status
+			)
+			VALUES ($1, $2, $3, $4, $5, $6, $7, 'rejected')
+			RETURNING transaction_id, from_account, to_account,
+					  start_amount, end_amount,
+					  start_currency_id, exchange_rate,
+					  commission, status, timestamp
+	`, fromAccount, toAccount, amount, finalAmount, currency.Id, exchangeRate, commission)
+
+		transfer, err = scanTransfer(row)
+		if err != nil {
+			return nil, err
+		}
+
+		if err := tx.Commit(); err != nil {
+			return nil, err
+		}
+		return transfer, ErrInsufficientFunds
 	}
 
 	row := tx.QueryRow(`
@@ -1198,7 +1220,7 @@ func (s *Server) CreateTransfer(fromAccount, toAccount string, amount int64) (*T
               commission, status, timestamp
 `, fromAccount, toAccount, amount, finalAmount, currency.Id, exchangeRate, commission)
 
-	transfer, err := scanTransfer(row)
+	transfer, err = scanTransfer(row)
 	if err != nil {
 		return nil, err
 	}
