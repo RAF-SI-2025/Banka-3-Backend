@@ -8,9 +8,11 @@ import (
 	"os"
 
 	"github.com/RAF-SI-2025/Banka-3-Backend/gen/bank"
+	notificationpb "github.com/RAF-SI-2025/Banka-3-Backend/gen/notification"
 	internalBank "github.com/RAF-SI-2025/Banka-3-Backend/internal/bank"
 	_ "github.com/jackc/pgx/v5/stdlib"
 	"google.golang.org/grpc"
+	"google.golang.org/grpc/credentials/insecure"
 	"google.golang.org/grpc/reflection"
 	"gorm.io/driver/postgres"
 	"gorm.io/gorm"
@@ -51,7 +53,18 @@ func main() {
 	log.Println("connected to database...")
 	defer func() { _ = db.Close() }()
 
-	bankService, err := internalBank.NewServer(db, gorm_db)
+	notificationAddr := os.Getenv("NOTIFICATION_GRPC_ADDR")
+	if notificationAddr == "" {
+		notificationAddr = "notification:50051"
+	}
+
+	notificationConn, err := grpc.NewClient(notificationAddr, grpc.WithTransportCredentials(insecure.NewCredentials()))
+	if err != nil {
+		log.Fatalf("failed to connect to notification service: %v", err)
+	}
+	defer func() { _ = notificationConn.Close() }()
+
+	bankService, err := internalBank.NewServer(db, gorm_db, notificationpb.NewNotificationServiceClient(notificationConn))
 	if err != nil {
 		log.Fatalf("failed to start bank service: %v", err)
 	}

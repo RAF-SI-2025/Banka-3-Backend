@@ -16,6 +16,7 @@ import (
 
 	bankpb "github.com/RAF-SI-2025/Banka-3-Backend/gen/bank"
 	exchangepb "github.com/RAF-SI-2025/Banka-3-Backend/gen/exchange"
+	notificationpb "github.com/RAF-SI-2025/Banka-3-Backend/gen/notification"
 	"github.com/go-pdf/fpdf"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/codes"
@@ -27,12 +28,13 @@ import (
 
 type Server struct {
 	bankpb.UnimplementedBankServiceServer
-	database        *sql.DB
-	db_gorm         *gorm.DB
-	ExchangeService exchangepb.ExchangeServiceClient
+	database           *sql.DB
+	db_gorm            *gorm.DB
+	ExchangeService    exchangepb.ExchangeServiceClient
+	NotificationClient notificationpb.NotificationServiceClient
 }
 
-func NewServer(database *sql.DB, gorm_db *gorm.DB) (*Server, error) {
+func NewServer(database *sql.DB, gorm_db *gorm.DB, notificationClient notificationpb.NotificationServiceClient) (*Server, error) {
 	exchangeAddr := os.Getenv("EXCHANGE_GRPC_ADDR")
 	if exchangeAddr == "" {
 		exchangeAddr = "exchange:50051"
@@ -43,9 +45,10 @@ func NewServer(database *sql.DB, gorm_db *gorm.DB) (*Server, error) {
 	}
 
 	return &Server{
-		database:        database,
-		db_gorm:         gorm_db,
-		ExchangeService: exchangepb.NewExchangeServiceClient(exchangeConn),
+		database:           database,
+		db_gorm:            gorm_db,
+		ExchangeService:    exchangepb.NewExchangeServiceClient(exchangeConn),
+		NotificationClient: notificationClient,
 	}, nil
 }
 
@@ -1364,7 +1367,7 @@ func (s *Server) GetLoanByNumber(_ context.Context, req *bankpb.GetLoanByNumberR
 	return loanViewToProto(loan), nil
 }
 
-func (s *Server) CreateLoanRequest(_ context.Context, req *bankpb.CreateLoanRequestRequest) (*bankpb.CreateLoanRequestResponse, error) {
+func (s *Server) CreateLoanRequest(ctx context.Context, req *bankpb.CreateLoanRequestRequest) (*bankpb.CreateLoanRequestResponse, error) {
 	clientEmail := strings.TrimSpace(req.ClientEmail)
 	if clientEmail == "" {
 		return nil, status.Error(codes.Unauthenticated, "client email required")
@@ -1440,6 +1443,8 @@ func (s *Server) CreateLoanRequest(_ context.Context, req *bankpb.CreateLoanRequ
 	if err := s.createLoanRequest(loanRequest); err != nil {
 		return nil, status.Error(codes.Internal, "failed to create loan request")
 	}
+
+	s.sendLoanRequestCreatedEmail(ctx, clientEmail)
 
 	return &bankpb.CreateLoanRequestResponse{}, nil
 }

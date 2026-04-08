@@ -16,6 +16,9 @@ import (
 
 type testNotificationServer struct {
 	notificationpb.UnimplementedNotificationServiceServer
+	loanRequestCreatedCalls int
+	loanRequestCreatedResp  *notificationpb.SuccessResponse
+	loanRequestCreatedErr   error
 }
 
 func (s *testNotificationServer) SendCardCreatedEmail(_ context.Context, _ *notificationpb.CardCreatedMailRequest) (*notificationpb.SuccessResponse, error) {
@@ -23,6 +26,17 @@ func (s *testNotificationServer) SendCardCreatedEmail(_ context.Context, _ *noti
 }
 
 func (s *testNotificationServer) SendCardConfirmationEmail(_ context.Context, _ *notificationpb.CardConfirmationMailRequest) (*notificationpb.SuccessResponse, error) {
+	return &notificationpb.SuccessResponse{Successful: true}, nil
+}
+
+func (s *testNotificationServer) SendLoanRequestCreatedEmail(_ context.Context, _ *notificationpb.LoanRequestCreatedMailRequest) (*notificationpb.SuccessResponse, error) {
+	s.loanRequestCreatedCalls++
+	if s.loanRequestCreatedErr != nil {
+		return nil, s.loanRequestCreatedErr
+	}
+	if s.loanRequestCreatedResp != nil {
+		return s.loanRequestCreatedResp, nil
+	}
 	return &notificationpb.SuccessResponse{Successful: true}, nil
 }
 

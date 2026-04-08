@@ -9,9 +9,175 @@ import (
 
 	"github.com/DATA-DOG/go-sqlmock"
 	bankpb "github.com/RAF-SI-2025/Banka-3-Backend/gen/bank"
+	notificationpb "github.com/RAF-SI-2025/Banka-3-Backend/gen/notification"
+	"google.golang.org/grpc"
 	"google.golang.org/grpc/codes"
+	"google.golang.org/grpc/credentials/insecure"
 	"google.golang.org/grpc/status"
 )
+
+// ---------------------------------------------------------------------------
+// CreateLoanRequest
+// ---------------------------------------------------------------------------
+
+func newNotificationTestClient(t *testing.T, handler notificationpb.NotificationServiceServer) notificationpb.NotificationServiceClient {
+	t.Helper()
+
+	addr, stop := startNotificationTestServer(t, handler)
+	t.Cleanup(stop)
+
+	conn, err := grpc.NewClient(addr, grpc.WithTransportCredentials(insecure.NewCredentials()))
+	if err != nil {
+		t.Fatalf("grpc.NewClient: %v", err)
+	}
+	t.Cleanup(func() { _ = conn.Close() })
+
+	return notificationpb.NewNotificationServiceClient(conn)
+}
+
+func expectCreateLoanRequestQueries(mock sqlmock.Sqlmock, clientEmail string, now time.Time) {
+	mock.ExpectQuery(`SELECT .* FROM "accounts" JOIN clients ON clients.id = accounts.owner WHERE clients.email = \$1 AND accounts.number = \$2.*`).
+		WithArgs(clientEmail, "12345678901234567890", 1).
+		WillReturnRows(sqlmock.NewRows([]string{
+			"id", "number", "name", "owner", "balance", "created_by", "created_at",
+			"valid_until", "currency", "active", "owner_type", "account_type",
+			"maintainance_cost", "daily_limit", "monthly_limit", "daily_expenditure",
+			"monthly_expenditure",
+		}).AddRow(
+			int64(1), "12345678901234567890", "Main", int64(1), int64(2500000), int64(1), now,
+			now.AddDate(3, 0, 0), "RSD", true, "personal", "checking",
+			int64(0), int64(0), int64(0), int64(0), int64(0),
+		))
+
+	mock.ExpectQuery(`SELECT .* FROM "currencies" WHERE label = \$1.*`).
+		WithArgs("RSD", 1).
+		WillReturnRows(sqlmock.NewRows([]string{
+			"id", "label", "name", "symbol", "countries", "description", "active",
+		}).AddRow(int64(1), "RSD", "Serbian Dinar", "din", "Serbia", "Serbian Dinar", true))
+
+	mock.ExpectBegin()
+	mock.ExpectQuery(`INSERT INTO "loan_request"`).
+		WillReturnRows(sqlmock.NewRows([]string{"id"}).AddRow(int64(1)))
+	mock.ExpectCommit()
+}
+
+func TestCreateLoanRequest_SendsEmailOnSuccess(t *testing.T) {
+	notificationServer := &testNotificationServer{}
+	client := newNotificationTestClient(t, notificationServer)
+
+	server, mock, db := newGormTestServerWithNotificationClient(t, client)
+	defer func() { _ = db.Close() }()
+
+	now := time.Now()
+	expectCreateLoanRequestQueries(mock, "client@example.com", now)
+
+	resp, err := server.CreateLoanRequest(context.Background(), &bankpb.CreateLoanRequestRequest{
+		ClientEmail:      "client@example.com",
+		AccountNumber:    "12345678901234567890",
+		LoanType:         "GOTOVINSKI",
+		Amount:           500000,
+		RepaymentPeriod:  24,
+		Currency:         "RSD",
+		Purpose:          "Bruno test loan",
+		Salary:           150000,
+		EmploymentStatus: "full_time",
+		EmploymentPeriod: 36,
+		PhoneNumber:      "+381641111111",
+		InterestRateType: "fixed",
+	})
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if resp == nil {
+		t.Fatalf("expected non-nil response")
+	}
+	if notificationServer.loanRequestCreatedCalls != 1 {
+		t.Fatalf("expected 1 notification call, got %d", notificationServer.loanRequestCreatedCalls)
+	}
+	if err := mock.ExpectationsWereMet(); err != nil {
+		t.Fatalf("unmet expectations: %v", err)
+	}
+}
+
+func TestCreateLoanRequest_ContinuesWhenNotificationFails(t *testing.T) {
+	notificationServer := &testNotificationServer{
+		loanRequestCreatedErr: status.Error(codes.Unavailable, "notification unavailable"),
+	}
+	client := newNotificationTestClient(t, notificationServer)
+
+	server, mock, db := newGormTestServerWithNotificationClient(t, client)
+	defer func() { _ = db.Close() }()
+
+	now := time.Now()
+	expectCreateLoanRequestQueries(mock, "client@example.com", now)
+
+	resp, err := server.CreateLoanRequest(context.Background(), &bankpb.CreateLoanRequestRequest{
+		ClientEmail:      "client@example.com",
+		AccountNumber:    "12345678901234567890",
+		LoanType:         "GOTOVINSKI",
+		Amount:           500000,
+		RepaymentPeriod:  24,
+		Currency:         "RSD",
+		Purpose:          "Bruno test loan",
+		Salary:           150000,
+		EmploymentStatus: "full_time",
+		EmploymentPeriod: 36,
+		PhoneNumber:      "+381641111111",
+		InterestRateType: "fixed",
+	})
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if resp == nil {
+		t.Fatalf("expected non-nil response")
+	}
+	if notificationServer.loanRequestCreatedCalls != 1 {
+		t.Fatalf("expected 1 notification call, got %d", notificationServer.loanRequestCreatedCalls)
+	}
+	if err := mock.ExpectationsWereMet(); err != nil {
+		t.Fatalf("unmet expectations: %v", err)
+	}
+}
+
+func TestCreateLoanRequest_ContinuesWhenNotificationReportsUnsuccessful(t *testing.T) {
+	notificationServer := &testNotificationServer{
+		loanRequestCreatedResp: &notificationpb.SuccessResponse{Successful: false},
+	}
+	client := newNotificationTestClient(t, notificationServer)
+
+	server, mock, db := newGormTestServerWithNotificationClient(t, client)
+	defer func() { _ = db.Close() }()
+
+	now := time.Now()
+	expectCreateLoanRequestQueries(mock, "client@example.com", now)
+
+	resp, err := server.CreateLoanRequest(context.Background(), &bankpb.CreateLoanRequestRequest{
+		ClientEmail:      "client@example.com",
+		AccountNumber:    "12345678901234567890",
+		LoanType:         "GOTOVINSKI",
+		Amount:           500000,
+		RepaymentPeriod:  24,
+		Currency:         "RSD",
+		Purpose:          "Bruno test loan",
+		Salary:           150000,
+		EmploymentStatus: "full_time",
+		EmploymentPeriod: 36,
+		PhoneNumber:      "+381641111111",
+		InterestRateType: "fixed",
+	})
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if resp == nil {
+		t.Fatalf("expected non-nil response")
+	}
+	if notificationServer.loanRequestCreatedCalls != 1 {
+		t.Fatalf("expected 1 notification call, got %d", notificationServer.loanRequestCreatedCalls)
+	}
+	if err := mock.ExpectationsWereMet(); err != nil {
+		t.Fatalf("unmet expectations: %v", err)
+	}
+}
 
 // ---------------------------------------------------------------------------
 // GetLoanRequests

@@ -120,3 +120,26 @@ func (s *Server) sendCardConfirmationEmail(ctx context.Context, email string, li
 	log.Printf("[NotificationClient] SUCCESS: CardConfirmation email sent to %s", email)
 	return nil
 }
+
+func (s *Server) sendLoanRequestCreatedEmail(ctx context.Context, email string) {
+	if s.NotificationClient == nil {
+		log.Printf("[NotificationClient] WARNING: Notification client is not configured, skipping LoanRequestCreated email for %s", email)
+		return
+	}
+
+	log.Printf("[NotificationClient] Attempting to send LoanRequestCreated email to: %s", email)
+
+	resp, err := s.NotificationClient.SendLoanRequestCreatedEmail(ctx, &notificationpb.LoanRequestCreatedMailRequest{
+		ToAddr: email,
+	})
+	if err != nil {
+		log.Printf("[NotificationClient] ERROR: Failed to call SendLoanRequestCreatedEmail for %s: %v", email, err)
+		return
+	}
+	if !resp.Successful {
+		log.Printf("[NotificationClient] ERROR: Notification service reported unsuccessful LoanRequestCreated email for %s", email)
+		return
+	}
+
+	log.Printf("[NotificationClient] SUCCESS: LoanRequestCreated email sent to %s", email)
+}
