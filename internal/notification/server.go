@@ -46,25 +46,25 @@ func NewServer(sender EmailSender) *Server {
 }
 
 func (s *Server) SendConfirmationEmail(ctx context.Context, req *notification.ConfirmationMailRequest) (*notification.SuccessResponse, error) {
-	logger.FromContext(ctx).InfoContext(ctx,"sending confirmation email")
+	logger.FromContext(ctx).InfoContext(ctx, "sending confirmation email")
 
 	to := strings.Split(req.ToAddr, ",")
 
 	templ, err := template.ParseFiles("templates/confirmation.html")
 	if err != nil {
-		logger.FromContext(ctx).ErrorContext(ctx,"parse confirmation.html failed", "err", err)
+		logger.FromContext(ctx).ErrorContext(ctx, "parse confirmation.html failed", "err", err)
 		return &notification.SuccessResponse{Successful: false}, nil
 	}
 
 	var rendered bytes.Buffer
 	if err := templ.Execute(&rendered, req); err != nil {
-		logger.FromContext(ctx).ErrorContext(ctx,"execute confirmation.html failed", "err", err)
+		logger.FromContext(ctx).ErrorContext(ctx, "execute confirmation.html failed", "err", err)
 		return &notification.SuccessResponse{Successful: false}, nil
 	}
 
 	err = s.sender.Send(to, "Confirm your Banka 3 account", rendered.String()) //umesto smtp
 	if err != nil {
-		logger.FromContext(ctx).ErrorContext(ctx,"send confirmation email failed", "err", err)
+		logger.FromContext(ctx).ErrorContext(ctx, "send confirmation email failed", "err", err)
 		return &notification.SuccessResponse{Successful: false}, nil
 	}
 
@@ -77,19 +77,19 @@ func (s *Server) SendActivationEmail(ctx context.Context, req *notification.Acti
 	to := strings.Split(req.ToAddr, ",")
 	templ, err := template.ParseFiles("templates/activation.html")
 	if err != nil {
-		logger.FromContext(ctx).ErrorContext(ctx,"parse activation.html failed", "err", err)
+		logger.FromContext(ctx).ErrorContext(ctx, "parse activation.html failed", "err", err)
 		return &notification.SuccessResponse{Successful: false}, nil
 	}
 
 	var rendered bytes.Buffer
 	if err := templ.Execute(&rendered, req); err != nil {
-		logger.FromContext(ctx).ErrorContext(ctx,"execute activation.html failed", "err", err)
+		logger.FromContext(ctx).ErrorContext(ctx, "execute activation.html failed", "err", err)
 		return &notification.SuccessResponse{Successful: false}, nil
 	}
 
 	err = s.sender.Send(to, "Aktivirajte Banka 3 nalog", rendered.String()) //umesto smtp
 	if err != nil {
-		logger.FromContext(ctx).ErrorContext(ctx,"send activation email failed", "err", err)
+		logger.FromContext(ctx).ErrorContext(ctx, "send activation email failed", "err", err)
 		return &notification.SuccessResponse{Successful: false}, nil
 	}
 
@@ -102,19 +102,19 @@ func (s *Server) SendPasswordResetEmail(ctx context.Context, req *notification.P
 	to := strings.Split(req.ToAddr, ",")
 	templ, err := template.ParseFiles("templates/password_reset.html")
 	if err != nil {
-		logger.FromContext(ctx).ErrorContext(ctx,"parse password_reset.html failed", "err", err)
+		logger.FromContext(ctx).ErrorContext(ctx, "parse password_reset.html failed", "err", err)
 		return &notification.SuccessResponse{Successful: false}, nil
 	}
 
 	var rendered bytes.Buffer
 	if err := templ.Execute(&rendered, req); err != nil {
-		logger.FromContext(ctx).ErrorContext(ctx,"execute password_reset.html failed", "err", err)
+		logger.FromContext(ctx).ErrorContext(ctx, "execute password_reset.html failed", "err", err)
 		return &notification.SuccessResponse{Successful: false}, nil
 	}
 
 	err = s.sender.Send(to, "Reset your Banka 3 password", rendered.String())
 	if err != nil {
-		logger.FromContext(ctx).ErrorContext(ctx,"send password reset email failed", "err", err)
+		logger.FromContext(ctx).ErrorContext(ctx, "send password reset email failed", "err", err)
 		return &notification.SuccessResponse{Successful: false}, nil
 	}
 
@@ -127,19 +127,19 @@ func (s *Server) SendInitialPasswordSetEmail(ctx context.Context, req *notificat
 	to := strings.Split(req.ToAddr, ",")
 	templ, err := template.ParseFiles("templates/initial_password_set.html")
 	if err != nil {
-		logger.FromContext(ctx).ErrorContext(ctx,"parse initial_password_set.html failed", "err", err)
+		logger.FromContext(ctx).ErrorContext(ctx, "parse initial_password_set.html failed", "err", err)
 		return &notification.SuccessResponse{Successful: false}, nil
 	}
 
 	var rendered bytes.Buffer
 	if err := templ.Execute(&rendered, req); err != nil {
-		logger.FromContext(ctx).ErrorContext(ctx,"execute initial_password_set.html failed", "err", err)
+		logger.FromContext(ctx).ErrorContext(ctx, "execute initial_password_set.html failed", "err", err)
 		return &notification.SuccessResponse{Successful: false}, nil
 	}
 
 	err = s.sender.Send(to, "Set your Banka 3 password", rendered.String())
 	if err != nil {
-		logger.FromContext(ctx).ErrorContext(ctx,"send initial password set email failed", "err", err)
+		logger.FromContext(ctx).ErrorContext(ctx, "send initial password set email failed", "err", err)
 		return &notification.SuccessResponse{Successful: false}, nil
 	}
 
@@ -152,7 +152,7 @@ func (s *Server) SendCardConfirmationEmail(ctx context.Context, req *notificatio
 	to := strings.Split(req.ToAddr, ",")
 	templ, err := template.ParseFiles("templates/card_confirmation.html")
 	if err != nil {
-		logger.FromContext(ctx).ErrorContext(ctx,"parse card_confirmation.html failed", "err", err)
+		logger.FromContext(ctx).ErrorContext(ctx, "parse card_confirmation.html failed", "err", err)
 		return &notification.SuccessResponse{Successful: false}, nil
 	}
 
@@ -179,7 +179,7 @@ func (s *Server) SendLoanPaymentFailedEmail(ctx context.Context, req *notificati
 	to := strings.Split(req.ToAddr, ",")
 	templ, err := template.ParseFiles("templates/loan_payment_failed.html")
 	if err != nil {
-		logger.FromContext(ctx).ErrorContext(ctx,"parse loan_payment_failed.html failed", "err", err)
+		logger.FromContext(ctx).ErrorContext(ctx, "parse loan_payment_failed.html failed", "err", err)
 		return &notification.SuccessResponse{Successful: false}, nil
 	}
 
@@ -197,13 +197,13 @@ func (s *Server) SendLoanPaymentFailedEmail(ctx context.Context, req *notificati
 
 	var rendered bytes.Buffer
 	if err := templ.Execute(&rendered, data); err != nil {
-		logger.FromContext(ctx).ErrorContext(ctx,"execute loan_payment_failed.html failed", "err", err)
+		logger.FromContext(ctx).ErrorContext(ctx, "execute loan_payment_failed.html failed", "err", err)
 		return &notification.SuccessResponse{Successful: false}, nil
 	}
 
 	err = s.sender.Send(to, "Neuspela naplata rate kredita - Banka 3", rendered.String())
 	if err != nil {
-		logger.FromContext(ctx).ErrorContext(ctx,"send loan payment failed email failed", "err", err)
+		logger.FromContext(ctx).ErrorContext(ctx, "send loan payment failed email failed", "err", err)
 		return &notification.SuccessResponse{Successful: false}, nil
 	}
 
@@ -234,19 +234,19 @@ func (s *Server) SendTOTPDisableEmail(ctx context.Context, req *notification.Sen
 	to := strings.Split(req.Email, ",")
 	templ, err := template.ParseFiles("templates/disable_totp.html")
 	if err != nil {
-		logger.FromContext(ctx).ErrorContext(ctx,"parse disable_totp.html failed", "err", err)
+		logger.FromContext(ctx).ErrorContext(ctx, "parse disable_totp.html failed", "err", err)
 		return &notification.SuccessResponse{Successful: false}, nil
 	}
 
 	var rendered bytes.Buffer
 	if err := templ.Execute(&rendered, req); err != nil {
-		logger.FromContext(ctx).ErrorContext(ctx,"execute disable_totp.html failed", "err", err)
+		logger.FromContext(ctx).ErrorContext(ctx, "execute disable_totp.html failed", "err", err)
 		return &notification.SuccessResponse{Successful: false}, nil
 	}
 
 	err = s.sender.Send(to, "Disable TOTP request", rendered.String())
 	if err != nil {
-		logger.FromContext(ctx).ErrorContext(ctx,"send disable totp email failed", "err", err)
+		logger.FromContext(ctx).ErrorContext(ctx, "send disable totp email failed", "err", err)
 		return &notification.SuccessResponse{Successful: false}, nil
 	}
 	return &notification.SuccessResponse{Successful: true}, nil

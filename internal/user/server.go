@@ -163,7 +163,7 @@ func (s *Server) GetEmployees(ctx context.Context, req *userpb.GetEmployeesReque
 
 	employees, err := GetAllUsersFromModel(Employee{}, s, restrictions)
 	if err != nil {
-		logger.FromContext(ctx).ErrorContext(ctx,"error retrieving employees", "err", err)
+		logger.FromContext(ctx).ErrorContext(ctx, "error retrieving employees", "err", err)
 		return nil, status.Error(codes.Internal, "Failed to retrieve employees")
 	}
 
@@ -237,7 +237,7 @@ func (s *Server) GetClients(ctx context.Context, req *userpb.GetClientsRequest) 
 	clients, err := GetAllUsersFromModel(Client{}, s, user_restrictions{"first_name": strings.TrimSpace(req.FirstName), "last_name": strings.TrimSpace(req.LastName), "email": strings.TrimSpace(req.Email)})
 
 	if err != nil {
-		logger.FromContext(ctx).ErrorContext(ctx,"error retrieving clients", "err", err)
+		logger.FromContext(ctx).ErrorContext(ctx, "error retrieving clients", "err", err)
 		return nil, status.Error(codes.Internal, "Failed to retrieve clients")
 	}
 
@@ -272,7 +272,7 @@ func (s *Server) UpdateClient(ctx context.Context, req *userpb.UpdateClientReque
 		field := ref.Field(i)
 		if field.Type() == reflect.TypeFor[string]() {
 			if !field.CanSet() {
-				logger.FromContext(ctx).ErrorContext(ctx,"cannot set the value of struct field")
+				logger.FromContext(ctx).ErrorContext(ctx, "cannot set the value of struct field")
 				// This need not be an error, but it will also probably
 				// never happen
 				return nil, status.Error(codes.Internal, "client update failed")
@@ -741,7 +741,7 @@ func (s *Server) CreateClientAccount(ctx context.Context, req *userpb.CreateClie
 
 	salt, salt_err := generateSalt()
 	if salt_err != nil {
-		logger.FromContext(ctx).ErrorContext(ctx,"error generating salt", "err", salt_err)
+		logger.FromContext(ctx).ErrorContext(ctx, "error generating salt", "err", salt_err)
 		return nil, status.Error(codes.Internal, "Password salting failed")
 	}
 
@@ -753,7 +753,7 @@ func (s *Server) CreateClientAccount(ctx context.Context, req *userpb.CreateClie
 
 	err := create_user_from_model(client, s)
 	if err != nil {
-		logger.FromContext(ctx).ErrorContext(ctx,"client creation failed", "err", err)
+		logger.FromContext(ctx).ErrorContext(ctx, "client creation failed", "err", err)
 		return nil, status.Error(codes.Internal, "Client creation failed")
 	}
 	return &userpb.CreateClientResponse{Valid: true}, nil
@@ -772,14 +772,14 @@ func (s *Server) CreateEmployeeAccount(ctx context.Context, req *userpb.CreateEm
 
 	salt, salt_err := generateSalt()
 	if salt_err != nil {
-		logger.FromContext(ctx).ErrorContext(ctx,"error generating salt", "err", salt_err)
+		logger.FromContext(ctx).ErrorContext(ctx, "error generating salt", "err", salt_err)
 	}
 
 	permissions := make([]Permission, 0, len(req.Permissions))
 	for _, permName := range req.Permissions {
 		var perm Permission
 		if err := s.db_gorm.First(&perm, "name = ?", permName).Error; err != nil {
-			logger.FromContext(ctx).WarnContext(ctx,"permission not found, skipping", "name", permName)
+			logger.FromContext(ctx).WarnContext(ctx, "permission not found, skipping", "name", permName)
 			continue
 		}
 		permissions = append(permissions, perm)
@@ -795,14 +795,14 @@ func (s *Server) CreateEmployeeAccount(ctx context.Context, req *userpb.CreateEm
 	err := create_user_from_model(employee, s)
 
 	if err != nil {
-		logger.FromContext(ctx).ErrorContext(ctx,"employee creation failed", "err", err)
+		logger.FromContext(ctx).ErrorContext(ctx, "employee creation failed", "err", err)
 		return nil, status.Error(codes.Internal, "Employee creation failed")
 	}
 
 	// Re-fetch to get the auto-assigned ID and properly loaded permissions
 	created, err := getUserByAttribute(Employee{}, s.db_gorm, "email", employee.Email)
 	if err != nil {
-		logger.FromContext(ctx).ErrorContext(ctx,"employee created but failed to fetch", "err", err)
+		logger.FromContext(ctx).ErrorContext(ctx, "employee created but failed to fetch", "err", err)
 		return employee.toProtobuf(), nil
 	}
 
@@ -811,7 +811,7 @@ func (s *Server) CreateEmployeeAccount(ctx context.Context, req *userpb.CreateEm
 		Email: req.Email,
 	})
 	if emailErr != nil {
-		logger.FromContext(ctx).ErrorContext(ctx,"employee created but activation email failed", "err", emailErr)
+		logger.FromContext(ctx).ErrorContext(ctx, "employee created but activation email failed", "err", emailErr)
 	}
 
 	return created.toProtobuf(), nil
