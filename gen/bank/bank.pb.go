@@ -1636,9 +1636,9 @@ type Transaction struct {
 	Type            string                 `protobuf:"bytes,2,opt,name=type,proto3" json:"type,omitempty"` // da li je transfer ili placanje
 	FromAccount     string                 `protobuf:"bytes,3,opt,name=from_account,json=fromAccount,proto3" json:"from_account,omitempty"`
 	ToAccount       string                 `protobuf:"bytes,4,opt,name=to_account,json=toAccount,proto3" json:"to_account,omitempty"`
-	InitialAmount   float64                `protobuf:"fixed64,5,opt,name=initial_amount,json=initialAmount,proto3" json:"initial_amount,omitempty"`
-	FinalAmount     float64                `protobuf:"fixed64,6,opt,name=final_amount,json=finalAmount,proto3" json:"final_amount,omitempty"`
-	Fee             float64                `protobuf:"fixed64,7,opt,name=fee,proto3" json:"fee,omitempty"`
+	InitialAmount   int64                  `protobuf:"varint,5,opt,name=initial_amount,json=initialAmount,proto3" json:"initial_amount,omitempty"`
+	FinalAmount     int64                  `protobuf:"varint,6,opt,name=final_amount,json=finalAmount,proto3" json:"final_amount,omitempty"`
+	Fee             int64                  `protobuf:"varint,7,opt,name=fee,proto3" json:"fee,omitempty"`
 	Currency        string                 `protobuf:"bytes,8,opt,name=currency,proto3" json:"currency,omitempty"`
 	PaymentCode     string                 `protobuf:"bytes,9,opt,name=payment_code,json=paymentCode,proto3" json:"payment_code,omitempty"`
 	ReferenceNumber string                 `protobuf:"bytes,10,opt,name=reference_number,json=referenceNumber,proto3" json:"reference_number,omitempty"`
@@ -1712,21 +1712,21 @@ func (x *Transaction) GetToAccount() string {
 	return ""
 }
 
-func (x *Transaction) GetInitialAmount() float64 {
+func (x *Transaction) GetInitialAmount() int64 {
 	if x != nil {
 		return x.InitialAmount
 	}
 	return 0
 }
 
-func (x *Transaction) GetFinalAmount() float64 {
+func (x *Transaction) GetFinalAmount() int64 {
 	if x != nil {
 		return x.FinalAmount
 	}
 	return 0
 }
 
-func (x *Transaction) GetFee() float64 {
+func (x *Transaction) GetFee() int64 {
 	if x != nil {
 		return x.Fee
 	}
@@ -4779,9 +4779,9 @@ const file_bank_bank_proto_rawDesc = "" +
 	"\ffrom_account\x18\x03 \x01(\tR\vfromAccount\x12\x1d\n" +
 	"\n" +
 	"to_account\x18\x04 \x01(\tR\ttoAccount\x12%\n" +
-	"\x0einitial_amount\x18\x05 \x01(\x01R\rinitialAmount\x12!\n" +
-	"\ffinal_amount\x18\x06 \x01(\x01R\vfinalAmount\x12\x10\n" +
-	"\x03fee\x18\a \x01(\x01R\x03fee\x12\x1a\n" +
+	"\x0einitial_amount\x18\x05 \x01(\x03R\rinitialAmount\x12!\n" +
+	"\ffinal_amount\x18\x06 \x01(\x03R\vfinalAmount\x12\x10\n" +
+	"\x03fee\x18\a \x01(\x03R\x03fee\x12\x1a\n" +
 	"\bcurrency\x18\b \x01(\tR\bcurrency\x12!\n" +
 	"\fpayment_code\x18\t \x01(\tR\vpaymentCode\x12)\n" +
 	"\x10reference_number\x18\n" +

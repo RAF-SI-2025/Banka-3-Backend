@@ -17,9 +17,9 @@ type TransactionRow struct {
 	Type            string    `gorm:"column:type"`
 	FromAccount     string    `gorm:"column:from_account"`
 	ToAccount       string    `gorm:"column:to_account"`
-	InitialAmount   float64   `gorm:"column:initial_amount"`
-	FinalAmount     float64   `gorm:"column:final_amount"`
-	Fee             float64   `gorm:"column:fee"`
+	InitialAmount   int64     `gorm:"column:initial_amount"`
+	FinalAmount     int64     `gorm:"column:final_amount"`
+	Fee             int64     `gorm:"column:fee"`
 	Currency        string    `gorm:"column:currency"`
 	PaymentCode     string    `gorm:"column:payment_code"`
 	ReferenceNumber string    `gorm:"column:reference_number"`
@@ -35,31 +35,30 @@ func (s *Server) GetFilteredTransactionsRepo(accNumbers []string, req *bankpb.Ge
 	var results []TransactionRow
 	var total int64
 
-	// Definisanje pod-upita za Payments
+	// 1. Pod-upit za Payments - ispravljen spelling: transaction_code
 	paymentSub := s.db_gorm.Table("payments p").
 		Select(`p.transaction_id AS id, 'payment' AS type, p.from_account, p.to_account, 
                 p.start_amount AS initial_amount, p.end_amount AS final_amount, p.commission AS fee, 
-                c.code AS currency, COALESCE(p.transaction_code::text, '') AS payment_code, 
-                COALESCE(p.call_number, '') AS reference_number, COALESCE(p.reason, '') AS purpose, 
+                a.currency AS currency, p.transaction_code::text AS payment_code, 
+                p.call_number AS reference_number, p.reason AS purpose, 
                 p.status, p.timestamp, p.recipient_id, 0 AS start_currency_id, 0 AS exchange_rate`).
 		Joins("JOIN accounts a ON a.number = p.from_account").
-		Joins("JOIN currencies c ON c.id = a.currency_id").
 		Where("p.from_account IN ? OR p.to_account IN ?", accNumbers, accNumbers)
 
-	// Definisanje pod-upita za Transfers
+	// 2. Pod-upit za Transfers - kastujemo status u tekst zbog unije
 	transferSub := s.db_gorm.Table("transfers t").
 		Select(`t.transaction_id AS id, 'transfer' AS type, t.from_account, t.to_account, 
                 t.start_amount AS initial_amount, t.end_amount AS final_amount, t.commission AS fee, 
-                c.code AS currency, '' AS payment_code, '' AS reference_number, '' AS purpose, 
-                t.status, t.timestamp, 0 AS recipient_id, t.start_currency_id, t.exchange_rate`).
-		Joins("JOIN currencies c ON c.id = t.start_currency_id").
+                a.currency AS currency, '' AS payment_code, '' AS reference_number, '' AS purpose, 
+                t.status::text AS status, t.timestamp, 0 AS recipient_id, t.start_currency_id, t.exchange_rate`).
+		Joins("JOIN accounts a ON a.number = t.from_account").
 		Where("t.from_account IN ? OR t.to_account IN ?", accNumbers, accNumbers)
 
-	// Kreiranje baznog upita nad unijom
+	// 3. Kreiranje unije
 	unionQuery := s.db_gorm.Raw("? UNION ALL ?", paymentSub, transferSub)
 	query := s.db_gorm.Table("(?) AS tx", unionQuery)
 
-	// Primena filtera iz Request-a
+	// 4. Primena svih filtera iz Request-a
 	if req.AccountNumber != "" {
 		query = query.Where("(tx.from_account = ? OR tx.to_account = ?)", req.AccountNumber, req.AccountNumber)
 	}
@@ -79,10 +78,12 @@ func (s *Server) GetFilteredTransactionsRepo(accNumbers []string, req *bankpb.Ge
 		query = query.Where("tx.status = ?", req.Status)
 	}
 
-	// Count i Paginacija
-	query.Count(&total)
+	// 5. Count total pre paginacije
+	if err := query.Count(&total).Error; err != nil {
+		return nil, 0, err
+	}
 
-	// Default sortiranje ako nije prosleđeno
+	// 6. Logika sortiranja
 	sortBy := "timestamp"
 	if req.SortBy != "" {
 		sortBy = req.SortBy
@@ -92,24 +93,41 @@ func (s *Server) GetFilteredTransactionsRepo(accNumbers []string, req *bankpb.Ge
 		sortOrder = req.SortOrder
 	}
 
+	// 7. Paginacija i finalno izvršavanje
 	offset := (req.Page - 1) * req.PageSize
 	err := query.Order(fmt.Sprintf("tx.%s %s", sortBy, sortOrder)).
-		Limit(int(req.PageSize)).Offset(int(offset)).Scan(&results).Error
+		Limit(int(req.PageSize)).
+		Offset(int(offset)).
+		Scan(&results).Error
 
 	return results, total, err
 }
 
-// GetSingleTransactionRepo vraća jednu transakciju iz specifične tabele
 func (s *Server) GetSingleTransactionRepo(id int64, txType string) (TransactionRow, error) {
 	var row TransactionRow
-	table := "payments"
-	if txType == "transfer" {
-		table = "transfers"
+
+	if txType == "payment" {
+		err := s.db_gorm.Table("payments p").
+			Select(`p.transaction_id AS id, 'payment' AS type, p.from_account, p.to_account, 
+                    p.start_amount AS initial_amount, p.end_amount AS final_amount, p.commission AS fee, 
+                    a.currency AS currency, p.transaction_code::text AS payment_code, 
+                    p.call_number AS reference_number, p.reason AS purpose, 
+                    p.status, p.timestamp, p.recipient_id, 0 AS start_currency_id, 0 AS exchange_rate`).
+			Joins("JOIN accounts a ON a.number = p.from_account").
+			Where("p.transaction_id = ?", id).
+			First(&row).Error
+		return row, err
 	}
 
-	err := s.db_gorm.Table(table).
-		Select("*, transaction_id as id").
-		Where("transaction_id = ?", id).
+	// Ako je transfer
+	err := s.db_gorm.Table("transfers t").
+		Select(`t.transaction_id AS id, 'transfer' AS type, t.from_account, t.to_account, 
+                t.start_amount AS initial_amount, t.end_amount AS final_amount, t.commission AS fee, 
+                a.currency AS currency, '' AS payment_code, '' AS reference_number, '' AS purpose, 
+                t.status::text AS status, t.timestamp, 0 AS recipient_id, 
+                t.start_currency_id, t.exchange_rate`).
+		Joins("JOIN accounts a ON a.number = t.from_account").
+		Where("t.transaction_id = ?", id).
 		First(&row).Error
 
 	return row, err

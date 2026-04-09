@@ -57,7 +57,7 @@ func (s *Server) GetTransactions(ctx context.Context, req *bankpb.GetTransaction
 			ReferenceNumber: r.ReferenceNumber,
 			Purpose:         r.Purpose,
 			Status:          r.Status,
-			Timestamp:       r.Timestamp.Format(time.RFC3339), // Proto traži string
+			Timestamp:       r.Timestamp.Format(time.RFC3339),
 			RecipientId:     r.RecipientID,
 			StartCurrencyId: r.StartCurrencyID,
 			ExchangeRate:    r.ExchangeRate,
@@ -142,7 +142,7 @@ func (s *Server) GenerateTransactionPdf(ctx context.Context, req *bankpb.Generat
 		fmt.Sprintf("ID: %d", t.Id),
 		fmt.Sprintf("Sa računa: %s", t.FromAccount),
 		fmt.Sprintf("Na račun: %s", t.ToAccount),
-		fmt.Sprintf("Iznos: %.2f", t.InitialAmount),
+		fmt.Sprintf("Iznos: %d", t.InitialAmount),
 		fmt.Sprintf("Status: %s", t.Status),
 		fmt.Sprintf("Datum: %s", t.Timestamp),
 	}

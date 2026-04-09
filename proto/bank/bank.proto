@@ -205,9 +205,9 @@ message Transaction {
   string type = 2; // da li je transfer ili placanje
   string from_account = 3;
   string to_account = 4;
-  double initial_amount = 5;
-  double final_amount = 6;
-  double fee = 7;
+  int64 initial_amount = 5;
+  int64 final_amount = 6;
+  int64 fee = 7;
   string currency = 8;
   string payment_code = 9;
   string reference_number = 10;
