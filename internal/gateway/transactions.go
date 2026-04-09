@@ -21,44 +21,37 @@ func (s *Server) GetTransactions(c *gin.Context) {
 		return
 	}
 
-	email := c.GetString("email")
-
 	ctx, cancel := context.WithTimeout(c.Request.Context(), 5*time.Second)
 	defer cancel()
 
 	ctx = metadata.NewOutgoingContext(ctx, metadata.Pairs(
-		"user-email", email,
+		"user-email", c.GetString("email"),
 	))
 
-	resp, err := s.BankClient.ListClientTransactions(ctx, &bankpb.ListClientTranasctionsRequest{
+	resp, err := s.BankClient.GetTransactions(ctx, &bankpb.GetTransactionsRequest{
 		AccountNumber: query.AccountNumber,
-		Date:          query.Date,
-		Amount:        int64(query.Amount),
+		DateFrom:      query.DateFrom,
+		DateTo:        query.DateTo,
+		AmountFrom:    query.AmountFrom,
+		AmountTo:      query.AmountTo,
 		Status:        query.Status,
+		Page:          query.Page,
+		PageSize:      query.PageSize,
+		SortBy:        query.SortBy,
+		SortOrder:     query.SortOrder,
 	})
 	if err != nil {
 		writeGRPCError(c, err)
 		return
 	}
 
-	transactions := make([]gin.H, 0, len(resp.Transactions))
-	for _, t := range resp.Transactions {
-		transactions = append(transactions, gin.H{
-			"from_account":     t.FromAccount,
-			"to_account":       t.ToAccount,
-			"initial_amount":   t.InitialAmount,
-			"final_amount":     t.FinalAmount,
-			"fee":              t.Fee,
-			"currency":         t.Currency,
-			"payment_code":     t.PaymentCode,
-			"reference_number": t.ReferenceNumber,
-			"purpose":          t.Purpose,
-			"status":           t.Status,
-			"timestamp":        time.Unix(t.Timestamp, 0).Format(time.RFC3339),
-		})
-	}
-
-	c.JSON(http.StatusOK, transactions)
+	c.JSON(http.StatusOK, gin.H{
+		"transactions": resp.Transactions,
+		"page":         resp.Page,
+		"page_size":    resp.PageSize,
+		"total":        resp.Total,
+		"total_pages":  resp.TotalPages,
+	})
 }
 
 func (s *Server) GetTransactionByID(c *gin.Context) {
@@ -73,42 +66,23 @@ func (s *Server) GetTransactionByID(c *gin.Context) {
 		return
 	}
 
-	clientID, ok := s.getAuthenticatedClientID(c)
-	if !ok {
-		return
-	}
-
 	ctx, cancel := context.WithTimeout(c.Request.Context(), 5*time.Second)
 	defer cancel()
 
+	ctx = metadata.NewOutgoingContext(ctx, metadata.Pairs(
+		"user-email", c.GetString("email"),
+	))
+
 	resp, err := s.BankClient.GetTransactionById(ctx, &bankpb.GetTransactionByIdRequest{
-		ClientId: clientID,
-		Id:       uri.ID,
-		Type:     query.Type,
+		Id:   uri.ID,
+		Type: query.Type,
 	})
 	if err != nil {
 		writeGRPCError(c, err)
 		return
 	}
 
-	t := resp.Transaction
-	c.JSON(http.StatusOK, gin.H{
-		"id":                t.Id,
-		"type":              t.Type,
-		"from_account":      t.FromAccount,
-		"to_account":        t.ToAccount,
-		"start_amount":      t.StartAmount,
-		"end_amount":        t.EndAmount,
-		"commission":        t.Commission,
-		"status":            t.Status,
-		"timestamp":         t.Timestamp,
-		"recipient_id":      t.RecipientId,
-		"transaction_code":  t.TransactionCode,
-		"call_number":       t.CallNumber,
-		"reason":            t.Reason,
-		"start_currency_id": t.StartCurrencyId,
-		"exchange_rate":     t.ExchangeRate,
-	})
+	c.JSON(http.StatusOK, resp.Transaction)
 }
 
 func (s *Server) GenerateTransactionPDF(c *gin.Context) {
@@ -123,18 +97,16 @@ func (s *Server) GenerateTransactionPDF(c *gin.Context) {
 		return
 	}
 
-	clientID, ok := s.getAuthenticatedClientID(c)
-	if !ok {
-		return
-	}
-
 	ctx, cancel := context.WithTimeout(c.Request.Context(), 10*time.Second)
 	defer cancel()
 
+	ctx = metadata.NewOutgoingContext(ctx, metadata.Pairs(
+		"user-email", c.GetString("email"),
+	))
+
 	resp, err := s.BankClient.GenerateTransactionPdf(ctx, &bankpb.GenerateTransactionPdfRequest{
-		ClientId: clientID,
-		Id:       uri.ID,
-		Type:     query.Type,
+		Id:   uri.ID,
+		Type: query.Type,
 	})
 	if err != nil {
 		writeGRPCError(c, err)
