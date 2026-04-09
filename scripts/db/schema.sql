@@ -83,6 +83,26 @@ CREATE TABLE IF NOT EXISTS currencies (
     UNIQUE(label)
 );
 
+CREATE TABLE IF NOT EXISTS activity_codes (
+    id BIGSERIAL PRIMARY KEY,
+    code VARCHAR(7) NOT NULL,
+    sector VARCHAR(127) NOT NULL,
+    branch VARCHAR(255) NOT NULL,
+    UNIQUE(code)
+);
+
+CREATE TABLE IF NOT EXISTS companies (
+    id                  BIGSERIAL        PRIMARY KEY,
+    registered_id       BIGINT          NOT NULL,
+    name                VARCHAR(127)    NOT NULL,
+    tax_code            BIGINT          NOT NULL,
+    activity_code_id    BIGINT          REFERENCES activity_codes(id) ON UPDATE CASCADE ON DELETE RESTRICT,
+    address             VARCHAR(255)    NOT NULL,
+    owner_id            BIGINT          NOT NULL REFERENCES clients(id) ON UPDATE CASCADE ON DELETE RESTRICT,
+    UNIQUE(registered_id),
+    UNIQUE(tax_code)
+);
+
 CREATE TYPE owner_type AS ENUM ('personal', 'business');
 CREATE TYPE account_type AS ENUM ('checking', 'foreign');
 
@@ -106,26 +126,6 @@ CREATE TABLE IF NOT EXISTS accounts (
     daily_expenditure   BIGINT,
     monthly_expenditure BIGINT,
     UNIQUE(number)
-);
-
-CREATE TABLE IF NOT EXISTS activity_codes (
-    id BIGSERIAL PRIMARY KEY,
-    code VARCHAR(7) NOT NULL,
-    sector VARCHAR(127) NOT NULL,
-    branch VARCHAR(255) NOT NULL,
-    UNIQUE(code)
-);
-
-CREATE TABLE IF NOT EXISTS companies (
-    id                  BIGSERIAL        PRIMARY KEY,
-    registered_id       BIGINT          NOT NULL,
-    name                VARCHAR(127)    NOT NULL,
-    tax_code            BIGINT          NOT NULL,
-    activity_code_id    BIGINT          REFERENCES activity_codes(id) ON UPDATE CASCADE ON DELETE RESTRICT,
-    address             VARCHAR(255)    NOT NULL,
-    owner_id            BIGINT          NOT NULL REFERENCES clients(id) ON UPDATE CASCADE ON DELETE RESTRICT,
-    UNIQUE(registered_id),
-    UNIQUE(tax_code)
 );
 
 CREATE TYPE card_type AS ENUM ('debit', 'credit');
