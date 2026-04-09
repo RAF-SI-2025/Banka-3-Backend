@@ -12,6 +12,7 @@ import (
 	bankpb "github.com/RAF-SI-2025/Banka-3-Backend/gen/bank"
 	"github.com/RAF-SI-2025/Banka-3-Backend/gen/exchange"
 	"github.com/jackc/pgx/v5/pgconn"
+	"gorm.io/gorm"
 )
 
 var ErrCompanyNotFound = errors.New("company not found")
@@ -1367,4 +1368,19 @@ func (s *Server) getAllLoans(loanType, accountNumber, loanStatus string) ([]loan
 
 	log.Printf("[getAllLoans] SUCCESS: Retrieved %d loans", len(loans))
 	return loans, nil
+}
+
+// GetInternalAccountByCurrency gets the internal account owned by the the bank for a given currency label.
+func (s *Server) GetInternalAccountByCurrency(tx *gorm.DB, currencyLabel string) (*Account, error) {
+	var account Account
+	systemEmail := "system@banka3.rs"
+
+	err := tx.Joins("JOIN clients ON clients.id = accounts.owner").
+		Where("clients.email = ? AND accounts.currency = ?", systemEmail, currencyLabel).
+		First(&account).Error
+
+	if err != nil {
+		return nil, err
+	}
+	return &account, nil
 }
