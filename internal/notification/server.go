@@ -247,7 +247,27 @@ func (s *Server) SendCardCreatedEmail(_ context.Context, req *notification.CardC
 		return &notification.SuccessResponse{Successful: false}, nil
 	}
 
-	err = s.sender.Send(to, "Vaša Banka 3 kartica je spremna!", rendered.String())
+	err = s.sender.Send(to, "VaÅ¡a Banka 3 kartica je spremna!", rendered.String())
+	if err != nil {
+		return &notification.SuccessResponse{Successful: false}, nil
+	}
+
+	return &notification.SuccessResponse{Successful: true}, nil
+}
+
+func (s *Server) SendLoanRequestCreatedEmail(_ context.Context, req *notification.LoanRequestCreatedMailRequest) (*notification.SuccessResponse, error) {
+	to := strings.Split(req.ToAddr, ",")
+	templ, err := template.ParseFiles("templates/loan_request_created.html")
+	if err != nil {
+		return &notification.SuccessResponse{Successful: false}, nil
+	}
+
+	var rendered bytes.Buffer
+	if err := templ.Execute(&rendered, req); err != nil {
+		return &notification.SuccessResponse{Successful: false}, nil
+	}
+
+	err = s.sender.Send(to, "Zahtev za kredit je primljen - Banka 3", rendered.String())
 	if err != nil {
 		return &notification.SuccessResponse{Successful: false}, nil
 	}
@@ -268,7 +288,7 @@ func (s *Server) SendCardBlockedEmail(_ context.Context, req *notification.CardB
 		return &notification.SuccessResponse{Successful: false}, nil
 	}
 
-	subject := "Status Vaše kartice je ažuriran"
+	subject := "Status VaÅ¡e kartice je aÅ¾uriran"
 	err = s.sender.Send(to, subject, rendered.String())
 	if err != nil {
 		return &notification.SuccessResponse{Successful: false}, nil

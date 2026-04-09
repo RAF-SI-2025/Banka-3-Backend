@@ -168,3 +168,34 @@ func TestSendCardCreatedEmail_Fail(t *testing.T) {
 		t.Errorf("expected Successful=false, got true")
 	}
 }
+
+func TestSendLoanRequestCreatedEmail_Success(t *testing.T) {
+	createFakeTemplate("test-templates/loan_request_created.html", t)
+	defer cleanupTemplates(t)
+
+	mock := &MockSender{ShouldFail: false}
+	server := &Server{sender: mock}
+
+	req := &notification.LoanRequestCreatedMailRequest{ToAddr: "test@test.com"}
+	resp, err := server.SendLoanRequestCreatedEmail(context.Background(), req)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if !resp.Successful {
+		t.Errorf("expected Successful=true, got false")
+	}
+}
+
+func TestSendLoanRequestCreatedEmail_Fail(t *testing.T) {
+	createFakeTemplate("test-templates/loan_request_created.html", t)
+	defer cleanupTemplates(t)
+
+	mock := &MockSender{ShouldFail: true}
+	server := &Server{sender: mock}
+
+	req := &notification.LoanRequestCreatedMailRequest{ToAddr: "test@test.com"}
+	resp, _ := server.SendLoanRequestCreatedEmail(context.Background(), req)
+	if resp.Successful {
+		t.Errorf("expected Successful=false, got true")
+	}
+}

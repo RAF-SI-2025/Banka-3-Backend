@@ -12,6 +12,7 @@ service NotificationService {
 
   rpc SendCardConfirmationEmail(CardConfirmationMailRequest) returns (SuccessResponse);
   rpc SendCardCreatedEmail(CardCreatedMailRequest) returns (SuccessResponse);
+  rpc SendLoanRequestCreatedEmail(LoanRequestCreatedMailRequest) returns (SuccessResponse);
   rpc SendCardBlockedEmail(CardBlockedReqest) returns (SuccessResponse);
 
   rpc SendLoanPaymentFailedEmail(LoanPaymentFailedMailRequest) returns (SuccessResponse);
@@ -52,6 +53,10 @@ message CardConfirmationMailRequest {
 }
 
 message CardCreatedMailRequest {
+  string to_addr = 1;
+}
+
+message LoanRequestCreatedMailRequest {
   string to_addr = 1;
 }
 

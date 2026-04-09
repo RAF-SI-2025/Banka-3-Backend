@@ -96,3 +96,21 @@ func TestSendCardCreatedEmailSMTPFailureReturnsUnsuccessful(t *testing.T) {
 		t.Fatalf("expected unsuccessful=false due to smtp failure")
 	}
 }
+
+func TestSendLoanRequestCreatedEmailSMTPFailureReturnsUnsuccessful(t *testing.T) {
+	setSMTPTestEnv(t)
+
+	server := &Server{sender: &failingSender{}}
+	resp, err := server.SendLoanRequestCreatedEmail(context.Background(), &notificationpb.LoanRequestCreatedMailRequest{
+		ToAddr: "receiver@example.com",
+	})
+	if err != nil {
+		t.Fatalf("SendLoanRequestCreatedEmail returned unexpected error: %v", err)
+	}
+	if resp == nil {
+		t.Fatalf("expected response, got nil")
+	}
+	if resp.Successful {
+		t.Fatalf("expected unsuccessful=false due to smtp failure")
+	}
+}

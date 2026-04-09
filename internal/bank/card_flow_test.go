@@ -8,10 +8,41 @@ import (
 
 	"github.com/DATA-DOG/go-sqlmock"
 	bankpb "github.com/RAF-SI-2025/Banka-3-Backend/gen/bank"
+	notificationpb "github.com/RAF-SI-2025/Banka-3-Backend/gen/notification"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/metadata"
 	"google.golang.org/grpc/status"
 )
+
+type testNotificationServer struct {
+	notificationpb.UnimplementedNotificationServiceServer
+	loanRequestCreatedCalls int
+	loanRequestCreatedResp  *notificationpb.SuccessResponse
+	loanRequestCreatedErr   error
+}
+
+func (s *testNotificationServer) SendCardCreatedEmail(_ context.Context, _ *notificationpb.CardCreatedMailRequest) (*notificationpb.SuccessResponse, error) {
+	return &notificationpb.SuccessResponse{Successful: true}, nil
+}
+
+func (s *testNotificationServer) SendCardConfirmationEmail(_ context.Context, _ *notificationpb.CardConfirmationMailRequest) (*notificationpb.SuccessResponse, error) {
+	return &notificationpb.SuccessResponse{Successful: true}, nil
+}
+
+func (s *testNotificationServer) SendLoanRequestCreatedEmail(_ context.Context, _ *notificationpb.LoanRequestCreatedMailRequest) (*notificationpb.SuccessResponse, error) {
+	s.loanRequestCreatedCalls++
+	if s.loanRequestCreatedErr != nil {
+		return nil, s.loanRequestCreatedErr
+	}
+	if s.loanRequestCreatedResp != nil {
+		return s.loanRequestCreatedResp, nil
+	}
+	return &notificationpb.SuccessResponse{Successful: true}, nil
+}
+
+func (s *testNotificationServer) SendCardBlockedEmail(_ context.Context, _ *notificationpb.CardBlockedReqest) (*notificationpb.SuccessResponse, error) {
+	return &notificationpb.SuccessResponse{Successful: true}, nil
+}
 
 func TestCreateCardSuccess(t *testing.T) {
 	server, mock, db := newTestServer(t)

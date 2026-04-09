@@ -25,6 +25,7 @@ const (
 	NotificationService_SendInitialPasswordSetEmail_FullMethodName  = "/notification.NotificationService/SendInitialPasswordSetEmail"
 	NotificationService_SendCardConfirmationEmail_FullMethodName    = "/notification.NotificationService/SendCardConfirmationEmail"
 	NotificationService_SendCardCreatedEmail_FullMethodName         = "/notification.NotificationService/SendCardCreatedEmail"
+	NotificationService_SendLoanRequestCreatedEmail_FullMethodName  = "/notification.NotificationService/SendLoanRequestCreatedEmail"
 	NotificationService_SendCardBlockedEmail_FullMethodName         = "/notification.NotificationService/SendCardBlockedEmail"
 	NotificationService_SendLoanPaymentFailedEmail_FullMethodName   = "/notification.NotificationService/SendLoanPaymentFailedEmail"
 	NotificationService_SendTOTPDisableEmail_FullMethodName         = "/notification.NotificationService/SendTOTPDisableEmail"
@@ -41,6 +42,7 @@ type NotificationServiceClient interface {
 	SendInitialPasswordSetEmail(ctx context.Context, in *PasswordLinkMailRequest, opts ...grpc.CallOption) (*SuccessResponse, error)
 	SendCardConfirmationEmail(ctx context.Context, in *CardConfirmationMailRequest, opts ...grpc.CallOption) (*SuccessResponse, error)
 	SendCardCreatedEmail(ctx context.Context, in *CardCreatedMailRequest, opts ...grpc.CallOption) (*SuccessResponse, error)
+	SendLoanRequestCreatedEmail(ctx context.Context, in *LoanRequestCreatedMailRequest, opts ...grpc.CallOption) (*SuccessResponse, error)
 	SendCardBlockedEmail(ctx context.Context, in *CardBlockedReqest, opts ...grpc.CallOption) (*SuccessResponse, error)
 	SendLoanPaymentFailedEmail(ctx context.Context, in *LoanPaymentFailedMailRequest, opts ...grpc.CallOption) (*SuccessResponse, error)
 	SendTOTPDisableEmail(ctx context.Context, in *SendTOTPDisableEmailRequest, opts ...grpc.CallOption) (*SuccessResponse, error)
@@ -115,6 +117,16 @@ func (c *notificationServiceClient) SendCardCreatedEmail(ctx context.Context, in
 	return out, nil
 }
 
+func (c *notificationServiceClient) SendLoanRequestCreatedEmail(ctx context.Context, in *LoanRequestCreatedMailRequest, opts ...grpc.CallOption) (*SuccessResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(SuccessResponse)
+	err := c.cc.Invoke(ctx, NotificationService_SendLoanRequestCreatedEmail_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
 func (c *notificationServiceClient) SendCardBlockedEmail(ctx context.Context, in *CardBlockedReqest, opts ...grpc.CallOption) (*SuccessResponse, error) {
 	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
 	out := new(SuccessResponse)
@@ -165,6 +177,7 @@ type NotificationServiceServer interface {
 	SendInitialPasswordSetEmail(context.Context, *PasswordLinkMailRequest) (*SuccessResponse, error)
 	SendCardConfirmationEmail(context.Context, *CardConfirmationMailRequest) (*SuccessResponse, error)
 	SendCardCreatedEmail(context.Context, *CardCreatedMailRequest) (*SuccessResponse, error)
+	SendLoanRequestCreatedEmail(context.Context, *LoanRequestCreatedMailRequest) (*SuccessResponse, error)
 	SendCardBlockedEmail(context.Context, *CardBlockedReqest) (*SuccessResponse, error)
 	SendLoanPaymentFailedEmail(context.Context, *LoanPaymentFailedMailRequest) (*SuccessResponse, error)
 	SendTOTPDisableEmail(context.Context, *SendTOTPDisableEmailRequest) (*SuccessResponse, error)
@@ -196,6 +209,9 @@ func (UnimplementedNotificationServiceServer) SendCardConfirmationEmail(context.
 }
 func (UnimplementedNotificationServiceServer) SendCardCreatedEmail(context.Context, *CardCreatedMailRequest) (*SuccessResponse, error) {
 	return nil, status.Error(codes.Unimplemented, "method SendCardCreatedEmail not implemented")
+}
+func (UnimplementedNotificationServiceServer) SendLoanRequestCreatedEmail(context.Context, *LoanRequestCreatedMailRequest) (*SuccessResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method SendLoanRequestCreatedEmail not implemented")
 }
 func (UnimplementedNotificationServiceServer) SendCardBlockedEmail(context.Context, *CardBlockedReqest) (*SuccessResponse, error) {
 	return nil, status.Error(codes.Unimplemented, "method SendCardBlockedEmail not implemented")
@@ -338,6 +354,24 @@ func _NotificationService_SendCardCreatedEmail_Handler(srv interface{}, ctx cont
 	return interceptor(ctx, in, info, handler)
 }
 
+func _NotificationService_SendLoanRequestCreatedEmail_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(LoanRequestCreatedMailRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(NotificationServiceServer).SendLoanRequestCreatedEmail(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: NotificationService_SendLoanRequestCreatedEmail_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(NotificationServiceServer).SendLoanRequestCreatedEmail(ctx, req.(*LoanRequestCreatedMailRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
 func _NotificationService_SendCardBlockedEmail_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
 	in := new(CardBlockedReqest)
 	if err := dec(in); err != nil {
@@ -440,6 +474,10 @@ var NotificationService_ServiceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "SendCardCreatedEmail",
 			Handler:    _NotificationService_SendCardCreatedEmail_Handler,
+		},
+		{
+			MethodName: "SendLoanRequestCreatedEmail",
+			Handler:    _NotificationService_SendLoanRequestCreatedEmail_Handler,
 		},
 		{
 			MethodName: "SendCardBlockedEmail",

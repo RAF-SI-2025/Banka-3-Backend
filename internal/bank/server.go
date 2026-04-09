@@ -36,21 +36,12 @@ type Server struct {
 	UserService         userpb.UserServiceClient
 }
 
-func NewServer(database *sql.DB, gorm_db *gorm.DB) (*Server, error) {
+func NewServer(database *sql.DB, gorm_db *gorm.DB, notificationClient notificationpb.NotificationServiceClient) (*Server, error) {
 	exchangeAddr := os.Getenv("EXCHANGE_GRPC_ADDR")
 	if exchangeAddr == "" {
 		exchangeAddr = "exchange:50051"
 	}
 	exchangeConn, err := grpc.NewClient(exchangeAddr, grpc.WithTransportCredentials(insecure.NewCredentials()))
-	if err != nil {
-		return nil, err
-	}
-
-	notificationAddr := os.Getenv("NOTIFICATION_GRPC_ADDR")
-	if notificationAddr == "" {
-		notificationAddr = "notification:50051"
-	}
-	notificationConn, err := grpc.NewClient(notificationAddr, grpc.WithTransportCredentials(insecure.NewCredentials()))
 	if err != nil {
 		return nil, err
 	}
@@ -68,7 +59,7 @@ func NewServer(database *sql.DB, gorm_db *gorm.DB) (*Server, error) {
 		database:            database,
 		db_gorm:             gorm_db,
 		ExchangeService:     exchangepb.NewExchangeServiceClient(exchangeConn),
-		NotificationService: notificationpb.NewNotificationServiceClient(notificationConn),
+		NotificationService: notificationClient,
 		UserService:         userpb.NewUserServiceClient(userConn),
 	}, nil
 }
@@ -1346,7 +1337,7 @@ func (s *Server) GetLoanByNumber(_ context.Context, req *bankpb.GetLoanByNumberR
 	return loanViewToProto(loan), nil
 }
 
-func (s *Server) CreateLoanRequest(_ context.Context, req *bankpb.CreateLoanRequestRequest) (*bankpb.CreateLoanRequestResponse, error) {
+func (s *Server) CreateLoanRequest(ctx context.Context, req *bankpb.CreateLoanRequestRequest) (*bankpb.CreateLoanRequestResponse, error) {
 	clientEmail := strings.TrimSpace(req.ClientEmail)
 	if clientEmail == "" {
 		return nil, status.Error(codes.Unauthenticated, "client email required")
@@ -1422,6 +1413,8 @@ func (s *Server) CreateLoanRequest(_ context.Context, req *bankpb.CreateLoanRequ
 	if err := s.createLoanRequest(loanRequest); err != nil {
 		return nil, status.Error(codes.Internal, "failed to create loan request")
 	}
+
+	s.sendLoanRequestCreatedEmail(ctx, clientEmail)
 
 	return &bankpb.CreateLoanRequestResponse{}, nil
 }

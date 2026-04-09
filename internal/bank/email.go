@@ -60,6 +60,29 @@ func (s *Server) sendCardConfirmationEmail(ctx context.Context, email string, li
 	return nil
 }
 
+func (s *Server) sendLoanRequestCreatedEmail(ctx context.Context, email string) {
+	if s.NotificationService == nil {
+		log.Printf("[NotificationClient] WARNING: Notification client is not configured, skipping LoanRequestCreated email for %s", email)
+		return
+	}
+
+	log.Printf("[NotificationClient] Attempting to send LoanRequestCreated email to: %s", email)
+
+	resp, err := s.NotificationService.SendLoanRequestCreatedEmail(ctx, &notificationpb.LoanRequestCreatedMailRequest{
+		ToAddr: email,
+	})
+	if err != nil {
+		log.Printf("[NotificationClient] ERROR: Failed to call SendLoanRequestCreatedEmail for %s: %v", email, err)
+		return
+	}
+	if !resp.Successful {
+		log.Printf("[NotificationClient] ERROR: Notification service reported unsuccessful LoanRequestCreated email for %s", email)
+		return
+	}
+
+	log.Printf("[NotificationClient] SUCCESS: LoanRequestCreated email sent to %s", email)
+}
+
 func (s *Server) sendCardBlockedEmail(ctx context.Context, email string, isBlocked bool) error {
 	log.Printf("[NotificationClient] Sending CardBlocked email to: %s (Status: %v)", email, isBlocked)
 
