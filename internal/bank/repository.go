@@ -6,7 +6,6 @@ import (
 	"database/sql"
 	"errors"
 	"fmt"
-	"log"
 	"math"
 	"math/big"
 	"strings"
@@ -14,6 +13,7 @@ import (
 
 	bankpb "github.com/RAF-SI-2025/Banka-3-Backend/gen/bank"
 	"github.com/RAF-SI-2025/Banka-3-Backend/gen/exchange"
+	"github.com/RAF-SI-2025/Banka-3-Backend/pkg/logger"
 	"github.com/jackc/pgx/v5/pgconn"
 )
 
@@ -97,7 +97,7 @@ func scanTransfer(scanner interface {
 		&transfer.Timestamp,
 	)
 	if err != nil {
-		log.Println("error when scanning transfer: ", err)
+		logger.L().Error("scanning transfer failed", "err", err)
 		return nil, err
 	}
 	if exchangeRate.Valid {
@@ -333,7 +333,7 @@ func (s *Server) GetCardsRecords() ([]*Card, error) {
 	defer func(rows *sql.Rows) {
 		err := rows.Close()
 		if err != nil {
-			log.Printf("[ERROR] closing rows: %v", err)
+			logger.L().Error("closing rows failed", "err", err)
 		}
 	}(rows)
 
@@ -784,11 +784,11 @@ func (s *Server) getLoansForClient(clientEmail string, loanType string, accountN
 		Order("loans.amount DESC").
 		Scan(&loans).Error
 	if err != nil {
-		log.Printf("[getLoansForClient] ERROR executing query for client %s: %v", clientEmail, err)
+		logger.L().Error("getLoansForClient query failed", "client", clientEmail, "err", err)
 		return nil, err
 	}
 
-	log.Printf("[getLoansForClient] SUCCESS: Retrieved %d loans for client %s", len(loans), clientEmail)
+	logger.L().Info("getLoansForClient ok", "client", clientEmail, "count", len(loans))
 	return loans, nil
 }
 
@@ -1280,8 +1280,7 @@ func (s *Server) GetTransferHistory(clientEmail string, page, pageSize int32) (*
 	}
 	defer func() {
 		if err := rows.Close(); err != nil {
-			log.Println("bank/server.go row close failed (GetTransferHistory)")
-			log.Println("rows close failed:", err)
+			logger.L().Error("GetTransferHistory rows close failed", "err", err)
 		}
 	}()
 
@@ -1309,7 +1308,7 @@ func (s *Server) GetTransferHistory(clientEmail string, page, pageSize int32) (*
 	}
 
 	if err := rows.Err(); err != nil {
-		log.Println("bank/server.go got some error in rows (GetTransferHistory)")
+		logger.L().Error("GetTransferHistory rows error")
 		return nil, err
 	}
 
@@ -1484,10 +1483,10 @@ func (s *Server) getAllLoans(loanType, accountNumber, loanStatus string) ([]loan
 		Order("accounts.number").
 		Scan(&loans).Error
 	if err != nil {
-		log.Printf("[getAllLoans] ERROR executing query: %v", err)
+		logger.L().Error("getAllLoans query failed", "err", err)
 		return nil, err
 	}
 
-	log.Printf("[getAllLoans] SUCCESS: Retrieved %d loans", len(loans))
+	logger.L().Info("getAllLoans ok", "count", len(loans))
 	return loans, nil
 }

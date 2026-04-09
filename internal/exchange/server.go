@@ -5,12 +5,12 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
-	"log"
 	"net/http"
 	"os"
 	"time"
 
 	exchangepb "github.com/RAF-SI-2025/Banka-3-Backend/gen/exchange"
+	"github.com/RAF-SI-2025/Banka-3-Backend/pkg/logger"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
 	"gorm.io/gorm"
@@ -28,7 +28,7 @@ func NewServer(gorm_db *gorm.DB) *Server {
 }
 
 func (s *Server) fetchAndStoreRates() error {
-	log.Println("[ExchangeService] Starting fetchAndStoreRates...")
+	logger.L().Info("fetching and storing exchange rates")
 
 	apiKey := os.Getenv("EXCHANGE_RATE_API_KEY")
 	if apiKey == "" || apiKey == "YOUR_KEY" {
@@ -77,9 +77,9 @@ func (s *Server) GetExchangeRates(_ context.Context, _ *exchangepb.ExchangeRateL
 	}
 
 	if len(rates) == 0 || time.Now().After(rates[0].ValidUntil) {
-		log.Printf("[ExchangeService] Rates expired or missing. Refreshing...")
+		logger.L().Info("rates expired or missing, refreshing")
 		if err := s.fetchAndStoreRates(); err != nil {
-			log.Printf("[ExchangeService] Refresh failed: %v", err)
+			logger.L().Error("refresh failed", "err", err)
 		}
 		rates, _ = s.GetRatesRecord()
 	}

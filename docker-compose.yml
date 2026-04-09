@@ -42,6 +42,8 @@ services:
       DATABASE_URL: "postgres://${POSTGRES_USER}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB}?sslmode=disable"
       GRPC_PORT: "50051"
       NOTIFICATION_GRPC_ADDR: ${NOTIFICATION_GRPC_ADDR:-notification:50051}
+      LOG_LEVEL: ${LOG_LEVEL:-info}
+      LOG_FORMAT: ${LOG_FORMAT:-text}
     depends_on:
       postgres:
         condition: service_healthy
@@ -58,6 +60,8 @@ services:
       DATABASE_URL: "postgres://${POSTGRES_USER}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB}?sslmode=disable"
       GRPC_PORT: "50051"
       EXCHANGE_RATE_API_KEY: ${EXCHANGE_RATE_API_KEY}
+      LOG_LEVEL: ${LOG_LEVEL:-info}
+      LOG_FORMAT: ${LOG_FORMAT:-text}
     depends_on:
       postgres:
         condition: service_healthy
@@ -81,6 +85,8 @@ services:
       REDIS_ADDR: "redis:6379"
       REDIS_PASSWORD: ${REDIS_PASSWORD}
       TOTP_DISABLE_BASE_URL: ${TOTP_DISABLE_BASE_URL}
+      LOG_LEVEL: ${LOG_LEVEL:-info}
+      LOG_FORMAT: ${LOG_FORMAT:-text}
     depends_on:
       postgres:
         condition: service_healthy
@@ -102,6 +108,8 @@ services:
       FROM_EMAIL_PASSWORD: "${FROM_EMAIL_PASSWORD}"
       FROM_EMAIL_SMTP: "${FROM_EMAIL_SMTP}"
       SMTP_ADDR: "${SMTP_ADDR}"
+      LOG_LEVEL: ${LOG_LEVEL:-info}
+      LOG_FORMAT: ${LOG_FORMAT:-text}
     networks: [banka]
 
   gateway:
@@ -117,6 +125,8 @@ services:
       NOTIFICATION_GRPC_ADDR: "notification:50051"
       BANK_GRPC_ADDR: "bank:50051"
       EXCHANGE_GRPC_ADDR: "exchange:50051"
+      LOG_LEVEL: ${LOG_LEVEL:-info}
+      LOG_FORMAT: ${LOG_FORMAT:-text}
     depends_on:
       - user
       - notification

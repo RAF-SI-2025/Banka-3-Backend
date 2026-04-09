@@ -2,10 +2,11 @@ package user
 
 import (
 	"context"
-	"log"
 	"time"
 
 	"github.com/jackc/pgx/v5"
+
+	"github.com/RAF-SI-2025/Banka-3-Backend/pkg/logger"
 )
 
 // StartPGListener connects to PostgreSQL and listens for permission_change
@@ -17,7 +18,7 @@ func StartPGListener(ctx context.Context, databaseURL string, srv *Server) {
 			if ctx.Err() != nil {
 				return
 			}
-			log.Printf("pg listener error: %v, reconnecting in 5s...", err)
+			logger.L().Error("pg listener error, reconnecting in 5s", "err", err)
 			time.Sleep(5 * time.Second)
 		}
 	}
@@ -33,7 +34,7 @@ func listenLoop(ctx context.Context, databaseURL string, srv *Server) error {
 	if _, err := conn.Exec(ctx, "LISTEN permission_change"); err != nil {
 		return err
 	}
-	log.Println("pg listener: listening on permission_change")
+	logger.L().Info("pg listener: listening on permission_change")
 
 	for {
 		notification, err := conn.WaitForNotification(ctx)
@@ -50,17 +51,17 @@ func listenLoop(ctx context.Context, databaseURL string, srv *Server) error {
 
 		if !active {
 			if err := srv.DeleteSession(ctx, email); err != nil {
-				log.Printf("pg listener: failed to delete session for %s: %v", email, err)
+				logger.FromContext(ctx).Error("pg listener: failed to delete session", "email", email, "err", err)
 			} else {
-				log.Printf("pg listener: deleted session for deactivated employee %s", email)
+				logger.FromContext(ctx).Info("pg listener: deleted session for deactivated employee", "email", email)
 			}
 			continue
 		}
 
 		if err := srv.UpdateSessionPermissions(ctx, email, role, permissions); err != nil {
-			log.Printf("pg listener: failed to update session for %s: %v", email, err)
+			logger.FromContext(ctx).Error("pg listener: failed to update session", "email", email, "err", err)
 		} else {
-			log.Printf("pg listener: updated session for %s", email)
+			logger.FromContext(ctx).Info("pg listener: updated session", "email", email)
 		}
 	}
 }

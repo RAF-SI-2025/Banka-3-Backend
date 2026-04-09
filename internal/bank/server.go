@@ -5,7 +5,6 @@ import (
 	"context"
 	"database/sql"
 	"fmt"
-	"log"
 	"math"
 	"os"
 	"strconv"
@@ -16,6 +15,7 @@ import (
 
 	bankpb "github.com/RAF-SI-2025/Banka-3-Backend/gen/bank"
 	exchangepb "github.com/RAF-SI-2025/Banka-3-Backend/gen/exchange"
+	"github.com/RAF-SI-2025/Banka-3-Backend/pkg/logger"
 	"github.com/go-pdf/fpdf"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/codes"
@@ -1270,7 +1270,7 @@ func loanViewToProto(loan *loanView) *bankpb.Loan {
 	}
 }
 
-func (s *Server) GetLoans(_ context.Context, req *bankpb.GetLoansRequest) (*bankpb.GetLoansResponse, error) {
+func (s *Server) GetLoans(ctx context.Context, req *bankpb.GetLoansRequest) (*bankpb.GetLoansResponse, error) {
 	clientEmail := strings.TrimSpace(req.ClientEmail)
 	if clientEmail == "" {
 		return nil, status.Error(codes.Unauthenticated, "client email required")
@@ -1301,7 +1301,7 @@ func (s *Server) GetLoans(_ context.Context, req *bankpb.GetLoansRequest) (*bank
 		loanStatus,
 	)
 	if err != nil {
-		log.Printf("[GetLoans] ERROR fetching loans for client %s: %v", clientEmail, err)
+		logger.FromContext(ctx).ErrorContext(ctx, "GetLoans fetch failed", "client", clientEmail, "err", err)
 		return nil, status.Error(codes.Internal, fmt.Sprintf("failed to retrieve loans: %v", err))
 	}
 
@@ -1315,7 +1315,7 @@ func (s *Server) GetLoans(_ context.Context, req *bankpb.GetLoansRequest) (*bank
 	}, nil
 }
 
-func (s *Server) GetLoanByNumber(_ context.Context, req *bankpb.GetLoanByNumberRequest) (*bankpb.Loan, error) {
+func (s *Server) GetLoanByNumber(ctx context.Context, req *bankpb.GetLoanByNumberRequest) (*bankpb.Loan, error) {
 	clientEmail := strings.TrimSpace(req.ClientEmail)
 	if clientEmail == "" {
 		return nil, status.Error(codes.Unauthenticated, "client email required")
@@ -1331,7 +1331,7 @@ func (s *Server) GetLoanByNumber(_ context.Context, req *bankpb.GetLoanByNumberR
 		return nil, status.Error(codes.InvalidArgument, "invalid loan number")
 	}
 
-	log.Printf("[GetLoanByNumber] Looking up loan %d for client email: %s", loanID, clientEmail)
+	l := logger.FromContext(ctx).With("loan_id", loanID, "client", clientEmail)
 
 	var loan *loanView
 	var clientLookupErr error
@@ -1340,25 +1340,20 @@ func (s *Server) GetLoanByNumber(_ context.Context, req *bankpb.GetLoanByNumberR
 
 	if clientLookupErr != nil {
 		if errors.Is(clientLookupErr, gorm.ErrRecordNotFound) {
-			// Check if this might be an employee (email not in clients table)
-			// Try unrestricted lookup for employees
-			log.Printf("[GetLoanByNumber] Client lookup failed for %s, trying employee lookup", clientEmail)
+			// not in clients table — try unrestricted lookup for employees
 			loan, err = s.getLoanByID(loanID)
 			if err != nil {
 				if errors.Is(err, gorm.ErrRecordNotFound) {
-					log.Printf("[GetLoanByNumber] Loan %d not found", loanID)
+					l.WarnContext(ctx, "loan not found")
 					return nil, status.Error(codes.NotFound, "loan not found")
 				}
-				log.Printf("[GetLoanByNumber] ERROR fetching loan %d: %v", loanID, err)
+				l.ErrorContext(ctx, "loan fetch failed", "err", err)
 				return nil, status.Error(codes.Internal, fmt.Sprintf("failed to retrieve loan: %v", err))
 			}
-			log.Printf("[GetLoanByNumber] SUCCESS: Found loan %d for employee %s", loanID, clientEmail)
 		} else {
-			log.Printf("[GetLoanByNumber] ERROR fetching loan %d for client %s: %v", loanID, clientEmail, clientLookupErr)
+			l.ErrorContext(ctx, "loan fetch failed", "err", clientLookupErr)
 			return nil, status.Error(codes.Internal, fmt.Sprintf("failed to retrieve loan: %v", clientLookupErr))
 		}
-	} else {
-		log.Printf("[GetLoanByNumber] SUCCESS: Found loan %d for client %s", loanID, clientEmail)
 	}
 
 	return loanViewToProto(loan), nil
@@ -1445,26 +1440,33 @@ func (s *Server) CreateLoanRequest(_ context.Context, req *bankpb.CreateLoanRequ
 }
 
 func (s *Server) PayoutMoneyToOtherAccount(
-	_ context.Context,
+	ctx context.Context,
 	req *bankpb.PaymentRequest,
 ) (*bankpb.PaymentResponse, error) {
+
+	l := logger.FromContext(ctx).With("from", req.SenderAccount, "to", req.RecipientAccount, "amount", req.Amount)
 
 	payment, currency, err := s.ProcessPayment(req.SenderAccount, req.RecipientAccount,
 		req.Amount, req.PaymentCode, req.ReferenceNumber, req.Purpose)
 
 	if err != nil {
-		log.Printf("bank/server.go: payment failed: %v", err)
 		switch {
 		case errors.Is(err, ErrAccountNotFound):
+			l.WarnContext(ctx, "payment rejected: account not found")
 			return nil, status.Error(codes.NotFound, "account not found")
 		case errors.Is(err, ErrInsufficientFunds):
+			l.WarnContext(ctx, "payment rejected: insufficient funds")
 			return nil, status.Error(codes.FailedPrecondition, "insufficient funds")
 		case strings.Contains(err.Error(), "exchange error"):
+			l.ErrorContext(ctx, "payment failed: exchange unavailable", "err", err)
 			return nil, status.Error(codes.Unavailable, "exchange service unavailable")
 		default:
+			l.ErrorContext(ctx, "payment failed", "err", err)
 			return nil, status.Error(codes.Internal, "internal error")
 		}
 	}
+
+	l.InfoContext(ctx, "payment completed", "final_amount", payment.End_amount)
 
 	return &bankpb.PaymentResponse{
 		FromAccount:     payment.From_account,
@@ -1482,7 +1484,7 @@ func (s *Server) PayoutMoneyToOtherAccount(
 }
 
 func (s *Server) TransferMoneyBetweenAccounts(
-	_ context.Context,
+	ctx context.Context,
 	req *bankpb.TransferRequest,
 ) (*bankpb.TransferResponse, error) {
 
@@ -1494,31 +1496,39 @@ func (s *Server) TransferMoneyBetweenAccounts(
 		return nil, status.Error(codes.InvalidArgument, "amount must be greater than zero")
 	}
 
+	l := logger.FromContext(ctx).With("from", req.FromAccount, "to", req.ToAccount, "amount", req.Amount)
+
 	transfer, err := s.CreateTransfer(req.FromAccount, req.ToAccount, req.Amount)
 	if err != nil {
-		log.Printf("bank/server.go: failed to create transfer: %v", err)
 		switch {
 		case strings.Contains(err.Error(), "same account"):
+			l.WarnContext(ctx, "transfer rejected: same account")
 			return nil, status.Error(codes.InvalidArgument, err.Error())
 		case strings.Contains(err.Error(), "insufficient funds"):
+			l.WarnContext(ctx, "transfer rejected: insufficient funds")
 			return nil, status.Error(codes.InvalidArgument, err.Error())
 		case strings.Contains(err.Error(), "exchange error"):
+			l.ErrorContext(ctx, "transfer failed: exchange unavailable", "err", err)
 			return nil, status.Error(codes.Unavailable, "exchange service currently unavailable")
 		default:
+			l.ErrorContext(ctx, "transfer create failed", "err", err)
 			return nil, status.Error(codes.Internal, "failed to create transfer")
 		}
 	}
 
 	err = s.ConfirmTransfer(transfer.Transaction_id, "123456")
 	if err != nil {
-		log.Printf("bank/server.go: transfer confirmation failed: %v", err)
 		switch {
 		case strings.Contains(err.Error(), "insufficient funds"):
+			l.WarnContext(ctx, "transfer confirm rejected: insufficient funds", "tx_id", transfer.Transaction_id)
 			return nil, status.Error(codes.FailedPrecondition, "insufficient funds")
 		default:
+			l.ErrorContext(ctx, "transfer confirm failed", "tx_id", transfer.Transaction_id, "err", err)
 			return nil, status.Error(codes.Internal, "transfer confirmation failed")
 		}
 	}
+
+	l.InfoContext(ctx, "transfer completed", "tx_id", transfer.Transaction_id)
 
 	res := &bankpb.TransferResponse{
 		FromAccount:     transfer.From_account,
@@ -1699,7 +1709,7 @@ func (s *Server) RejectLoanRequest(_ context.Context, req *bankpb.RejectLoanRequ
 	return &bankpb.RejectLoanRequestResponse{}, nil
 }
 
-func (s *Server) GetAllLoans(_ context.Context, req *bankpb.GetAllLoansRequest) (*bankpb.GetLoansResponse, error) {
+func (s *Server) GetAllLoans(ctx context.Context, req *bankpb.GetAllLoansRequest) (*bankpb.GetLoansResponse, error) {
 	loanType := ""
 	if strings.TrimSpace(req.LoanType) != "" {
 		parsed, err := parseLoanType(req.LoanType)
@@ -1724,7 +1734,7 @@ func (s *Server) GetAllLoans(_ context.Context, req *bankpb.GetAllLoansRequest) 
 		loanStatus,
 	)
 	if err != nil {
-		log.Printf("[GetAllLoans] ERROR fetching all loans: %v", err)
+		logger.FromContext(ctx).ErrorContext(ctx, "GetAllLoans fetch failed", "err", err)
 		return nil, status.Error(codes.Internal, fmt.Sprintf("failed to retrieve loans: %v", err))
 	}
 

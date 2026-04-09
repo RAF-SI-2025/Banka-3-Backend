@@ -10,7 +10,16 @@ import (
 	exchangepb "github.com/RAF-SI-2025/Banka-3-Backend/gen/exchange"
 	notificationpb "github.com/RAF-SI-2025/Banka-3-Backend/gen/notification"
 	userpb "github.com/RAF-SI-2025/Banka-3-Backend/gen/user"
+	"github.com/RAF-SI-2025/Banka-3-Backend/pkg/logger"
 )
+
+func dialOpts() []grpc.DialOption {
+	return []grpc.DialOption{
+		grpc.WithTransportCredentials(insecure.NewCredentials()),
+		grpc.WithUnaryInterceptor(logger.UnaryClientInterceptor()),
+		grpc.WithStreamInterceptor(logger.StreamClientInterceptor()),
+	}
+}
 
 type Server struct {
 	UserClient         userpb.UserServiceClient
@@ -41,25 +50,25 @@ func NewServer() (*Server, error) {
 		exchangeAddr = "exhcange:50051"
 	}
 
-	userConn, err := grpc.NewClient(userAddr, grpc.WithTransportCredentials(insecure.NewCredentials()))
+	userConn, err := grpc.NewClient(userAddr, dialOpts()...)
 	if err != nil {
 		return nil, err
 	}
 
-	notificationConn, err := grpc.NewClient(notificationAddr, grpc.WithTransportCredentials(insecure.NewCredentials()))
+	notificationConn, err := grpc.NewClient(notificationAddr, dialOpts()...)
 	if err != nil {
 		_ = userConn.Close()
 		return nil, err
 	}
 
-	bankConn, err := grpc.NewClient(bankAddr, grpc.WithTransportCredentials(insecure.NewCredentials()))
+	bankConn, err := grpc.NewClient(bankAddr, dialOpts()...)
 	if err != nil {
 		_ = userConn.Close()
 		_ = notificationConn.Close()
 		return nil, err
 	}
 
-	exchangeConn, err := grpc.NewClient(exchangeAddr, grpc.WithTransportCredentials(insecure.NewCredentials()))
+	exchangeConn, err := grpc.NewClient(exchangeAddr, dialOpts()...)
 	if err != nil {
 		_ = userConn.Close()
 		_ = notificationConn.Close()

@@ -6,5 +6,6 @@
 !go.sum
 !cmd/
 !internal/
+!pkg/
 !gen/
 !proto/

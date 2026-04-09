@@ -2,10 +2,10 @@ package bank
 
 import (
 	"context"
-	"log"
 	"os"
 
 	notificationpb "github.com/RAF-SI-2025/Banka-3-Backend/gen/notification"
+	"github.com/RAF-SI-2025/Banka-3-Backend/pkg/logger"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials/insecure"
 )
@@ -20,17 +20,18 @@ func (s *Server) sendCardCreatedEmail(ctx context.Context, email string) error {
 		addr = defaultNotificationURL
 	}
 
-	log.Printf("[NotificationClient] Attempting to send CardCreated email to: %s via %s", email, addr)
+	l := logger.FromContext(ctx).With("notification", "CardCreated", "to", email, "addr", addr)
+	l.Info("sending notification email")
 
-	conn, err := grpc.NewClient(addr, grpc.WithTransportCredentials(insecure.NewCredentials()))
+	conn, err := grpc.NewClient(addr, grpc.WithTransportCredentials(insecure.NewCredentials()),
+		grpc.WithUnaryInterceptor(logger.UnaryClientInterceptor()))
 	if err != nil {
-		log.Printf("[NotificationClient] ERROR: Failed to create gRPC client for %s: %v", addr, err)
+		l.Error("failed to create grpc client", "err", err)
 		return err
 	}
 	defer func(conn *grpc.ClientConn) {
-		err := conn.Close()
-		if err != nil {
-			log.Printf("[NotificationClient] ERROR: Failed to close gRPC connection to %s: %v", addr, err)
+		if err := conn.Close(); err != nil {
+			l.Error("failed to close grpc connection", "err", err)
 		}
 	}(conn)
 
@@ -40,11 +41,11 @@ func (s *Server) sendCardCreatedEmail(ctx context.Context, email string) error {
 	})
 
 	if err != nil {
-		log.Printf("[NotificationClient] ERROR: Failed to call SendCardCreatedEmail for %s: %v", email, err)
+		l.Error("SendCardCreatedEmail failed", "err", err)
 		return err
 	}
 
-	log.Printf("[NotificationClient] SUCCESS: CardCreated email sent to %s", email)
+	l.Info("notification email sent")
 	return nil
 }
 
@@ -54,17 +55,18 @@ func (s *Server) sendLoanPaymentFailedEmail(ctx context.Context, email, loanNumb
 		addr = defaultNotificationURL
 	}
 
-	log.Printf("[NotificationClient] Attempting to send LoanPaymentFailed email to: %s via %s", email, addr)
+	l := logger.FromContext(ctx).With("notification", "LoanPaymentFailed", "to", email, "addr", addr, "loan", loanNumber)
+	l.Info("sending notification email")
 
-	conn, err := grpc.NewClient(addr, grpc.WithTransportCredentials(insecure.NewCredentials()))
+	conn, err := grpc.NewClient(addr, grpc.WithTransportCredentials(insecure.NewCredentials()),
+		grpc.WithUnaryInterceptor(logger.UnaryClientInterceptor()))
 	if err != nil {
-		log.Printf("[NotificationClient] ERROR: Failed to create gRPC client for %s: %v", addr, err)
+		l.Error("failed to create grpc client", "err", err)
 		return err
 	}
 	defer func(conn *grpc.ClientConn) {
-		err := conn.Close()
-		if err != nil {
-			log.Printf("[NotificationClient] ERROR: Failed to close gRPC connection to %s: %v", addr, err)
+		if err := conn.Close(); err != nil {
+			l.Error("failed to close grpc connection", "err", err)
 		}
 	}(conn)
 
@@ -78,11 +80,11 @@ func (s *Server) sendLoanPaymentFailedEmail(ctx context.Context, email, loanNumb
 	})
 
 	if err != nil {
-		log.Printf("[NotificationClient] ERROR: Failed to call SendLoanPaymentFailedEmail for %s: %v", email, err)
+		l.Error("SendLoanPaymentFailedEmail failed", "err", err)
 		return err
 	}
 
-	log.Printf("[NotificationClient] SUCCESS: LoanPaymentFailed email sent to %s", email)
+	l.Info("notification email sent")
 	return nil
 }
 
@@ -92,17 +94,18 @@ func (s *Server) sendCardConfirmationEmail(ctx context.Context, email string, li
 		addr = defaultNotificationURL
 	}
 
-	log.Printf("[NotificationClient] Attempting to send CardConfirmation email to: %s (Link: %s) via %s", email, link, addr)
+	l := logger.FromContext(ctx).With("notification", "CardConfirmation", "to", email, "addr", addr, "link", link)
+	l.Info("sending notification email")
 
-	conn, err := grpc.NewClient(addr, grpc.WithTransportCredentials(insecure.NewCredentials()))
+	conn, err := grpc.NewClient(addr, grpc.WithTransportCredentials(insecure.NewCredentials()),
+		grpc.WithUnaryInterceptor(logger.UnaryClientInterceptor()))
 	if err != nil {
-		log.Printf("[NotificationClient] ERROR: Failed to create gRPC client for %s: %v", addr, err)
+		l.Error("failed to create grpc client", "err", err)
 		return err
 	}
 	defer func(conn *grpc.ClientConn) {
-		err := conn.Close()
-		if err != nil {
-			log.Printf("[NotificationClient] ERROR: Failed to close gRPC connection to %s: %v", addr, err)
+		if err := conn.Close(); err != nil {
+			l.Error("failed to close grpc connection", "err", err)
 		}
 	}(conn)
 
@@ -113,10 +116,10 @@ func (s *Server) sendCardConfirmationEmail(ctx context.Context, email string, li
 	})
 
 	if err != nil {
-		log.Printf("[NotificationClient] ERROR: Failed to call SendCardConfirmationEmail for %s: %v", email, err)
+		l.Error("SendCardConfirmationEmail failed", "err", err)
 		return err
 	}
 
-	log.Printf("[NotificationClient] SUCCESS: CardConfirmation email sent to %s", email)
+	l.Info("notification email sent")
 	return nil
 }

@@ -6,7 +6,6 @@ import (
 	"database/sql"
 	"errors"
 	"fmt"
-	"log"
 	"reflect"
 	"sort"
 	"time"
@@ -14,6 +13,8 @@ import (
 	"github.com/golang-jwt/jwt/v5"
 	"github.com/jackc/pgx/v5/pgconn"
 	"gorm.io/gorm"
+
+	"github.com/RAF-SI-2025/Banka-3-Backend/pkg/logger"
 )
 
 type User struct {
@@ -268,7 +269,7 @@ func isUniqueViolation(err error) bool {
 func create_user_from_model[T Client | Employee](user T, s *Server) error {
 	result := s.db_gorm.Create(&user)
 	if result.Error != nil {
-		log.Printf("We got this error: %s", result.Error.Error())
+		logger.L().Error("create user failed", "err", result.Error)
 		return result.Error
 	}
 	return nil
@@ -283,11 +284,11 @@ func getUserByAttribute[T Client | Employee](user T, gorm *gorm.DB, attribute_na
 		err = gorm.Model(&user).Where(attribute_name+" = ?", attribute_value).First(&ret).Error
 	}
 	if err != nil {
-		log.Println("Error from getEmployeeByAttribute: ", err)
+		logger.L().Error("getUserByAttribute failed", "err", err)
 		return nil, err
 	}
 
-	log.Println(ret)
+	logger.L().Debug("getUserByAttribute result", "value", ret)
 	return &ret, nil
 }
 
@@ -296,7 +297,7 @@ func deleteUser[T Client | Employee](user T, s *Server) error {
 	if result.RowsAffected == 0 {
 		return ErrEmployeeNotFound
 	} else if result.Error != nil {
-		log.Println("Error in deleteUser: ", result.Error)
+		logger.L().Error("deleteUser failed", "err", result.Error)
 	}
 	return nil
 
@@ -307,7 +308,7 @@ func userExists[T Client | Employee](user T, s *Server) bool {
 	if errors.Is(result.Error, gorm.ErrRecordNotFound) {
 		return false
 	} else if result.Error != nil {
-		log.Println("Error occured in userExists: ", result.Error)
+		logger.L().Error("userExists failed", "err", result.Error)
 		return false
 	}
 	return true
