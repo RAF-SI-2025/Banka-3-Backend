@@ -299,6 +299,24 @@ func (s *Server) SendTOTPDisableEmail(_ context.Context, req *notification.SendT
 	return &notification.SuccessResponse{Successful: true}, nil
 }
 
+func (s *Server) SendClientSetPasswordEmail(_ context.Context, req *notification.ActivationMailRequest) (*notification.SuccessResponse, error) {
+	to := strings.Split(req.ToAddr, ",")
+	templ, err := template.ParseFiles("templates/client_set_password.html")
+	if err != nil {
+		log.Printf("error in parsing template :%v", err)
+		return &notification.SuccessResponse{Successful: false}, nil
+	}
+	var rendered bytes.Buffer
+	if err := templ.Execute(&rendered, req); err != nil {
+		log.Println("error in filling template :", err)
+		return &notification.SuccessResponse{Successful: false}, nil
+	}
+	err = s.sender.Send(to, "Set your Banka 3 password", rendered.String())
+	if err != nil {
+		log.Println("Couldn't send client set password email:", err)
+	}
+	return &notification.SuccessResponse{Successful: true}, nil
+}
 func (s *Server) SendBankAccountCreationEmail(_ context.Context, req *notification.SendBankAccountCreationEmailRequest) (*notification.SuccessResponse, error) {
 	println("sneding mail to " + req.ToAddr)
 	to := strings.Split(req.ToAddr, ",")

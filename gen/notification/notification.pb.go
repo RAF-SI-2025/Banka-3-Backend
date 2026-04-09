@@ -597,16 +597,17 @@ const file_notification_notification_proto_rawDesc = "" +
 	"\x0fSuccessResponse\x12\x1e\n" +
 	"\n" +
 	"successful\x18\x01 \x01(\bR\n" +
-	"successful2\xed\a\n" +
+	"successful2\xcf\b\n" +
 	"\x13NotificationService\x12]\n" +
 	"\x15SendConfirmationEmail\x12%.notification.ConfirmationMailRequest\x1a\x1d.notification.SuccessResponse\x12Y\n" +
 	"\x13SendActivationEmail\x12#.notification.ActivationMailRequest\x1a\x1d.notification.SuccessResponse\x12^\n" +
 	"\x16SendPasswordResetEmail\x12%.notification.PasswordLinkMailRequest\x1a\x1d.notification.SuccessResponse\x12c\n" +
 	"\x1bSendInitialPasswordSetEmail\x12%.notification.PasswordLinkMailRequest\x1a\x1d.notification.SuccessResponse\x12e\n" +
 	"\x19SendCardConfirmationEmail\x12).notification.CardConfirmationMailRequest\x1a\x1d.notification.SuccessResponse\x12[\n" +
-	"\x14SendCardCreatedEmail\x12$.notification.CardCreatedMailRequest\x1a\x1d.notification.SuccessResponse\x12V\n" +
-	"\x14SendCardBlockedEmail\x12\x1f.notification.CardBlockedReqest\x1a\x1d.notification.SuccessResponse\x12g\n" +
+	"\x14SendCardCreatedEmail\x12$.notification.CardCreatedMailRequest\x1a\x1d.notification.SuccessResponse\x12g\n" +
 	"\x1aSendLoanPaymentFailedEmail\x12*.notification.LoanPaymentFailedMailRequest\x1a\x1d.notification.SuccessResponse\x12`\n" +
+	"\x1aSendClientSetPasswordEmail\x12#.notification.ActivationMailRequest\x1a\x1d.notification.SuccessResponse\x12V\n" +
+	"\x14SendCardBlockedEmail\x12\x1f.notification.CardBlockedReqest\x1a\x1d.notification.SuccessResponse\x12`\n" +
 	"\x14SendTOTPDisableEmail\x12).notification.SendTOTPDisableEmailRequest\x1a\x1d.notification.SuccessResponse\x12p\n" +
 	"\x1cSendBankAccountCreationEmail\x121.notification.SendBankAccountCreationEmailRequest\x1a\x1d.notification.SuccessResponseB9Z7github.com/RAF-SI-2025/Banka-3-Backend/gen/notificationb\x06proto3"
 
@@ -642,22 +643,24 @@ var file_notification_notification_proto_depIdxs = []int32{
 	4,  // 3: notification.NotificationService.SendInitialPasswordSetEmail:input_type -> notification.PasswordLinkMailRequest
 	5,  // 4: notification.NotificationService.SendCardConfirmationEmail:input_type -> notification.CardConfirmationMailRequest
 	6,  // 5: notification.NotificationService.SendCardCreatedEmail:input_type -> notification.CardCreatedMailRequest
-	7,  // 6: notification.NotificationService.SendCardBlockedEmail:input_type -> notification.CardBlockedReqest
-	8,  // 7: notification.NotificationService.SendLoanPaymentFailedEmail:input_type -> notification.LoanPaymentFailedMailRequest
-	1,  // 8: notification.NotificationService.SendTOTPDisableEmail:input_type -> notification.SendTOTPDisableEmailRequest
-	0,  // 9: notification.NotificationService.SendBankAccountCreationEmail:input_type -> notification.SendBankAccountCreationEmailRequest
-	9,  // 10: notification.NotificationService.SendConfirmationEmail:output_type -> notification.SuccessResponse
-	9,  // 11: notification.NotificationService.SendActivationEmail:output_type -> notification.SuccessResponse
-	9,  // 12: notification.NotificationService.SendPasswordResetEmail:output_type -> notification.SuccessResponse
-	9,  // 13: notification.NotificationService.SendInitialPasswordSetEmail:output_type -> notification.SuccessResponse
-	9,  // 14: notification.NotificationService.SendCardConfirmationEmail:output_type -> notification.SuccessResponse
-	9,  // 15: notification.NotificationService.SendCardCreatedEmail:output_type -> notification.SuccessResponse
-	9,  // 16: notification.NotificationService.SendCardBlockedEmail:output_type -> notification.SuccessResponse
+	8,  // 6: notification.NotificationService.SendLoanPaymentFailedEmail:input_type -> notification.LoanPaymentFailedMailRequest
+	3,  // 7: notification.NotificationService.SendClientSetPasswordEmail:input_type -> notification.ActivationMailRequest
+	7,  // 8: notification.NotificationService.SendCardBlockedEmail:input_type -> notification.CardBlockedReqest
+	1,  // 9: notification.NotificationService.SendTOTPDisableEmail:input_type -> notification.SendTOTPDisableEmailRequest
+	0,  // 10: notification.NotificationService.SendBankAccountCreationEmail:input_type -> notification.SendBankAccountCreationEmailRequest
+	9,  // 11: notification.NotificationService.SendConfirmationEmail:output_type -> notification.SuccessResponse
+	9,  // 12: notification.NotificationService.SendActivationEmail:output_type -> notification.SuccessResponse
+	9,  // 13: notification.NotificationService.SendPasswordResetEmail:output_type -> notification.SuccessResponse
+	9,  // 14: notification.NotificationService.SendInitialPasswordSetEmail:output_type -> notification.SuccessResponse
+	9,  // 15: notification.NotificationService.SendCardConfirmationEmail:output_type -> notification.SuccessResponse
+	9,  // 16: notification.NotificationService.SendCardCreatedEmail:output_type -> notification.SuccessResponse
 	9,  // 17: notification.NotificationService.SendLoanPaymentFailedEmail:output_type -> notification.SuccessResponse
-	9,  // 18: notification.NotificationService.SendTOTPDisableEmail:output_type -> notification.SuccessResponse
-	9,  // 19: notification.NotificationService.SendBankAccountCreationEmail:output_type -> notification.SuccessResponse
-	10, // [10:20] is the sub-list for method output_type
-	0,  // [0:10] is the sub-list for method input_type
+	9,  // 18: notification.NotificationService.SendClientSetPasswordEmail:output_type -> notification.SuccessResponse
+	9,  // 19: notification.NotificationService.SendCardBlockedEmail:output_type -> notification.SuccessResponse
+	9,  // 20: notification.NotificationService.SendTOTPDisableEmail:output_type -> notification.SuccessResponse
+	9,  // 21: notification.NotificationService.SendBankAccountCreationEmail:output_type -> notification.SuccessResponse
+	11, // [11:22] is the sub-list for method output_type
+	0,  // [0:11] is the sub-list for method input_type
 	0,  // [0:0] is the sub-list for extension type_name
 	0,  // [0:0] is the sub-list for extension extendee
 	0,  // [0:0] is the sub-list for field type_name

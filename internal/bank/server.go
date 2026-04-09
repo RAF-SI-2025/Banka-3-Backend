@@ -1427,13 +1427,21 @@ func (s *Server) CreateLoanRequest(_ context.Context, req *bankpb.CreateLoanRequ
 }
 
 func (s *Server) PayoutMoneyToOtherAccount(
-	_ context.Context,
+	ctx context.Context,
 	req *bankpb.PaymentRequest,
 ) (*bankpb.PaymentResponse, error) {
 
+	email, err := s.getEmailFromMetadata(ctx)
+	if err != nil {
+		return nil, status.Error(codes.Unauthenticated, "failed to get email from metadata")
+	}
+	_, err = s.getOwnedAccountByNumber(email, req.SenderAccount)
+	if err != nil {
+		return nil, status.Error(codes.Unauthenticated, "signed user is not an owner of the sender account")
+	}
+
 	payment, currency, err := s.ProcessPayment(req.SenderAccount, req.RecipientAccount,
 		req.Amount, req.PaymentCode, req.ReferenceNumber, req.Purpose)
-
 	if err != nil {
 		log.Printf("bank/server.go: payment failed: %v", err)
 		switch {
@@ -1464,9 +1472,19 @@ func (s *Server) PayoutMoneyToOtherAccount(
 }
 
 func (s *Server) TransferMoneyBetweenAccounts(
-	_ context.Context,
+	ctx context.Context,
 	req *bankpb.TransferRequest,
 ) (*bankpb.TransferResponse, error) {
+
+	// Authorization: verify that the caller owns the source account
+	email, err := s.getEmailFromMetadata(ctx)
+	if err != nil {
+		return nil, status.Error(codes.Unauthenticated, "unauthorized")
+	}
+	_, err = s.getOwnedAccountByNumber(email, req.FromAccount)
+	if err != nil {
+		return nil, status.Error(codes.Unauthenticated, "unauthorized")
+	}
 
 	if strings.TrimSpace(req.FromAccount) == "" || strings.TrimSpace(req.ToAccount) == "" {
 		return nil, status.Error(codes.InvalidArgument, "account numbers are required")
@@ -1480,9 +1498,9 @@ func (s *Server) TransferMoneyBetweenAccounts(
 	if err != nil {
 		log.Printf("bank/server.go: failed to create transfer: %v", err)
 		switch {
+		case errors.Is(err, ErrInsufficientFunds):
+			return nil, status.Error(codes.FailedPrecondition, "Insufficient funds")
 		case strings.Contains(err.Error(), "same account"):
-			return nil, status.Error(codes.InvalidArgument, err.Error())
-		case strings.Contains(err.Error(), "insufficient funds"):
 			return nil, status.Error(codes.InvalidArgument, err.Error())
 		case strings.Contains(err.Error(), "exchange error"):
 			return nil, status.Error(codes.Unavailable, "exchange service currently unavailable")
