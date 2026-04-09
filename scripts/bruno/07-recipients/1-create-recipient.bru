@@ -1,0 +1,43 @@
+meta {
+  name: Create Recipient
+  type: http
+  seq: 1
+}
+
+post {
+  url: {{baseUrl}}/api/recipients
+  body: json
+  auth: none
+}
+
+headers {
+  Authorization: Bearer {{clientAccessToken}}
+}
+
+body:json {
+  {
+    "name": "Bruno Test Recipient",
+    "account_number": "{{testAccountNumber2}}"
+  }
+}
+
+tests {
+  test("status 201", function() {
+    expect(res.status).to.equal(201);
+  });
+  test("has id", function() {
+    expect(res.body.id).to.be.a("number");
+  });
+  test("name matches", function() {
+    expect(res.body.name).to.equal("Bruno Test Recipient");
+  });
+  test("account_number matches", function() {
+    expect(res.body.account_number).to.equal(bru.getEnvVar("testAccountNumber2"));
+  });
+}
+
+script:post-response {
+  if (res.body && res.body.id) {
+    bru.setEnvVar("testRecipientId", res.body.id);
+  }
+}

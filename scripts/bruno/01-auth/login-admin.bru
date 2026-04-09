@@ -1,0 +1,40 @@
+meta {
+  name: Login Admin
+  type: http
+  seq: 1
+}
+
+post {
+  url: {{baseUrl}}/api/login
+  body: json
+  auth: none
+}
+
+body:json {
+  {
+    "email": "{{adminEmail}}",
+    "password": "{{adminPassword}}"
+  }
+}
+
+tests {
+  test("status 200", function() {
+    expect(res.status).to.equal(200);
+  });
+  test("has accessToken", function() {
+    expect(res.body.accessToken).to.be.a("string");
+  });
+  test("has refreshToken", function() {
+    expect(res.body.refreshToken).to.be.a("string");
+  });
+  test("has permissions array", function() {
+    expect(res.body.permissions).to.be.an("array");
+  });
+}
+
+script:post-response {
+  if (res.body && res.body.accessToken) {
+    bru.setEnvVar("accessToken", res.body.accessToken);
+    bru.setEnvVar("refreshToken", res.body.refreshToken);
+  }
+}

@@ -1,0 +1,31 @@
+meta {
+  name: Get Account By Number
+  type: http
+  seq: 5
+}
+
+get {
+  url: {{baseUrl}}/api/accounts/{{testAccountNumber}}
+  body: none
+  auth: none
+}
+
+headers {
+  Authorization: Bearer {{accessToken}}
+}
+
+tests {
+  test("status 200", function() {
+    expect(res.status).to.equal(200);
+  });
+  test("correct account returned", function() {
+    expect(res.body.account_number).to.equal(bru.getEnvVar("testAccountNumber"));
+  });
+  test("has required fields", function() {
+    expect(res.body).to.have.property("balance");
+    expect(res.body).to.have.property("currency");
+    expect(res.body).to.have.property("account_type");
+    expect(res.body).to.have.property("daily_limit");
+    expect(res.body).to.have.property("monthly_limit");
+  });
+}

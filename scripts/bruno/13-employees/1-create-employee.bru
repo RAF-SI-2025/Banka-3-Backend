@@ -1,0 +1,62 @@
+meta {
+  name: Create Employee
+  type: http
+  seq: 1
+}
+
+post {
+  url: {{baseUrl}}/api/employees
+  body: json
+  auth: none
+}
+
+headers {
+  Authorization: Bearer {{accessToken}}
+}
+
+script:pre-request {
+  const ts = Date.now();
+  bru.setVar("uniqueEmail", "emp_" + ts + "@banka.raf");
+  bru.setVar("uniqueUsername", "emp_" + ts);
+}
+
+body:json {
+  {
+    "first_name": "Jovan",
+    "last_name": "Jovanovic",
+    "birth_date": "1992-03-15",
+    "gender": "M",
+    "email": "{{uniqueEmail}}",
+    "phone": "+381641112222",
+    "address": "Bulevar Oslobodjenja 10",
+    "username": "{{uniqueUsername}}",
+    "position": "Teller",
+    "department": "Retail",
+    "password": "TestPass12",
+    "active": true,
+    "permissions": ["manage_employees", "manage_clients", "manage_accounts", "manage_companies", "manage_loans", "manage_cards", "trade_stocks", "view_stocks"]
+  }
+}
+
+tests {
+  test("status 201", function() {
+    expect(res.status).to.equal(201);
+  });
+  test("has id", function() {
+    expect(res.body.id).to.be.a("number");
+    expect(res.body.id).to.be.greaterThan(0);
+  });
+  test("first_name is Jovan", function() {
+    expect(res.body.first_name).to.equal("Jovan");
+  });
+  test("has permissions array", function() {
+    expect(res.body.permissions).to.be.an("array");
+  });
+}
+
+script:post-response {
+  if (res.body && res.body.id) {
+    bru.setEnvVar("testEmployeeId", res.body.id);
+    bru.setEnvVar("testEmployeeEmail", res.body.email);
+  }
+}

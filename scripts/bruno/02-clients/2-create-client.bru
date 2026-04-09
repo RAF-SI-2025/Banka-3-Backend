@@ -1,0 +1,41 @@
+meta {
+  name: Create Client
+  type: http
+  seq: 2
+}
+
+post {
+  url: {{baseUrl}}/api/clients
+  body: json
+  auth: none
+}
+
+headers {
+  Authorization: Bearer {{accessToken}}
+}
+
+script:pre-request {
+  bru.setVar("newClientEmail", "client_" + Date.now() + "@primer.raf");
+}
+
+body:json {
+  {
+    "first_name": "Ana",
+    "last_name": "Anic",
+    "date_of_birth": 631152000,
+    "gender": "F",
+    "email": "{{newClientEmail}}",
+    "phone_number": "+381649998877",
+    "address": "Terazije 5",
+    "password": "TestPass12"
+  }
+}
+
+tests {
+  test("status 201", function() {
+    expect(res.status).to.equal(201);
+  });
+  test("valid is true", function() {
+    expect(res.body.valid).to.equal(true);
+  });
+}

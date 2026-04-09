@@ -1,6 +1,7 @@
 package main
 
 import (
+	"context"
 	"database/sql"
 	"fmt"
 	"log"
@@ -8,6 +9,7 @@ import (
 	"os"
 
 	_ "github.com/jackc/pgx/v5/stdlib"
+	"github.com/redis/go-redis/v9"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials/insecure"
 	"google.golang.org/grpc/reflection"
@@ -80,8 +82,27 @@ func main() {
 		log.Fatalf("JWT secrets not set, exiting...")
 	}
 
+	redisAddr := os.Getenv("REDIS_ADDR")
+	if redisAddr == "" {
+		redisAddr = "redis:6379"
+	}
+	rdb := redis.NewClient(&redis.Options{
+		Addr:     redisAddr,
+		Password: os.Getenv("REDIS_PASSWORD"),
+	})
+	if err := rdb.Ping(context.Background()).Err(); err != nil {
+		log.Fatalf("failed to connect to Redis at %s: %v", redisAddr, err)
+	}
+	log.Println("connected to Redis...")
+
+	connections.Rdb = rdb
+
 	userService := internalUser.NewServer(accessJwtSecret, refreshJwtSecret, connections)
 	totpService := internalUser.NewTotpServer(connections)
+
+	// Start PG listener for permission change notifications
+	databaseURL := os.Getenv("DATABASE_URL")
+	go internalUser.StartPGListener(context.Background(), databaseURL, userService)
 
 	srv := grpc.NewServer()
 	user.RegisterUserServiceServer(srv, userService)

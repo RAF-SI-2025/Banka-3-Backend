@@ -128,3 +128,29 @@ func (s *Server) UpdateClient(c *gin.Context) {
 		"address":       req.Address,
 	})
 }
+
+func (s *Server) GetMe(c *gin.Context) {
+	email := c.GetString("email")
+	if email == "" {
+		c.AbortWithStatus(http.StatusUnauthorized)
+		return
+	}
+
+	ctx, cancel := context.WithTimeout(c.Request.Context(), 5*time.Second)
+	defer cancel()
+
+	resp, err := s.UserClient.GetClients(ctx, &userpb.GetClientsRequest{
+		Email: email,
+	})
+	if err != nil {
+		writeGRPCError(c, err)
+		return
+	}
+
+	if len(resp.Clients) == 0 {
+		c.JSON(http.StatusNotFound, gin.H{"error": "client not found"})
+		return
+	}
+
+	c.JSON(http.StatusOK, clientResponse(resp.Clients[0]))
+}

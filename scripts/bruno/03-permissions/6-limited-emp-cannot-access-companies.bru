@@ -1,0 +1,21 @@
+meta {
+  name: 8-Limited Emp CANNOT Access Companies
+  type: http
+  seq: 8
+}
+
+get {
+  url: {{baseUrl}}/api/companies
+  body: none
+  auth: none
+}
+
+headers {
+  Authorization: Bearer {{limitedEmpToken}}
+}
+
+tests {
+  test("status 403", function() {
+    expect(res.status).to.equal(403);
+  });
+}

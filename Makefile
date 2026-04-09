@@ -4,6 +4,9 @@ export
 GO_IMAGE := golang:1.25
 GO_RUN   := docker run --rm -v $(PWD):/app -w /app $(GO_IMAGE)
 
+ADMIN_EMAIL  ?= admin@banka.raf
+CLIENT_EMAIL ?= petar@primer.raf
+
 .PHONY: all up down down-v proto schema seed nuke lint lint-l build build-l test test-l test-integration test-integration-l fmt fmt-l
 
 all: proto up schema seed
@@ -29,7 +32,9 @@ schema:
 	docker compose exec -T postgres psql -U $(POSTGRES_USER) -d $(POSTGRES_DB) < scripts/db/schema.sql
 
 seed:
-	docker compose exec -T postgres psql -U $(POSTGRES_USER) -d $(POSTGRES_DB) < scripts/db/seed.sql
+	docker compose exec -T postgres psql -U $(POSTGRES_USER) -d $(POSTGRES_DB) \
+		-v admin_email=$(ADMIN_EMAIL) -v client_email=$(CLIENT_EMAIL) \
+		< scripts/db/seed.sql
 
 nuke:
 	docker compose exec -T postgres psql -U $(POSTGRES_USER) -d $(POSTGRES_DB) -c "DROP SCHEMA public CASCADE; CREATE SCHEMA public;"
@@ -47,15 +52,9 @@ build-l:
 	go build ./cmd/...
 
 test:
-	$(GO_RUN) go test -race ./...
-
-test-l:
-	go test -race ./...
-
-test-integration:
 	$(GO_RUN) go test -race -count=1 -tags=integration ./...
 
-test-integration-l:
+test-l:
 	go test -race -count=1 -tags=integration ./...
 
 fmt:

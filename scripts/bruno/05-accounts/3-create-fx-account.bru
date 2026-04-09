@@ -1,0 +1,48 @@
+meta {
+  name: Create EUR Account
+  type: http
+  seq: 3
+}
+
+post {
+  url: {{baseUrl}}/api/accounts
+  body: json
+  auth: none
+}
+
+headers {
+  Authorization: Bearer {{accessToken}}
+}
+
+body:json {
+  {
+    "client_id": {{testClientId}},
+    "account_type": "DEVIZNI",
+    "subtype": "licni",
+    "currency": "EUR",
+    "initial_balance": 1000,
+    "daily_limit": 100000,
+    "monthly_limit": 1000000
+  }
+}
+
+tests {
+  test("status 201", function() {
+    expect(res.status).to.equal(201);
+  });
+  test("has account_number", function() {
+    expect(res.body.account_number).to.be.a("string");
+    expect(res.body.account_number).to.match(/^\d{20}$/);
+  });
+  test("currency is EUR", function() {
+    if (res.body.currency) {
+      expect(res.body.currency).to.equal("EUR");
+    }
+  });
+}
+
+script:post-response {
+  if (res.body && res.body.account_number) {
+    bru.setEnvVar("testFxAccountNumber", res.body.account_number);
+  }
+}

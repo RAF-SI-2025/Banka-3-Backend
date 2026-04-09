@@ -1,0 +1,38 @@
+meta {
+  name: Reject Loan Request (as Employee)
+  type: http
+  seq: 5
+}
+
+script:pre-request {
+  // First we need to fetch the latest loan requests to find our "to be rejected" one
+}
+
+get {
+  url: {{baseUrl}}/api/loan-requests
+  body: none
+  auth: none
+}
+
+headers {
+  Authorization: Bearer {{accessToken}}
+}
+
+tests {
+  test("status 200", function() {
+    expect(res.status).to.equal(200);
+  });
+  test("found pending request to reject", function() {
+    const pending = res.body.filter(r => r.status === "pending" || r.status === "Pending" || r.status === "PENDING");
+    expect(pending.length).to.be.greaterThan(0);
+  });
+}
+
+script:post-response {
+  if (res.body && res.body.length > 0) {
+    const pending = res.body.find(r => r.status === "pending" || r.status === "Pending" || r.status === "PENDING");
+    if (pending) {
+      bru.setEnvVar("testRejectLoanRequestId", pending.id);
+    }
+  }
+}

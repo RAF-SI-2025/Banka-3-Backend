@@ -19,6 +19,8 @@ func NoopMiddleware() gin.HandlerFunc {
 	}
 }
 
+// AuthenticatedMiddleware validates the JWT and checks that an active session exists.
+// It only sets identity fields (email, exp, iat) in context.
 func AuthenticatedMiddleware(user userpb.UserServiceClient) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		header := c.GetHeader("Authorization")
@@ -77,32 +79,63 @@ func TOTPMiddleware(totp userpb.TOTPServiceClient) gin.HandlerFunc {
 	}
 }
 
+// PermissionMiddleware fetches the user's role and permissions from the session store
+// and checks them against the required values.
+// Prefix "role:" checks the role (e.g. "role:client", "role:client|employee").
+// Plain strings check permissions (e.g. "manage_contracts").
+// The "admin" permission bypasses all checks.
 func PermissionMiddleware(user userpb.UserServiceClient) func(...string) gin.HandlerFunc {
-	return func(permissions ...string) gin.HandlerFunc {
+	return func(required ...string) gin.HandlerFunc {
 		return func(c *gin.Context) {
-			email, exists := c.Get("email")
-			if !exists {
-				c.AbortWithStatus(401)
+			email := c.GetString("email")
+			if email == "" {
+				c.AbortWithStatus(http.StatusUnauthorized)
 				return
 			}
 
-			emp, err := user.GetEmployeeByEmail(c, &userpb.GetEmployeeByEmailRequest{
-				Email: email.(string),
-			})
-			if err != nil {
-				c.AbortWithStatus(403)
-				return
+			// Fetch role/permissions from Redis via gRPC (once per request)
+			var userRole string
+			var userPerms []string
+			if cached, exists := c.Get("role"); exists {
+				userRole, _ = cached.(string)
+				permsVal, _ := c.Get("permissions")
+				userPerms, _ = permsVal.([]string)
+			} else {
+				ctx, cancel := context.WithTimeout(c.Request.Context(), 5*time.Second)
+				defer cancel()
+				resp, err := user.GetUserPermissions(ctx, &userpb.GetUserPermissionsRequest{
+					Email: email,
+				})
+				if err != nil {
+					c.AbortWithStatus(http.StatusForbidden)
+					return
+				}
+				userRole = resp.Role
+				userPerms = resp.Permissions
+				c.Set("role", userRole)
+				c.Set("permissions", userPerms)
 			}
 
-			if slices.Contains(emp.Permissions, "admin") {
+			// Admin permission bypasses all checks
+			if slices.Contains(userPerms, "admin") {
 				c.Next()
 				return
 			}
 
-			for _, perm := range permissions {
-				if !slices.Contains(emp.Permissions, perm) {
-					c.AbortWithStatus(403)
-					return
+			for _, req := range required {
+				if strings.HasPrefix(req, "role:") {
+					// Role check: "role:client", "role:employee", "role:client|employee"
+					allowedRoles := strings.Split(req[5:], "|")
+					if !slices.Contains(allowedRoles, userRole) {
+						c.AbortWithStatus(http.StatusForbidden)
+						return
+					}
+				} else {
+					// Permission check
+					if !slices.Contains(userPerms, req) {
+						c.AbortWithStatus(http.StatusForbidden)
+						return
+					}
 				}
 			}
 			c.Next()

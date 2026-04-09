@@ -1,0 +1,37 @@
+meta {
+  name: 2-Login Limited Employee
+  type: http
+  seq: 2
+}
+
+post {
+  url: {{baseUrl}}/api/login
+  body: json
+  auth: none
+}
+
+body:json {
+  {
+    "email": "limited_emp@banka.raf",
+    "password": "Test1234!"
+  }
+}
+
+tests {
+  test("status 200", function() {
+    expect(res.status).to.equal(200);
+  });
+  test("has accessToken", function() {
+    expect(res.body.accessToken).to.be.a("string");
+  });
+  test("has only view_stocks permission", function() {
+    expect(res.body.permissions).to.be.an("array");
+    expect(res.body.permissions).to.include("view_stocks");
+  });
+}
+
+script:post-response {
+  if (res.body && res.body.accessToken) {
+    bru.setEnvVar("limitedEmpToken", res.body.accessToken);
+  }
+}

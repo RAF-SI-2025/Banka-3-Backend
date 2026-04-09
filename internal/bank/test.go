@@ -7,6 +7,7 @@ import (
 
 	"github.com/DATA-DOG/go-sqlmock"
 	notificationpb "github.com/RAF-SI-2025/Banka-3-Backend/gen/notification"
+	userpb "github.com/RAF-SI-2025/Banka-3-Backend/gen/user"
 	"google.golang.org/grpc"
 	"gorm.io/driver/postgres"
 	"gorm.io/gorm"
@@ -38,7 +39,7 @@ func newGormTestServer(t *testing.T) (*Server, sqlmock.Sqlmock, *sql.DB) {
 	return server, mock, db
 }
 
-func _(t *testing.T, handler notificationpb.NotificationServiceServer) (string, func()) {
+func startNotificationTestServer(t *testing.T, handler notificationpb.NotificationServiceServer) (string, func()) {
 	t.Helper()
 	lis, err := net.Listen("tcp", "127.0.0.1:0")
 	if err != nil {
@@ -46,6 +47,23 @@ func _(t *testing.T, handler notificationpb.NotificationServiceServer) (string, 
 	}
 	srv := grpc.NewServer()
 	notificationpb.RegisterNotificationServiceServer(srv, handler)
+	go func() {
+		_ = srv.Serve(lis)
+	}()
+	return lis.Addr().String(), func() {
+		srv.Stop()
+		_ = lis.Close()
+	}
+}
+
+func startUserTestServer(t *testing.T, handler userpb.UserServiceServer) (string, func()) {
+	t.Helper()
+	lis, err := net.Listen("tcp", "127.0.0.1:0")
+	if err != nil {
+		t.Fatalf("listen: %v", err)
+	}
+	srv := grpc.NewServer()
+	userpb.RegisterUserServiceServer(srv, handler)
 	go func() {
 		_ = srv.Serve(lis)
 	}()

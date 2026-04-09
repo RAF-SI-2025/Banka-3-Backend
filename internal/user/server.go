@@ -18,6 +18,7 @@ import (
 	"time"
 
 	"github.com/golang-jwt/jwt/v5"
+	"github.com/redis/go-redis/v9"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/credentials/insecure"
@@ -32,6 +33,7 @@ type Connections struct {
 	NotificationClient notificationpb.NotificationServiceClient
 	Sql_db             *sql.DB
 	Gorm               *gorm.DB
+	Rdb                *redis.Client
 }
 
 const (
@@ -50,6 +52,7 @@ type Server struct {
 	refreshJwtSecret string
 	database         *sql.DB
 	db_gorm          *gorm.DB
+	rdb              *redis.Client
 }
 
 func generateSalt() ([]byte, error) {
@@ -74,6 +77,20 @@ func NewServer(accessJwtSecret string, refreshJwtSecret string, conn *Connection
 		refreshJwtSecret: refreshJwtSecret,
 		database:         conn.Sql_db,
 		db_gorm:          conn.Gorm,
+		rdb:              conn.Rdb,
+	}
+}
+
+func (c Client) toProtobuf() *userpb.GetClientResponse {
+	return &userpb.GetClientResponse{
+		Id:          int64(c.Id),
+		FirstName:   c.First_name,
+		LastName:    c.Last_name,
+		BirthDate:   c.Date_of_birth.Unix(),
+		Gender:      c.Gender,
+		Email:       c.Email,
+		PhoneNumber: c.Phone_number,
+		Address:     c.Address,
 	}
 }
 
@@ -112,7 +129,7 @@ func (client Client) toProtobuff() *userpb.Client {
 	}
 }
 
-func (s *Server) GetEmployeeByEmail(_ context.Context, req *userpb.GetEmployeeByEmailRequest) (*userpb.GetEmployeeResponse, error) {
+func (s *Server) GetEmployeeByEmail(_ context.Context, req *userpb.GetUserByEmailRequest) (*userpb.GetEmployeeResponse, error) {
 	resp, err := getUserByAttribute(Employee{}, s.db_gorm, "email", req.Email)
 	if err != nil {
 		if errors.Is(err, gorm.ErrRecordNotFound) {
@@ -123,8 +140,27 @@ func (s *Server) GetEmployeeByEmail(_ context.Context, req *userpb.GetEmployeeBy
 	return resp.toProtobuf(), nil
 }
 
-func (s *Server) GetEmployeeById(_ context.Context, req *userpb.GetEmployeeByIdRequest) (*userpb.GetEmployeeResponse, error) {
+func (s *Server) GetEmployeeById(_ context.Context, req *userpb.GetUserByIdRequest) (*userpb.GetEmployeeResponse, error) {
 	resp, err := getUserByAttribute(Employee{}, s.db_gorm, "id", req.Id)
+	if err != nil {
+		return nil, err
+	}
+	return resp.toProtobuf(), nil
+}
+
+func (s *Server) GetClientByEmail(_ context.Context, req *userpb.GetUserByEmailRequest) (*userpb.GetClientResponse, error) {
+	resp, err := getUserByAttribute(Client{}, s.db_gorm, "email", req.Email)
+	if err != nil {
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			return nil, status.Error(codes.NotFound, "employee not found")
+		}
+		return nil, status.Error(codes.Internal, "failed to get employee")
+	}
+	return resp.toProtobuf(), nil
+}
+
+func (s *Server) GetClientById(_ context.Context, req *userpb.GetUserByIdRequest) (*userpb.GetClientResponse, error) {
+	resp, err := getUserByAttribute(Client{}, s.db_gorm, "id", req.Id)
 	if err != nil {
 		return nil, err
 	}
@@ -171,7 +207,18 @@ func (s *Server) GetEmployees(_ context.Context, req *userpb.GetEmployeesRequest
 	return &userpb.GetEmployeesResponse{Employees: employee_responses}, nil
 }
 
-func (s *Server) UpdateEmployee(_ context.Context, req *userpb.UpdateEmployeeRequest) (*userpb.GetEmployeeResponse, error) {
+func (s *Server) UpdateEmployee(ctx context.Context, req *userpb.UpdateEmployeeRequest) (*userpb.GetEmployeeResponse, error) {
+	if !req.Active {
+		existing, err := getUserByAttribute(Employee{}, s.db_gorm, "id", req.Id)
+		if err == nil && existing != nil {
+			for _, p := range existing.Permissions {
+				if p.Name == "admin" {
+					return nil, status.Error(codes.PermissionDenied, "cannot deactivate an admin")
+				}
+			}
+		}
+	}
+
 	var permissions []Permission
 	for _, perm := range req.Permissions {
 		// yes these are invalid. i don't care
@@ -201,6 +248,18 @@ func (s *Server) UpdateEmployee(_ context.Context, req *userpb.UpdateEmployeeReq
 		}
 		return nil, status.Error(codes.Internal, "Messed something up in UpdateEmployee_ in repo")
 	}
+
+	// Sync session: deactivation deletes session, otherwise update permissions
+	if !req.Active {
+		_ = s.DeleteSession(ctx, updated.Email)
+	} else {
+		permNames := make([]string, len(updated.Permissions))
+		for i, p := range updated.Permissions {
+			permNames[i] = p.Name
+		}
+		_ = s.UpdateSessionPermissions(ctx, updated.Email, "employee", permNames)
+	}
+
 	return updated.toProtobuf(), nil
 
 }
@@ -301,23 +360,24 @@ func (s *Server) GenerateAccessToken(email string) (string, error) {
 }
 
 func validateJWTToken(tokenString, secret string) (*userpb.ValidateTokenResponse, error) {
-	token, err := jwt.Parse(tokenString, func(t *jwt.Token) (any, error) {
+	claims := &jwt.RegisteredClaims{}
+	token, err := jwt.ParseWithClaims(tokenString, claims, func(t *jwt.Token) (any, error) {
 		return []byte(secret), nil
 	})
 
-	if err != nil {
+	if err != nil || !token.Valid {
 		return nil, status.Error(codes.Unauthenticated, "invalid token")
 	}
 
-	sub, err := token.Claims.GetSubject()
+	sub, err := claims.GetSubject()
 	if err != nil {
 		return nil, err
 	}
-	exp, err := token.Claims.GetExpirationTime()
+	exp, err := claims.GetExpirationTime()
 	if err != nil {
 		return nil, err
 	}
-	iat, err := token.Claims.GetIssuedAt()
+	iat, err := claims.GetIssuedAt()
 	if err != nil {
 		return nil, err
 	}
@@ -333,11 +393,42 @@ func (s *Server) ValidateRefreshToken(_ context.Context, req *userpb.ValidateTok
 	return validateJWTToken(req.Token, s.refreshJwtSecret)
 }
 
-func (s *Server) ValidateAccessToken(_ context.Context, req *userpb.ValidateTokenRequest) (*userpb.ValidateTokenResponse, error) {
-	return validateJWTToken(req.Token, s.accessJwtSecret)
+func (s *Server) ValidateAccessToken(ctx context.Context, req *userpb.ValidateTokenRequest) (*userpb.ValidateTokenResponse, error) {
+	resp, err := validateJWTToken(req.Token, s.accessJwtSecret)
+	if err != nil {
+		return nil, err
+	}
+
+	session, err := s.GetSession(ctx, resp.Sub)
+	if err != nil {
+		return nil, status.Error(codes.Unavailable, "session store unavailable")
+	}
+	if session == nil {
+		return nil, status.Error(codes.Unauthenticated, "no active session")
+	}
+	if !session.Active {
+		return nil, status.Error(codes.Unauthenticated, "account deactivated")
+	}
+
+	return resp, nil
 }
 
-func (s *Server) Refresh(_ context.Context, req *userpb.RefreshRequest) (*userpb.RefreshResponse, error) {
+func (s *Server) GetUserPermissions(ctx context.Context, req *userpb.GetUserPermissionsRequest) (*userpb.GetUserPermissionsResponse, error) {
+	session, err := s.GetSession(ctx, req.Email)
+	if err != nil {
+		return nil, status.Error(codes.Unavailable, "session store unavailable")
+	}
+	if session == nil {
+		return nil, status.Error(codes.Unauthenticated, "no active session")
+	}
+
+	return &userpb.GetUserPermissionsResponse{
+		Role:        session.Role,
+		Permissions: session.Permissions,
+	}, nil
+}
+
+func (s *Server) Refresh(ctx context.Context, req *userpb.RefreshRequest) (*userpb.RefreshResponse, error) {
 	token, err := validateJWTToken(req.RefreshToken, s.refreshJwtSecret)
 	if err != nil {
 		return nil, err
@@ -347,6 +438,12 @@ func (s *Server) Refresh(_ context.Context, req *userpb.RefreshRequest) (*userpb
 	newSignedToken, err := s.GenerateRefreshToken(email)
 	if err != nil {
 		return nil, fmt.Errorf("generating refresh token: %w", err)
+	}
+
+	role, permissions, active := s.getRoleAndPermissions(email)
+
+	if !active {
+		return nil, status.Error(codes.Unauthenticated, "account deactivated")
 	}
 
 	newAccessToken, err := s.GenerateAccessToken(email)
@@ -378,10 +475,33 @@ func (s *Server) Refresh(_ context.Context, req *userpb.RefreshRequest) (*userpb
 		return nil, fmt.Errorf("committing transaction: %w", err)
 	}
 
-	return &userpb.RefreshResponse{AccessToken: newAccessToken, RefreshToken: newSignedToken}, nil
+	if err := s.CreateSession(ctx, email, SessionData{
+		Role:        role,
+		Permissions: permissions,
+		Active:      true,
+	}); err != nil {
+		return nil, status.Error(codes.Unavailable, "session store unavailable")
+	}
+
+	return &userpb.RefreshResponse{AccessToken: newAccessToken, RefreshToken: newSignedToken, Permissions: permissions, Role: role}, nil
 }
 
-func (s *Server) Login(_ context.Context, req *userpb.LoginRequest) (*userpb.LoginResponse, error) {
+// getRoleAndPermissions determines the role, permissions, and active status for a user by email.
+// Employees get role "employee" with their DB permissions; clients get role "client" with empty permissions.
+// The active flag is only meaningful for employees; clients always return true.
+func (s *Server) getRoleAndPermissions(email string) (role string, permissions []string, active bool) {
+	emp, err := getUserByAttribute(Employee{}, s.db_gorm, "email", email)
+	if err == nil && emp != nil {
+		permissions := make([]string, len(emp.Permissions))
+		for i, v := range emp.Permissions {
+			permissions[i] = v.Name
+		}
+		return "employee", permissions, emp.Active
+	}
+	return "client", []string{}, true
+}
+
+func (s *Server) Login(ctx context.Context, req *userpb.LoginRequest) (*userpb.LoginResponse, error) {
 	user, err := s.GetUserByEmail(req.Email)
 	if err != nil || user == nil {
 		return nil, status.Error(codes.Unauthenticated, "wrong creds")
@@ -389,6 +509,12 @@ func (s *Server) Login(_ context.Context, req *userpb.LoginRequest) (*userpb.Log
 	hashedPassword := HashPassword(req.Password, user.salt)
 
 	if bytes.Equal(hashedPassword, user.hashedPassword) {
+		role, permissions, active := s.getRoleAndPermissions(user.email)
+
+		if !active {
+			return nil, status.Error(codes.Unauthenticated, "account deactivated")
+		}
+
 		accessToken, err := s.GenerateAccessToken(user.email)
 		if err != nil {
 			return nil, err
@@ -402,16 +528,26 @@ func (s *Server) Login(_ context.Context, req *userpb.LoginRequest) (*userpb.Log
 			return nil, err
 		}
 
+		if err := s.CreateSession(ctx, user.email, SessionData{
+			Role:        role,
+			Permissions: permissions,
+			Active:      true,
+		}); err != nil {
+			return nil, status.Error(codes.Unavailable, "session store unavailable")
+		}
+
 		return &userpb.LoginResponse{
 			AccessToken:  accessToken,
 			RefreshToken: refreshToken,
+			Permissions:  permissions,
+			Role:         role,
 		}, nil
 	}
 
 	return nil, status.Error(codes.Unauthenticated, "wrong creds")
 }
 
-func (s *Server) Logout(_ context.Context, req *userpb.LogoutRequest) (*userpb.LogoutResponse, error) {
+func (s *Server) Logout(ctx context.Context, req *userpb.LogoutRequest) (*userpb.LogoutResponse, error) {
 	email := req.Email
 	tx, err := s.database.Begin()
 	if err != nil {
@@ -427,6 +563,8 @@ func (s *Server) Logout(_ context.Context, req *userpb.LogoutRequest) (*userpb.L
 		return nil, fmt.Errorf("committing transaction: %w", err)
 	}
 
+	_ = s.DeleteSession(ctx, email)
+
 	return &userpb.LogoutResponse{
 		Success: true,
 	}, nil
@@ -440,7 +578,7 @@ func (s *Server) RequestInitialPasswordSet(ctx context.Context, req *userpb.Pass
 	return s.requestPasswordAction(ctx, strings.TrimSpace(req.Email), passwordActionInitialSet)
 }
 
-func (s *Server) SetPasswordWithToken(_ context.Context, req *userpb.SetPasswordWithTokenRequest) (*userpb.SetPasswordWithTokenResponse, error) {
+func (s *Server) SetPasswordWithToken(ctx context.Context, req *userpb.SetPasswordWithTokenRequest) (*userpb.SetPasswordWithTokenResponse, error) {
 	token := strings.TrimSpace(req.Token)
 	newPassword := strings.TrimSpace(req.NewPassword)
 
@@ -454,7 +592,7 @@ func (s *Server) SetPasswordWithToken(_ context.Context, req *userpb.SetPassword
 	}
 	defer func() { _ = tx.Rollback() }()
 
-	email, _, err := consumePasswordActionToken(tx, hashValue(token))
+	email, actionType, err := consumePasswordActionToken(tx, hashValue(token))
 	if err != nil {
 		if errors.Is(err, ErrInvalidPasswordActionToken) {
 			return nil, status.Error(codes.InvalidArgument, "invalid or expired token")
@@ -473,6 +611,12 @@ func (s *Server) SetPasswordWithToken(_ context.Context, req *userpb.SetPassword
 		return nil, status.Error(codes.Internal, "password update failed")
 	}
 
+	if actionType == passwordActionInitialSet {
+		if _, err := tx.Exec(`UPDATE employees SET active = true, updated_at = NOW() WHERE email = $1`, email); err != nil {
+			return nil, status.Error(codes.Internal, "employee activation failed")
+		}
+	}
+
 	if err := s.RevokeRefreshTokensByEmail(tx, email); err != nil {
 		return nil, status.Error(codes.Internal, "refresh token revocation failed")
 	}
@@ -480,6 +624,8 @@ func (s *Server) SetPasswordWithToken(_ context.Context, req *userpb.SetPassword
 	if err := tx.Commit(); err != nil {
 		return nil, status.Error(codes.Internal, "committing transaction failed")
 	}
+
+	_ = s.DeleteSession(ctx, email)
 
 	return &userpb.SetPasswordWithTokenResponse{Successful: true}, nil
 }
@@ -654,18 +800,35 @@ func (s *Server) CreateEmployeeAccount(ctx context.Context, req *userpb.CreateEm
 		log.Printf("Error generating salt %s", salt_err.Error())
 	}
 
+	permissions := make([]Permission, 0, len(req.Permissions))
+	for _, permName := range req.Permissions {
+		var perm Permission
+		if err := s.db_gorm.First(&perm, "name = ?", permName).Error; err != nil {
+			log.Printf("Permission %q not found, skipping", permName)
+			continue
+		}
+		permissions = append(permissions, perm)
+	}
+
 	employee := Employee{First_name: req.FirstName,
 		Last_name: req.LastName, Date_of_birth: time.Unix(req.BirthDate, 0),
 		Gender: req.Gender, Email: req.Email, Phone_number: req.PhoneNumber,
 		Address: req.Address, Username: req.Username, Position: req.Position,
 		Department: req.Department, Salt_password: salt,
-		Password: []byte{}}
+		Password: []byte{}, Permissions: permissions}
 
 	err := create_user_from_model(employee, s)
 
 	if err != nil {
 		log.Printf("Error in user creation%s", err.Error())
 		return nil, status.Error(codes.Internal, "Employee creation failed")
+	}
+
+	// Re-fetch to get the auto-assigned ID and properly loaded permissions
+	created, err := getUserByAttribute(Employee{}, s.db_gorm, "email", employee.Email)
+	if err != nil {
+		log.Printf("Employee created but failed to fetch: %s", err.Error())
+		return employee.toProtobuf(), nil
 	}
 
 	// Send activation email so the employee can set their own password
@@ -676,6 +839,6 @@ func (s *Server) CreateEmployeeAccount(ctx context.Context, req *userpb.CreateEm
 		log.Printf("Employee created but activation email failed: %s", emailErr.Error())
 	}
 
-	return employee.toProtobuf(), nil
+	return created.toProtobuf(), nil
 
 }

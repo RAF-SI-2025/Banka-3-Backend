@@ -205,7 +205,7 @@ func (s *Server) resolveCaller(ctx context.Context) (*callerIdentity, error) {
 		_ = conn.Close()
 	}(conn)
 
-	empResp, err := userClient.GetEmployeeByEmail(ctx, &userpb.GetEmployeeByEmailRequest{
+	empResp, err := userClient.GetEmployeeByEmail(ctx, &userpb.GetUserByEmailRequest{
 		Email: email,
 	})
 	if err == nil && empResp != nil {

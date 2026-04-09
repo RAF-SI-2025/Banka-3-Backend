@@ -1199,12 +1199,12 @@ func (s *Server) CreateTransfer(fromAccount, toAccount string, amount int64) (*T
         from_account, to_account, start_amount, end_amount,
         start_currency_id, exchange_rate, commission, status
     )
-    VALUES ($1, $2, $3, $4, $5, $6, $7, 'pending')
+    VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
     RETURNING transaction_id, from_account, to_account,
               start_amount, end_amount,
               start_currency_id, exchange_rate,
               commission, status, timestamp
-`, fromAccount, toAccount, amount, finalAmount, currency.Id, exchangeRate, commission)
+`, fromAccount, toAccount, amount, finalAmount, currency.Id, exchangeRate, commission, pending)
 
 	transfer, err := scanTransfer(row)
 	if err != nil {
@@ -1237,7 +1237,7 @@ func (s *Server) ConfirmTransfer(transferID int64, verificationCode string) erro
 		return err
 	}
 
-	if t.Status != "pending" {
+	if t.Status != pending {
 		return errors.New("transfer already processed")
 	}
 
@@ -1288,7 +1288,7 @@ func (s *Server) ConfirmTransfer(transferID int64, verificationCode string) erro
 		}
 	}
 
-	_, err = tx.Exec(`UPDATE transfers SET status = 'realized' WHERE transaction_id = $1`, t.Transaction_id)
+	_, err = tx.Exec(`UPDATE transfers SET status = $1 WHERE transaction_id = $2`, realized, t.Transaction_id)
 	if err != nil {
 		return err
 	}
@@ -1340,7 +1340,7 @@ func (s *Server) GetTransferHistory(clientEmail string, page, pageSize int32) (*
 			PaymentCode:     "",
 			ReferenceNumber: "",
 			Purpose:         "",
-			Status:          t.Status,
+			Status:          string(t.Status),
 			Timestamp:       t.Timestamp.Format(time.RFC3339),
 		})
 	}

@@ -16,6 +16,13 @@ service NotificationService {
 
   rpc SendLoanPaymentFailedEmail(LoanPaymentFailedMailRequest) returns (SuccessResponse);
   rpc SendTOTPDisableEmail(SendTOTPDisableEmailRequest) returns (SuccessResponse);
+
+  rpc SendBankAccountCreationEmail(SendBankAccountCreationEmailRequest) returns (SuccessResponse);
+}
+
+message SendBankAccountCreationEmailRequest {
+  string to_addr = 1;
+  string account_name = 2;
 }
 
 message SendTOTPDisableEmailRequest {

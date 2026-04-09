@@ -1,0 +1,21 @@
+meta {
+  name: 12-Client CANNOT Access Employees
+  type: http
+  seq: 12
+}
+
+get {
+  url: {{baseUrl}}/api/employees
+  body: none
+  auth: none
+}
+
+headers {
+  Authorization: Bearer {{clientAccessToken}}
+}
+
+tests {
+  test("status 403", function() {
+    expect(res.status).to.equal(403);
+  });
+}

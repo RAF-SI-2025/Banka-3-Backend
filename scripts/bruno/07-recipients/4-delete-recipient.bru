@@ -1,0 +1,21 @@
+meta {
+  name: Delete Recipient
+  type: http
+  seq: 4
+}
+
+delete {
+  url: {{baseUrl}}/api/recipients/{{testRecipientId}}
+  body: none
+  auth: none
+}
+
+headers {
+  Authorization: Bearer {{clientAccessToken}}
+}
+
+tests {
+  test("status 204", function() {
+    expect(res.status).to.equal(204);
+  });
+}

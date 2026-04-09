@@ -1,0 +1,30 @@
+meta {
+  name: Update Company
+  type: http
+  seq: 4
+}
+
+put {
+  url: {{baseUrl}}/api/companies/{{testCompanyId}}
+  body: json
+  auth: none
+}
+
+headers {
+  Authorization: Bearer {{accessToken}}
+}
+
+body:json {
+  {
+    "name": "Bruno Test DOO Updated",
+    "activity_code_id": 2,
+    "address": "Nova adresa 10, Beograd",
+    "owner_id": {{testClientId}}
+  }
+}
+
+tests {
+  test("status 200", function() {
+    expect(res.status).to.equal(200);
+  });
+}

@@ -1,0 +1,36 @@
+meta {
+  name: Update Client
+  type: http
+  seq: 3
+}
+
+put {
+  url: {{baseUrl}}/api/clients/{{testClientId}}
+  body: json
+  auth: none
+}
+
+headers {
+  Authorization: Bearer {{accessToken}}
+}
+
+body:json {
+  {
+    "first_name": "Petar",
+    "last_name": "Petrovic",
+    "date_of_birth": 643334400,
+    "gender": "M",
+    "email": "petar@primer.raf",
+    "phone_number": "+381641111111",
+    "address": "Nova Adresa 1"
+  }
+}
+
+tests {
+  test("status 200", function() {
+    expect(res.status).to.equal(200);
+  });
+  test("address updated", function() {
+    expect(res.body.address).to.equal("Nova Adresa 1");
+  });
+}

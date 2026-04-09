@@ -1,0 +1,37 @@
+meta {
+  name: Create and Reject Loan Request
+  type: http
+  seq: 4
+}
+
+post {
+  url: {{baseUrl}}/api/loan-requests
+  body: json
+  auth: none
+}
+
+headers {
+  Authorization: Bearer {{clientAccessToken}}
+}
+
+body:json {
+  {
+    "account_number": "{{testAccountNumber}}",
+    "loan_type": "GOTOVINSKI",
+    "amount": 100000,
+    "repayment_period": 12,
+    "currency": "RSD",
+    "purpose": "Loan to be rejected",
+    "salary": 80000,
+    "employment_status": "full_time",
+    "employment_period": 12,
+    "phone_number": "+381641111111",
+    "interest_rate_type": "fixed"
+  }
+}
+
+tests {
+  test("status 201", function() {
+    expect(res.status).to.equal(201);
+  });
+}

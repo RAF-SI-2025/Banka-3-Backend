@@ -182,6 +182,9 @@ CREATE TABLE IF NOT EXISTS payments (
     timestamp           TIMESTAMP       NOT NULL DEFAULT NOW()
 );
 
+
+CREATE TYPE transfer_status AS ENUM ('pending', 'realized', 'rejected');
+
 CREATE TABLE IF NOT EXISTS transfers (
     transaction_id      BIGSERIAL       PRIMARY KEY,
     from_account        VARCHAR(20)     REFERENCES accounts(number),
@@ -191,7 +194,7 @@ CREATE TABLE IF NOT EXISTS transfers (
     start_currency_id   BIGINT          REFERENCES currencies(id) ON UPDATE CASCADE ON DELETE RESTRICT,
     exchange_rate       DECIMAL(20,2),
     commission          BIGINT          NOT NULL,
-    status              VARCHAR(20)     NOT NULL DEFAULT 'pending' CHECK  (status IN ('pending', 'completed', 'rejected')),
+    status              transfer_status  NOT NULL DEFAULT 'pending',
     timestamp           TIMESTAMP       NOT NULL DEFAULT NOW()
 );
 
@@ -276,3 +279,36 @@ CREATE TABLE IF NOT EXISTS exchange_rates (
     updated_at    TIMESTAMP      NOT NULL DEFAULT NOW(),
     valid_until   TIMESTAMP      NOT NULL DEFAULT NOW()
 );
+
+-- Notify Redis when employee permissions change
+CREATE OR REPLACE FUNCTION notify_permission_change() RETURNS trigger AS $$
+DECLARE
+    emp_email TEXT;
+BEGIN
+    SELECT email INTO emp_email FROM employees
+    WHERE id = COALESCE(NEW.employee_id, OLD.employee_id);
+
+    IF emp_email IS NOT NULL THEN
+        PERFORM pg_notify('permission_change', emp_email);
+    END IF;
+    RETURN COALESCE(NEW, OLD);
+END;
+$$ LANGUAGE plpgsql;
+
+CREATE TRIGGER trg_permission_change
+    AFTER INSERT OR UPDATE OR DELETE ON employee_permissions
+    FOR EACH ROW EXECUTE FUNCTION notify_permission_change();
+
+-- Notify Redis when employee active status changes
+CREATE OR REPLACE FUNCTION notify_employee_status_change() RETURNS trigger AS $$
+BEGIN
+    IF OLD.active IS DISTINCT FROM NEW.active THEN
+        PERFORM pg_notify('permission_change', NEW.email);
+    END IF;
+    RETURN NEW;
+END;
+$$ LANGUAGE plpgsql;
+
+CREATE TRIGGER trg_employee_status_change
+    AFTER UPDATE ON employees
+    FOR EACH ROW EXECUTE FUNCTION notify_employee_status_change();

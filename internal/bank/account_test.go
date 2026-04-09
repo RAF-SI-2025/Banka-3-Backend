@@ -26,7 +26,21 @@ type testUserServer struct {
 	clientMail string
 }
 
-func (s *testUserServer) GetEmployeeByEmail(_ context.Context, _ *userpb.GetEmployeeByEmailRequest) (*userpb.GetEmployeeResponse, error) {
+func (s *testUserServer) GetClientById(_ context.Context, _ *userpb.GetUserByIdRequest) (*userpb.GetClientResponse, error) {
+	date := time.Date(1990, 5, 20, 0, 0, 0, 0, time.UTC)
+	return &userpb.GetClientResponse{
+		Id:          1,
+		FirstName:   "Petar",
+		LastName:    "Petrovic",
+		BirthDate:   date.Unix(),
+		Gender:      "M",
+		Email:       "petar@primer.raf",
+		PhoneNumber: "+381645555555",
+		Address:     "Njegoseva 25",
+	}, nil
+}
+
+func (s *testUserServer) GetEmployeeByEmail(_ context.Context, _ *userpb.GetUserByEmailRequest) (*userpb.GetEmployeeResponse, error) {
 	if s.isEmployee {
 		return &userpb.GetEmployeeResponse{Id: 1, Email: "emp@banka.rs"}, nil
 	}

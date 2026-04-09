@@ -1,0 +1,24 @@
+meta {
+  name: 8-Limited Emp CAN Access Loan Requests (role:employee)
+  type: http
+  seq: 8
+}
+
+get {
+  url: {{baseUrl}}/api/loan-requests
+  body: none
+  auth: none
+}
+
+headers {
+  Authorization: Bearer {{limitedEmpToken}}
+}
+
+tests {
+  test("status 200", function() {
+    expect(res.status).to.equal(200);
+  });
+  test("returns array", function() {
+    expect(res.body).to.be.an("array");
+  });
+}

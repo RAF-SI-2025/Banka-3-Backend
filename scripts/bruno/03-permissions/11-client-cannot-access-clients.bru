@@ -1,0 +1,21 @@
+meta {
+  name: 13-Client CANNOT Access Clients
+  type: http
+  seq: 13
+}
+
+get {
+  url: {{baseUrl}}/api/clients
+  body: none
+  auth: none
+}
+
+headers {
+  Authorization: Bearer {{clientAccessToken}}
+}
+
+tests {
+  test("status 403", function() {
+    expect(res.status).to.equal(403);
+  });
+}

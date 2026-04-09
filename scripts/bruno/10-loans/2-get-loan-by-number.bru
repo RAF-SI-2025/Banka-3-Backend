@@ -1,0 +1,32 @@
+meta {
+  name: Get Loan By Number
+  type: http
+  seq: 2
+}
+
+get {
+  url: {{baseUrl}}/api/loans/{{testLoanNumber}}
+  body: none
+  auth: none
+}
+
+headers {
+  Authorization: Bearer {{accessToken}}
+}
+
+tests {
+  test("status 200", function() {
+    expect(res.status).to.equal(200);
+  });
+  test("correct loan returned", function() {
+    expect(res.body.loan_number).to.equal(bru.getEnvVar("testLoanNumber"));
+  });
+  test("has detailed fields", function() {
+    expect(res.body).to.have.property("loan_type");
+    expect(res.body).to.have.property("loan_amount");
+    expect(res.body).to.have.property("repayment_period");
+    expect(res.body).to.have.property("nominal_rate");
+    expect(res.body).to.have.property("effective_rate");
+    expect(res.body).to.have.property("remaining_debt");
+  });
+}

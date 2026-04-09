@@ -17,6 +17,7 @@ type (
 	installment_status  string
 	employment_status   string
 	card_brand          string
+	Transfer_status     string
 
 	// Note, unlike type aliease these are all destinct types, only
 	// their underlying type is string.
@@ -80,6 +81,10 @@ const (
 	mastercard card_brand = "mastercard"
 	amex       card_brand = "amex"
 	dinacard   card_brand = "dinacard"
+
+	pending  Transfer_status = "pending"
+	realized Transfer_status = "realized"
+	rejected Transfer_status = "rejected"
 )
 
 type (
@@ -190,16 +195,16 @@ type (
 	}
 
 	Transfer struct {
-		Transaction_id    int64     `gorm:"column:transaction_id;type:bigserial;not null;primaryKey"`
-		From_account      string    `gorm:"column:from_account;type:varchar(20);references accounts(number)"`
-		To_account        string    `gorm:"column:to_account;type:varchar(20);references accounts(number)"`
-		Start_amount      int64     `gorm:"column:start_amount;type:bigint;not null"`
-		End_amount        int64     `gorm:"column:end_amount;type:bigint;not null"`
-		Start_currency_id int64     `gorm:"column:start_currency_id;type:bigint;references currencies(id)"`
-		Exchange_rate     float64   `gorm:"column:exchange_rate;type:decimal(20,2)"`
-		Commission        int64     `gorm:"column:commission;type:bigint;not null"`
-		Timestamp         time.Time `gorm:"column:timestamp;not null;autoCreateTime"`
-		Status            string    `gorm:"column:status;type:varchar(20);not null"`
+		Transaction_id    int64           `gorm:"column:transaction_id;type:bigserial;not null;primaryKey"`
+		From_account      string          `gorm:"column:from_account;type:varchar(20);references accounts(number)"`
+		To_account        string          `gorm:"column:to_account;type:varchar(20);references accounts(number)"`
+		Start_amount      int64           `gorm:"column:start_amount;type:bigint;not null"`
+		End_amount        int64           `gorm:"column:end_amount;type:bigint;not null"`
+		Start_currency_id int64           `gorm:"column:start_currency_id;type:bigint;references currencies(id)"`
+		Exchange_rate     float64         `gorm:"column:exchange_rate;type:decimal(20,2)"`
+		Commission        int64           `gorm:"column:commission;type:bigint;not null"`
+		Timestamp         time.Time       `gorm:"column:timestamp;not null;autoCreateTime"`
+		Status            Transfer_status `gorm:"column:status;type:varchar(20);not null"`
 	}
 
 	PaymentCode struct {

@@ -1,0 +1,35 @@
+meta {
+  name: Request Card
+  type: http
+  seq: 1
+}
+
+post {
+  url: {{baseUrl}}/api/cards
+  body: json
+  auth: none
+}
+
+headers {
+  Authorization: Bearer {{clientAccessToken}}
+}
+
+body:json {
+  {
+    "account_number": "{{testAccountNumber}}",
+    "card_type": "debit",
+    "card_brand": "VISA"
+  }
+}
+
+tests {
+  test("status 201", function() {
+    expect(res.status).to.equal(201);
+  });
+  test("echoes account_number", function() {
+    expect(res.body.account_number).to.equal(bru.getEnvVar("testAccountNumber"));
+  });
+  test("echoes card_type", function() {
+    expect(res.body.card_type).to.equal("debit");
+  });
+}

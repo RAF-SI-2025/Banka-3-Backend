@@ -1,0 +1,21 @@
+meta {
+  name: Block Card
+  type: http
+  seq: 3
+}
+
+patch {
+  url: {{baseUrl}}/api/cards/{{testCardNumber}}/block
+  body: none
+  auth: none
+}
+
+headers {
+  Authorization: Bearer {{clientAccessToken}}
+}
+
+tests {
+  test("status 200", function() {
+    expect(res.status).to.equal(200);
+  });
+}

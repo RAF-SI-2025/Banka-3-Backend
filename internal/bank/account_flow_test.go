@@ -9,6 +9,7 @@ import (
 
 	"github.com/DATA-DOG/go-sqlmock"
 	bankpb "github.com/RAF-SI-2025/Banka-3-Backend/gen/bank"
+	notificationpb "github.com/RAF-SI-2025/Banka-3-Backend/gen/notification"
 	"github.com/jackc/pgx/v5/pgconn"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
@@ -21,8 +22,22 @@ func (timeArgument) Match(v driver.Value) bool {
 	return ok
 }
 
+type testNotificationServer struct {
+	notificationpb.UnimplementedNotificationServiceServer
+}
+
 func TestCreateAccountSuccess(t *testing.T) {
-	server, mock, db := newTestServer(t)
+	notificationServer := &testNotificationServer{}
+	notifAddr, notifStop := startNotificationTestServer(t, notificationServer)
+	defer notifStop()
+	t.Setenv("NOTIFICATION_GRPC_ADDR", notifAddr)
+
+	userServer := &testUserServer{}
+	userAddr, userStop := startUserTestServer(t, userServer)
+	defer userStop()
+	t.Setenv("USER_GRPC_ADDR", userAddr)
+
+	server, mock, db := newGormTestServer(t)
 	defer func() { _ = db.Close() }()
 
 	createdAt := time.Date(2026, 3, 19, 0, 0, 0, 0, time.UTC)
@@ -273,7 +288,17 @@ func TestCreateAccountCurrencyNotFound(t *testing.T) {
 }
 
 func TestCreateAccountDefaultValidUntilAndZeroLimitsBecomeNull(t *testing.T) {
-	server, mock, db := newTestServer(t)
+	notificationServer := &testNotificationServer{}
+	notifAddr, notifStop := startNotificationTestServer(t, notificationServer)
+	defer notifStop()
+	t.Setenv("NOTIFICATION_GRPC_ADDR", notifAddr)
+
+	userServer := &testUserServer{}
+	userAddr, userStop := startUserTestServer(t, userServer)
+	defer userStop()
+	t.Setenv("USER_GRPC_ADDR", userAddr)
+
+	server, mock, db := newGormTestServer(t)
 	defer func() { _ = db.Close() }()
 
 	createdAt := time.Date(2026, 3, 19, 0, 0, 0, 0, time.UTC)
@@ -353,7 +378,17 @@ func TestCreateAccountDefaultValidUntilAndZeroLimitsBecomeNull(t *testing.T) {
 }
 
 func TestCreateAccountNumberCollisionRetryPath(t *testing.T) {
-	server, mock, db := newTestServer(t)
+	notificationServer := &testNotificationServer{}
+	notifAddr, notifStop := startNotificationTestServer(t, notificationServer)
+	defer notifStop()
+	t.Setenv("NOTIFICATION_GRPC_ADDR", notifAddr)
+
+	userServer := &testUserServer{}
+	userAddr, userStop := startUserTestServer(t, userServer)
+	defer userStop()
+	t.Setenv("USER_GRPC_ADDR", userAddr)
+
+	server, mock, db := newGormTestServer(t)
 	defer func() { _ = db.Close() }()
 
 	createdAt := time.Date(2026, 3, 19, 0, 0, 0, 0, time.UTC)

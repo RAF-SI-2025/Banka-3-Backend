@@ -1,0 +1,40 @@
+meta {
+  name: Get Loans (as Employee)
+  type: http
+  seq: 1
+}
+
+get {
+  url: {{baseUrl}}/api/loans
+  body: none
+  auth: none
+}
+
+headers {
+  Authorization: Bearer {{accessToken}}
+}
+
+tests {
+  test("status 200", function() {
+    expect(res.status).to.equal(200);
+  });
+  test("returns array", function() {
+    expect(res.body).to.be.an("array");
+  });
+  test("loans have expected fields", function() {
+    if (res.body.length > 0) {
+      const loan = res.body[0];
+      expect(loan).to.have.property("loan_number");
+      expect(loan).to.have.property("loan_type");
+      expect(loan).to.have.property("loan_amount");
+      expect(loan).to.have.property("status");
+      expect(loan).to.have.property("currency");
+    }
+  });
+}
+
+script:post-response {
+  if (res.body && res.body.length > 0) {
+    bru.setEnvVar("testLoanNumber", res.body[0].loan_number);
+  }
+}

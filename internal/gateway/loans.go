@@ -19,7 +19,7 @@ func (s *Server) getAuthenticatedEmployeeID(c *gin.Context) (int64, bool) {
 	ctx, cancel := context.WithTimeout(c.Request.Context(), 5*time.Second)
 	defer cancel()
 
-	resp, err := s.UserClient.GetEmployeeByEmail(ctx, &userpb.GetEmployeeByEmailRequest{
+	resp, err := s.UserClient.GetEmployeeByEmail(ctx, &userpb.GetUserByEmailRequest{
 		Email: email,
 	})
 	if err != nil {
@@ -71,7 +71,7 @@ func (s *Server) GetLoans(c *gin.Context) {
 		email, query.LoanType, query.AccountNumber, query.Status)
 
 	// Try employee first; if not an employee, fall back to client view
-	_, err := s.UserClient.GetEmployeeByEmail(ctx, &userpb.GetEmployeeByEmailRequest{Email: email})
+	_, err := s.UserClient.GetEmployeeByEmail(ctx, &userpb.GetUserByEmailRequest{Email: email})
 	if err == nil {
 		log.Printf("[GetLoans] User %s is an employee, calling GetAllLoans", email)
 		// Employee: get all loans

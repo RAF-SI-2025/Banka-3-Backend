@@ -1,0 +1,30 @@
+meta {
+  name: Get Recipients
+  type: http
+  seq: 2
+}
+
+get {
+  url: {{baseUrl}}/api/recipients
+  body: none
+  auth: none
+}
+
+headers {
+  Authorization: Bearer {{clientAccessToken}}
+}
+
+tests {
+  test("status 200", function() {
+    expect(res.status).to.equal(200);
+  });
+  test("returns array", function() {
+    expect(res.body).to.be.an("array");
+    expect(res.body.length).to.be.greaterThan(0);
+  });
+  test("contains our recipient", function() {
+    const found = res.body.find(r => r.id === Number(bru.getEnvVar("testRecipientId")));
+    expect(found).to.not.be.undefined;
+    expect(found.name).to.equal("Bruno Test Recipient");
+  });
+}
