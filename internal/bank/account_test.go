@@ -19,14 +19,14 @@ import (
 	"gorm.io/gorm"
 )
 
-type testUserServer struct {
+type TestUserServer struct {
 	userpb.UnimplementedUserServiceServer
 	isEmployee bool
 	clientID   uint64
 	clientMail string
 }
 
-func (s *testUserServer) GetClientById(_ context.Context, _ *userpb.GetUserByIdRequest) (*userpb.GetClientResponse, error) {
+func (s *TestUserServer) GetClientById(_ context.Context, _ *userpb.GetUserByIdRequest) (*userpb.GetClientResponse, error) {
 	date := time.Date(1990, 5, 20, 0, 0, 0, 0, time.UTC)
 	return &userpb.GetClientResponse{
 		Id:          1,
@@ -40,14 +40,14 @@ func (s *testUserServer) GetClientById(_ context.Context, _ *userpb.GetUserByIdR
 	}, nil
 }
 
-func (s *testUserServer) GetEmployeeByEmail(_ context.Context, _ *userpb.GetUserByEmailRequest) (*userpb.GetEmployeeResponse, error) {
+func (s *TestUserServer) GetEmployeeByEmail(_ context.Context, _ *userpb.GetUserByEmailRequest) (*userpb.GetEmployeeResponse, error) {
 	if s.isEmployee {
 		return &userpb.GetEmployeeResponse{Id: 1, Email: "emp@banka.rs"}, nil
 	}
 	return nil, status.Error(codes.NotFound, "not employee")
 }
 
-func (s *testUserServer) GetClients(_ context.Context, _ *userpb.GetClientsRequest) (*userpb.GetClientsResponse, error) {
+func (s *TestUserServer) GetClients(_ context.Context, _ *userpb.GetClientsRequest) (*userpb.GetClientsResponse, error) {
 	if !s.isEmployee && s.clientMail != "" {
 		return &userpb.GetClientsResponse{
 			Clients: []*userpb.Client{{Id: int64(s.clientID), Email: s.clientMail}},
@@ -64,7 +64,7 @@ func setupMockGorm(t *testing.T, db *sql.DB) *gorm.DB {
 	return gormDB
 }
 
-func startUserMock(srv *testUserServer) (string, func()) {
+func startUserMock(srv *TestUserServer) (string, func()) {
 	lis, _ := net.Listen("tcp", "127.0.0.1:0")
 	s := grpc.NewServer()
 	userpb.RegisterUserServiceServer(s, srv)
@@ -77,7 +77,7 @@ func TestListAccounts(t *testing.T) {
 	gormDB := setupMockGorm(t, sqlDB)
 	server := &Server{db_gorm: gormDB}
 
-	userSrv := &testUserServer{isEmployee: true}
+	userSrv := &TestUserServer{isEmployee: true}
 	addr, stop := startUserMock(userSrv)
 	defer stop()
 	_ = os.Setenv("USER_SERVICE_ADDR", addr)
@@ -116,7 +116,7 @@ func TestGetAccountDetails(t *testing.T) {
 	gormDB := setupMockGorm(t, sqlDB)
 	server := &Server{db_gorm: gormDB}
 
-	userSrv := &testUserServer{isEmployee: false, clientID: 10, clientMail: "user@mail.com"}
+	userSrv := &TestUserServer{isEmployee: false, clientID: 10, clientMail: "user@mail.com"}
 	addr, stop := startUserMock(userSrv)
 	defer stop()
 	_ = os.Setenv("USER_SERVICE_ADDR", addr)
@@ -140,7 +140,7 @@ func TestListClientTransactions(t *testing.T) {
 	gormDB := setupMockGorm(t, sqlDB)
 	server := &Server{db_gorm: gormDB}
 
-	userSrv := &testUserServer{isEmployee: false, clientID: 10, clientMail: "client@mail.com"}
+	userSrv := &TestUserServer{isEmployee: false, clientID: 10, clientMail: "client@mail.com"}
 	addr, stop := startUserMock(userSrv)
 	defer stop()
 	_ = os.Setenv("USER_SERVICE_ADDR", addr)

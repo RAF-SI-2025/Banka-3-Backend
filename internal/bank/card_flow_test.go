@@ -14,15 +14,11 @@ import (
 	"google.golang.org/grpc/status"
 )
 
-type testNotificationServer struct {
-	notificationpb.UnimplementedNotificationServiceServer
-}
-
-func (s *testNotificationServer) SendCardCreatedEmail(_ context.Context, _ *notificationpb.CardCreatedMailRequest) (*notificationpb.SuccessResponse, error) {
+func (s *TestNotificationServer) SendCardCreatedEmail(_ context.Context, _ *notificationpb.CardCreatedMailRequest) (*notificationpb.SuccessResponse, error) {
 	return &notificationpb.SuccessResponse{Successful: true}, nil
 }
 
-func (s *testNotificationServer) SendCardConfirmationEmail(_ context.Context, _ *notificationpb.CardConfirmationMailRequest) (*notificationpb.SuccessResponse, error) {
+func (s *TestNotificationServer) SendCardConfirmationEmail(_ context.Context, _ *notificationpb.CardConfirmationMailRequest) (*notificationpb.SuccessResponse, error) {
 	return &notificationpb.SuccessResponse{Successful: true}, nil
 }
 
@@ -75,7 +71,7 @@ func TestRequestCardSuccess(t *testing.T) {
 	server, mock, db := newTestServer(t)
 	defer func() { _ = db.Close() }()
 
-	notificationServer := &testNotificationServer{}
+	notificationServer := &TestNotificationServer{}
 	addr, stop := startNotificationTestServer(t, notificationServer)
 	defer stop()
 	t.Setenv("NOTIFICATION_GRPC_ADDR", addr)
@@ -147,7 +143,7 @@ func TestConfirmCardSuccess(t *testing.T) {
 	server, mock, db := newTestServer(t)
 	defer func() { _ = db.Close() }()
 
-	notificationServer := &testNotificationServer{}
+	notificationServer := &TestNotificationServer{}
 	addr, stop := startNotificationTestServer(t, notificationServer)
 	defer stop()
 	t.Setenv("NOTIFICATION_GRPC_ADDR", addr)
