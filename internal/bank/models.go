@@ -265,6 +265,9 @@ type (
 		Updated_at    time.Time `gorm:"column:updated_at;not null;autoUpdateTime"`
 		Valid_until   time.Time `gorm:"column:valid_until;not null"`
 	}
+
+	Transaction struct {
+	}
 )
 
 func (Currency) TableName() string {
@@ -320,4 +323,7 @@ func (CardRequest) TableName() string {
 }
 func (PaymentRecipient) TableName() string {
 	return "payment_recipients"
+}
+func (Transaction) TableName() string {
+	return "transactions"
 }
