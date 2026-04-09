@@ -1675,7 +1675,7 @@ func (s *Server) ApproveLoanRequest(_ context.Context, req *bankpb.ApproveLoanRe
 		return nil
 	})
 	if err != nil {
-		return nil, status.Error(codes.Internal, "failed to approve loan request")
+		return nil, status.Error(codes.Internal, err.Error())
 	}
 
 	return &bankpb.ApproveLoanRequestResponse{}, nil

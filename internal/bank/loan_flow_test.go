@@ -97,24 +97,23 @@ func TestGetLoanRequests_DBError(t *testing.T) {
 	}
 }
 
-// ---------------------------------------------------------------------------
-// ApproveLoanRequest
-// ---------------------------------------------------------------------------
-
 func TestApproveLoanRequest_Success(t *testing.T) {
 	server, mock, db := newGormTestServer(t)
 	defer func() { _ = db.Close() }()
 
 	now := time.Now()
+	loanAmount := int64(10_000_00)
+	clientAccountNum := "12345678901234567890"
+	bankAccountNum := "333000100000000110"
 
-	// getLoanRequestByID
+	// 1. getLoanRequestByID
 	loanReqRows := sqlmock.NewRows([]string{
 		"id", "type", "currency_id", "amount", "repayment_period",
 		"account_id", "status", "submission_date",
 		"purpose", "salary", "employment_status", "employment_period",
 		"phone_number", "interest_rate_type",
 	}).AddRow(
-		int64(1), "cash", int64(1), int64(10_000_00), int64(12),
+		int64(1), "cash", int64(1), loanAmount, int64(12),
 		int64(1), "pending", now,
 		"repair", int64(50_000_00), "full_time", int64(24),
 		"0611234567", "fixed",
@@ -123,14 +122,14 @@ func TestApproveLoanRequest_Success(t *testing.T) {
 		WithArgs(int64(1), 1).
 		WillReturnRows(loanReqRows)
 
-	// Fetch account
+	// 2. Fetch client account
 	accountRows := sqlmock.NewRows([]string{
 		"id", "number", "name", "owner", "balance", "created_by", "created_at",
 		"valid_until", "currency", "active", "owner_type", "account_type",
 		"maintainance_cost", "daily_limit", "monthly_limit", "daily_expenditure",
 		"monthly_expenditure",
 	}).AddRow(
-		int64(1), "12345678901234567890", "Main", int64(1), int64(0), int64(1), now,
+		int64(1), clientAccountNum, "Main", int64(1), int64(0), int64(1), now,
 		now.AddDate(3, 0, 0), "RSD", true, "personal", "checking",
 		int64(0), int64(0), int64(0), int64(0), int64(0),
 	)
@@ -138,7 +137,7 @@ func TestApproveLoanRequest_Success(t *testing.T) {
 		WithArgs(int64(1), 1).
 		WillReturnRows(accountRows)
 
-	// Fetch currency
+	// 3. Fetch currency
 	currencyRows := sqlmock.NewRows([]string{
 		"id", "label", "name", "symbol", "countries", "description", "active",
 	}).AddRow(int64(1), "RSD", "Serbian Dinar", "din", "Serbia", "Serbian Dinar", true)
@@ -146,14 +145,57 @@ func TestApproveLoanRequest_Success(t *testing.T) {
 		WithArgs(int64(1), 1).
 		WillReturnRows(currencyRows)
 
-	// Transaction: create loan, create installment, update loan request
+	// --- TRANSACTION STARTS ---
 	mock.ExpectBegin()
+
+	// 4. Lookup Bank Internal Account
+	bankAccountRows := sqlmock.NewRows([]string{"id", "number", "balance", "currency"}).
+		AddRow(int64(99), bankAccountNum, int64(100_000_000_00), "RSD")
+	mock.ExpectQuery(`SELECT .* FROM "accounts" JOIN clients ON .* WHERE clients.email = \$1 AND accounts.currency = \$2 .*`).
+		WithArgs("system@banka3.rs", "RSD", 1).
+		WillReturnRows(bankAccountRows)
+
+	// 5. Decrease Bank Balance
+	mock.ExpectQuery(`UPDATE accounts SET balance = balance - \$2, .* WHERE number = \$1 .* RETURNING number`).
+		WithArgs(bankAccountNum, loanAmount).
+		WillReturnRows(sqlmock.NewRows([]string{"number"}).AddRow(bankAccountNum))
+
+	// 5b. REQUIRED: GetAccountByNumberRecord (Must have all 17 columns)
+	accountColumns := []string{
+		"id", "number", "name", "owner", "balance", "currency", "active",
+		"owner_type", "account_type", "maintainance_cost", "daily_limit",
+		"monthly_limit", "daily_expenditure", "monthly_expenditure",
+		"created_by", "created_at", "valid_until",
+	}
+
+	mock.ExpectQuery(`SELECT .* FROM accounts WHERE number = \$1`).
+		WithArgs(bankAccountNum).
+		WillReturnRows(sqlmock.NewRows(accountColumns).
+			AddRow(int64(99), bankAccountNum, "Bank Account", int64(0), int64(99990000), "RSD", true,
+				"system", "business", int64(0), int64(0), int64(0), int64(0), int64(0),
+				int64(0), now, now))
+
+	// 6. Increase Client Balance
+	mock.ExpectExec(regexp.QuoteMeta(`UPDATE accounts SET balance = balance + $1 WHERE number = $2`)).
+		WithArgs(loanAmount, clientAccountNum).
+		WillReturnResult(sqlmock.NewResult(1, 1))
+
+	// 6b. REQUIRED: GetAccountByNumberRecord (Must have all 17 columns)
+	mock.ExpectQuery(`SELECT .* FROM accounts WHERE number = \$1`).
+		WithArgs(clientAccountNum).
+		WillReturnRows(sqlmock.NewRows(accountColumns).
+			AddRow(int64(1), clientAccountNum, "Client Account", int64(1), loanAmount, "RSD", true,
+				"personal", "checking", int64(0), int64(0), int64(0), int64(0), int64(0),
+				int64(1), now, now))
+
+	// 7. Original Transaction steps
 	mock.ExpectQuery(`INSERT INTO "loans"`).
 		WillReturnRows(sqlmock.NewRows([]string{"id"}).AddRow(int64(1)))
 	mock.ExpectQuery(`INSERT INTO "loan_installment"`).
 		WillReturnRows(sqlmock.NewRows([]string{"id"}).AddRow(int64(1)))
 	mock.ExpectExec(`UPDATE "loan_request"`).
 		WillReturnResult(sqlmock.NewResult(0, 1))
+
 	mock.ExpectCommit()
 
 	resp, err := server.ApproveLoanRequest(context.Background(), &bankpb.ApproveLoanRequestRequest{Id: 1})
