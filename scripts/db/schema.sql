@@ -177,7 +177,7 @@ CREATE TABLE IF NOT EXISTS payments (
     commission          BIGINT          NOT NULL,
     status              VARCHAR(20)     NOT NULL DEFAULT 'realized' CHECK (status IN ('realized', 'rejected', 'pending')),
     recipient_id        BIGINT          REFERENCES clients(id),
-    transcaction_code    INT            NOT NULL,
+    transaction_code    INT            NOT NULL,
     call_number         VARCHAR(31)     NOT NULL,
     reason              VARCHAR(255)    NOT NULL,
     timestamp           TIMESTAMP       NOT NULL DEFAULT NOW()

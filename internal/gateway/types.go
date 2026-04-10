@@ -191,19 +191,25 @@ type paymentRecipientByIDURI struct {
 	ID int64 `uri:"id" binding:"required"`
 }
 
-type getTransactionsQuery struct {
-	AccountNumber string  `form:"account_number"`
-	Date          string  `form:"date"`
-	Amount        float64 `form:"amount"`
-	Status        string  `form:"status"`
-}
-
 type transactionByIDURI struct {
 	ID int64 `uri:"id" binding:"required"`
 }
 
 type transactionTypeQuery struct {
 	Type string `form:"type" binding:"required"`
+}
+
+type getTransactionsQuery struct {
+	AccountNumber string  `form:"account_number"`
+	DateFrom      string  `form:"date_from"`
+	DateTo        string  `form:"date_to"`
+	AmountFrom    float64 `form:"amount_from"`
+	AmountTo      float64 `form:"amount_to"`
+	Status        string  `form:"status"`
+	Page          int32   `form:"page"`
+	PageSize      int32   `form:"page_size"`
+	SortBy        string  `form:"sort_by"`
+	SortOrder     string  `form:"sort_order"`
 }
 
 type requestCardRequest struct {
