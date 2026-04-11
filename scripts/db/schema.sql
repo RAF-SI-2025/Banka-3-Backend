@@ -54,11 +54,14 @@ CREATE TABLE IF NOT EXISTS payment_recipients (
 );
 
 CREATE TABLE IF NOT EXISTS refresh_tokens (
-    email        VARCHAR(255) PRIMARY KEY,
+    session_id   VARCHAR(64)  PRIMARY KEY,
+    email        VARCHAR(255) NOT NULL,
     hashed_token BYTEA        NOT NULL,
     valid_until  TIMESTAMP    NOT NULL,
     revoked      BOOLEAN      NOT NULL DEFAULT FALSE
 );
+
+CREATE INDEX IF NOT EXISTS idx_refresh_tokens_email ON refresh_tokens(email);
 
 CREATE TABLE IF NOT EXISTS password_action_tokens (
     email        VARCHAR(255) NOT NULL,
@@ -83,6 +86,30 @@ CREATE TABLE IF NOT EXISTS currencies (
     UNIQUE(label)
 );
 
+CREATE TYPE owner_type AS ENUM ('personal', 'business');
+CREATE TYPE account_type AS ENUM ('checking', 'foreign');
+
+CREATE TABLE IF NOT EXISTS accounts (
+    id                  BIGSERIAL       PRIMARY KEY,
+    number              VARCHAR(20)     NOT NULL,
+    name                VARCHAR(127)    NOT NULL,
+    owner               BIGINT          NOT NULL REFERENCES clients(id) ON DELETE CASCADE, -- cascade delete??
+    balance             DECIMAL(20,2)   NOT NULL DEFAULT 0,
+    created_by          BIGINT          REFERENCES employees(id) ON DELETE SET NULL,
+    created_at          DATE            NOT NULL DEFAULT CURRENT_DATE,
+    valid_until         DATE            NOT NULL,
+    currency            VARCHAR(8)      NOT NULL REFERENCES currencies(label) ON UPDATE CASCADE ON DELETE RESTRICT,
+    active              BOOLEAN         NOT NULL DEFAULT FALSE,
+    owner_type          owner_type      NOT NULL,
+    account_type        account_type   NOT NULL,
+    maintainance_cost   DECIMAL(20,2)   NOT NULL,
+    daily_limit         DECIMAL(20,2),
+    monthly_limit       DECIMAL(20,2),
+    daily_expenditure   DECIMAL(20,2),
+    monthly_expenditure DECIMAL(20,2),
+    UNIQUE(number)
+);
+
 CREATE TABLE IF NOT EXISTS activity_codes (
     id BIGSERIAL PRIMARY KEY,
     code VARCHAR(7) NOT NULL,
@@ -103,33 +130,8 @@ CREATE TABLE IF NOT EXISTS companies (
     UNIQUE(tax_code)
 );
 
-CREATE TYPE owner_type AS ENUM ('personal', 'business');
-CREATE TYPE account_type AS ENUM ('checking', 'foreign');
-
-CREATE TABLE IF NOT EXISTS accounts (
-    id                  BIGSERIAL       PRIMARY KEY,
-    number              VARCHAR(20)     NOT NULL,
-    name                VARCHAR(127)    NOT NULL,
-    owner               BIGINT          NOT NULL REFERENCES clients(id) ON DELETE CASCADE,
-    company_id          BIGINT          DEFAULT NULL REFERENCES companies(id) ON DELETE CASCADE,
-    balance             BIGINT          NOT NULL DEFAULT 0,
-    created_by          BIGINT          REFERENCES employees(id) ON DELETE SET NULL,
-    created_at          DATE            NOT NULL DEFAULT CURRENT_DATE,
-    valid_until         DATE            NOT NULL,
-    currency            VARCHAR(8)      NOT NULL REFERENCES currencies(label) ON UPDATE CASCADE ON DELETE RESTRICT,
-    active              BOOLEAN         NOT NULL DEFAULT FALSE,
-    owner_type          owner_type      NOT NULL,
-    account_type        account_type    NOT NULL,
-    maintainance_cost   BIGINT          NOT NULL,
-    daily_limit         BIGINT,
-    monthly_limit       BIGINT,
-    daily_expenditure   BIGINT,
-    monthly_expenditure BIGINT,
-    UNIQUE(number)
-);
-
 CREATE TYPE card_type AS ENUM ('debit', 'credit');
-CREATE TYPE card_status AS ENUM ('active', 'blocked');
+CREATE TYPE card_status AS ENUM ('active', 'blocked', 'deactivated');
 CREATE TYPE card_brand AS ENUM ('visa', 'mastercard', 'amex', 'dinacard');
 
 CREATE TABLE IF NOT EXISTS cards (
@@ -141,7 +143,7 @@ CREATE TABLE IF NOT EXISTS cards (
     valid_until     DATE            NOT NULL,
     account_number  VARCHAR(20)     REFERENCES accounts(number) ON UPDATE CASCADE ON DELETE RESTRICT,
     cvv             VARCHAR(7)      NOT NULL,
-    card_limit      BIGINT,
+    card_limit      DECIMAL(20,2),
     status          card_status     NOT NULL DEFAULT 'active',
     UNIQUE(number)
 );
@@ -172,9 +174,9 @@ CREATE TABLE IF NOT EXISTS payments (
     transaction_id      BIGSERIAL       PRIMARY KEY,
     from_account        VARCHAR(20)     REFERENCES accounts(number),
     to_account          VARCHAR(20)     REFERENCES accounts(number),
-    start_amount        BIGINT          NOT NULL,
-    end_amount          BIGINT          NOT NULL,
-    commission          BIGINT          NOT NULL,
+    start_amount        DECIMAL(20,2)   NOT NULL,
+    end_amount          DECIMAL(20,2)   NOT NULL,
+    commission          DECIMAL(20,2)   NOT NULL,
     status              VARCHAR(20)     NOT NULL DEFAULT 'realized' CHECK (status IN ('realized', 'rejected', 'pending')),
     recipient_id        BIGINT          REFERENCES clients(id),
     transcaction_code    INT            NOT NULL,
@@ -183,19 +185,16 @@ CREATE TABLE IF NOT EXISTS payments (
     timestamp           TIMESTAMP       NOT NULL DEFAULT NOW()
 );
 
-
-CREATE TYPE transfer_status AS ENUM ('pending', 'realized', 'rejected');
-
 CREATE TABLE IF NOT EXISTS transfers (
     transaction_id      BIGSERIAL       PRIMARY KEY,
     from_account        VARCHAR(20)     REFERENCES accounts(number),
     to_account          VARCHAR(20)     REFERENCES accounts(number),
-    start_amount        BIGINT          NOT NULL,
-    end_amount          BIGINT          NOT NULL,
+    start_amount        DECIMAL(20,2)   NOT NULL,
+    end_amount          DECIMAL(20,2)   NOT NULL,
     start_currency_id   BIGINT          REFERENCES currencies(id) ON UPDATE CASCADE ON DELETE RESTRICT,
     exchange_rate       DECIMAL(20,2),
-    commission          BIGINT          NOT NULL,
-    status              transfer_status  NOT NULL DEFAULT 'pending',
+    commission          DECIMAL(20,2)   NOT NULL,
+    status              VARCHAR(20)     NOT NULL DEFAULT 'pending' CHECK  (status IN ('pending', 'completed', 'rejected')),
     timestamp           TIMESTAMP       NOT NULL DEFAULT NOW()
 );
 
@@ -211,16 +210,16 @@ CREATE TYPE interest_rate_type AS ENUM ('fixed', 'variable');
 CREATE TABLE IF NOT EXISTS loans (
     id                  BIGSERIAL           PRIMARY KEY,
     account_id          BIGINT              REFERENCES accounts(id) ON UPDATE CASCADE ON DELETE RESTRICT,
-    amount              BIGINT              NOT NULL,
+    amount              DECIMAL(20,2)       NOT NULL,
     currency_id         BIGSERIAL           REFERENCES currencies(id) ON UPDATE CASCADE ON DELETE RESTRICT,
     installments        BIGINT              NOT NULL,
     nominal_rate        DECIMAL (5, 2)      NOT NULL,
     interest_rate       DECIMAL (5, 2)      NOT NULL,
     date_signed         DATE                NOT NULL,
     date_end            DATE                NOT NULL,
-    monthly_payment     BIGINT              NOT NULL,
+    monthly_payment     DECIMAL(20,2)       NOT NULL,
     next_payment_due    DATE                NOT NULL,
-    remaining_debt      BIGINT              NOT NULL,
+    remaining_debt      DECIMAL(20,2)       NOT NULL,
     type                loan_type           NOT NULL,
     loan_status         loan_status         NOT NULL DEFAULT 'approved',
     interest_rate_type  interest_rate_type  NOT NULL
@@ -231,7 +230,7 @@ CREATE TYPE installment_status AS ENUM ('paid', 'due', 'late');
 CREATE TABLE IF NOT EXISTS loan_installment (
     id                  BIGSERIAL           PRIMARY KEY,
     loan_id             BIGINT              REFERENCES loans(id) ON UPDATE CASCADE ON DELETE CASCADE,
-    installment_amount  BIGINT              NOT NULL,
+    installment_amount  DECIMAL(20,2)       NOT NULL,
     interest_rate       DECIMAL(5, 2)       NOT NULL,
     currency_id         BIGSERIAL           REFERENCES currencies(id) ON UPDATE CASCADE ON DELETE RESTRICT,
     due_date            DATE                NOT NULL,
@@ -247,13 +246,13 @@ CREATE TABLE IF NOT EXISTS loan_request (
     id                  BIGSERIAL            PRIMARY KEY,
     type                loan_type            NOT NULL,
     currency_id         BIGINT               REFERENCES currencies(id) ON UPDATE CASCADE ON DELETE RESTRICT,
-    amount              BIGINT               NOT NULL,
+    amount              DECIMAL(20,2)        NOT NULL,
     repayment_period    BIGINT               NOT NULL,
     account_id          BIGINT               REFERENCES accounts(id) ON UPDATE CASCADE ON DELETE RESTRICT,
     status              loan_request_status  NOT NULL DEFAULT 'pending',
     submission_date     TIMESTAMP            NOT NULL DEFAULT NOW(),
     purpose             VARCHAR(255),
-    salary              BIGINT,
+    salary              DECIMAL(20,2),
     employment_status   employment_status,
     employment_period   BIGINT,
     phone_number        VARCHAR(32),
@@ -272,6 +271,17 @@ CREATE TABLE IF NOT EXISTS backup_codes (
     client_id BIGINT REFERENCES clients(id) ON DELETE CASCADE,
     token     VARCHAR(6) NOT NULL,
     used      BOOLEAN NOT NULL DEFAULT FALSE
+);
+
+CREATE TABLE IF NOT EXISTS transaction_verification_codes (
+    client_id        BIGINT PRIMARY KEY REFERENCES clients(id) ON DELETE CASCADE,
+    code             VARCHAR(6)  NOT NULL,
+    valid_until      TIMESTAMP   NOT NULL,
+    failed_attempts  INTEGER     NOT NULL DEFAULT 0,
+    max_attempts     INTEGER     NOT NULL DEFAULT 3,
+    used             BOOLEAN     NOT NULL DEFAULT FALSE,
+    canceled         BOOLEAN     NOT NULL DEFAULT FALSE,
+    created_at       TIMESTAMP   NOT NULL DEFAULT NOW()
 );
 
 CREATE TABLE IF NOT EXISTS exchange_rates (

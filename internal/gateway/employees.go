@@ -82,7 +82,7 @@ func (s *Server) GetEmployeeByID(c *gin.Context) {
 	ctx, cancel := context.WithTimeout(c.Request.Context(), 5*time.Second)
 	defer cancel()
 
-	resp, err := s.UserClient.GetEmployeeById(ctx, &userpb.GetUserByIdRequest{
+	resp, err := s.UserClient.GetEmployeeById(ctx, &userpb.GetEmployeeByIdRequest{
 		Id: uri.EmployeeID,
 	})
 	if err != nil {

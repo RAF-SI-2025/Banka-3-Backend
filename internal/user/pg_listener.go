@@ -49,7 +49,7 @@ func listenLoop(ctx context.Context, databaseURL string, srv *Server) error {
 		role, permissions, active := srv.getRoleAndPermissions(email)
 
 		if !active {
-			if err := srv.DeleteSession(ctx, email); err != nil {
+			if err := srv.DeleteSessionsByEmail(ctx, email); err != nil {
 				log.Printf("pg listener: failed to delete session for %s: %v", email, err)
 			} else {
 				log.Printf("pg listener: deleted session for deactivated employee %s", email)

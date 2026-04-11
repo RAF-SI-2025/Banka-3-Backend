@@ -1,7 +1,7 @@
 #!/bin/bash
 
 # Konfiguracija
-BASE_URL="http://localhost:8080/api" 
+BASE_URL="http://localhost:8081/api" 
 GREEN='\033[0;32m'
 RED='\033[0;31m'
 BLUE='\033[0;34m'

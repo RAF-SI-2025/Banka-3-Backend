@@ -37,16 +37,14 @@ const (
 	UserService_UpdateClient_FullMethodName              = "/user.UserService/UpdateClient"
 	UserService_CreateEmployeeAccount_FullMethodName     = "/user.UserService/CreateEmployeeAccount"
 	UserService_GetUserPermissions_FullMethodName        = "/user.UserService/GetUserPermissions"
-	UserService_GetClientById_FullMethodName             = "/user.UserService/GetClientById"
-	UserService_GetClientByEmail_FullMethodName          = "/user.UserService/GetClientByEmail"
 )
 
 // UserServiceClient is the client API for UserService service.
 //
 // For semantics around ctx use and closing/ending streaming RPCs, please refer to https://pkg.go.dev/google.golang.org/grpc/?tab=doc#ClientConn.NewStream.
 type UserServiceClient interface {
-	GetEmployeeById(ctx context.Context, in *GetUserByIdRequest, opts ...grpc.CallOption) (*GetEmployeeResponse, error)
-	GetEmployeeByEmail(ctx context.Context, in *GetUserByEmailRequest, opts ...grpc.CallOption) (*GetEmployeeResponse, error)
+	GetEmployeeById(ctx context.Context, in *GetEmployeeByIdRequest, opts ...grpc.CallOption) (*GetEmployeeResponse, error)
+	GetEmployeeByEmail(ctx context.Context, in *GetEmployeeByEmailRequest, opts ...grpc.CallOption) (*GetEmployeeResponse, error)
 	GetEmployees(ctx context.Context, in *GetEmployeesRequest, opts ...grpc.CallOption) (*GetEmployeesResponse, error)
 	UpdateEmployee(ctx context.Context, in *UpdateEmployeeRequest, opts ...grpc.CallOption) (*GetEmployeeResponse, error)
 	DeleteEmployee(ctx context.Context, in *DeleteEmployeeRequest, opts ...grpc.CallOption) (*DeleteEmployeeResponse, error)
@@ -63,8 +61,6 @@ type UserServiceClient interface {
 	UpdateClient(ctx context.Context, in *UpdateClientRequest, opts ...grpc.CallOption) (*UpdateClientResponse, error)
 	CreateEmployeeAccount(ctx context.Context, in *CreateEmployeeRequest, opts ...grpc.CallOption) (*GetEmployeeResponse, error)
 	GetUserPermissions(ctx context.Context, in *GetUserPermissionsRequest, opts ...grpc.CallOption) (*GetUserPermissionsResponse, error)
-	GetClientById(ctx context.Context, in *GetUserByIdRequest, opts ...grpc.CallOption) (*GetClientResponse, error)
-	GetClientByEmail(ctx context.Context, in *GetUserByEmailRequest, opts ...grpc.CallOption) (*GetClientResponse, error)
 }
 
 type userServiceClient struct {
@@ -75,7 +71,7 @@ func NewUserServiceClient(cc grpc.ClientConnInterface) UserServiceClient {
 	return &userServiceClient{cc}
 }
 
-func (c *userServiceClient) GetEmployeeById(ctx context.Context, in *GetUserByIdRequest, opts ...grpc.CallOption) (*GetEmployeeResponse, error) {
+func (c *userServiceClient) GetEmployeeById(ctx context.Context, in *GetEmployeeByIdRequest, opts ...grpc.CallOption) (*GetEmployeeResponse, error) {
 	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
 	out := new(GetEmployeeResponse)
 	err := c.cc.Invoke(ctx, UserService_GetEmployeeById_FullMethodName, in, out, cOpts...)
@@ -85,7 +81,7 @@ func (c *userServiceClient) GetEmployeeById(ctx context.Context, in *GetUserById
 	return out, nil
 }
 
-func (c *userServiceClient) GetEmployeeByEmail(ctx context.Context, in *GetUserByEmailRequest, opts ...grpc.CallOption) (*GetEmployeeResponse, error) {
+func (c *userServiceClient) GetEmployeeByEmail(ctx context.Context, in *GetEmployeeByEmailRequest, opts ...grpc.CallOption) (*GetEmployeeResponse, error) {
 	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
 	out := new(GetEmployeeResponse)
 	err := c.cc.Invoke(ctx, UserService_GetEmployeeByEmail_FullMethodName, in, out, cOpts...)
@@ -255,32 +251,12 @@ func (c *userServiceClient) GetUserPermissions(ctx context.Context, in *GetUserP
 	return out, nil
 }
 
-func (c *userServiceClient) GetClientById(ctx context.Context, in *GetUserByIdRequest, opts ...grpc.CallOption) (*GetClientResponse, error) {
-	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
-	out := new(GetClientResponse)
-	err := c.cc.Invoke(ctx, UserService_GetClientById_FullMethodName, in, out, cOpts...)
-	if err != nil {
-		return nil, err
-	}
-	return out, nil
-}
-
-func (c *userServiceClient) GetClientByEmail(ctx context.Context, in *GetUserByEmailRequest, opts ...grpc.CallOption) (*GetClientResponse, error) {
-	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
-	out := new(GetClientResponse)
-	err := c.cc.Invoke(ctx, UserService_GetClientByEmail_FullMethodName, in, out, cOpts...)
-	if err != nil {
-		return nil, err
-	}
-	return out, nil
-}
-
 // UserServiceServer is the server API for UserService service.
 // All implementations must embed UnimplementedUserServiceServer
 // for forward compatibility.
 type UserServiceServer interface {
-	GetEmployeeById(context.Context, *GetUserByIdRequest) (*GetEmployeeResponse, error)
-	GetEmployeeByEmail(context.Context, *GetUserByEmailRequest) (*GetEmployeeResponse, error)
+	GetEmployeeById(context.Context, *GetEmployeeByIdRequest) (*GetEmployeeResponse, error)
+	GetEmployeeByEmail(context.Context, *GetEmployeeByEmailRequest) (*GetEmployeeResponse, error)
 	GetEmployees(context.Context, *GetEmployeesRequest) (*GetEmployeesResponse, error)
 	UpdateEmployee(context.Context, *UpdateEmployeeRequest) (*GetEmployeeResponse, error)
 	DeleteEmployee(context.Context, *DeleteEmployeeRequest) (*DeleteEmployeeResponse, error)
@@ -297,8 +273,6 @@ type UserServiceServer interface {
 	UpdateClient(context.Context, *UpdateClientRequest) (*UpdateClientResponse, error)
 	CreateEmployeeAccount(context.Context, *CreateEmployeeRequest) (*GetEmployeeResponse, error)
 	GetUserPermissions(context.Context, *GetUserPermissionsRequest) (*GetUserPermissionsResponse, error)
-	GetClientById(context.Context, *GetUserByIdRequest) (*GetClientResponse, error)
-	GetClientByEmail(context.Context, *GetUserByEmailRequest) (*GetClientResponse, error)
 	mustEmbedUnimplementedUserServiceServer()
 }
 
@@ -309,10 +283,10 @@ type UserServiceServer interface {
 // pointer dereference when methods are called.
 type UnimplementedUserServiceServer struct{}
 
-func (UnimplementedUserServiceServer) GetEmployeeById(context.Context, *GetUserByIdRequest) (*GetEmployeeResponse, error) {
+func (UnimplementedUserServiceServer) GetEmployeeById(context.Context, *GetEmployeeByIdRequest) (*GetEmployeeResponse, error) {
 	return nil, status.Error(codes.Unimplemented, "method GetEmployeeById not implemented")
 }
-func (UnimplementedUserServiceServer) GetEmployeeByEmail(context.Context, *GetUserByEmailRequest) (*GetEmployeeResponse, error) {
+func (UnimplementedUserServiceServer) GetEmployeeByEmail(context.Context, *GetEmployeeByEmailRequest) (*GetEmployeeResponse, error) {
 	return nil, status.Error(codes.Unimplemented, "method GetEmployeeByEmail not implemented")
 }
 func (UnimplementedUserServiceServer) GetEmployees(context.Context, *GetEmployeesRequest) (*GetEmployeesResponse, error) {
@@ -363,12 +337,6 @@ func (UnimplementedUserServiceServer) CreateEmployeeAccount(context.Context, *Cr
 func (UnimplementedUserServiceServer) GetUserPermissions(context.Context, *GetUserPermissionsRequest) (*GetUserPermissionsResponse, error) {
 	return nil, status.Error(codes.Unimplemented, "method GetUserPermissions not implemented")
 }
-func (UnimplementedUserServiceServer) GetClientById(context.Context, *GetUserByIdRequest) (*GetClientResponse, error) {
-	return nil, status.Error(codes.Unimplemented, "method GetClientById not implemented")
-}
-func (UnimplementedUserServiceServer) GetClientByEmail(context.Context, *GetUserByEmailRequest) (*GetClientResponse, error) {
-	return nil, status.Error(codes.Unimplemented, "method GetClientByEmail not implemented")
-}
 func (UnimplementedUserServiceServer) mustEmbedUnimplementedUserServiceServer() {}
 func (UnimplementedUserServiceServer) testEmbeddedByValue()                     {}
 
@@ -391,7 +359,7 @@ func RegisterUserServiceServer(s grpc.ServiceRegistrar, srv UserServiceServer) {
 }
 
 func _UserService_GetEmployeeById_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
-	in := new(GetUserByIdRequest)
+	in := new(GetEmployeeByIdRequest)
 	if err := dec(in); err != nil {
 		return nil, err
 	}
@@ -403,13 +371,13 @@ func _UserService_GetEmployeeById_Handler(srv interface{}, ctx context.Context, 
 		FullMethod: UserService_GetEmployeeById_FullMethodName,
 	}
 	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
-		return srv.(UserServiceServer).GetEmployeeById(ctx, req.(*GetUserByIdRequest))
+		return srv.(UserServiceServer).GetEmployeeById(ctx, req.(*GetEmployeeByIdRequest))
 	}
 	return interceptor(ctx, in, info, handler)
 }
 
 func _UserService_GetEmployeeByEmail_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
-	in := new(GetUserByEmailRequest)
+	in := new(GetEmployeeByEmailRequest)
 	if err := dec(in); err != nil {
 		return nil, err
 	}
@@ -421,7 +389,7 @@ func _UserService_GetEmployeeByEmail_Handler(srv interface{}, ctx context.Contex
 		FullMethod: UserService_GetEmployeeByEmail_FullMethodName,
 	}
 	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
-		return srv.(UserServiceServer).GetEmployeeByEmail(ctx, req.(*GetUserByEmailRequest))
+		return srv.(UserServiceServer).GetEmployeeByEmail(ctx, req.(*GetEmployeeByEmailRequest))
 	}
 	return interceptor(ctx, in, info, handler)
 }
@@ -714,42 +682,6 @@ func _UserService_GetUserPermissions_Handler(srv interface{}, ctx context.Contex
 	return interceptor(ctx, in, info, handler)
 }
 
-func _UserService_GetClientById_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
-	in := new(GetUserByIdRequest)
-	if err := dec(in); err != nil {
-		return nil, err
-	}
-	if interceptor == nil {
-		return srv.(UserServiceServer).GetClientById(ctx, in)
-	}
-	info := &grpc.UnaryServerInfo{
-		Server:     srv,
-		FullMethod: UserService_GetClientById_FullMethodName,
-	}
-	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
-		return srv.(UserServiceServer).GetClientById(ctx, req.(*GetUserByIdRequest))
-	}
-	return interceptor(ctx, in, info, handler)
-}
-
-func _UserService_GetClientByEmail_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
-	in := new(GetUserByEmailRequest)
-	if err := dec(in); err != nil {
-		return nil, err
-	}
-	if interceptor == nil {
-		return srv.(UserServiceServer).GetClientByEmail(ctx, in)
-	}
-	info := &grpc.UnaryServerInfo{
-		Server:     srv,
-		FullMethod: UserService_GetClientByEmail_FullMethodName,
-	}
-	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
-		return srv.(UserServiceServer).GetClientByEmail(ctx, req.(*GetUserByEmailRequest))
-	}
-	return interceptor(ctx, in, info, handler)
-}
-
 // UserService_ServiceDesc is the grpc.ServiceDesc for UserService service.
 // It's only intended for direct use with grpc.RegisterService,
 // and not to be introspected or modified (even as a copy)
@@ -828,14 +760,6 @@ var UserService_ServiceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "GetUserPermissions",
 			Handler:    _UserService_GetUserPermissions_Handler,
-		},
-		{
-			MethodName: "GetClientById",
-			Handler:    _UserService_GetClientById_Handler,
-		},
-		{
-			MethodName: "GetClientByEmail",
-			Handler:    _UserService_GetClientByEmail_Handler,
 		},
 	},
 	Streams:  []grpc.StreamDesc{},

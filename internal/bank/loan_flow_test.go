@@ -150,6 +150,8 @@ func TestApproveLoanRequest_Success(t *testing.T) {
 	mock.ExpectBegin()
 	mock.ExpectQuery(`INSERT INTO "loans"`).
 		WillReturnRows(sqlmock.NewRows([]string{"id"}).AddRow(int64(1)))
+	mock.ExpectExec(`UPDATE "accounts" SET "balance"=balance \+ \$1 WHERE id = \$2`).
+		WillReturnResult(sqlmock.NewResult(0, 1))
 	mock.ExpectQuery(`INSERT INTO "loan_installment"`).
 		WillReturnRows(sqlmock.NewRows([]string{"id"}).AddRow(int64(1)))
 	mock.ExpectExec(`UPDATE "loan_request"`).

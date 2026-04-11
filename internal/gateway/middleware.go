@@ -20,7 +20,7 @@ func NoopMiddleware() gin.HandlerFunc {
 }
 
 // AuthenticatedMiddleware validates the JWT and checks that an active session exists.
-// It only sets identity fields (email, exp, iat) in context.
+// It stores identity and session metadata in context for downstream handlers.
 func AuthenticatedMiddleware(user userpb.UserServiceClient) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		header := c.GetHeader("Authorization")
@@ -40,6 +40,9 @@ func AuthenticatedMiddleware(user userpb.UserServiceClient) gin.HandlerFunc {
 		}
 
 		c.Set("email", resp.Sub)
+		c.Set("session_id", resp.SessionId)
+		c.Set("role", resp.Role)
+		c.Set("permissions", resp.Permissions)
 		c.Set("exp", resp.Exp)
 		c.Set("iat", resp.Iat)
 		c.Next()
@@ -60,7 +63,7 @@ func TOTPMiddleware(totp userpb.TOTPServiceClient) gin.HandlerFunc {
 		}
 		header := c.GetHeader("TOTP")
 		if header == "" {
-			c.AbortWithStatus(http.StatusUnauthorized)
+			c.AbortWithStatusJSON(http.StatusUnauthorized, gin.H{"message": "missing verification code"})
 			return
 		}
 		resp, err := totp.VerifyCode(context.Background(), &userpb.VerifyCodeRequest{
@@ -68,11 +71,21 @@ func TOTPMiddleware(totp userpb.TOTPServiceClient) gin.HandlerFunc {
 			Code:  header,
 		})
 		if err != nil {
-			c.AbortWithStatusJSON(http.StatusUnauthorized, gin.H{"message": "user doesn't have TOTP setup"})
+			c.AbortWithStatusJSON(http.StatusUnauthorized, gin.H{"message": "verification failed"})
 			return
 		}
 		if !resp.Valid {
-			c.AbortWithStatus(http.StatusUnauthorized)
+			if resp.TransactionCancelled {
+				c.AbortWithStatusJSON(http.StatusUnauthorized, gin.H{
+					"message":            "verification code expired or transaction cancelled",
+					"remaining_attempts": resp.RemainingAttempts,
+				})
+				return
+			}
+			c.AbortWithStatusJSON(http.StatusUnauthorized, gin.H{
+				"message":            "invalid verification code",
+				"remaining_attempts": resp.RemainingAttempts,
+			})
 			return
 		}
 		c.Next()
@@ -84,7 +97,7 @@ func TOTPMiddleware(totp userpb.TOTPServiceClient) gin.HandlerFunc {
 // Prefix "role:" checks the role (e.g. "role:client", "role:client|employee").
 // Plain strings check permissions (e.g. "manage_contracts").
 // The "admin" permission bypasses all checks.
-func PermissionMiddleware(user userpb.UserServiceClient) func(...string) gin.HandlerFunc {
+func PermissionMiddleware() func(...string) gin.HandlerFunc {
 	return func(required ...string) gin.HandlerFunc {
 		return func(c *gin.Context) {
 			email := c.GetString("email")
@@ -93,27 +106,12 @@ func PermissionMiddleware(user userpb.UserServiceClient) func(...string) gin.Han
 				return
 			}
 
-			// Fetch role/permissions from Redis via gRPC (once per request)
-			var userRole string
-			var userPerms []string
-			if cached, exists := c.Get("role"); exists {
-				userRole, _ = cached.(string)
-				permsVal, _ := c.Get("permissions")
-				userPerms, _ = permsVal.([]string)
-			} else {
-				ctx, cancel := context.WithTimeout(c.Request.Context(), 5*time.Second)
-				defer cancel()
-				resp, err := user.GetUserPermissions(ctx, &userpb.GetUserPermissionsRequest{
-					Email: email,
-				})
-				if err != nil {
-					c.AbortWithStatus(http.StatusForbidden)
-					return
-				}
-				userRole = resp.Role
-				userPerms = resp.Permissions
-				c.Set("role", userRole)
-				c.Set("permissions", userPerms)
+			userRole := c.GetString("role")
+			permsVal, exists := c.Get("permissions")
+			userPerms, _ := permsVal.([]string)
+			if userRole == "" || !exists {
+				c.AbortWithStatus(http.StatusForbidden)
+				return
 			}
 
 			// Admin permission bypasses all checks

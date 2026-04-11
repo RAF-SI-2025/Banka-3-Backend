@@ -9,7 +9,7 @@ CLIENT_EMAIL ?= petar@primer.raf
 
 .PHONY: all up down down-v proto schema seed nuke lint lint-l build build-l test test-l test-integration test-integration-l fmt fmt-l
 
-all: proto up schema seed
+all: proto up
 
 up:
 	docker compose up -d --build
@@ -22,11 +22,15 @@ down-v:
 
 proto:
 	docker build -t banka-proto -f scripts/proto/Dockerfile .
-	docker run --rm -v $(PWD):/workspace -u $$(id -u):$$(id -g) banka-proto \
+ifeq ($(OS),Windows_NT)
+	powershell -NoProfile -Command "$$protoRoot = Join-Path (Get-Location) 'proto'; $$workspace = (Get-Location).Path -replace '\\','/'; $$mount = $$workspace + ':/workspace'; $$protoFiles = Get-ChildItem -Path $$protoRoot -Recurse -Filter *.proto -File | ForEach-Object { $$_.FullName.Substring($$protoRoot.Length + 1).Replace('\', '/') }; if (-not $$protoFiles) { throw 'No proto files found under proto/'; }; $$env:MSYS_NO_PATHCONV = '1'; $$env:MSYS2_ARG_CONV_EXCL = '*'; $$dockerArgs = @('run', '--rm', '-v', $$mount, 'banka-proto', '--proto_path=/workspace/proto', '--go_out=/workspace/gen', '--go_opt=paths=source_relative', '--go-grpc_out=/workspace/gen', '--go-grpc_opt=paths=source_relative') + $$protoFiles; & docker @dockerArgs"
+else
+	docker run --rm -v "$(PWD):/workspace" -u $$(id -u):$$(id -g) banka-proto \
 		--proto_path=/workspace/proto \
 		--go_out=/workspace/gen --go_opt=paths=source_relative \
 		--go-grpc_out=/workspace/gen --go-grpc_opt=paths=source_relative \
 		$$(cd proto && find . -name '*.proto' | sed 's|^\./||')
+endif
 
 schema:
 	docker compose exec -T postgres psql -U $(POSTGRES_USER) -d $(POSTGRES_DB) < scripts/db/schema.sql

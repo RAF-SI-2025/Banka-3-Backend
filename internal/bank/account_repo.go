@@ -1,13 +1,9 @@
 package bank
 
 import (
-	cryptorand "crypto/rand"
-	"database/sql"
 	"errors"
 	"fmt"
-	"math/big"
 	"strings"
-	"time"
 
 	bankpb "github.com/RAF-SI-2025/Banka-3-Backend/gen/bank"
 )
@@ -42,7 +38,7 @@ func (s *Server) UpdateAccountNameRecord(accountNumber string, name string) erro
 	return nil
 }
 
-func (s *Server) UpdateAccountLimitsRecord(accountNumber string, dailyLimit *int64, monthlyLimit *int64) error {
+func (s *Server) UpdateAccountLimitsRecord(accountNumber string, dailyLimit *float64, monthlyLimit *float64) error {
 	updates := map[string]any{}
 
 	if dailyLimit != nil {
@@ -73,7 +69,7 @@ func (s *Server) UpdateAccountLimitsRecord(accountNumber string, dailyLimit *int
 
 func (s *Server) GetActiveAccountsByOwnerID(ownerID int64) ([]Account, error) {
 	var accounts []Account
-	result := s.db_gorm.Where(&Account{Owner: ownerID, Active: true}).
+	result := s.db_gorm.Where(&Account{Owner: int64(ownerID), Active: true}).
 		Order("balance DESC").
 		Find(&accounts)
 	return accounts, result.Error
@@ -119,193 +115,153 @@ func (s *Server) GetCompanyByOwnerID(ownerID int64) (*Company, error) {
 	return &company, nil
 }
 
-func (s *Server) GetFilteredTransactions(accNumbers []string, accountNumber string, date string, amount int64, status string) ([]*bankpb.ClientTransaction, error) {
-	var pbTransactions []*bankpb.ClientTransaction
+func (s *Server) GetFilteredTransactions(accNumbers []string, accountNumber string, date string, amount float64, status string) ([]*bankpb.ClientTransaction, error) {
+	if len(accNumbers) == 0 {
+		return []*bankpb.ClientTransaction{}, nil
+	}
 
-	var payments []Payment
-	payQuery := s.db_gorm.Model(&Payment{}).Where("from_account IN ? OR to_account IN ?", accNumbers, accNumbers)
+	makePlaceholders := func(start, count int) string {
+		parts := make([]string, count)
+		for i := 0; i < count; i++ {
+			parts[i] = fmt.Sprintf("$%d", start+i)
+		}
+		return strings.Join(parts, ", ")
+	}
+
+	args := make([]any, 0, len(accNumbers)*2+8)
+	for _, acc := range accNumbers {
+		args = append(args, acc)
+	}
+	for _, acc := range accNumbers {
+		args = append(args, acc)
+	}
+
+	nextArg := len(args) + 1
+	statusFilter := strings.TrimSpace(strings.ToLower(status))
+
+	paymentConditions := []string{
+		fmt.Sprintf("(p.from_account IN (%s) OR p.to_account IN (%s))",
+			makePlaceholders(1, len(accNumbers)),
+			makePlaceholders(1+len(accNumbers), len(accNumbers))),
+	}
+	transferConditions := []string{
+		fmt.Sprintf("(t.from_account IN (%s) OR t.to_account IN (%s))",
+			makePlaceholders(1, len(accNumbers)),
+			makePlaceholders(1+len(accNumbers), len(accNumbers))),
+	}
+
 	if accountNumber != "" {
-		payQuery = payQuery.Where("from_account = ? OR to_account = ?", accountNumber, accountNumber)
+		paymentConditions = append(paymentConditions, fmt.Sprintf("(p.from_account = $%d OR p.to_account = $%d)", nextArg, nextArg))
+		transferConditions = append(transferConditions, fmt.Sprintf("(t.from_account = $%d OR t.to_account = $%d)", nextArg, nextArg))
+		args = append(args, accountNumber)
+		nextArg++
 	}
 	if date != "" {
-		payQuery = payQuery.Where("DATE(timestamp) = ?", date)
+		paymentConditions = append(paymentConditions, fmt.Sprintf("DATE(p.timestamp) = $%d", nextArg))
+		transferConditions = append(transferConditions, fmt.Sprintf("DATE(t.timestamp) = $%d", nextArg))
+		args = append(args, date)
+		nextArg++
 	}
 	if amount > 0 {
-		payQuery = payQuery.Where("start_amount = ?", amount)
+		paymentConditions = append(paymentConditions, fmt.Sprintf("p.start_amount = $%d", nextArg))
+		transferConditions = append(transferConditions, fmt.Sprintf("t.start_amount = $%d", nextArg))
+		args = append(args, amount)
+		nextArg++
 	}
-	if status != "" {
-		payQuery = payQuery.Where("status = ?", status)
-	}
-	payQuery.Order("timestamp DESC").Find(&payments)
-
-	for _, p := range payments {
-		pbTransactions = append(pbTransactions, &bankpb.ClientTransaction{
-			FromAccount:     p.From_account,
-			ToAccount:       p.To_account,
-			InitialAmount:   float64(p.Start_amount),
-			FinalAmount:     float64(p.End_amount),
-			Fee:             float64(p.Commission),
-			PaymentCode:     fmt.Sprintf("%d", p.Transaction_code),
-			ReferenceNumber: p.Call_number,
-			Purpose:         p.Reason,
-			Status:          p.Status,
-			Timestamp:       p.Timestamp.Unix(),
-		})
-	}
-
-	var transfers []Transfer
-	transQuery := s.db_gorm.Model(&Transfer{}).Where("from_account IN ? OR to_account IN ?", accNumbers, accNumbers)
-	if accountNumber != "" {
-		transQuery = transQuery.Where("from_account = ? OR to_account = ?", accountNumber, accountNumber)
-	}
-	if date != "" {
-		transQuery = transQuery.Where("DATE(timestamp) = ?", date)
-	}
-	if amount > 0 {
-		transQuery = transQuery.Where("start_amount = ?", amount)
-	}
-	transQuery.Order("timestamp DESC").Find(&transfers)
-
-	for _, t := range transfers {
-		pbTransactions = append(pbTransactions, &bankpb.ClientTransaction{
-			FromAccount:   t.From_account,
-			ToAccount:     t.To_account,
-			InitialAmount: float64(t.Start_amount),
-			FinalAmount:   float64(t.End_amount),
-			Fee:           float64(t.Commission),
-			Status:        "realized",
-			Timestamp:     t.Timestamp.Unix(),
-		})
-	}
-
-	return pbTransactions, nil
-}
-
-// CreateAccountRecord handles the database transaction to insert a new account.
-func (s *Server) CreateAccountRecord(account Account) (*Account, error) {
-	if account.Valid_until.IsZero() {
-		account.Valid_until = time.Now().AddDate(5, 0, 0)
-	}
-	account.Active = true
-	account.Daily_expenditure = 0
-	account.Monthly_expenditure = 0
-
-	var dailyLimit, monthlyLimit sql.NullInt64
-	if account.Daily_limit != 0 {
-		dailyLimit = sql.NullInt64{Int64: account.Daily_limit, Valid: true}
-	}
-	if account.Monthly_limit != 0 {
-		monthlyLimit = sql.NullInt64{Int64: account.Monthly_limit, Valid: true}
-	}
-
-	for range 5 {
-		tx, err := s.database.Begin()
-		if err != nil {
-			return nil, fmt.Errorf("starting transaction: %w", err)
+	if statusFilter != "" {
+		switch statusFilter {
+		case "realized", "completed":
+			paymentConditions = append(paymentConditions, fmt.Sprintf("p.status = $%d", nextArg))
+			transferConditions = append(transferConditions, fmt.Sprintf("t.status = $%d", nextArg))
+			args = append(args, "realized")
+			nextArg++
+			args = append(args, "completed")
+			nextArg++
+		default:
+			paymentConditions = append(paymentConditions, fmt.Sprintf("p.status = $%d", nextArg))
+			transferConditions = append(transferConditions, fmt.Sprintf("t.status = $%d", nextArg))
+			args = append(args, statusFilter)
+			nextArg++
+			args = append(args, statusFilter)
+			nextArg++
 		}
-
-		var exists bool
-		if err := tx.QueryRow(`SELECT EXISTS(SELECT 1 FROM clients WHERE id = $1)`, account.Owner).Scan(&exists); err != nil || !exists {
-			_ = tx.Rollback()
-			return nil, ErrAccountOwnerNotFound
-		}
-		if err := tx.QueryRow(`SELECT EXISTS(SELECT 1 FROM employees WHERE id = $1)`, account.Created_by).Scan(&exists); err != nil || !exists {
-			_ = tx.Rollback()
-			return nil, ErrAccountCreatorNotFound
-		}
-		if err := tx.QueryRow(`SELECT EXISTS(SELECT 1 FROM currencies WHERE label = $1)`, account.Currency).Scan(&exists); err != nil || !exists {
-			_ = tx.Rollback()
-			return nil, ErrAccountCurrencyNotFound
-		}
-
-		number, err := s.generateAccountNumber(tx)
-		if err != nil {
-			_ = tx.Rollback()
-			return nil, err
-		}
-		account.Number = number
-
-		row := tx.QueryRow(`
-    INSERT INTO accounts (
-     number, name, owner, company_id, balance, created_by, valid_until, currency, active,
-     owner_type, account_type, maintainance_cost, daily_limit, monthly_limit,
-     daily_expenditure, monthly_expenditure
-    )
-    VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16)
-    RETURNING
-     id, number, name, owner, company_id, balance, created_by, created_at, valid_until,
-     currency, active, owner_type, account_type, maintainance_cost, daily_limit,
-     monthly_limit, daily_expenditure, monthly_expenditure
-   `,
-			account.Number, account.Name, account.Owner, account.CompanyID, account.Balance, account.Created_by,
-			account.Valid_until, account.Currency, account.Active, string(account.Owner_type),
-			string(account.Account_type), account.Maintainance_cost, dailyLimit, monthlyLimit,
-			account.Daily_expenditure, account.Monthly_expenditure,
-		)
-
-		created, err := s.scanAccount(row)
-		if err != nil {
-			_ = tx.Rollback()
-			if isUniqueViolation(err) {
-				continue
-			}
-			return nil, fmt.Errorf("creating account: %w", err)
-		}
-
-		if err := tx.Commit(); err != nil {
-			return nil, fmt.Errorf("committing transaction: %w", err)
-		}
-		return created, nil
 	}
-	return nil, ErrAccountNumberGenerationFailed
-}
 
-func (s *Server) scanAccount(row *sql.Row) (*Account, error) {
-	var a Account
-	var dailyLimit, monthlyLimit, dailyExp, monthlyExp sql.NullInt64
-	// Use NullStrings for business fields to prevent errors on NULL database values
-	var compName, regNum, pib, actCode, addr sql.NullString
+	query := fmt.Sprintf(`
+		SELECT
+			tx.from_account,
+			tx.to_account,
+			tx.initial_amount,
+			tx.final_amount,
+			tx.fee,
+			tx.payment_code,
+			tx.reference_number,
+			tx.purpose,
+			tx.status,
+			EXTRACT(EPOCH FROM tx.timestamp)::bigint AS timestamp
+		FROM (
+			SELECT
+				p.from_account,
+				p.to_account,
+				p.start_amount::double precision AS initial_amount,
+				p.end_amount::double precision AS final_amount,
+				p.commission::double precision AS fee,
+				COALESCE(p.transcaction_code::text, '') AS payment_code,
+				COALESCE(p.call_number, '') AS reference_number,
+				COALESCE(p.reason, '') AS purpose,
+				p.status,
+				p.timestamp
+			FROM payments p
+			WHERE %s
 
-	err := row.Scan(
-		&a.Id, &a.Number, &a.Name, &a.Owner, &a.Balance, &a.Created_by, &a.Created_at, &a.Valid_until,
-		&a.Currency, &a.Active, &a.Owner_type, &a.Account_type, &a.Maintainance_cost, &dailyLimit,
-		&monthlyLimit, &dailyExp, &monthlyExp,
-		&compName, &regNum, &pib, &actCode, &addr,
-	)
+			UNION ALL
+
+			SELECT
+				t.from_account,
+				t.to_account,
+				t.start_amount::double precision AS initial_amount,
+				t.end_amount::double precision AS final_amount,
+				t.commission::double precision AS fee,
+				''::text AS payment_code,
+				''::text AS reference_number,
+				''::text AS purpose,
+				CASE WHEN t.status = 'completed' THEN 'realized' ELSE t.status END AS status,
+				t.timestamp
+			FROM transfers t
+			WHERE %s
+		) tx
+		ORDER BY tx.timestamp DESC
+	`, strings.Join(paymentConditions, " AND "), strings.Join(transferConditions, " AND "))
+
+	rows, err := s.database.Query(query, args...)
 	if err != nil {
 		return nil, err
 	}
+	defer func() { _ = rows.Close() }()
 
-	// Map NullInt64 back to int64
-	a.Daily_limit = dailyLimit.Int64
-	a.Monthly_limit = monthlyLimit.Int64
-	a.Daily_expenditure = dailyExp.Int64
-	a.Monthly_expenditure = monthlyExp.Int64
-
-	return &a, nil
-}
-
-func (s *Server) generateAccountNumber(tx *sql.Tx) (string, error) {
-	for range 5 {
-		number, _ := randomDigits(20)
-		var exists bool
-		err := tx.QueryRow(`SELECT EXISTS(SELECT 1 FROM accounts WHERE number = $1)`, number).Scan(&exists)
-		if err == nil && !exists {
-			return number, nil
+	pbTransactions := make([]*bankpb.ClientTransaction, 0)
+	for rows.Next() {
+		tx := &bankpb.ClientTransaction{}
+		if err := rows.Scan(
+			&tx.FromAccount,
+			&tx.ToAccount,
+			&tx.InitialAmount,
+			&tx.FinalAmount,
+			&tx.Fee,
+			&tx.PaymentCode,
+			&tx.ReferenceNumber,
+			&tx.Purpose,
+			&tx.Status,
+			&tx.Timestamp,
+		); err != nil {
+			return nil, err
 		}
+		pbTransactions = append(pbTransactions, tx)
 	}
-	return "", ErrAccountNumberGenerationFailed
-}
 
-func randomDigits(length int) (string, error) {
-	var builder strings.Builder
-	builder.Grow(length)
-	for i := 0; i < length; i++ {
-		digit, err := cryptorand.Int(cryptorand.Reader, big.NewInt(10))
-		if err != nil {
-			return "", err
-		}
-		builder.WriteByte(byte('0' + digit.Int64()))
+	if err := rows.Err(); err != nil {
+		return nil, err
 	}
-	return builder.String(), nil
+
+	return pbTransactions, nil
 }

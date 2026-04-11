@@ -2,10 +2,13 @@ package bank
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"log"
 	"math/rand"
 	"time"
+
+	"gorm.io/gorm"
 )
 
 // kicks off background jobs for loan stuff, returns a cancel func for cleanup
@@ -65,7 +68,7 @@ func (s *Server) RunMonthlyVariableRateUpdate() {
 			continue
 		}
 
-		amountRSD := int64(float64(loan.Amount) * rateToRSD)
+		amountRSD := loan.Amount * rateToRSD
 		baseRate := BaseAnnualRate(amountRSD)
 		// spec says random for simulation, should probably be tied to EURIBOR or something
 		offset := -1.50 + rand.Float64()*3.0
@@ -87,7 +90,7 @@ func (s *Server) RunMonthlyVariableRateUpdate() {
 			continue
 		}
 
-		log.Printf("[Cron] Updated variable loan %d: rate=%.2f%%, payment=%d", loan.Id, newAnnualRate, newPayment)
+		log.Printf("[Cron] Updated variable loan %d: rate=%.2f%%, payment=%.2f", loan.Id, newAnnualRate, newPayment)
 	}
 }
 
@@ -133,69 +136,101 @@ func (s *Server) RunDailyInstallmentCollection() {
 }
 
 func (s *Server) processLoanPayment(loan *Loan, today time.Time, isRetry bool) {
-	// TODO(#51/#52): actually deduct from account, for now we just pretend it worked
-	log.Printf("[Cron] WOULD DEDUCT %d from account %d (loan %d, retry=%v)",
-		loan.Monthly_payment, loan.Account_id, loan.Id, isRetry)
-
-	paymentSucceeded := true
-
-	if paymentSucceeded {
-		installment := LoanInstallment{
-			Loan_id:            loan.Id,
-			Installment_amount: loan.Monthly_payment,
-			Interest_rate:      loan.Interest_rate,
-			Currency_id:        loan.Currency_id,
-			Due_date:           loan.Next_payment_due,
-			Paid_date:          today,
-			Status:             Installment_Paid,
-		}
-		if err := s.db_gorm.Create(&installment).Error; err != nil {
-			log.Printf("[Cron] ERROR creating paid installment for loan %d: %v", loan.Id, err)
-			return
+	err := s.db_gorm.Transaction(func(tx *gorm.DB) error {
+		var installment LoanInstallment
+		if err := tx.
+			Where("loan_id = ? AND status IN ?", loan.Id, []installment_status{Due, Installment_Late}).
+			Order("due_date ASC, id ASC").
+			First(&installment).Error; err != nil {
+			if errors.Is(err, gorm.ErrRecordNotFound) {
+				return nil
+			}
+			return err
 		}
 
-		newDebt := loan.Remaining_debt - loan.Monthly_payment
-		if newDebt < 0 {
-			newDebt = 0
+		paymentSucceeded := false
+		result := tx.Exec(
+			`UPDATE accounts SET balance = balance - $1 WHERE id = $2 AND balance >= $1`,
+			loan.Monthly_payment,
+			loan.Account_id,
+		)
+		if result.Error == nil {
+			paymentSucceeded = result.RowsAffected > 0
 		}
 
-		updates := map[string]any{
-			"remaining_debt":   newDebt,
-			"next_payment_due": loan.Next_payment_due.AddDate(0, 1, 0),
-		}
-		if newDebt <= 0 {
-			updates["loan_status"] = Paid
+		if paymentSucceeded {
+			if err := tx.Model(&LoanInstallment{}).Where("id = ?", installment.Id).Updates(map[string]any{
+				"status":    Installment_Paid,
+				"paid_date": today,
+			}).Error; err != nil {
+				return err
+			}
+
+			newDebt := loan.Remaining_debt - loan.Monthly_payment
+			if newDebt < 0 {
+				newDebt = 0
+			}
+			nextDue := loan.Next_payment_due.AddDate(0, 1, 0)
+
+			updates := map[string]any{
+				"remaining_debt":   newDebt,
+				"next_payment_due": nextDue,
+			}
+			if newDebt <= 0 {
+				updates["loan_status"] = Paid
+			}
+
+			if err := tx.Model(&Loan{}).Where("id = ?", loan.Id).Updates(updates).Error; err != nil {
+				return err
+			}
+
+			if newDebt > 0 {
+				nextInstallment := LoanInstallment{
+					Loan_id:            loan.Id,
+					Installment_amount: loan.Monthly_payment,
+					Interest_rate:      loan.Interest_rate,
+					Currency_id:        loan.Currency_id,
+					Due_date:           nextDue,
+					Paid_date:          nextDue,
+					Status:             Due,
+				}
+				if err := tx.Create(&nextInstallment).Error; err != nil {
+					return err
+				}
+			}
+
+			log.Printf("[Cron] Loan %d: payment recorded, remaining_debt=%.2f", loan.Id, newDebt)
+			return nil
 		}
 
-		if err := s.db_gorm.Model(&Loan{}).Where("id = ?", loan.Id).Updates(updates).Error; err != nil {
-			log.Printf("[Cron] ERROR updating loan %d after payment: %v", loan.Id, err)
+		loanUpdates := map[string]any{
+			"loan_status": Late,
 		}
-
-		log.Printf("[Cron] Loan %d: payment recorded, remaining_debt=%d", loan.Id, newDebt)
-	} else {
-		installment := LoanInstallment{
-			Loan_id:            loan.Id,
-			Installment_amount: loan.Monthly_payment,
-			Interest_rate:      loan.Interest_rate,
-			Currency_id:        loan.Currency_id,
-			Due_date:           loan.Next_payment_due,
-			Paid_date:          time.Time{},
-			Status:             Installment_Late,
-		}
-		if err := s.db_gorm.Create(&installment).Error; err != nil {
-			log.Printf("[Cron] ERROR creating late installment for loan %d: %v", loan.Id, err)
-		}
-
-		s.db_gorm.Model(&Loan{}).Where("id = ?", loan.Id).Update("loan_status", Late)
-
-		// bijemo reket
 		if isRetry {
 			newRate := float32(float64(loan.Interest_rate) + 0.05)
-			s.db_gorm.Model(&Loan{}).Where("id = ?", loan.Id).Update("interest_rate", newRate)
+			remainingMonths := loan.Installments - int64(s.countPaidInstallments(loan.Id))
+			if remainingMonths <= 0 {
+				remainingMonths = 1
+			}
+			loanUpdates["interest_rate"] = newRate
+			loanUpdates["monthly_payment"] = CalculateAnnuity(loan.Remaining_debt, float64(newRate), remainingMonths)
+			if err := tx.Model(&LoanInstallment{}).Where("id = ?", installment.Id).Updates(map[string]any{
+				"status":        Installment_Late,
+				"interest_rate": newRate,
+			}).Error; err != nil {
+				return err
+			}
 			log.Printf("[Cron] Loan %d: penalty applied, new rate=%.2f%%", loan.Id, newRate)
+		} else {
+			if err := tx.Model(&LoanInstallment{}).Where("id = ?", installment.Id).Update("status", Installment_Late).Error; err != nil {
+				return err
+			}
 		}
 
-		// let them know their payment bounced
+		if err := tx.Model(&Loan{}).Where("id = ?", loan.Id).Updates(loanUpdates).Error; err != nil {
+			return err
+		}
+
 		currencyLabel, _ := s.getCurrencyLabelByID(loan.Currency_id)
 		email, _ := s.getClientEmailByAccountID(loan.Account_id)
 		if email != "" {
@@ -203,12 +238,16 @@ func (s *Server) processLoanPayment(loan *Loan, today time.Time, isRetry bool) {
 				context.Background(),
 				email,
 				fmt.Sprintf("%d", loan.Id),
-				fmt.Sprintf("%d", loan.Monthly_payment),
+				fmt.Sprintf("%.2f", loan.Monthly_payment),
 				currencyLabel,
 				loan.Next_payment_due.Format("2006-01-02"),
 			)
 		}
 
 		log.Printf("[Cron] Loan %d: payment FAILED, status set to late", loan.Id)
+		return nil
+	})
+	if err != nil {
+		log.Printf("[Cron] ERROR processing loan %d: %v", loan.Id, err)
 	}
 }

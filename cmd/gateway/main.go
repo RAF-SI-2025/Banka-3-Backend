@@ -2,6 +2,7 @@ package main
 
 import (
 	"log"
+	"os"
 
 	"github.com/gin-gonic/gin"
 
@@ -18,7 +19,12 @@ func main() {
 
 	gateway.SetupApi(router, server)
 
-	if err := router.Run(":8080"); err != nil {
+	httpPort := os.Getenv("HTTP_PORT")
+	if httpPort == "" {
+		httpPort = "8080"
+	}
+
+	if err := router.Run(":" + httpPort); err != nil {
 		log.Fatalf("gateway stopped: %v", err)
 	}
 }

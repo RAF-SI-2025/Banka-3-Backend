@@ -19,7 +19,7 @@ func (s *Server) getAuthenticatedEmployeeID(c *gin.Context) (int64, bool) {
 	ctx, cancel := context.WithTimeout(c.Request.Context(), 5*time.Second)
 	defer cancel()
 
-	resp, err := s.UserClient.GetEmployeeByEmail(ctx, &userpb.GetUserByEmailRequest{
+	resp, err := s.UserClient.GetEmployeeByEmail(ctx, &userpb.GetEmployeeByEmailRequest{
 		Email: email,
 	})
 	if err != nil {
@@ -71,7 +71,7 @@ func (s *Server) GetLoans(c *gin.Context) {
 		email, query.LoanType, query.AccountNumber, query.Status)
 
 	// Try employee first; if not an employee, fall back to client view
-	_, err := s.UserClient.GetEmployeeByEmail(ctx, &userpb.GetUserByEmailRequest{Email: email})
+	_, err := s.UserClient.GetEmployeeByEmail(ctx, &userpb.GetEmployeeByEmailRequest{Email: email})
 	if err == nil {
 		log.Printf("[GetLoans] User %s is an employee, calling GetAllLoans", email)
 		// Employee: get all loans
@@ -168,11 +168,17 @@ func (s *Server) CreateLoanRequest(c *gin.Context) {
 	ctx, cancel := context.WithTimeout(c.Request.Context(), 5*time.Second)
 	defer cancel()
 
-	_, err := s.BankClient.CreateLoanRequest(ctx, &bankpb.CreateLoanRequestRequest{
+	amount, err := normalizeMoneyAmount(req.Amount)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
+	}
+
+	_, err = s.BankClient.CreateLoanRequest(ctx, &bankpb.CreateLoanRequestRequest{
 		ClientEmail:      c.GetString("email"),
 		AccountNumber:    req.AccountNumber,
 		LoanType:         req.LoanType,
-		Amount:           req.Amount,
+		Amount:           amount,
 		RepaymentPeriod:  req.RepaymentPeriod,
 		Currency:         req.Currency,
 		Purpose:          req.Purpose,

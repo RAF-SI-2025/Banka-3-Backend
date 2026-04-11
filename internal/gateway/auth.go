@@ -37,17 +37,20 @@ func (s *Server) Login(c *gin.Context) {
 		"accessToken":  resp.AccessToken,
 		"refreshToken": resp.RefreshToken,
 		"permissions":  permissions,
+		"sessionId":    resp.SessionId,
 	})
 }
 
 func (s *Server) Logout(c *gin.Context) {
 	email := c.GetString("email")
+	sessionID := c.GetString("session_id")
 
 	ctx, cancel := context.WithTimeout(c.Request.Context(), 5*time.Second)
 	defer cancel()
 
 	_, err := s.UserClient.Logout(ctx, &userpb.LogoutRequest{
-		Email: email,
+		Email:     email,
+		SessionId: sessionID,
 	})
 	if err != nil {
 		writeGRPCError(c, err)
@@ -84,6 +87,7 @@ func (s *Server) Refresh(c *gin.Context) {
 		"access_token":  resp.AccessToken,
 		"refresh_token": resp.RefreshToken,
 		"permissions":   permissions,
+		"session_id":    resp.SessionId,
 	})
 }
 

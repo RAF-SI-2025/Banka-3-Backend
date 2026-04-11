@@ -21,6 +21,16 @@ func (s *Server) GetTransactions(c *gin.Context) {
 		return
 	}
 
+	amountFilter := 0.0
+	if query.Amount > 0 {
+		var err error
+		amountFilter, err = normalizeMoneyAmount(query.Amount)
+		if err != nil {
+			c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+			return
+		}
+	}
+
 	email := c.GetString("email")
 
 	ctx, cancel := context.WithTimeout(c.Request.Context(), 5*time.Second)
@@ -33,7 +43,7 @@ func (s *Server) GetTransactions(c *gin.Context) {
 	resp, err := s.BankClient.ListClientTransactions(ctx, &bankpb.ListClientTranasctionsRequest{
 		AccountNumber: query.AccountNumber,
 		Date:          query.Date,
-		Amount:        int64(query.Amount),
+		Amount:        amountFilter,
 		Status:        query.Status,
 	})
 	if err != nil {
@@ -161,10 +171,10 @@ func (s *Server) PayoutMoneyToOtherAccount(c *gin.Context) {
 		})
 		return
 	}
-	if req.Amount <= 0 {
-		c.JSON(http.StatusBadRequest, gin.H{
-			"error": "amount must be greater than zero",
-		})
+
+	amount, err := normalizeMoneyAmount(req.Amount)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 		return
 	}
 
@@ -178,7 +188,7 @@ func (s *Server) PayoutMoneyToOtherAccount(c *gin.Context) {
 		SenderAccount:    req.SenderAccount,
 		RecipientAccount: req.RecipientAccount,
 		RecipientName:    req.RecipientName,
-		Amount:           req.Amount,
+		Amount:           amount,
 		PaymentCode:      paymentCodeParsed,
 		ReferenceNumber:  req.ReferenceNumber,
 		Purpose:          req.Purpose,
@@ -227,8 +237,9 @@ func (s *Server) TransferMoneyBetweenAccounts(c *gin.Context) {
 		return
 	}
 
-	if req.Amount <= 0 {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "amount must be greater than zero"})
+	amount, err := normalizeMoneyAmount(req.Amount)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 		return
 	}
 
@@ -240,7 +251,7 @@ func (s *Server) TransferMoneyBetweenAccounts(c *gin.Context) {
 	res, err := s.BankClient.TransferMoneyBetweenAccounts(context.Background(), &bankpb.TransferRequest{
 		FromAccount: req.FromAccount,
 		ToAccount:   req.ToAccount,
-		Amount:      req.Amount,
+		Amount:      amount,
 		Description: req.Description,
 	})
 

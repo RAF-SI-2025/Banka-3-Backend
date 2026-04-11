@@ -19,35 +19,21 @@ import (
 	"gorm.io/gorm"
 )
 
-type TestUserServer struct {
+type testUserServer struct {
 	userpb.UnimplementedUserServiceServer
 	isEmployee bool
 	clientID   uint64
 	clientMail string
 }
 
-func (s *TestUserServer) GetClientById(_ context.Context, _ *userpb.GetUserByIdRequest) (*userpb.GetClientResponse, error) {
-	date := time.Date(1990, 5, 20, 0, 0, 0, 0, time.UTC)
-	return &userpb.GetClientResponse{
-		Id:          1,
-		FirstName:   "Petar",
-		LastName:    "Petrovic",
-		BirthDate:   date.Unix(),
-		Gender:      "M",
-		Email:       "petar@primer.raf",
-		PhoneNumber: "+381645555555",
-		Address:     "Njegoseva 25",
-	}, nil
-}
-
-func (s *TestUserServer) GetEmployeeByEmail(_ context.Context, _ *userpb.GetUserByEmailRequest) (*userpb.GetEmployeeResponse, error) {
+func (s *testUserServer) GetEmployeeByEmail(_ context.Context, _ *userpb.GetEmployeeByEmailRequest) (*userpb.GetEmployeeResponse, error) {
 	if s.isEmployee {
 		return &userpb.GetEmployeeResponse{Id: 1, Email: "emp@banka.rs"}, nil
 	}
 	return nil, status.Error(codes.NotFound, "not employee")
 }
 
-func (s *TestUserServer) GetClients(_ context.Context, _ *userpb.GetClientsRequest) (*userpb.GetClientsResponse, error) {
+func (s *testUserServer) GetClients(_ context.Context, _ *userpb.GetClientsRequest) (*userpb.GetClientsResponse, error) {
 	if !s.isEmployee && s.clientMail != "" {
 		return &userpb.GetClientsResponse{
 			Clients: []*userpb.Client{{Id: int64(s.clientID), Email: s.clientMail}},
@@ -64,7 +50,7 @@ func setupMockGorm(t *testing.T, db *sql.DB) *gorm.DB {
 	return gormDB
 }
 
-func startUserMock(srv *TestUserServer) (string, func()) {
+func startUserMock(srv *testUserServer) (string, func()) {
 	lis, _ := net.Listen("tcp", "127.0.0.1:0")
 	s := grpc.NewServer()
 	userpb.RegisterUserServiceServer(s, srv)
@@ -75,9 +61,9 @@ func startUserMock(srv *TestUserServer) (string, func()) {
 func TestListAccounts(t *testing.T) {
 	sqlDB, mock, _ := sqlmock.New()
 	gormDB := setupMockGorm(t, sqlDB)
-	server := &Server{db_gorm: gormDB}
+	server := &Server{database: sqlDB, db_gorm: gormDB}
 
-	userSrv := &TestUserServer{isEmployee: true}
+	userSrv := &testUserServer{isEmployee: true}
 	addr, stop := startUserMock(userSrv)
 	defer stop()
 	_ = os.Setenv("USER_SERVICE_ADDR", addr)
@@ -114,9 +100,9 @@ func TestListAccounts(t *testing.T) {
 func TestGetAccountDetails(t *testing.T) {
 	sqlDB, mock, _ := sqlmock.New()
 	gormDB := setupMockGorm(t, sqlDB)
-	server := &Server{db_gorm: gormDB}
+	server := &Server{database: sqlDB, db_gorm: gormDB}
 
-	userSrv := &TestUserServer{isEmployee: false, clientID: 10, clientMail: "user@mail.com"}
+	userSrv := &testUserServer{isEmployee: false, clientID: 10, clientMail: "user@mail.com"}
 	addr, stop := startUserMock(userSrv)
 	defer stop()
 	_ = os.Setenv("USER_SERVICE_ADDR", addr)
@@ -138,31 +124,23 @@ func TestGetAccountDetails(t *testing.T) {
 func TestListClientTransactions(t *testing.T) {
 	sqlDB, mock, _ := sqlmock.New()
 	gormDB := setupMockGorm(t, sqlDB)
-	server := &Server{db_gorm: gormDB}
-
-	userSrv := &TestUserServer{isEmployee: false, clientID: 10, clientMail: "client@mail.com"}
-	addr, stop := startUserMock(userSrv)
-	defer stop()
-	_ = os.Setenv("USER_SERVICE_ADDR", addr)
-
-	ctx := metadata.NewIncomingContext(context.Background(), metadata.Pairs("user-email", "client@mail.com"))
+	server := &Server{database: sqlDB, db_gorm: gormDB}
 
 	t.Run("Success", func(t *testing.T) {
-		mock.ExpectQuery(`SELECT \* FROM "accounts" WHERE "accounts"\."owner" = \$1 AND "accounts"\."active" = \$2`).
-			WithArgs(int64(10), true).
-			WillReturnRows(sqlmock.NewRows([]string{"number", "owner"}).AddRow("123", 10))
+		mock.ExpectQuery(`(?s)SELECT\s+tx\.from_account,.*FROM \(\s*SELECT.*UNION ALL.*SELECT.*\)\s+tx\s+ORDER BY tx\.timestamp DESC`).
+			WithArgs("123", "123", "123").
+			WillReturnRows(sqlmock.NewRows([]string{
+				"from_account", "to_account", "initial_amount", "final_amount", "fee",
+				"payment_code", "reference_number", "purpose", "status", "timestamp",
+			}).
+				AddRow("123", "456", 10.0, 10.0, 0.0, "289", "ref", "pay", "realized", time.Now().Unix()).
+				AddRow("789", "987", 20.0, 20.0, 0.0, "", "", "", "realized", time.Now().Unix()))
 
-		mock.ExpectQuery(`SELECT \* FROM "payments" WHERE \(from_account IN \(\$1\) OR to_account IN \(\$2\)\)`).
-			WillReturnRows(sqlmock.NewRows([]string{"transaction_id", "status", "timestamp"}).AddRow(1, "realized", time.Now()))
-
-		mock.ExpectQuery(`SELECT \* FROM "transfers" WHERE \(from_account IN \(\$1\) OR to_account IN \(\$2\)\)`).
-			WillReturnRows(sqlmock.NewRows([]string{"transaction_id", "timestamp"}).AddRow(2, time.Now()))
-
-		resp, err := server.ListClientTransactions(ctx, &bankpb.ListClientTranasctionsRequest{AccountNumber: "123"})
+		resp, err := server.GetFilteredTransactions([]string{"123"}, "123", "", 0, "")
 		if err != nil {
 			t.Fatalf("fail: %v", err)
 		}
-		if resp == nil || len(resp.Transactions) != 2 {
+		if resp == nil || len(resp) != 2 {
 			t.Fatalf("expected 2 tx, got %v", resp)
 		}
 	})
@@ -171,7 +149,7 @@ func TestListClientTransactions(t *testing.T) {
 func TestGetCompanyByOwnerID(t *testing.T) {
 	sqlDB, mock, _ := sqlmock.New()
 	gormDB := setupMockGorm(t, sqlDB)
-	server := &Server{db_gorm: gormDB}
+	server := &Server{database: sqlDB, db_gorm: gormDB}
 
 	t.Run("Success", func(t *testing.T) {
 		mock.ExpectQuery(`SELECT \* FROM "companies" WHERE "companies"."owner_id" = \$1`).

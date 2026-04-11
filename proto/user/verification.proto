@@ -6,6 +6,7 @@ option go_package = "github.com/RAF-SI-2025/Banka-3-Backend/gen/user";
 
 service TOTPService {
   rpc VerifyCode(VerifyCodeRequest) returns (VerifyCodeResponse);
+  rpc CreateTransactionCode(CreateTransactionCodeRequest) returns (CreateTransactionCodeResponse);
   rpc EnrollBegin(EnrollBeginRequest) returns (EnrollBeginResponse);
   rpc EnrollConfirm(EnrollConfirmRequest) returns (EnrollConfirmResponse);
   rpc DisableBegin(DisableBeginRequest) returns (DisableBeginResponse);
@@ -20,6 +21,18 @@ message VerifyCodeRequest {
 
 message VerifyCodeResponse {
   bool valid = 1;
+  int32 remaining_attempts = 2;
+  bool transaction_cancelled = 3;
+}
+
+message CreateTransactionCodeRequest {
+  string email = 1;
+}
+
+message CreateTransactionCodeResponse {
+  string code = 1;
+  int64 valid_until_unix = 2;
+  int32 max_attempts = 3;
 }
 
 message EnrollBeginRequest {

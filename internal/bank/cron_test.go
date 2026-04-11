@@ -72,19 +72,25 @@ func TestRunDailyInstallmentCollection_Success(t *testing.T) {
 		today, int64(500_000), "cash", "approved", "fixed",
 	)
 	mock.ExpectQuery(regexp.QuoteMeta(`SELECT * FROM "loans" WHERE next_payment_due <= $1 AND loan_status IN ($2,$3)`)).
-		WithArgs(sqlmock.AnyArg(), "approved", "late").
+		WithArgs(today, "approved", "late").
 		WillReturnRows(loanRows)
 
-	// processLoanPayment: create installment
+	// processLoanPayment: fetch current installment
 	mock.ExpectBegin()
-	mock.ExpectQuery(`INSERT INTO "loan_installment"`).
-		WillReturnRows(sqlmock.NewRows([]string{"id"}).AddRow(int64(1)))
-	mock.ExpectCommit()
-
-	// processLoanPayment: update loan
-	mock.ExpectBegin()
+	mock.ExpectQuery(`(?s)SELECT \* FROM "loan_installment" WHERE loan_id = \$1 AND status IN \(\$2,\$3\).*LIMIT \$4`).
+		WithArgs(int64(1), Due, Installment_Late, 1).
+		WillReturnRows(sqlmock.NewRows([]string{
+			"id", "loan_id", "installment_amount", "interest_rate",
+			"currency_id", "due_date", "paid_date", "status",
+		}).AddRow(int64(1), int64(1), int64(86_988), float32(8.0), int64(1), today, today, "due"))
+	mock.ExpectExec(`UPDATE accounts SET balance = balance - \$1 WHERE id = \$2 AND balance >= \$1`).
+		WillReturnResult(sqlmock.NewResult(0, 1))
+	mock.ExpectExec(`UPDATE "loan_installment"`).
+		WillReturnResult(sqlmock.NewResult(0, 1))
 	mock.ExpectExec(`UPDATE "loans"`).
 		WillReturnResult(sqlmock.NewResult(0, 1))
+	mock.ExpectQuery(`INSERT INTO "loan_installment"`).
+		WillReturnRows(sqlmock.NewRows([]string{"id"}).AddRow(int64(2)))
 	mock.ExpectCommit()
 
 	// Retry late installments query (none)
@@ -120,17 +126,21 @@ func TestRunDailyInstallmentCollection_FullPayoff(t *testing.T) {
 		today, int64(86_988), "cash", "approved", "fixed",
 	)
 	mock.ExpectQuery(regexp.QuoteMeta(`SELECT * FROM "loans" WHERE next_payment_due <= $1 AND loan_status IN ($2,$3)`)).
-		WithArgs(sqlmock.AnyArg(), "approved", "late").
+		WithArgs(today, "approved", "late").
 		WillReturnRows(loanRows)
 
-	// processLoanPayment: create installment
+	// processLoanPayment: fetch current installment and settle it
 	mock.ExpectBegin()
-	mock.ExpectQuery(`INSERT INTO "loan_installment"`).
-		WillReturnRows(sqlmock.NewRows([]string{"id"}).AddRow(int64(12)))
-	mock.ExpectCommit()
-
-	// processLoanPayment: update loan (should set loan_status=paid since remaining_debt goes to 0)
-	mock.ExpectBegin()
+	mock.ExpectQuery(`(?s)SELECT \* FROM "loan_installment" WHERE loan_id = \$1 AND status IN \(\$2,\$3\).*LIMIT \$4`).
+		WithArgs(int64(2), Due, Installment_Late, 1).
+		WillReturnRows(sqlmock.NewRows([]string{
+			"id", "loan_id", "installment_amount", "interest_rate",
+			"currency_id", "due_date", "paid_date", "status",
+		}).AddRow(int64(12), int64(2), int64(86_988), float32(8.0), int64(1), today, today, "due"))
+	mock.ExpectExec(`UPDATE accounts SET balance = balance - \$1 WHERE id = \$2 AND balance >= \$1`).
+		WillReturnResult(sqlmock.NewResult(0, 1))
+	mock.ExpectExec(`UPDATE "loan_installment"`).
+		WillReturnResult(sqlmock.NewResult(0, 1))
 	mock.ExpectExec(`UPDATE "loans"`).
 		WillReturnResult(sqlmock.NewResult(0, 1))
 	mock.ExpectCommit()

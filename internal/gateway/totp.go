@@ -46,6 +46,23 @@ func (s *Server) TOTPSetupConfirm(c *gin.Context) {
 	}
 }
 
+func (s *Server) CreateTransactionCode(c *gin.Context) {
+	email := c.GetString("email")
+	resp, err := s.TOTPClient.CreateTransactionCode(context.Background(), &userpb.CreateTransactionCodeRequest{
+		Email: email,
+	})
+	if err != nil {
+		writeGRPCError(c, err)
+		return
+	}
+
+	c.JSON(http.StatusCreated, createTransactionCodeResponse{
+		Code:           resp.Code,
+		ValidUntilUnix: resp.ValidUntilUnix,
+		MaxAttempts:    resp.MaxAttempts,
+	})
+}
+
 func (s *Server) TOTPDisableBegin(c *gin.Context) {
 	email := c.GetString("email")
 	resp, err := s.TOTPClient.DisableBegin(context.Background(), &userpb.DisableBeginRequest{

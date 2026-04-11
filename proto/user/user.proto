@@ -5,8 +5,8 @@ package user;
 option go_package = "github.com/RAF-SI-2025/Banka-3-Backend/gen/user";
 
 service UserService {
-  rpc GetEmployeeById(GetUserByIdRequest) returns (GetEmployeeResponse);
-  rpc GetEmployeeByEmail(GetUserByEmailRequest) returns (GetEmployeeResponse);
+  rpc GetEmployeeById(GetEmployeeByIdRequest) returns (GetEmployeeResponse);
+  rpc GetEmployeeByEmail(GetEmployeeByEmailRequest) returns (GetEmployeeResponse);
   rpc GetEmployees(GetEmployeesRequest) returns (GetEmployeesResponse);
   rpc UpdateEmployee(UpdateEmployeeRequest) returns (GetEmployeeResponse);
   rpc DeleteEmployee(DeleteEmployeeRequest) returns (DeleteEmployeeResponse);
@@ -23,8 +23,6 @@ service UserService {
   rpc UpdateClient(UpdateClientRequest) returns (UpdateClientResponse);
   rpc CreateEmployeeAccount(CreateEmployeeRequest) returns (GetEmployeeResponse);
   rpc GetUserPermissions(GetUserPermissionsRequest) returns (GetUserPermissionsResponse);
-  rpc GetClientById(GetUserByIdRequest) returns (GetClientResponse);
-  rpc GetClientByEmail(GetUserByEmailRequest) returns (GetClientResponse);
 }
 
 message GetUserPermissionsRequest {
@@ -54,7 +52,9 @@ message ValidateTokenResponse {
   int64 exp = 3;
   repeated string permissions = 4;
   string role = 5;
+  string session_id = 6;
 }
+
 
 message RefreshRequest {
   string refresh_token = 1;
@@ -65,6 +65,7 @@ message RefreshResponse {
   string refresh_token = 2;
   repeated string permissions = 3;
   string role = 4;
+  string session_id = 5;
 }
 
 message EmployeeResponse {
@@ -78,6 +79,7 @@ message EmployeeResponse {
 
 message LogoutRequest {
   string email = 1;
+  string session_id = 2;
 }
 
 message LogoutResponse {
@@ -94,6 +96,7 @@ message LoginResponse {
   string refresh_token = 2;
   repeated string permissions = 3;
   string role = 4;
+  string session_id = 5;
 }
 
 message PasswordActionRequest {
@@ -206,11 +209,11 @@ message GetEmployeesResponse {
   repeated Employee employees = 1;
 }
 
-message GetUserByIdRequest {
+message GetEmployeeByIdRequest {
   int64 id = 1;
 }
 
-message GetUserByEmailRequest {
+message GetEmployeeByEmailRequest {
   string email = 1;
 }
 
@@ -228,17 +231,6 @@ message GetEmployeeResponse {
   string department = 11;
   bool active = 12;
   repeated string permissions = 13;
-}
-
-message GetClientResponse {
-  int64 id = 1;
-  string first_name = 2;
-  string last_name = 3;
-  int64 birth_date = 4;
-  string gender = 5;
-  string email = 6;
-  string phone_number = 7;
-  string address = 8;
 }
 
 message UpdateEmployeeRequest {

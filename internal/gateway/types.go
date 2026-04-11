@@ -90,17 +90,17 @@ type createEmployeeAccountRequest struct {
 }
 
 type createLoanRequestRequest struct {
-	AccountNumber    string `json:"account_number" binding:"required"`
-	LoanType         string `json:"loan_type" binding:"required"`
-	Amount           int64  `json:"amount" binding:"required"`
-	RepaymentPeriod  int64  `json:"repayment_period" binding:"required"`
-	Currency         string `json:"currency" binding:"required"`
-	Purpose          string `json:"purpose"`
-	Salary           int64  `json:"salary"`
-	EmploymentStatus string `json:"employment_status"`
-	EmploymentPeriod int64  `json:"employment_period"`
-	PhoneNumber      string `json:"phone_number"`
-	InterestRateType string `json:"interest_rate_type"`
+	AccountNumber    string  `json:"account_number" binding:"required"`
+	LoanType         string  `json:"loan_type" binding:"required"`
+	Amount           float64 `json:"amount" binding:"required,gt=0"`
+	RepaymentPeriod  int64   `json:"repayment_period" binding:"required"`
+	Currency         string  `json:"currency" binding:"required"`
+	Purpose          string  `json:"purpose"`
+	Salary           float64 `json:"salary"`
+	EmploymentStatus string  `json:"employment_status"`
+	EmploymentPeriod int64   `json:"employment_period"`
+	PhoneNumber      string  `json:"phone_number"`
+	InterestRateType string  `json:"interest_rate_type"`
 }
 
 type getLoanRequestsQuery struct {
@@ -137,7 +137,7 @@ type updateCompanyRequest struct {
 	OwnerID        int64  `json:"owner_id" binding:"required"`
 }
 
-type CreateAccountRequest struct {
+type createAccountRequest struct {
 	ClientID       int64         `json:"client_id" binding:"required"`
 	AccountType    string        `json:"account_type" binding:"required"`
 	Subtype        string        `json:"subtype" binding:"required"`
@@ -146,12 +146,10 @@ type CreateAccountRequest struct {
 	DailyLimit     float64       `json:"daily_limit"`
 	MonthlyLimit   float64       `json:"monthly_limit"`
 	CreateCard     bool          `json:"create_card"`
-	CardType       string        `json:"card_type"`
-	CardBrand      string        `json:"card_brand"`
-	BusinessInfo   *BusinessInfo `json:"business_info"`
+	BusinessInfo   *businessInfo `json:"business_info"`
 }
 
-type BusinessInfo struct {
+type businessInfo struct {
 	CompanyName        string `json:"company_name" binding:"required"`
 	RegistrationNumber string `json:"registration_number" binding:"required"`
 	PIB                string `json:"pib" binding:"required"`
@@ -174,8 +172,8 @@ type updateAccountNameRequest struct {
 }
 
 type updateAccountLimitsRequest struct {
-	DailyLimit   *int64 `json:"daily_limit"`
-	MonthlyLimit *int64 `json:"monthly_limit"`
+	DailyLimit   *float64 `json:"daily_limit"`
+	MonthlyLimit *float64 `json:"monthly_limit"`
 }
 
 type createPaymentRecipientRequest struct {
@@ -224,27 +222,36 @@ type conversionRequest struct {
 	FromCurrency string  `json:"from_currency" binding:"required"`
 	ToCurrency   string  `json:"to_currency" binding:"required"`
 	Amount       float64 `json:"amount" binding:"required,gt=0"`
+	FromAccount  string  `json:"from_account"`
+	ToAccount    string  `json:"to_account"`
+	Description  string  `json:"description"`
 }
 
 type TOTPSetupConfirmRequest struct {
 	Code string `json:"code" binding:"required"`
 }
 
+type createTransactionCodeResponse struct {
+	Code           string `json:"code"`
+	ValidUntilUnix int64  `json:"valid_until_unix"`
+	MaxAttempts    int32  `json:"max_attempts"`
+}
+
 type paymentRequest struct {
-	SenderAccount    string `json:"sender_account" binding:"required"`
-	RecipientAccount string `json:"recipient_account" binding:"required"`
-	RecipientName    string `json:"recipient_name" binding:"required"`
-	Amount           int64  `json:"amount" binding:"required"`
-	PaymentCode      string `json:"payment_code" binding:"required"`
-	ReferenceNumber  string `json:"reference_number"`
-	Purpose          string `json:"purpose"`
+	SenderAccount    string  `json:"sender_account" binding:"required"`
+	RecipientAccount string  `json:"recipient_account" binding:"required"`
+	RecipientName    string  `json:"recipient_name" binding:"required"`
+	Amount           float64 `json:"amount" binding:"required,gt=0"`
+	PaymentCode      string  `json:"payment_code" binding:"required"`
+	ReferenceNumber  string  `json:"reference_number"`
+	Purpose          string  `json:"purpose"`
 }
 
 type transferRequest struct {
-	FromAccount string `json:"from_account" binding:"required"`
-	ToAccount   string `json:"to_account" binding:"required"`
-	Amount      int64  `json:"amount" binding:"required"`
-	Description string `json:"description"`
+	FromAccount string  `json:"from_account" binding:"required"`
+	ToAccount   string  `json:"to_account" binding:"required"`
+	Amount      float64 `json:"amount" binding:"required,gt=0"`
+	Description string  `json:"description"`
 }
 
 //will use this later

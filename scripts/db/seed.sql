@@ -136,6 +136,145 @@ INSERT INTO clients (
     phone_number, address, password, salt_password
 )
 VALUES (
+    'Marko', 'Petrovic', to_timestamp(631152000)::date, 'M', 'marko.petrovic@gmail.com',
+    '+381641234567', 'Knez Mihailova 77 Beograd',
+    '\xa7368ef98abae0935b8e62721ac0db8ff50a07a2c8e60bde9a32175354632bd9'::BYTEA,
+    '\x11223344556677889900aabbccddeeff'::BYTEA
+)
+ON CONFLICT (email) DO NOTHING;
+
+-- Marko Petrovic - 2x RSD, 2x EUR, 2x USD
+INSERT INTO accounts (number, name, owner, balance, created_by, valid_until, currency, active, owner_type, account_type, maintainance_cost, daily_limit, monthly_limit, daily_expenditure, monthly_expenditure)
+SELECT
+    '333000199999999110' AS number,
+    'Marko tekuci 1' AS name,
+    c.id AS owner,
+    10000000 AS balance,
+    e.id AS created_by,
+    '2029-12-31' AS valid_until,
+    'RSD' AS currency,
+    TRUE AS active,
+    'personal'::owner_type AS owner_type,
+    'checking'::account_type AS account_type,
+    25500 AS maintainance_cost,
+    25000000 AS daily_limit,
+    100000000 AS monthly_limit,
+    0 AS daily_expenditure,
+    0 AS monthly_expenditure
+FROM clients c, employees e
+WHERE c.email = 'marko.petrovic@gmail.com' AND e.email = :'admin_email'
+ON CONFLICT (number) DO NOTHING;
+
+INSERT INTO accounts (number, name, owner, balance, created_by, valid_until, currency, active, owner_type, account_type, maintainance_cost, daily_limit, monthly_limit, daily_expenditure, monthly_expenditure)
+SELECT
+    '333000199999999210' AS number,
+    'Marko tekuci 2' AS name,
+    c.id AS owner,
+    777777 AS balance,
+    e.id AS created_by,
+    '2029-12-31' AS valid_until,
+    'RSD' AS currency,
+    TRUE AS active,
+    'personal'::owner_type AS owner_type,
+    'checking'::account_type AS account_type,
+    25500 AS maintainance_cost,
+    25000000 AS daily_limit,
+    100000000 AS monthly_limit,
+    0 AS daily_expenditure,
+    0 AS monthly_expenditure
+FROM clients c, employees e
+WHERE c.email = 'marko.petrovic@gmail.com' AND e.email = :'admin_email'
+ON CONFLICT (number) DO NOTHING;
+
+INSERT INTO accounts (number, name, owner, balance, created_by, valid_until, currency, active, owner_type, account_type, maintainance_cost, daily_limit, monthly_limit, daily_expenditure, monthly_expenditure)
+SELECT
+    '333000199999999120' AS number,
+    'Marko devizni EUR 1' AS name,
+    c.id AS owner,
+    2000000 AS balance,
+    e.id AS created_by,
+    '2029-12-31' AS valid_until,
+    'EUR' AS currency,
+    TRUE AS active,
+    'personal'::owner_type AS owner_type,
+    'foreign'::account_type AS account_type,
+    0 AS maintainance_cost,
+    500000 AS daily_limit,
+    2000000 AS monthly_limit,
+    0 AS daily_expenditure,
+    0 AS monthly_expenditure
+FROM clients c, employees e
+WHERE c.email = 'marko.petrovic@gmail.com' AND e.email = :'admin_email'
+ON CONFLICT (number) DO NOTHING;
+
+INSERT INTO accounts (number, name, owner, balance, created_by, valid_until, currency, active, owner_type, account_type, maintainance_cost, daily_limit, monthly_limit, daily_expenditure, monthly_expenditure)
+SELECT
+    '333000199999999220' AS number,
+    'Marko devizni EUR 2' AS name,
+    c.id AS owner,
+    80000000 AS balance,
+    e.id AS created_by,
+    '2029-12-31' AS valid_until,
+    'EUR' AS currency,
+    TRUE AS active,
+    'personal'::owner_type AS owner_type,
+    'foreign'::account_type AS account_type,
+    0 AS maintainance_cost,
+    500000 AS daily_limit,
+    2000000 AS monthly_limit,
+    0 AS daily_expenditure,
+    0 AS monthly_expenditure
+FROM clients c, employees e
+WHERE c.email = 'marko.petrovic@gmail.com' AND e.email = :'admin_email'
+ON CONFLICT (number) DO NOTHING;
+
+INSERT INTO accounts (number, name, owner, balance, created_by, valid_until, currency, active, owner_type, account_type, maintainance_cost, daily_limit, monthly_limit, daily_expenditure, monthly_expenditure)
+SELECT
+    '333000199999999130' AS number,
+    'Marko devizni USD 1' AS name,
+    c.id AS owner,
+    123000000 AS balance,
+    e.id AS created_by,
+    '2029-12-31' AS valid_until,
+    'USD' AS currency,
+    TRUE AS active,
+    'personal'::owner_type AS owner_type,
+    'foreign'::account_type AS account_type,
+    0 AS maintainance_cost,
+    500000 AS daily_limit,
+    2000000 AS monthly_limit,
+    0 AS daily_expenditure,
+    0 AS monthly_expenditure
+FROM clients c, employees e
+WHERE c.email = 'marko.petrovic@gmail.com' AND e.email = :'admin_email'
+ON CONFLICT (number) DO NOTHING;
+
+INSERT INTO accounts (number, name, owner, balance, created_by, valid_until, currency, active, owner_type, account_type, maintainance_cost, daily_limit, monthly_limit, daily_expenditure, monthly_expenditure)
+SELECT
+    '333000199999999230' AS number,
+    'Marko devizni USD 2' AS name,
+    c.id AS owner,
+    30000000 AS balance,
+    e.id AS created_by,
+    '2029-12-31' AS valid_until,
+    'USD' AS currency,
+    TRUE AS active,
+    'personal'::owner_type AS owner_type,
+    'foreign'::account_type AS account_type,
+    0 AS maintainance_cost,
+    500000 AS daily_limit,
+    2000000 AS monthly_limit,
+    0 AS daily_expenditure,
+    0 AS monthly_expenditure
+FROM clients c, employees e
+WHERE c.email = 'marko.petrovic@gmail.com' AND e.email = :'admin_email'
+ON CONFLICT (number) DO NOTHING;
+
+INSERT INTO clients (
+    first_name, last_name, date_of_birth, gender, email,
+    phone_number, address, password, salt_password
+)
+VALUES (
     'Jovana', 'Jovanovic', '1995-03-08', 'F', 'jovana@primer.raf',
     '+381649876543', 'Cara Dusana 44',
     '\xa514f71947f5447cdfc2845f40d020cea4146ba28e84cb1a82662a6286f8228d'::BYTEA,

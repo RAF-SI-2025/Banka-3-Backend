@@ -91,9 +91,9 @@ func TestLoginCorrectCreds(t *testing.T) {
 		WillReturnRows(sqlmock.NewRows([]string{"id", "first_name", "last_name", "date_of_birth", "gender", "email", "phone_number", "address", "username", "password", "salt_password", "position", "department", "active", "created_at", "updated_at"}))
 
 	mock.ExpectExec(regexp.QuoteMeta(`
-		INSERT INTO refresh_tokens VALUES ($1, $2, $3, FALSE)
-		ON CONFLICT (email) DO UPDATE SET (hashed_token, valid_until, revoked) = (excluded.hashed_token, excluded.valid_until, excluded.revoked)
-	`)).WithArgs(email, sqlmock.AnyArg(), sqlmock.AnyArg()).WillReturnResult(sqlmock.NewResult(0, 1))
+		INSERT INTO refresh_tokens VALUES ($1, $2, $3, $4, FALSE)
+		ON CONFLICT (session_id) DO UPDATE SET (email, hashed_token, valid_until, revoked) = (excluded.email, excluded.hashed_token, excluded.valid_until, excluded.revoked)
+	`)).WithArgs(sqlmock.AnyArg(), email, sqlmock.AnyArg(), sqlmock.AnyArg()).WillReturnResult(sqlmock.NewResult(0, 1))
 	resp, err := server.Login(context.Background(), &userpb.LoginRequest{Email: email, Password: "password"})
 	if err != nil {
 		t.Fatalf("got error in Login: %v", err)

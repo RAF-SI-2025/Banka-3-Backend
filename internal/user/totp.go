@@ -30,7 +30,9 @@ type TOTPServer struct {
 }
 
 const (
-	totpDisableAction = "totp_disable"
+	totpDisableAction              = "totp_disable"
+	transactionVerificationTTL     = 5 * time.Minute
+	transactionVerificationMaxTrys = 3
 )
 
 func NewTotpServer(conn *Connections) *TOTPServer {
@@ -55,14 +57,38 @@ func (s *TOTPServer) VerifyCode(_ context.Context, req *userpb.VerifyCodeRequest
 		return nil, err
 	}
 	userId := client.Id
+
+	tx, err := s.db.Begin()
+	if err != nil {
+		return nil, status.Error(codes.Internal, "starting transaction failed")
+	}
+	defer func() { _ = tx.Rollback() }()
+
+	valid, remainingAttempts, cancelled, err := s.VerifyTransactionVerificationCode(tx, userId, req.Code)
+	switch {
+	case err == nil:
+		if commitErr := tx.Commit(); commitErr != nil {
+			return nil, status.Error(codes.Internal, "committing transaction failed")
+		}
+		return &userpb.VerifyCodeResponse{
+			Valid:                valid,
+			RemainingAttempts:    remainingAttempts,
+			TransactionCancelled: cancelled,
+		}, nil
+	case errors.Is(err, ErrNoActiveTransactionVerificationCode):
+		// Fallback to authenticator-style TOTP and backup codes for existing clients.
+	default:
+		return nil, err
+	}
+
 	secret, err := s.GetSecret(userId)
 	if err != nil {
 		if errors.Is(err, ErrUserNotFound) {
-			return nil, status.Error(codes.Unauthenticated, "user doesn't have TOTP set up")
+			return &userpb.VerifyCodeResponse{Valid: false}, nil
 		}
 		return nil, err
 	}
-	valid, err := totp.ValidateCustom(req.Code, *secret, time.Now(), totp.ValidateOpts{
+	valid, err = totp.ValidateCustom(req.Code, *secret, time.Now(), totp.ValidateOpts{
 		Digits: 6,
 		Period: 30,
 		Skew:   1,
@@ -80,6 +106,53 @@ func (s *TOTPServer) VerifyCode(_ context.Context, req *userpb.VerifyCodeRequest
 		}, nil
 	}
 	return &userpb.VerifyCodeResponse{Valid: valid}, nil
+}
+
+func generateNumericCode(length int) (string, error) {
+	limit := big.NewInt(1)
+	for range length {
+		limit.Mul(limit, big.NewInt(10))
+	}
+	random, err := rand.Int(rand.Reader, limit)
+	if err != nil {
+		return "", err
+	}
+	return fmt.Sprintf("%0*d", length, random.Int64()), nil
+}
+
+func (s *TOTPServer) CreateTransactionCode(_ context.Context, req *userpb.CreateTransactionCodeRequest) (*userpb.CreateTransactionCodeResponse, error) {
+	client, err := getUserByAttribute(Client{}, s.gorm, "email", req.Email)
+	if err != nil {
+		if errors.Is(err, ErrUserNotFound) {
+			return nil, status.Error(codes.NotFound, err.Error())
+		}
+		return nil, err
+	}
+
+	code, err := generateNumericCode(6)
+	if err != nil {
+		return nil, status.Error(codes.Internal, "code generation failed")
+	}
+
+	validUntil := time.Now().Add(transactionVerificationTTL)
+	tx, err := s.db.Begin()
+	if err != nil {
+		return nil, status.Error(codes.Internal, "starting transaction failed")
+	}
+	defer func() { _ = tx.Rollback() }()
+
+	if err := s.UpsertTransactionVerificationCode(tx, client.Id, code, validUntil, transactionVerificationMaxTrys); err != nil {
+		return nil, status.Error(codes.Internal, "storing verification code failed")
+	}
+	if err := tx.Commit(); err != nil {
+		return nil, status.Error(codes.Internal, "committing transaction failed")
+	}
+
+	return &userpb.CreateTransactionCodeResponse{
+		Code:           code,
+		ValidUntilUnix: validUntil.Unix(),
+		MaxAttempts:    transactionVerificationMaxTrys,
+	}, nil
 }
 func (s *TOTPServer) EnrollBegin(_ context.Context, req *userpb.EnrollBeginRequest) (*userpb.EnrollBeginResponse, error) {
 	client, err := getUserByAttribute(Client{}, s.gorm, "email", req.Email)

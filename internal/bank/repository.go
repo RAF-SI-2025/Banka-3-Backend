@@ -2,11 +2,14 @@ package bank
 
 import (
 	"context"
+	cryptorand "crypto/rand"
 	"database/sql"
 	"errors"
 	"fmt"
 	"log"
 	"math"
+	"math/big"
+	"strings"
 	"time"
 
 	bankpb "github.com/RAF-SI-2025/Banka-3-Backend/gen/bank"
@@ -181,24 +184,6 @@ func (s *Server) GetCompanyByIDRecord(companyID int64) (*Company, error) {
 	return company, nil
 }
 
-func (s *Server) GetCompanyByTaxCode(taxCode int64) (*Company, error) {
-	row := s.database.QueryRow(`
-        SELECT id, registered_id, name, tax_code, activity_code_id, address, owner_id
-        FROM companies
-        WHERE tax_code = $1
-    `, taxCode)
-
-	company, err := scanCompany(row)
-	if err == sql.ErrNoRows {
-		return nil, ErrCompanyNotFound
-	}
-	if err != nil {
-		return nil, fmt.Errorf("getting company by tax code: %w", err)
-	}
-
-	return company, nil
-}
-
 func (s *Server) GetCompaniesRecords() ([]*Company, error) {
 	rows, err := s.database.Query(`
 		SELECT id, registered_id, name, tax_code, activity_code_id, address, owner_id
@@ -337,6 +322,15 @@ func (s *Server) CreateCardRecord(card Card) (*Card, error) {
 	return scanCard(row)
 }
 
+func createCardRecordTx(tx *sql.Tx, card Card) (*Card, error) {
+	row := tx.QueryRow(`
+		INSERT INTO cards (number, type, brand, creation_date, valid_until, account_number, cvv, card_limit, status)
+		VALUES ($1, $2, $3, CURRENT_TIMESTAMP, $4, $5, $6, $7, $8)
+		RETURNING id, number, type, brand, creation_date, valid_until, account_number, cvv, card_limit, status
+	`, card.Number, card.Type, card.Brand, card.Valid_until, card.Account_number, card.Cvv, card.Card_limit, card.Status)
+	return scanCard(row)
+}
+
 func (s *Server) GetCardsRecords() ([]*Card, error) {
 	rows, err := s.database.Query(`
 		SELECT id, number, type, brand, creation_date, valid_until, account_number, cvv, card_limit, status
@@ -363,52 +357,15 @@ func (s *Server) GetCardsRecords() ([]*Card, error) {
 	return cards, nil
 }
 
-func (s *Server) GetAccountIDByCardID(cardID int64) (int64, error) {
-	var accountID int64
-
-	err := s.db_gorm.
-		Model(&Card{}).
-		Select("accounts.id").
-		Joins("JOIN accounts ON accounts.number = cards.account_number").
-		Where("cards.id = ?", cardID).
-		Scan(&accountID).Error
-
-	if err != nil {
-		return 0, err
-	}
-
-	if accountID == 0 {
-		return 0, errors.New("account not found")
-	}
-
-	return accountID, nil
-}
-
-func (s *Server) GetCardStatus(cardID int64) (Card_status, error) {
-	var status string
-
-	err := s.database.QueryRow(`SELECT status FROM cards WHERE id = $1`, cardID).Scan(&status)
-	if err != nil {
-		if err == sql.ErrNoRows {
-			return "", errors.New("card not found")
-		}
-		return "", err
-	}
-
-	return Card_status(status), nil
-}
-
-func (s *Server) UpdateCardStatus(cardID int64, status Card_status) error {
-	res, err := s.database.Exec(`UPDATE cards SET status = $1 WHERE id = $2`, status, cardID)
+func (s *Server) BlockCardRecord(cardID int64) error {
+	res, err := s.database.Exec(`UPDATE cards SET status = $1 WHERE id = $2`, Blocked, cardID)
 	if err != nil {
 		return err
 	}
-
 	rows, _ := res.RowsAffected()
 	if rows == 0 {
 		return errors.New("card not found")
 	}
-
 	return nil
 }
 
@@ -457,8 +414,8 @@ func (s *Server) CountActiveCardsByAccountNumber(accountNumber string) (int, err
 	var count int
 	err := s.database.QueryRow(`
 		SELECT COUNT(*) FROM cards
-		WHERE account_number = $1
-	`, accountNumber).Scan(&count)
+		WHERE account_number = $1 AND status != $2
+	`, accountNumber, Deactivated).Scan(&count)
 	return count, err
 }
 
@@ -489,23 +446,6 @@ func (s *Server) GetCardByIDRecord(id int64) (*Card, error) {
 		FROM cards WHERE id = $1
 	`, id)
 	return scanCard(row)
-}
-
-func (s *Server) GetEmployeeIDByEmail(email string) (int64, error) {
-	type empRow struct {
-		Id int64 `gorm:"column:id"`
-	}
-	var emp empRow
-
-	err := s.db_gorm.
-		Table("employees").
-		Select("id").
-		Where("email = ?", email).
-		Take(&emp).Error
-	if err != nil {
-		return 0, err
-	}
-	return emp.Id, nil
 }
 
 func (s *Server) IsEmployeeByEmail(email string) (bool, error) {
@@ -571,19 +511,245 @@ func (s *Server) GetCardsForEmployee() ([]Card, error) {
 	return cards, nil
 }
 
+func scanAccount(scanner interface {
+	Scan(dest ...any) error
+}) (*Account, error) {
+	var account Account
+	var ownerType string
+	var accountType string
+	var dailyLimit sql.NullFloat64
+	var monthlyLimit sql.NullFloat64
+	var dailyExpenditure sql.NullFloat64
+	var monthlyExpenditure sql.NullFloat64
+
+	err := scanner.Scan(
+		&account.Id,
+		&account.Number,
+		&account.Name,
+		&account.Owner,
+		&account.Balance,
+		&account.Created_by,
+		&account.Created_at,
+		&account.Valid_until,
+		&account.Currency,
+		&account.Active,
+		&ownerType,
+		&accountType,
+		&account.Maintainance_cost,
+		&dailyLimit,
+		&monthlyLimit,
+		&dailyExpenditure,
+		&monthlyExpenditure,
+	)
+	if err != nil {
+		return nil, err
+	}
+
+	account.Owner_type = owner_type(ownerType)
+	account.Account_type = account_type(accountType)
+	if dailyLimit.Valid {
+		account.Daily_limit = dailyLimit.Float64
+	}
+	if monthlyLimit.Valid {
+		account.Monthly_limit = monthlyLimit.Float64
+	}
+	if dailyExpenditure.Valid {
+		account.Daily_expenditure = dailyExpenditure.Float64
+	}
+	if monthlyExpenditure.Valid {
+		account.Monthly_expenditure = monthlyExpenditure.Float64
+	}
+
+	return &account, nil
+}
+
+func (s *Server) CreateAccountRecord(account Account, createCard bool) (*Account, error) {
+	if account.Valid_until.IsZero() {
+		account.Valid_until = time.Now().AddDate(3, 0, 0)
+	}
+	account.Balance = 0
+	account.Active = false
+	account.Daily_expenditure = 0
+	account.Monthly_expenditure = 0
+
+	var dailyLimit any
+	if account.Daily_limit != 0 {
+		dailyLimit = account.Daily_limit
+	}
+
+	var monthlyLimit any
+	if account.Monthly_limit != 0 {
+		monthlyLimit = account.Monthly_limit
+	}
+
+	for range 5 {
+		tx, err := s.database.Begin()
+		if err != nil {
+			return nil, fmt.Errorf("starting transaction: %w", err)
+		}
+
+		var ownerExists bool
+		if err := tx.QueryRow(`SELECT EXISTS(SELECT 1 FROM clients WHERE id = $1)`, account.Owner).Scan(&ownerExists); err != nil {
+			_ = tx.Rollback()
+			return nil, fmt.Errorf("checking account owner existence: %w", err)
+		}
+		if !ownerExists {
+			_ = tx.Rollback()
+			return nil, ErrAccountOwnerNotFound
+		}
+
+		var creatorExists bool
+		if err := tx.QueryRow(`SELECT EXISTS(SELECT 1 FROM employees WHERE id = $1)`, account.Created_by).Scan(&creatorExists); err != nil {
+			_ = tx.Rollback()
+			return nil, fmt.Errorf("checking account creator existence: %w", err)
+		}
+		if !creatorExists {
+			_ = tx.Rollback()
+			return nil, ErrAccountCreatorNotFound
+		}
+
+		var currencyExists bool
+		if err := tx.QueryRow(`SELECT EXISTS(SELECT 1 FROM currencies WHERE label = $1)`, account.Currency).Scan(&currencyExists); err != nil {
+			_ = tx.Rollback()
+			return nil, fmt.Errorf("checking currency existence: %w", err)
+		}
+		if !currencyExists {
+			_ = tx.Rollback()
+			return nil, ErrAccountCurrencyNotFound
+		}
+
+		number, err := s.generateAccountNumber(tx)
+		if err != nil {
+			_ = tx.Rollback()
+			if errors.Is(err, ErrAccountNumberGenerationFailed) {
+				return nil, err
+			}
+			return nil, fmt.Errorf("generating account number: %w", err)
+		}
+		account.Number = number
+
+		row := tx.QueryRow(`
+			INSERT INTO accounts (
+				number, name, owner, balance, created_by, valid_until, currency, active,
+				owner_type, account_type, maintainance_cost, daily_limit, monthly_limit,
+				daily_expenditure, monthly_expenditure
+			)
+			VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15)
+			RETURNING id, number, name, owner, balance, created_by, created_at, valid_until,
+				currency, active, owner_type, account_type, maintainance_cost, daily_limit,
+				monthly_limit, daily_expenditure, monthly_expenditure
+		`, account.Number, account.Name, account.Owner, account.Balance, account.Created_by,
+			account.Valid_until, account.Currency, account.Active, string(account.Owner_type),
+			string(account.Account_type), account.Maintainance_cost, dailyLimit, monthlyLimit,
+			account.Daily_expenditure, account.Monthly_expenditure)
+
+		created, err := scanAccount(row)
+		if err != nil {
+			if isUniqueViolation(err) {
+				_ = tx.Rollback()
+				continue
+			}
+			_ = tx.Rollback()
+			return nil, fmt.Errorf("creating account: %w", err)
+		}
+
+		if createCard {
+			cardLimit := account.Daily_limit
+			if cardLimit == 0 {
+				cardLimit = account.Monthly_limit
+			}
+
+			cardNumber, err := GenerateCardNumber(visa, created.Number)
+			if err != nil {
+				_ = tx.Rollback()
+				return nil, fmt.Errorf("generating card number: %w", err)
+			}
+
+			_, err = createCardRecordTx(tx, Card{
+				Number:         cardNumber,
+				Type:           Debit,
+				Brand:          visa,
+				Valid_until:    time.Now().AddDate(5, 0, 0),
+				Account_number: created.Number,
+				Cvv:            GenerateCVV(),
+				Card_limit:     cardLimit,
+				Status:         Active,
+			})
+			if err != nil {
+				if isUniqueViolation(err) {
+					_ = tx.Rollback()
+					continue
+				}
+				_ = tx.Rollback()
+				return nil, fmt.Errorf("creating default card: %w", err)
+			}
+		}
+
+		if err := tx.Commit(); err != nil {
+			return nil, fmt.Errorf("committing transaction: %w", err)
+		}
+
+		return created, nil
+	}
+
+	return nil, ErrAccountNumberGenerationFailed
+}
+
+func randomDigits(length int) (string, error) {
+	var builder strings.Builder
+	builder.Grow(length)
+
+	for i := 0; i < length; i++ {
+		digit, err := cryptorand.Int(cryptorand.Reader, big.NewInt(10))
+		if err != nil {
+			return "", err
+		}
+		builder.WriteByte(byte('0' + digit.Int64()))
+	}
+
+	return builder.String(), nil
+}
+
+func (s *Server) accountNumberExists(tx *sql.Tx, number string) (bool, error) {
+	var exists bool
+	if err := tx.QueryRow(`SELECT EXISTS(SELECT 1 FROM accounts WHERE number = $1)`, number).Scan(&exists); err != nil {
+		return false, fmt.Errorf("checking account number existence: %w", err)
+	}
+	return exists, nil
+}
+
+func (s *Server) generateAccountNumber(tx *sql.Tx) (string, error) {
+	for range 5 {
+		number, err := randomDigits(20)
+		if err != nil {
+			return "", fmt.Errorf("generating account number digits: %w", err)
+		}
+
+		exists, err := s.accountNumberExists(tx, number)
+		if err != nil {
+			return "", err
+		}
+		if !exists {
+			return number, nil
+		}
+	}
+
+	return "", ErrAccountNumberGenerationFailed
+}
+
 type loanView struct {
 	LoanNumber            string  `gorm:"column:loan_number"`
 	LoanType              string  `gorm:"column:loan_type"`
 	AccountNumber         string  `gorm:"column:account_number"`
-	LoanAmount            int64   `gorm:"column:loan_amount"`
+	LoanAmount            float64 `gorm:"column:loan_amount"`
 	RepaymentPeriod       int64   `gorm:"column:repayment_period"`
 	NominalRate           float64 `gorm:"column:nominal_rate"`
 	EffectiveRate         float64 `gorm:"column:effective_rate"`
 	AgreementDate         string  `gorm:"column:agreement_date"`
 	MaturityDate          string  `gorm:"column:maturity_date"`
-	NextInstallmentAmount int64   `gorm:"column:next_installment_amount"`
+	NextInstallmentAmount float64 `gorm:"column:next_installment_amount"`
 	NextInstallmentDate   string  `gorm:"column:next_installment_date"`
-	RemainingDebt         int64   `gorm:"column:remaining_debt"`
+	RemainingDebt         float64 `gorm:"column:remaining_debt"`
 	Currency              string  `gorm:"column:currency"`
 	Status                string  `gorm:"column:status"`
 }
@@ -736,7 +902,7 @@ func (s *Server) createLoanRequest(req *LoanRequest) error {
 	return s.db_gorm.Create(req).Error
 }
 
-func (s *Server) IncreaseAccountBalance(tx *sql.Tx, number string, amount int64) (*Account, error) {
+func (s *Server) IncreaseAccountBalance(tx *sql.Tx, number string, amount float64) (*Account, error) {
 	res, err := tx.Exec(
 		"UPDATE accounts SET balance = balance + $1 WHERE number = $2",
 		amount, number,
@@ -751,10 +917,10 @@ func (s *Server) IncreaseAccountBalance(tx *sql.Tx, number string, amount int64)
 	if affected == 0 {
 		return nil, fmt.Errorf("account not found")
 	}
-	return s.GetAccountByNumberRecord(number)
+	return getAccountByNumberRecordTx(tx, number)
 }
 
-func (s *Server) DecreaseAccountBalance(tx *sql.Tx, number string, amount int64) (*Account, error) {
+func (s *Server) DecreaseAccountBalance(tx *sql.Tx, number string, amount float64) (*Account, error) {
 	//everything is in one query to make sure
 	//COALESCE in case expenditures are null, if so, use 0
 	res := tx.QueryRow(`
@@ -775,7 +941,7 @@ func (s *Server) DecreaseAccountBalance(tx *sql.Tx, number string, amount int64)
 	var account string
 	err := res.Scan(&account)
 	if err == nil {
-		return s.GetAccountByNumberRecord(number)
+		return getAccountByNumberRecordTx(tx, number)
 	}
 
 	if err != sql.ErrNoRows {
@@ -785,7 +951,7 @@ func (s *Server) DecreaseAccountBalance(tx *sql.Tx, number string, amount int64)
 	//If error occurred, we need to diagnose it
 	//Running a query that will return data so we can check what conditions
 	//weren't met
-	var balance, dailyExp, monthlyExp, dailyLimit, monthlyLimit int64
+	var balance, dailyExp, monthlyExp, dailyLimit, monthlyLimit float64
 	err = tx.QueryRow(`
 		SELECT balance,
 		       COALESCE(daily_expenditure, 0),
@@ -810,8 +976,44 @@ func (s *Server) DecreaseAccountBalance(tx *sql.Tx, number string, amount int64)
 
 	return nil, fmt.Errorf("unknown failure")
 }
-func (s *Server) CreatePayment(tx *sql.Tx, from_account string, to_account string, start_amount int64,
-	end_amount int64, commission int64, transaction_code int64, call_number string,
+
+func getAccountByNumberRecordTx(tx *sql.Tx, number string) (*Account, error) {
+	var acc Account
+	err := tx.QueryRow(`
+		SELECT id, number, name, owner, balance, created_by, created_at, valid_until,
+		       currency, active, owner_type, account_type, maintainance_cost, daily_limit,
+		       monthly_limit, daily_expenditure, monthly_expenditure
+		FROM accounts WHERE number = $1
+	`, number).Scan(
+		&acc.Id,
+		&acc.Number,
+		&acc.Name,
+		&acc.Owner,
+		&acc.Balance,
+		&acc.Created_by,
+		&acc.Created_at,
+		&acc.Valid_until,
+		&acc.Currency,
+		&acc.Active,
+		&acc.Owner_type,
+		&acc.Account_type,
+		&acc.Maintainance_cost,
+		&acc.Daily_limit,
+		&acc.Monthly_limit,
+		&acc.Daily_expenditure,
+		&acc.Monthly_expenditure,
+	)
+	if err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			return nil, ErrAccountNotFound
+		}
+		return nil, err
+	}
+	return &acc, nil
+}
+
+func (s *Server) CreatePayment(tx *sql.Tx, from_account string, to_account string, start_amount float64,
+	end_amount float64, commission float64, transaction_code int64, call_number string,
 	reason string) (*Payment, error) {
 	recipient_id, err := s.getOwnerFromAccount(tx, to_account)
 	if err != nil {
@@ -867,7 +1069,7 @@ func (s *Server) getOwnerFromAccount(tx *sql.Tx, account string) (int64, error) 
 	return ownerID, nil
 }
 
-func (s *Server) ProcessPayment(from_account string, to_account string, amount int64, transaction_code int64, call_number string, reason string) (*Payment, *Currency, error) {
+func (s *Server) ProcessPayment(from_account string, to_account string, amount float64, transaction_code int64, call_number string, reason string) (*Payment, *Currency, error) {
 
 	fromAcc, err := s.GetAccountByNumberRecord(from_account)
 	if err != nil {
@@ -879,7 +1081,7 @@ func (s *Server) ProcessPayment(from_account string, to_account string, amount i
 	}
 
 	var finalAmount = amount
-	var commission int64 = 0
+	var commission float64 = 0
 
 	// 1. Logika konverzije
 	if fromAcc.Currency != toAcc.Currency {
@@ -888,7 +1090,7 @@ func (s *Server) ProcessPayment(from_account string, to_account string, amount i
 		resp1, err := s.ExchangeService.ConvertMoney(ctx, &exchange.ConversionRequest{
 			FromCurrency: fromAcc.Currency,
 			ToCurrency:   "RSD",
-			Amount:       float64(amount),
+			Amount:       amount,
 		})
 		if err != nil {
 			return nil, nil, fmt.Errorf("exchange error (hop 1): %v", err)
@@ -903,8 +1105,8 @@ func (s *Server) ProcessPayment(from_account string, to_account string, amount i
 			return nil, nil, fmt.Errorf("exchange error (hop 2): %v", err)
 		}
 
-		commission = int64(math.Round(float64(amount) * commission_rate))
-		finalAmount = int64(math.Round(resp2.ConvertedAmount))
+		commission = math.Round(amount*commission_rate*100) / 100
+		finalAmount = math.Round(resp2.ConvertedAmount*100) / 100
 	}
 
 	tx, err := s.database.Begin()
@@ -970,7 +1172,7 @@ func (s *Server) ProcessPayment(from_account string, to_account string, amount i
 	return payment, currency, nil
 }
 
-func (s *Server) CreateTransfer(fromAccount, toAccount string, amount int64) (*Transfer, error) {
+func (s *Server) CreateTransfer(fromAccount, toAccount string, amount float64) (*Transfer, error) {
 	if fromAccount == toAccount {
 		return nil, errors.New("cannot transfer to same account")
 	}
@@ -986,7 +1188,7 @@ func (s *Server) CreateTransfer(fromAccount, toAccount string, amount int64) (*T
 
 	var finalAmount = amount
 	var exchangeRate = 1.0
-	var commission int64 = 0
+	var commission float64 = 0
 
 	// Multi-currency logic: Always route through RSD if currencies differ
 	if fromAcc.Currency != toAcc.Currency {
@@ -996,7 +1198,7 @@ func (s *Server) CreateTransfer(fromAccount, toAccount string, amount int64) (*T
 		resp1, err := s.ExchangeService.ConvertMoney(ctx, &exchange.ConversionRequest{
 			FromCurrency: fromAcc.Currency,
 			ToCurrency:   "RSD",
-			Amount:       float64(amount),
+			Amount:       amount,
 		})
 		if err != nil {
 			return nil, fmt.Errorf("exchange error (source to RSD): %v", err)
@@ -1012,8 +1214,8 @@ func (s *Server) CreateTransfer(fromAccount, toAccount string, amount int64) (*T
 			return nil, fmt.Errorf("exchange error (RSD to destination): %v", err)
 		}
 
-		commission = int64(float64(amount) * commission_rate)
-		finalAmount = int64(resp2.ConvertedAmount)
+		commission = math.Round(amount*commission_rate*100) / 100
+		finalAmount = math.Round(resp2.ConvertedAmount*100) / 100
 		exchangeRate = resp2.ExchangeRate
 	}
 
@@ -1037,12 +1239,12 @@ func (s *Server) CreateTransfer(fromAccount, toAccount string, amount int64) (*T
         from_account, to_account, start_amount, end_amount,
         start_currency_id, exchange_rate, commission, status
     )
-    VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
+    VALUES ($1, $2, $3, $4, $5, $6, $7, 'pending')
     RETURNING transaction_id, from_account, to_account,
               start_amount, end_amount,
               start_currency_id, exchange_rate,
               commission, status, timestamp
-`, fromAccount, toAccount, amount, finalAmount, currency.Id, exchangeRate, commission, pending)
+`, fromAccount, toAccount, amount, finalAmount, currency.Id, exchangeRate, commission)
 
 	transfer, err := scanTransfer(row)
 	if err != nil {
@@ -1075,7 +1277,7 @@ func (s *Server) ConfirmTransfer(transferID int64, verificationCode string) erro
 		return err
 	}
 
-	if t.Status != pending {
+	if t.Status != "pending" {
 		return errors.New("transfer already processed")
 	}
 
@@ -1089,9 +1291,8 @@ func (s *Server) ConfirmTransfer(transferID int64, verificationCode string) erro
 		systemEmail := "system@banka3.rs"
 
 		// 1. Debit Client (Source Currency)
-		res, _ := tx.Exec(`UPDATE accounts SET balance = balance - $1 WHERE number = $2 AND balance >= $1`, t.Start_amount, t.From_account)
-		if aff, _ := res.RowsAffected(); aff == 0 {
-			return errors.New("insufficient funds")
+		if _, err := s.DecreaseAccountBalance(tx, t.From_account, t.Start_amount); err != nil {
+			return err
 		}
 
 		// 2. Credit Bank (Source Currency)
@@ -1116,9 +1317,8 @@ func (s *Server) ConfirmTransfer(transferID int64, verificationCode string) erro
 
 	} else {
 		// Same currency: Standard direct transfer
-		res, _ := tx.Exec(`UPDATE accounts SET balance = balance - $1 WHERE number = $2 AND balance >= $1`, t.Start_amount, t.From_account)
-		if aff, _ := res.RowsAffected(); aff == 0 {
-			return errors.New("insufficient funds")
+		if _, err := s.DecreaseAccountBalance(tx, t.From_account, t.Start_amount); err != nil {
+			return err
 		}
 		_, err = tx.Exec(`UPDATE accounts SET balance = balance + $1 WHERE number = $2`, t.Start_amount, t.To_account)
 		if err != nil {
@@ -1126,7 +1326,7 @@ func (s *Server) ConfirmTransfer(transferID int64, verificationCode string) erro
 		}
 	}
 
-	_, err = tx.Exec(`UPDATE transfers SET status = $1 WHERE transaction_id = $2`, realized, t.Transaction_id)
+	_, err = tx.Exec(`UPDATE transfers SET status = 'completed' WHERE transaction_id = $1`, t.Transaction_id)
 	if err != nil {
 		return err
 	}
@@ -1178,7 +1378,7 @@ func (s *Server) GetTransferHistory(clientEmail string, page, pageSize int32) (*
 			PaymentCode:     "",
 			ReferenceNumber: "",
 			Purpose:         "",
-			Status:          string(t.Status),
+			Status:          displayTransactionStatus(t.Status),
 			Timestamp:       t.Timestamp.Format(time.RFC3339),
 		})
 	}
@@ -1194,20 +1394,20 @@ func (s *Server) GetTransferHistory(clientEmail string, page, pageSize int32) (*
 }
 
 type loanRequestView struct {
-	Id               int64  `gorm:"column:id"`
-	LoanType         string `gorm:"column:loan_type"`
-	Amount           int64  `gorm:"column:amount"`
-	Currency         string `gorm:"column:currency"`
-	Purpose          string `gorm:"column:purpose"`
-	Salary           int64  `gorm:"column:salary"`
-	EmploymentStatus string `gorm:"column:employment_status"`
-	EmploymentPeriod int64  `gorm:"column:employment_period"`
-	PhoneNumber      string `gorm:"column:phone_number"`
-	RepaymentPeriod  int64  `gorm:"column:repayment_period"`
-	AccountNumber    string `gorm:"column:account_number"`
-	Status           string `gorm:"column:status"`
-	InterestRateType string `gorm:"column:interest_rate_type"`
-	SubmissionDate   string `gorm:"column:submission_date"`
+	Id               int64   `gorm:"column:id"`
+	LoanType         string  `gorm:"column:loan_type"`
+	Amount           float64 `gorm:"column:amount"`
+	Currency         string  `gorm:"column:currency"`
+	Purpose          string  `gorm:"column:purpose"`
+	Salary           float64 `gorm:"column:salary"`
+	EmploymentStatus string  `gorm:"column:employment_status"`
+	EmploymentPeriod int64   `gorm:"column:employment_period"`
+	PhoneNumber      string  `gorm:"column:phone_number"`
+	RepaymentPeriod  int64   `gorm:"column:repayment_period"`
+	AccountNumber    string  `gorm:"column:account_number"`
+	Status           string  `gorm:"column:status"`
+	InterestRateType string  `gorm:"column:interest_rate_type"`
+	SubmissionDate   string  `gorm:"column:submission_date"`
 }
 
 func (s *Server) getLoanRequests(loanType, accountNumber string) ([]loanRequestView, error) {
@@ -1308,8 +1508,6 @@ func (s *Server) getCurrencyLabelByID(id int64) (string, error) {
 	return currency.Label, nil
 }
 
-// TODO: Mozda bi bilo bolje da se poziva user servis za ovo?
-// Svakako ostavljam ovde za sada.
 func (s *Server) getClientEmailByAccountID(accountID int64) (string, error) {
 	var email string
 	err := s.db_gorm.

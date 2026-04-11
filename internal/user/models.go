@@ -64,6 +64,17 @@ type (
 		Token    string `gorm:"column:token;type:varchar(6);not null"`
 		Used     bool   `gorm:"column:used;type:boolean;not null; default false"`
 	}
+
+	TransactionVerificationCode struct {
+		ClientId       int64     `gorm:"column:client_id;type:bigint;not null;primaryKey"`
+		Code           string    `gorm:"column:code;type:varchar(6);not null"`
+		ValidUntil     time.Time `gorm:"column:valid_until;not null"`
+		FailedAttempts int32     `gorm:"column:failed_attempts;type:int;not null;default 0"`
+		MaxAttempts    int32     `gorm:"column:max_attempts;type:int;not null;default 3"`
+		Used           bool      `gorm:"column:used;type:boolean;not null;default false"`
+		Canceled       bool      `gorm:"column:canceled;type:boolean;not null;default false"`
+		CreatedAt      time.Time `gorm:"column:created_at;not null;autoCreateTime"`
+	}
 )
 
 func (Client) TableName() string {
@@ -88,4 +99,8 @@ func (VerificationCode) TableName() string {
 
 func (BackupCodes) TableName() string {
 	return "backup_codes"
+}
+
+func (TransactionVerificationCode) TableName() string {
+	return "transaction_verification_codes"
 }

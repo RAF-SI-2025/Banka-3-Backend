@@ -9,6 +9,7 @@ import (
 	"log"
 	"reflect"
 	"sort"
+	"strings"
 	"time"
 
 	"github.com/golang-jwt/jwt/v5"
@@ -60,19 +61,19 @@ func (s *Server) GetUserByEmail(email string) (*User, error) {
 	return &user, nil
 }
 
-func (s *Server) rotateRefreshToken(tx *sql.Tx, email string, oldHash, newHash []byte, newExpiry time.Time) error {
+func (s *Server) rotateRefreshToken(tx *sql.Tx, sessionID string, oldHash, newHash []byte, newExpiry time.Time) error {
 	var storedHash []byte
 	err := tx.QueryRow(`
         SELECT hashed_token FROM refresh_tokens
-        WHERE email = $1 AND revoked = FALSE AND valid_until > now()
+        WHERE session_id = $1 AND revoked = FALSE AND valid_until > now()
         FOR UPDATE
-    `, email).Scan(&storedHash)
+    `, sessionID).Scan(&storedHash)
 	if err != nil {
 		return fmt.Errorf("refresh token not found or expired: %w", err)
 	}
 
 	if !bytes.Equal(storedHash, oldHash) {
-		_, err := tx.Exec(`UPDATE refresh_tokens SET revoked = TRUE WHERE email = $1`, email)
+		_, err := tx.Exec(`UPDATE refresh_tokens SET revoked = TRUE WHERE session_id = $1`, sessionID)
 		if err != nil {
 			_ = tx.Rollback()
 			return fmt.Errorf("failed to revoke tokens: %w", err)
@@ -84,8 +85,8 @@ func (s *Server) rotateRefreshToken(tx *sql.Tx, email string, oldHash, newHash [
 	_, err = tx.Exec(`
         UPDATE refresh_tokens
         SET hashed_token = $1, valid_until = $2, revoked = FALSE
-        WHERE email = $3
-    `, newHash, newExpiry, email)
+        WHERE session_id = $3
+    `, newHash, newExpiry, sessionID)
 	return err
 }
 
@@ -99,6 +100,14 @@ func (s *Server) InsertRefreshToken(token string) error {
 	if err != nil {
 		return fmt.Errorf("getting subject: %w", err)
 	}
+	claims, ok := parsed.Claims.(*jwt.RegisteredClaims)
+	if !ok {
+		return fmt.Errorf("getting claims")
+	}
+	sessionID := strings.TrimSpace(claims.ID)
+	if sessionID == "" {
+		return fmt.Errorf("getting session id")
+	}
 
 	expiry, err := parsed.Claims.GetExpirationTime()
 	if err != nil {
@@ -108,10 +117,10 @@ func (s *Server) InsertRefreshToken(token string) error {
 	hasher.Write([]byte(token))
 	hashed_token := hasher.Sum(nil)
 	query := `
-	INSERT INTO refresh_tokens VALUES ($1, $2, $3, FALSE)
-	ON CONFLICT (email) DO UPDATE SET (hashed_token, valid_until, revoked) = (excluded.hashed_token, excluded.valid_until, excluded.revoked)
+	INSERT INTO refresh_tokens VALUES ($1, $2, $3, $4, FALSE)
+	ON CONFLICT (session_id) DO UPDATE SET (email, hashed_token, valid_until, revoked) = (excluded.email, excluded.hashed_token, excluded.valid_until, excluded.revoked)
 	`
-	_, err = s.database.Exec(query, email, hashed_token, expiry.Time)
+	_, err = s.database.Exec(query, sessionID, email, hashed_token, expiry.Time)
 	if err != nil {
 		return fmt.Errorf("inserting refresh token: %w", err)
 	}
@@ -210,6 +219,14 @@ func (s *Server) RevokeRefreshTokensByEmail(tx *sql.Tx, email string) error {
 	_, err := tx.Exec(`UPDATE refresh_tokens SET revoked = TRUE WHERE email = $1`, email)
 	if err != nil {
 		return fmt.Errorf("revoking refresh tokens: %w", err)
+	}
+	return nil
+}
+
+func (s *Server) RevokeRefreshTokenBySessionID(tx *sql.Tx, sessionID string) error {
+	_, err := tx.Exec(`UPDATE refresh_tokens SET revoked = TRUE WHERE session_id = $1`, sessionID)
+	if err != nil {
+		return fmt.Errorf("revoking refresh token: %w", err)
 	}
 	return nil
 }
@@ -351,6 +368,7 @@ func updateUserRecord[T Client | Employee](user T, s *Server) (*T, error) {
 
 var ErrUserNotFound = errors.New("user not found")
 var ErrTOTPAlreadyActive = errors.New("totp already active")
+var ErrNoActiveTransactionVerificationCode = errors.New("no active transaction verification code")
 
 func (s *TOTPServer) getUserIdByEmail(email string) (*uint64, error) {
 	query := `
@@ -505,7 +523,7 @@ func (s *TOTPServer) tryBurnBackupCode(id uint64, code string) (*bool, error) {
 	query := `
 		UPDATE backup_codes
 		SET used = TRUE
-		WHERE client_id = $1 AND token = $2
+		WHERE client_id = $1 AND token = $2 AND used = FALSE
 	`
 	res, err := s.db.Exec(query, id, code)
 	if err != nil {
@@ -517,4 +535,84 @@ func (s *TOTPServer) tryBurnBackupCode(id uint64, code string) (*bool, error) {
 	}
 	ret := rows == 1
 	return &ret, nil
+}
+
+func (s *TOTPServer) UpsertTransactionVerificationCode(tx *sql.Tx, id uint64, code string, validUntil time.Time, maxAttempts int32) error {
+	_, err := tx.Exec(`
+		INSERT INTO transaction_verification_codes (
+			client_id, code, valid_until, failed_attempts, max_attempts, used, canceled, created_at
+		)
+		VALUES ($1, $2, $3, 0, $4, FALSE, FALSE, NOW())
+		ON CONFLICT (client_id)
+		DO UPDATE SET
+			code = EXCLUDED.code,
+			valid_until = EXCLUDED.valid_until,
+			failed_attempts = 0,
+			max_attempts = EXCLUDED.max_attempts,
+			used = FALSE,
+			canceled = FALSE,
+			created_at = NOW()
+	`, id, code, validUntil, maxAttempts)
+	return err
+}
+
+func (s *TOTPServer) VerifyTransactionVerificationCode(tx *sql.Tx, id uint64, code string) (valid bool, remainingAttempts int32, cancelled bool, err error) {
+	var storedCode string
+	var failedAttempts int32
+	var maxAttempts int32
+	var validUntil time.Time
+	var used bool
+	var canceled bool
+
+	err = tx.QueryRow(`
+		SELECT code, failed_attempts, max_attempts, valid_until, used, canceled
+		FROM transaction_verification_codes
+		WHERE client_id = $1
+		FOR UPDATE
+	`, id).Scan(&storedCode, &failedAttempts, &maxAttempts, &validUntil, &used, &canceled)
+	if err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			return false, 0, false, ErrNoActiveTransactionVerificationCode
+		}
+		return false, 0, false, err
+	}
+
+	if canceled || used || !time.Now().Before(validUntil) {
+		if _, execErr := tx.Exec(`
+			UPDATE transaction_verification_codes
+			SET canceled = TRUE
+			WHERE client_id = $1
+		`, id); execErr != nil {
+			return false, 0, false, execErr
+		}
+		return false, 0, true, nil
+	}
+
+	if storedCode == code {
+		if _, execErr := tx.Exec(`
+			UPDATE transaction_verification_codes
+			SET used = TRUE
+			WHERE client_id = $1
+		`, id); execErr != nil {
+			return false, 0, false, execErr
+		}
+		return true, maxAttempts - failedAttempts, false, nil
+	}
+
+	failedAttempts++
+	cancelled = failedAttempts >= maxAttempts
+	if _, execErr := tx.Exec(`
+		UPDATE transaction_verification_codes
+		SET failed_attempts = $2, canceled = $3
+		WHERE client_id = $1
+	`, id, failedAttempts, cancelled); execErr != nil {
+		return false, 0, false, execErr
+	}
+
+	remainingAttempts = maxAttempts - failedAttempts
+	if remainingAttempts < 0 {
+		remainingAttempts = 0
+	}
+
+	return false, remainingAttempts, cancelled, nil
 }

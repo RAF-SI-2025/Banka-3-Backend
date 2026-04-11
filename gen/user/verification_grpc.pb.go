@@ -19,12 +19,13 @@ import (
 const _ = grpc.SupportPackageIsVersion9
 
 const (
-	TOTPService_VerifyCode_FullMethodName     = "/user.TOTPService/VerifyCode"
-	TOTPService_EnrollBegin_FullMethodName    = "/user.TOTPService/EnrollBegin"
-	TOTPService_EnrollConfirm_FullMethodName  = "/user.TOTPService/EnrollConfirm"
-	TOTPService_DisableBegin_FullMethodName   = "/user.TOTPService/DisableBegin"
-	TOTPService_DisableConfirm_FullMethodName = "/user.TOTPService/DisableConfirm"
-	TOTPService_Status_FullMethodName         = "/user.TOTPService/Status"
+	TOTPService_VerifyCode_FullMethodName            = "/user.TOTPService/VerifyCode"
+	TOTPService_CreateTransactionCode_FullMethodName = "/user.TOTPService/CreateTransactionCode"
+	TOTPService_EnrollBegin_FullMethodName           = "/user.TOTPService/EnrollBegin"
+	TOTPService_EnrollConfirm_FullMethodName         = "/user.TOTPService/EnrollConfirm"
+	TOTPService_DisableBegin_FullMethodName          = "/user.TOTPService/DisableBegin"
+	TOTPService_DisableConfirm_FullMethodName        = "/user.TOTPService/DisableConfirm"
+	TOTPService_Status_FullMethodName                = "/user.TOTPService/Status"
 )
 
 // TOTPServiceClient is the client API for TOTPService service.
@@ -32,6 +33,7 @@ const (
 // For semantics around ctx use and closing/ending streaming RPCs, please refer to https://pkg.go.dev/google.golang.org/grpc/?tab=doc#ClientConn.NewStream.
 type TOTPServiceClient interface {
 	VerifyCode(ctx context.Context, in *VerifyCodeRequest, opts ...grpc.CallOption) (*VerifyCodeResponse, error)
+	CreateTransactionCode(ctx context.Context, in *CreateTransactionCodeRequest, opts ...grpc.CallOption) (*CreateTransactionCodeResponse, error)
 	EnrollBegin(ctx context.Context, in *EnrollBeginRequest, opts ...grpc.CallOption) (*EnrollBeginResponse, error)
 	EnrollConfirm(ctx context.Context, in *EnrollConfirmRequest, opts ...grpc.CallOption) (*EnrollConfirmResponse, error)
 	DisableBegin(ctx context.Context, in *DisableBeginRequest, opts ...grpc.CallOption) (*DisableBeginResponse, error)
@@ -51,6 +53,16 @@ func (c *tOTPServiceClient) VerifyCode(ctx context.Context, in *VerifyCodeReques
 	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
 	out := new(VerifyCodeResponse)
 	err := c.cc.Invoke(ctx, TOTPService_VerifyCode_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *tOTPServiceClient) CreateTransactionCode(ctx context.Context, in *CreateTransactionCodeRequest, opts ...grpc.CallOption) (*CreateTransactionCodeResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(CreateTransactionCodeResponse)
+	err := c.cc.Invoke(ctx, TOTPService_CreateTransactionCode_FullMethodName, in, out, cOpts...)
 	if err != nil {
 		return nil, err
 	}
@@ -112,6 +124,7 @@ func (c *tOTPServiceClient) Status(ctx context.Context, in *StatusRequest, opts 
 // for forward compatibility.
 type TOTPServiceServer interface {
 	VerifyCode(context.Context, *VerifyCodeRequest) (*VerifyCodeResponse, error)
+	CreateTransactionCode(context.Context, *CreateTransactionCodeRequest) (*CreateTransactionCodeResponse, error)
 	EnrollBegin(context.Context, *EnrollBeginRequest) (*EnrollBeginResponse, error)
 	EnrollConfirm(context.Context, *EnrollConfirmRequest) (*EnrollConfirmResponse, error)
 	DisableBegin(context.Context, *DisableBeginRequest) (*DisableBeginResponse, error)
@@ -129,6 +142,9 @@ type UnimplementedTOTPServiceServer struct{}
 
 func (UnimplementedTOTPServiceServer) VerifyCode(context.Context, *VerifyCodeRequest) (*VerifyCodeResponse, error) {
 	return nil, status.Error(codes.Unimplemented, "method VerifyCode not implemented")
+}
+func (UnimplementedTOTPServiceServer) CreateTransactionCode(context.Context, *CreateTransactionCodeRequest) (*CreateTransactionCodeResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method CreateTransactionCode not implemented")
 }
 func (UnimplementedTOTPServiceServer) EnrollBegin(context.Context, *EnrollBeginRequest) (*EnrollBeginResponse, error) {
 	return nil, status.Error(codes.Unimplemented, "method EnrollBegin not implemented")
@@ -180,6 +196,24 @@ func _TOTPService_VerifyCode_Handler(srv interface{}, ctx context.Context, dec f
 	}
 	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
 		return srv.(TOTPServiceServer).VerifyCode(ctx, req.(*VerifyCodeRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _TOTPService_CreateTransactionCode_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(CreateTransactionCodeRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(TOTPServiceServer).CreateTransactionCode(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: TOTPService_CreateTransactionCode_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(TOTPServiceServer).CreateTransactionCode(ctx, req.(*CreateTransactionCodeRequest))
 	}
 	return interceptor(ctx, in, info, handler)
 }
@@ -284,6 +318,10 @@ var TOTPService_ServiceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "VerifyCode",
 			Handler:    _TOTPService_VerifyCode_Handler,
+		},
+		{
+			MethodName: "CreateTransactionCode",
+			Handler:    _TOTPService_CreateTransactionCode_Handler,
 		},
 		{
 			MethodName: "EnrollBegin",

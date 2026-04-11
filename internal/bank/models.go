@@ -9,7 +9,7 @@ type (
 	owner_type          string
 	account_type        string
 	card_type           string
-	Card_status         string
+	card_status         string
 	loan_type           string
 	loan_status         string
 	loan_request_status string
@@ -17,7 +17,6 @@ type (
 	installment_status  string
 	employment_status   string
 	card_brand          string
-	Transfer_status     string
 
 	// Note, unlike type aliease these are all destinct types, only
 	// their underlying type is string.
@@ -42,8 +41,9 @@ const (
 	Credit card_type = "credit"
 
 	// card_status enum
-	Active  Card_status = "active"
-	Blocked Card_status = "blocked"
+	Active      card_status = "active"
+	Blocked     card_status = "blocked"
+	Deactivated card_status = "deactivated"
 
 	// loan_type enum
 	Cash        loan_type = "cash"
@@ -81,10 +81,6 @@ const (
 	mastercard card_brand = "mastercard"
 	amex       card_brand = "amex"
 	dinacard   card_brand = "dinacard"
-
-	pending  Transfer_status = "pending"
-	realized Transfer_status = "realized"
-	rejected Transfer_status = "rejected"
 )
 
 type (
@@ -112,8 +108,7 @@ type (
 		Number              string       `gorm:"column:number;type:varchar(20);not null;unique"`
 		Name                string       `gorm:"column:name;type:varchar(127);not null"`
 		Owner               int64        `gorm:"column:owner;type:bigint;not null;references clients(id)"`
-		CompanyID           *int64       `gorm:"column:company_id;type:bigint;default:null;constraint:OnDelete:CASCADE;references:companies(id)"` // Ovde se koristi pointer jer moze da bude NULL
-		Balance             int64        `gorm:"column:balance;type:bigint;not null;default 0"`
+		Balance             float64      `gorm:"column:balance;type:decimal(20,2);not null;default 0"`
 		Created_by          int64        `gorm:"column:created_by;type:bigint;not null;references employees(id)"`
 		Created_at          time.Time    `gorm:"column:created_at;not null;autoCreateTime"`
 		Valid_until         time.Time    `gorm:"column:valid_until;not null"`
@@ -121,11 +116,11 @@ type (
 		Active              bool         `gorm:"column:active;type:BOOLEAN;not null;default:false"`
 		Owner_type          owner_type   `gorm:"column:owner_type;type:owner_type;not null"`
 		Account_type        account_type `gorm:"column:account_type;type:account_type;not null"`
-		Maintainance_cost   int64        `gorm:"column:maintainance_cost;type:bigint;not null"`
-		Daily_limit         int64        `gorm:"column:daily_limit;type:bigint"`
-		Monthly_limit       int64        `gorm:"column:monthly_limit;type:bigint"`
-		Daily_expenditure   int64        `gorm:"column:daily_expenditure;type:bigint"`
-		Monthly_expenditure int64        `gorm:"column:monthly_expenditure;type:bigint"`
+		Maintainance_cost   float64      `gorm:"column:maintainance_cost;type:decimal(20,2);not null"`
+		Daily_limit         float64      `gorm:"column:daily_limit;type:decimal(20,2)"`
+		Monthly_limit       float64      `gorm:"column:monthly_limit;type:decimal(20,2)"`
+		Daily_expenditure   float64      `gorm:"column:daily_expenditure;type:decimal(20,2)"`
+		Monthly_expenditure float64      `gorm:"column:monthly_expenditure;type:decimal(20,2)"`
 	}
 
 	ActivityCode struct {
@@ -154,8 +149,8 @@ type (
 		Valid_until    time.Time   `gorm:"column:valid_until;not null"`
 		Account_number string      `gorm:"column:account_number;type:varchar(20);references accounts(number)"`
 		Cvv            string      `gorm:"column:cvv;type:varchar(7);not null"`
-		Card_limit     int64       `gorm:"column:card_limit;type:bigint"`
-		Status         Card_status `gorm:"column:status;type:card_status;not null;default 'active'"`
+		Card_limit     float64     `gorm:"column:card_limit;type:decimal(20,2)"`
+		Status         card_status `gorm:"column:status;type:card_status;not null;default 'active'"`
 	}
 
 	CardRequest struct {
@@ -184,9 +179,9 @@ type (
 		Transaction_id   int64     `gorm:"column:transaction_id;type:bigserial;not null;primaryKey"`
 		From_account     string    `gorm:"column:from_account;type:varchar(20);references accounts(number)"`
 		To_account       string    `gorm:"column:to_account;type:varchar(20);references accounts(number)"`
-		Start_amount     int64     `gorm:"column:start_amount;type:bigint;not null"`
-		End_amount       int64     `gorm:"column:end_amount;type:bigint;not null"`
-		Commission       int64     `gorm:"column:commission;type:bigint;not null"`
+		Start_amount     float64   `gorm:"column:start_amount;type:decimal(20,2);not null"`
+		End_amount       float64   `gorm:"column:end_amount;type:decimal(20,2);not null"`
+		Commission       float64   `gorm:"column:commission;type:decimal(20,2);not null"`
 		Status           string    `gorm:"column:status;type:varchar(20);not null;default:realized"`
 		Recipient_id     int64     `gorm:"column:recipient_id;type:bigint;references clients(id)"`
 		Transaction_code int       `gorm:"column:transcaction_code;type:int;not null"`
@@ -196,16 +191,16 @@ type (
 	}
 
 	Transfer struct {
-		Transaction_id    int64           `gorm:"column:transaction_id;type:bigserial;not null;primaryKey"`
-		From_account      string          `gorm:"column:from_account;type:varchar(20);references accounts(number)"`
-		To_account        string          `gorm:"column:to_account;type:varchar(20);references accounts(number)"`
-		Start_amount      int64           `gorm:"column:start_amount;type:bigint;not null"`
-		End_amount        int64           `gorm:"column:end_amount;type:bigint;not null"`
-		Start_currency_id int64           `gorm:"column:start_currency_id;type:bigint;references currencies(id)"`
-		Exchange_rate     float64         `gorm:"column:exchange_rate;type:decimal(20,2)"`
-		Commission        int64           `gorm:"column:commission;type:bigint;not null"`
-		Timestamp         time.Time       `gorm:"column:timestamp;not null;autoCreateTime"`
-		Status            Transfer_status `gorm:"column:status;type:varchar(20);not null"`
+		Transaction_id    int64     `gorm:"column:transaction_id;type:bigserial;not null;primaryKey"`
+		From_account      string    `gorm:"column:from_account;type:varchar(20);references accounts(number)"`
+		To_account        string    `gorm:"column:to_account;type:varchar(20);references accounts(number)"`
+		Start_amount      float64   `gorm:"column:start_amount;type:decimal(20,2);not null"`
+		End_amount        float64   `gorm:"column:end_amount;type:decimal(20,2);not null"`
+		Start_currency_id int64     `gorm:"column:start_currency_id;type:bigint;references currencies(id)"`
+		Exchange_rate     float64   `gorm:"column:exchange_rate;type:decimal(20,2)"`
+		Commission        float64   `gorm:"column:commission;type:decimal(20,2);not null"`
+		Timestamp         time.Time `gorm:"column:timestamp;not null;autoCreateTime"`
+		Status            string    `gorm:"column:status;type:varchar(20);not null"`
 	}
 
 	PaymentCode struct {
@@ -216,16 +211,16 @@ type (
 	Loan struct {
 		Id                 int64              `gorm:"column:id;type:bigserial;not null;primaryKey"`
 		Account_id         int64              `gorm:"column:account_id;type:bigint;references accounts(id)"`
-		Amount             int64              `gorm:"column:amount;type:bigint;not null"`
+		Amount             float64            `gorm:"column:amount;type:decimal(20,2);not null"`
 		Currency_id        int64              `gorm:"column:currency_id;type:bigserial;references currencies(id)"`
 		Installments       int64              `gorm:"column:installments;type:bigint;not null"`
 		Nominal_rate       float32            `gorm:"column:nominal_rate;type:decimal(5,2);not null"`
 		Interest_rate      float32            `gorm:"column:interest_rate;type:decimal(5,2);not null"`
 		Date_signed        time.Time          `gorm:"column:date_signed;type:date;not null;"`
 		Date_end           time.Time          `gorm:"column:date_end;type:date;not null;"`
-		Monthly_payment    int64              `gorm:"column:monthly_payment;type:bigint;not null"`
+		Monthly_payment    float64            `gorm:"column:monthly_payment;type:decimal(20,2);not null"`
 		Next_payment_due   time.Time          `gorm:"column:next_payment_due;type:date;not null;"`
-		Remaining_debt     int64              `gorm:"column:remaining_debt;type:bigint;not null"`
+		Remaining_debt     float64            `gorm:"column:remaining_debt;type:decimal(20,2);not null"`
 		Type               loan_type          `gorm:"column:type;type:loan_type;not null"`
 		Loan_status        loan_status        `gorm:"column:loan_status;type:loan_status;not null;default 'approved'"`
 		Interest_rate_type interest_rate_type `gorm:"column:interest_rate_type;type:interest_rate_type;not null"`
@@ -234,7 +229,7 @@ type (
 	LoanInstallment struct {
 		Id                 int64              `gorm:"column:id;type:bigserial;not null;primaryKey"`
 		Loan_id            int64              `gorm:"column:loan_id;type:bigint;references loans(id)"`
-		Installment_amount int64              `gorm:"column:installment_amount;type:bigint;not null"`
+		Installment_amount float64            `gorm:"column:installment_amount;type:decimal(20,2);not null"`
 		Interest_rate      float32            `gorm:"column:interest_rate;type:decimal(5,2);not null"`
 		Currency_id        int64              `gorm:"column:currency_id;type:bigserial;references currencies(id)"`
 		Due_date           time.Time          `gorm:"column:due_date;type:date;not null"`
@@ -246,13 +241,13 @@ type (
 		Id                 int64               `gorm:"column:id;type:bigserial;not null;primaryKey"`
 		Type               loan_type           `gorm:"column:type;type:loan_type;not null"`
 		Currency_id        int64               `gorm:"column:currency_id;type:bigint;references currencies(id)"`
-		Amount             int64               `gorm:"column:amount;type:bigint;not null"`
+		Amount             float64             `gorm:"column:amount;type:decimal(20,2);not null"`
 		Repayment_period   int64               `gorm:"column:repayment_period;type:bigint;not null"`
 		Account_id         int64               `gorm:"column:account_id;type:bigint;references accounts(id)"`
 		Status             loan_request_status `gorm:"column:status;type:loan_request_status;not null;default 'pending'"`
 		Submission_date    time.Time           `gorm:"column:submission_date;not null;autoCreateTime"`
 		Purpose            string              `gorm:"column:purpose;type:varchar(255)"`
-		Salary             int64               `gorm:"column:salary;type:bigint"`
+		Salary             float64             `gorm:"column:salary;type:decimal(20,2)"`
 		Employment_status  employment_status   `gorm:"column:employment_status;type:employment_status"`
 		Employment_period  int64               `gorm:"column:employment_period;type:bigint"`
 		Phone_number       string              `gorm:"column:phone_number;type:varchar(32)"`

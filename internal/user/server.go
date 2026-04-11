@@ -18,6 +18,7 @@ import (
 	"time"
 
 	"github.com/golang-jwt/jwt/v5"
+	"github.com/google/uuid"
 	"github.com/redis/go-redis/v9"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/codes"
@@ -81,19 +82,6 @@ func NewServer(accessJwtSecret string, refreshJwtSecret string, conn *Connection
 	}
 }
 
-func (c Client) toProtobuf() *userpb.GetClientResponse {
-	return &userpb.GetClientResponse{
-		Id:          int64(c.Id),
-		FirstName:   c.First_name,
-		LastName:    c.Last_name,
-		BirthDate:   c.Date_of_birth.Unix(),
-		Gender:      c.Gender,
-		Email:       c.Email,
-		PhoneNumber: c.Phone_number,
-		Address:     c.Address,
-	}
-}
-
 func (emp Employee) toProtobuf() *userpb.GetEmployeeResponse {
 	permissions := make([]string, len(emp.Permissions))
 	for i, v := range emp.Permissions {
@@ -129,7 +117,7 @@ func (client Client) toProtobuff() *userpb.Client {
 	}
 }
 
-func (s *Server) GetEmployeeByEmail(_ context.Context, req *userpb.GetUserByEmailRequest) (*userpb.GetEmployeeResponse, error) {
+func (s *Server) GetEmployeeByEmail(_ context.Context, req *userpb.GetEmployeeByEmailRequest) (*userpb.GetEmployeeResponse, error) {
 	resp, err := getUserByAttribute(Employee{}, s.db_gorm, "email", req.Email)
 	if err != nil {
 		if errors.Is(err, gorm.ErrRecordNotFound) {
@@ -140,27 +128,8 @@ func (s *Server) GetEmployeeByEmail(_ context.Context, req *userpb.GetUserByEmai
 	return resp.toProtobuf(), nil
 }
 
-func (s *Server) GetEmployeeById(_ context.Context, req *userpb.GetUserByIdRequest) (*userpb.GetEmployeeResponse, error) {
+func (s *Server) GetEmployeeById(_ context.Context, req *userpb.GetEmployeeByIdRequest) (*userpb.GetEmployeeResponse, error) {
 	resp, err := getUserByAttribute(Employee{}, s.db_gorm, "id", req.Id)
-	if err != nil {
-		return nil, err
-	}
-	return resp.toProtobuf(), nil
-}
-
-func (s *Server) GetClientByEmail(_ context.Context, req *userpb.GetUserByEmailRequest) (*userpb.GetClientResponse, error) {
-	resp, err := getUserByAttribute(Client{}, s.db_gorm, "email", req.Email)
-	if err != nil {
-		if errors.Is(err, gorm.ErrRecordNotFound) {
-			return nil, status.Error(codes.NotFound, "employee not found")
-		}
-		return nil, status.Error(codes.Internal, "failed to get employee")
-	}
-	return resp.toProtobuf(), nil
-}
-
-func (s *Server) GetClientById(_ context.Context, req *userpb.GetUserByIdRequest) (*userpb.GetClientResponse, error) {
-	resp, err := getUserByAttribute(Client{}, s.db_gorm, "id", req.Id)
 	if err != nil {
 		return nil, err
 	}
@@ -251,7 +220,7 @@ func (s *Server) UpdateEmployee(ctx context.Context, req *userpb.UpdateEmployeeR
 
 	// Sync session: deactivation deletes session, otherwise update permissions
 	if !req.Active {
-		_ = s.DeleteSession(ctx, updated.Email)
+		_ = s.DeleteSessionsByEmail(ctx, updated.Email)
 	} else {
 		permNames := make([]string, len(updated.Permissions))
 		for i, p := range updated.Permissions {
@@ -335,10 +304,11 @@ func (s *Server) UpdateClient(_ context.Context, req *userpb.UpdateClientRequest
 	return &userpb.UpdateClientResponse{Valid: true, Response: "Client updated"}, nil
 }
 
-func (s *Server) GenerateRefreshToken(email string) (string, error) {
+func (s *Server) GenerateRefreshToken(email, sessionID string) (string, error) {
 	now := time.Now()
 	claims := jwt.RegisteredClaims{
 		Subject:   email,
+		ID:        sessionID,
 		ExpiresAt: jwt.NewNumericDate(now.Add(24 * time.Hour * 7)),
 		IssuedAt:  jwt.NewNumericDate(now),
 	}
@@ -347,10 +317,11 @@ func (s *Server) GenerateRefreshToken(email string) (string, error) {
 	return token.SignedString([]byte(s.refreshJwtSecret))
 }
 
-func (s *Server) GenerateAccessToken(email string) (string, error) {
+func (s *Server) GenerateAccessToken(email, sessionID string) (string, error) {
 	now := time.Now()
 	claims := jwt.RegisteredClaims{
 		Subject:   email,
+		ID:        sessionID,
 		ExpiresAt: jwt.NewNumericDate(now.Add(15 * time.Minute)),
 		IssuedAt:  jwt.NewNumericDate(now),
 	}
@@ -383,9 +354,10 @@ func validateJWTToken(tokenString, secret string) (*userpb.ValidateTokenResponse
 	}
 
 	return &userpb.ValidateTokenResponse{
-		Sub: sub,
-		Exp: exp.Unix(),
-		Iat: iat.Unix(),
+		Sub:       sub,
+		Exp:       exp.Unix(),
+		Iat:       iat.Unix(),
+		SessionId: claims.ID,
 	}, nil
 }
 
@@ -399,7 +371,7 @@ func (s *Server) ValidateAccessToken(ctx context.Context, req *userpb.ValidateTo
 		return nil, err
 	}
 
-	session, err := s.GetSession(ctx, resp.Sub)
+	session, err := s.GetSession(ctx, resp.SessionId)
 	if err != nil {
 		return nil, status.Error(codes.Unavailable, "session store unavailable")
 	}
@@ -410,11 +382,23 @@ func (s *Server) ValidateAccessToken(ctx context.Context, req *userpb.ValidateTo
 		return nil, status.Error(codes.Unauthenticated, "account deactivated")
 	}
 
+	resp.Sub = session.Email
+	resp.Role = session.Role
+	resp.Permissions = session.Permissions
+
 	return resp, nil
 }
 
 func (s *Server) GetUserPermissions(ctx context.Context, req *userpb.GetUserPermissionsRequest) (*userpb.GetUserPermissionsResponse, error) {
-	session, err := s.GetSession(ctx, req.Email)
+	ids, err := s.sessionIDsByEmail(ctx, req.Email)
+	if err != nil {
+		return nil, status.Error(codes.Unavailable, "session store unavailable")
+	}
+	if len(ids) == 0 {
+		return nil, status.Error(codes.Unauthenticated, "no active session")
+	}
+
+	session, err := s.GetSession(ctx, ids[0])
 	if err != nil {
 		return nil, status.Error(codes.Unavailable, "session store unavailable")
 	}
@@ -434,8 +418,9 @@ func (s *Server) Refresh(ctx context.Context, req *userpb.RefreshRequest) (*user
 		return nil, err
 	}
 	email := token.Sub
+	sessionID := token.SessionId
 
-	newSignedToken, err := s.GenerateRefreshToken(email)
+	newSignedToken, err := s.GenerateRefreshToken(email, sessionID)
 	if err != nil {
 		return nil, fmt.Errorf("generating refresh token: %w", err)
 	}
@@ -446,7 +431,7 @@ func (s *Server) Refresh(ctx context.Context, req *userpb.RefreshRequest) (*user
 		return nil, status.Error(codes.Unauthenticated, "account deactivated")
 	}
 
-	newAccessToken, err := s.GenerateAccessToken(email)
+	newAccessToken, err := s.GenerateAccessToken(email, sessionID)
 	if err != nil {
 		return nil, fmt.Errorf("generating access token: %w", err)
 	}
@@ -466,7 +451,7 @@ func (s *Server) Refresh(ctx context.Context, req *userpb.RefreshRequest) (*user
 	}
 	defer func() { _ = tx.Rollback() }()
 
-	err = s.rotateRefreshToken(tx, email, hashValue(req.RefreshToken), hashValue(newSignedToken), newExpiry.Time)
+	err = s.rotateRefreshToken(tx, sessionID, hashValue(req.RefreshToken), hashValue(newSignedToken), newExpiry.Time)
 	if err != nil {
 		return nil, status.Error(codes.Unauthenticated, "wrong token")
 	}
@@ -475,7 +460,8 @@ func (s *Server) Refresh(ctx context.Context, req *userpb.RefreshRequest) (*user
 		return nil, fmt.Errorf("committing transaction: %w", err)
 	}
 
-	if err := s.CreateSession(ctx, email, SessionData{
+	if err := s.CreateSession(ctx, sessionID, email, SessionData{
+		Email:       email,
 		Role:        role,
 		Permissions: permissions,
 		Active:      true,
@@ -483,7 +469,7 @@ func (s *Server) Refresh(ctx context.Context, req *userpb.RefreshRequest) (*user
 		return nil, status.Error(codes.Unavailable, "session store unavailable")
 	}
 
-	return &userpb.RefreshResponse{AccessToken: newAccessToken, RefreshToken: newSignedToken, Permissions: permissions, Role: role}, nil
+	return &userpb.RefreshResponse{AccessToken: newAccessToken, RefreshToken: newSignedToken, Permissions: permissions, Role: role, SessionId: sessionID}, nil
 }
 
 // getRoleAndPermissions determines the role, permissions, and active status for a user by email.
@@ -510,16 +496,17 @@ func (s *Server) Login(ctx context.Context, req *userpb.LoginRequest) (*userpb.L
 
 	if bytes.Equal(hashedPassword, user.hashedPassword) {
 		role, permissions, active := s.getRoleAndPermissions(user.email)
+		sessionID := uuid.NewString()
 
 		if !active {
 			return nil, status.Error(codes.Unauthenticated, "account deactivated")
 		}
 
-		accessToken, err := s.GenerateAccessToken(user.email)
+		accessToken, err := s.GenerateAccessToken(user.email, sessionID)
 		if err != nil {
 			return nil, err
 		}
-		refreshToken, err := s.GenerateRefreshToken(user.email)
+		refreshToken, err := s.GenerateRefreshToken(user.email, sessionID)
 		if err != nil {
 			return nil, err
 		}
@@ -528,7 +515,8 @@ func (s *Server) Login(ctx context.Context, req *userpb.LoginRequest) (*userpb.L
 			return nil, err
 		}
 
-		if err := s.CreateSession(ctx, user.email, SessionData{
+		if err := s.CreateSession(ctx, sessionID, user.email, SessionData{
+			Email:       user.email,
 			Role:        role,
 			Permissions: permissions,
 			Active:      true,
@@ -541,6 +529,7 @@ func (s *Server) Login(ctx context.Context, req *userpb.LoginRequest) (*userpb.L
 			RefreshToken: refreshToken,
 			Permissions:  permissions,
 			Role:         role,
+			SessionId:    sessionID,
 		}, nil
 	}
 
@@ -549,12 +538,17 @@ func (s *Server) Login(ctx context.Context, req *userpb.LoginRequest) (*userpb.L
 
 func (s *Server) Logout(ctx context.Context, req *userpb.LogoutRequest) (*userpb.LogoutResponse, error) {
 	email := req.Email
+	sessionID := req.SessionId
 	tx, err := s.database.Begin()
 	if err != nil {
 		return nil, fmt.Errorf("starting transaction: %w", err)
 	}
 	defer func() { _ = tx.Rollback() }()
-	err = s.RevokeRefreshTokensByEmail(tx, email)
+	if sessionID != "" {
+		err = s.RevokeRefreshTokenBySessionID(tx, sessionID)
+	} else {
+		err = s.RevokeRefreshTokensByEmail(tx, email)
+	}
 	if err != nil {
 		return nil, err
 	}
@@ -563,7 +557,11 @@ func (s *Server) Logout(ctx context.Context, req *userpb.LogoutRequest) (*userpb
 		return nil, fmt.Errorf("committing transaction: %w", err)
 	}
 
-	_ = s.DeleteSession(ctx, email)
+	if sessionID != "" {
+		_ = s.DeleteSession(ctx, sessionID)
+	} else {
+		_ = s.DeleteSessionsByEmail(ctx, email)
+	}
 
 	return &userpb.LogoutResponse{
 		Success: true,
@@ -625,7 +623,7 @@ func (s *Server) SetPasswordWithToken(ctx context.Context, req *userpb.SetPasswo
 		return nil, status.Error(codes.Internal, "committing transaction failed")
 	}
 
-	_ = s.DeleteSession(ctx, email)
+	_ = s.DeleteSessionsByEmail(ctx, email)
 
 	return &userpb.SetPasswordWithTokenResponse{Successful: true}, nil
 }

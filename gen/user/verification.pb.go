@@ -74,10 +74,12 @@ func (x *VerifyCodeRequest) GetCode() string {
 }
 
 type VerifyCodeResponse struct {
-	state         protoimpl.MessageState `protogen:"open.v1"`
-	Valid         bool                   `protobuf:"varint,1,opt,name=valid,proto3" json:"valid,omitempty"`
-	unknownFields protoimpl.UnknownFields
-	sizeCache     protoimpl.SizeCache
+	state                protoimpl.MessageState `protogen:"open.v1"`
+	Valid                bool                   `protobuf:"varint,1,opt,name=valid,proto3" json:"valid,omitempty"`
+	RemainingAttempts    int32                  `protobuf:"varint,2,opt,name=remaining_attempts,json=remainingAttempts,proto3" json:"remaining_attempts,omitempty"`
+	TransactionCancelled bool                   `protobuf:"varint,3,opt,name=transaction_cancelled,json=transactionCancelled,proto3" json:"transaction_cancelled,omitempty"`
+	unknownFields        protoimpl.UnknownFields
+	sizeCache            protoimpl.SizeCache
 }
 
 func (x *VerifyCodeResponse) Reset() {
@@ -117,6 +119,124 @@ func (x *VerifyCodeResponse) GetValid() bool {
 	return false
 }
 
+func (x *VerifyCodeResponse) GetRemainingAttempts() int32 {
+	if x != nil {
+		return x.RemainingAttempts
+	}
+	return 0
+}
+
+func (x *VerifyCodeResponse) GetTransactionCancelled() bool {
+	if x != nil {
+		return x.TransactionCancelled
+	}
+	return false
+}
+
+type CreateTransactionCodeRequest struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	Email         string                 `protobuf:"bytes,1,opt,name=email,proto3" json:"email,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *CreateTransactionCodeRequest) Reset() {
+	*x = CreateTransactionCodeRequest{}
+	mi := &file_user_verification_proto_msgTypes[2]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *CreateTransactionCodeRequest) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*CreateTransactionCodeRequest) ProtoMessage() {}
+
+func (x *CreateTransactionCodeRequest) ProtoReflect() protoreflect.Message {
+	mi := &file_user_verification_proto_msgTypes[2]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use CreateTransactionCodeRequest.ProtoReflect.Descriptor instead.
+func (*CreateTransactionCodeRequest) Descriptor() ([]byte, []int) {
+	return file_user_verification_proto_rawDescGZIP(), []int{2}
+}
+
+func (x *CreateTransactionCodeRequest) GetEmail() string {
+	if x != nil {
+		return x.Email
+	}
+	return ""
+}
+
+type CreateTransactionCodeResponse struct {
+	state          protoimpl.MessageState `protogen:"open.v1"`
+	Code           string                 `protobuf:"bytes,1,opt,name=code,proto3" json:"code,omitempty"`
+	ValidUntilUnix int64                  `protobuf:"varint,2,opt,name=valid_until_unix,json=validUntilUnix,proto3" json:"valid_until_unix,omitempty"`
+	MaxAttempts    int32                  `protobuf:"varint,3,opt,name=max_attempts,json=maxAttempts,proto3" json:"max_attempts,omitempty"`
+	unknownFields  protoimpl.UnknownFields
+	sizeCache      protoimpl.SizeCache
+}
+
+func (x *CreateTransactionCodeResponse) Reset() {
+	*x = CreateTransactionCodeResponse{}
+	mi := &file_user_verification_proto_msgTypes[3]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *CreateTransactionCodeResponse) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*CreateTransactionCodeResponse) ProtoMessage() {}
+
+func (x *CreateTransactionCodeResponse) ProtoReflect() protoreflect.Message {
+	mi := &file_user_verification_proto_msgTypes[3]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use CreateTransactionCodeResponse.ProtoReflect.Descriptor instead.
+func (*CreateTransactionCodeResponse) Descriptor() ([]byte, []int) {
+	return file_user_verification_proto_rawDescGZIP(), []int{3}
+}
+
+func (x *CreateTransactionCodeResponse) GetCode() string {
+	if x != nil {
+		return x.Code
+	}
+	return ""
+}
+
+func (x *CreateTransactionCodeResponse) GetValidUntilUnix() int64 {
+	if x != nil {
+		return x.ValidUntilUnix
+	}
+	return 0
+}
+
+func (x *CreateTransactionCodeResponse) GetMaxAttempts() int32 {
+	if x != nil {
+		return x.MaxAttempts
+	}
+	return 0
+}
+
 type EnrollBeginRequest struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
 	Email         string                 `protobuf:"bytes,1,opt,name=email,proto3" json:"email,omitempty"`
@@ -126,7 +246,7 @@ type EnrollBeginRequest struct {
 
 func (x *EnrollBeginRequest) Reset() {
 	*x = EnrollBeginRequest{}
-	mi := &file_user_verification_proto_msgTypes[2]
+	mi := &file_user_verification_proto_msgTypes[4]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -138,7 +258,7 @@ func (x *EnrollBeginRequest) String() string {
 func (*EnrollBeginRequest) ProtoMessage() {}
 
 func (x *EnrollBeginRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_user_verification_proto_msgTypes[2]
+	mi := &file_user_verification_proto_msgTypes[4]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -151,7 +271,7 @@ func (x *EnrollBeginRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use EnrollBeginRequest.ProtoReflect.Descriptor instead.
 func (*EnrollBeginRequest) Descriptor() ([]byte, []int) {
-	return file_user_verification_proto_rawDescGZIP(), []int{2}
+	return file_user_verification_proto_rawDescGZIP(), []int{4}
 }
 
 func (x *EnrollBeginRequest) GetEmail() string {
@@ -170,7 +290,7 @@ type EnrollBeginResponse struct {
 
 func (x *EnrollBeginResponse) Reset() {
 	*x = EnrollBeginResponse{}
-	mi := &file_user_verification_proto_msgTypes[3]
+	mi := &file_user_verification_proto_msgTypes[5]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -182,7 +302,7 @@ func (x *EnrollBeginResponse) String() string {
 func (*EnrollBeginResponse) ProtoMessage() {}
 
 func (x *EnrollBeginResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_user_verification_proto_msgTypes[3]
+	mi := &file_user_verification_proto_msgTypes[5]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -195,7 +315,7 @@ func (x *EnrollBeginResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use EnrollBeginResponse.ProtoReflect.Descriptor instead.
 func (*EnrollBeginResponse) Descriptor() ([]byte, []int) {
-	return file_user_verification_proto_rawDescGZIP(), []int{3}
+	return file_user_verification_proto_rawDescGZIP(), []int{5}
 }
 
 func (x *EnrollBeginResponse) GetUrl() string {
@@ -215,7 +335,7 @@ type EnrollConfirmRequest struct {
 
 func (x *EnrollConfirmRequest) Reset() {
 	*x = EnrollConfirmRequest{}
-	mi := &file_user_verification_proto_msgTypes[4]
+	mi := &file_user_verification_proto_msgTypes[6]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -227,7 +347,7 @@ func (x *EnrollConfirmRequest) String() string {
 func (*EnrollConfirmRequest) ProtoMessage() {}
 
 func (x *EnrollConfirmRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_user_verification_proto_msgTypes[4]
+	mi := &file_user_verification_proto_msgTypes[6]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -240,7 +360,7 @@ func (x *EnrollConfirmRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use EnrollConfirmRequest.ProtoReflect.Descriptor instead.
 func (*EnrollConfirmRequest) Descriptor() ([]byte, []int) {
-	return file_user_verification_proto_rawDescGZIP(), []int{4}
+	return file_user_verification_proto_rawDescGZIP(), []int{6}
 }
 
 func (x *EnrollConfirmRequest) GetEmail() string {
@@ -267,7 +387,7 @@ type EnrollConfirmResponse struct {
 
 func (x *EnrollConfirmResponse) Reset() {
 	*x = EnrollConfirmResponse{}
-	mi := &file_user_verification_proto_msgTypes[5]
+	mi := &file_user_verification_proto_msgTypes[7]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -279,7 +399,7 @@ func (x *EnrollConfirmResponse) String() string {
 func (*EnrollConfirmResponse) ProtoMessage() {}
 
 func (x *EnrollConfirmResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_user_verification_proto_msgTypes[5]
+	mi := &file_user_verification_proto_msgTypes[7]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -292,7 +412,7 @@ func (x *EnrollConfirmResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use EnrollConfirmResponse.ProtoReflect.Descriptor instead.
 func (*EnrollConfirmResponse) Descriptor() ([]byte, []int) {
-	return file_user_verification_proto_rawDescGZIP(), []int{5}
+	return file_user_verification_proto_rawDescGZIP(), []int{7}
 }
 
 func (x *EnrollConfirmResponse) GetSuccess() bool {
@@ -318,7 +438,7 @@ type DisableBeginRequest struct {
 
 func (x *DisableBeginRequest) Reset() {
 	*x = DisableBeginRequest{}
-	mi := &file_user_verification_proto_msgTypes[6]
+	mi := &file_user_verification_proto_msgTypes[8]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -330,7 +450,7 @@ func (x *DisableBeginRequest) String() string {
 func (*DisableBeginRequest) ProtoMessage() {}
 
 func (x *DisableBeginRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_user_verification_proto_msgTypes[6]
+	mi := &file_user_verification_proto_msgTypes[8]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -343,7 +463,7 @@ func (x *DisableBeginRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use DisableBeginRequest.ProtoReflect.Descriptor instead.
 func (*DisableBeginRequest) Descriptor() ([]byte, []int) {
-	return file_user_verification_proto_rawDescGZIP(), []int{6}
+	return file_user_verification_proto_rawDescGZIP(), []int{8}
 }
 
 func (x *DisableBeginRequest) GetEmail() string {
@@ -362,7 +482,7 @@ type DisableBeginResponse struct {
 
 func (x *DisableBeginResponse) Reset() {
 	*x = DisableBeginResponse{}
-	mi := &file_user_verification_proto_msgTypes[7]
+	mi := &file_user_verification_proto_msgTypes[9]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -374,7 +494,7 @@ func (x *DisableBeginResponse) String() string {
 func (*DisableBeginResponse) ProtoMessage() {}
 
 func (x *DisableBeginResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_user_verification_proto_msgTypes[7]
+	mi := &file_user_verification_proto_msgTypes[9]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -387,7 +507,7 @@ func (x *DisableBeginResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use DisableBeginResponse.ProtoReflect.Descriptor instead.
 func (*DisableBeginResponse) Descriptor() ([]byte, []int) {
-	return file_user_verification_proto_rawDescGZIP(), []int{7}
+	return file_user_verification_proto_rawDescGZIP(), []int{9}
 }
 
 func (x *DisableBeginResponse) GetSuccess() bool {
@@ -407,7 +527,7 @@ type DisableConfirmRequest struct {
 
 func (x *DisableConfirmRequest) Reset() {
 	*x = DisableConfirmRequest{}
-	mi := &file_user_verification_proto_msgTypes[8]
+	mi := &file_user_verification_proto_msgTypes[10]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -419,7 +539,7 @@ func (x *DisableConfirmRequest) String() string {
 func (*DisableConfirmRequest) ProtoMessage() {}
 
 func (x *DisableConfirmRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_user_verification_proto_msgTypes[8]
+	mi := &file_user_verification_proto_msgTypes[10]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -432,7 +552,7 @@ func (x *DisableConfirmRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use DisableConfirmRequest.ProtoReflect.Descriptor instead.
 func (*DisableConfirmRequest) Descriptor() ([]byte, []int) {
-	return file_user_verification_proto_rawDescGZIP(), []int{8}
+	return file_user_verification_proto_rawDescGZIP(), []int{10}
 }
 
 func (x *DisableConfirmRequest) GetEmail() string {
@@ -458,7 +578,7 @@ type DisableConfirmResponse struct {
 
 func (x *DisableConfirmResponse) Reset() {
 	*x = DisableConfirmResponse{}
-	mi := &file_user_verification_proto_msgTypes[9]
+	mi := &file_user_verification_proto_msgTypes[11]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -470,7 +590,7 @@ func (x *DisableConfirmResponse) String() string {
 func (*DisableConfirmResponse) ProtoMessage() {}
 
 func (x *DisableConfirmResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_user_verification_proto_msgTypes[9]
+	mi := &file_user_verification_proto_msgTypes[11]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -483,7 +603,7 @@ func (x *DisableConfirmResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use DisableConfirmResponse.ProtoReflect.Descriptor instead.
 func (*DisableConfirmResponse) Descriptor() ([]byte, []int) {
-	return file_user_verification_proto_rawDescGZIP(), []int{9}
+	return file_user_verification_proto_rawDescGZIP(), []int{11}
 }
 
 func (x *DisableConfirmResponse) GetSuccess() bool {
@@ -502,7 +622,7 @@ type StatusRequest struct {
 
 func (x *StatusRequest) Reset() {
 	*x = StatusRequest{}
-	mi := &file_user_verification_proto_msgTypes[10]
+	mi := &file_user_verification_proto_msgTypes[12]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -514,7 +634,7 @@ func (x *StatusRequest) String() string {
 func (*StatusRequest) ProtoMessage() {}
 
 func (x *StatusRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_user_verification_proto_msgTypes[10]
+	mi := &file_user_verification_proto_msgTypes[12]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -527,7 +647,7 @@ func (x *StatusRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use StatusRequest.ProtoReflect.Descriptor instead.
 func (*StatusRequest) Descriptor() ([]byte, []int) {
-	return file_user_verification_proto_rawDescGZIP(), []int{10}
+	return file_user_verification_proto_rawDescGZIP(), []int{12}
 }
 
 func (x *StatusRequest) GetEmail() string {
@@ -546,7 +666,7 @@ type StatusResponse struct {
 
 func (x *StatusResponse) Reset() {
 	*x = StatusResponse{}
-	mi := &file_user_verification_proto_msgTypes[11]
+	mi := &file_user_verification_proto_msgTypes[13]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -558,7 +678,7 @@ func (x *StatusResponse) String() string {
 func (*StatusResponse) ProtoMessage() {}
 
 func (x *StatusResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_user_verification_proto_msgTypes[11]
+	mi := &file_user_verification_proto_msgTypes[13]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -571,7 +691,7 @@ func (x *StatusResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use StatusResponse.ProtoReflect.Descriptor instead.
 func (*StatusResponse) Descriptor() ([]byte, []int) {
-	return file_user_verification_proto_rawDescGZIP(), []int{11}
+	return file_user_verification_proto_rawDescGZIP(), []int{13}
 }
 
 func (x *StatusResponse) GetActive() bool {
@@ -590,7 +710,7 @@ type TOTPStatusRequest struct {
 
 func (x *TOTPStatusRequest) Reset() {
 	*x = TOTPStatusRequest{}
-	mi := &file_user_verification_proto_msgTypes[12]
+	mi := &file_user_verification_proto_msgTypes[14]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -602,7 +722,7 @@ func (x *TOTPStatusRequest) String() string {
 func (*TOTPStatusRequest) ProtoMessage() {}
 
 func (x *TOTPStatusRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_user_verification_proto_msgTypes[12]
+	mi := &file_user_verification_proto_msgTypes[14]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -615,7 +735,7 @@ func (x *TOTPStatusRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use TOTPStatusRequest.ProtoReflect.Descriptor instead.
 func (*TOTPStatusRequest) Descriptor() ([]byte, []int) {
-	return file_user_verification_proto_rawDescGZIP(), []int{12}
+	return file_user_verification_proto_rawDescGZIP(), []int{14}
 }
 
 func (x *TOTPStatusRequest) GetEmail() string {
@@ -634,7 +754,7 @@ type TOTPStatusResponse struct {
 
 func (x *TOTPStatusResponse) Reset() {
 	*x = TOTPStatusResponse{}
-	mi := &file_user_verification_proto_msgTypes[13]
+	mi := &file_user_verification_proto_msgTypes[15]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -646,7 +766,7 @@ func (x *TOTPStatusResponse) String() string {
 func (*TOTPStatusResponse) ProtoMessage() {}
 
 func (x *TOTPStatusResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_user_verification_proto_msgTypes[13]
+	mi := &file_user_verification_proto_msgTypes[15]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -659,7 +779,7 @@ func (x *TOTPStatusResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use TOTPStatusResponse.ProtoReflect.Descriptor instead.
 func (*TOTPStatusResponse) Descriptor() ([]byte, []int) {
-	return file_user_verification_proto_rawDescGZIP(), []int{13}
+	return file_user_verification_proto_rawDescGZIP(), []int{15}
 }
 
 func (x *TOTPStatusResponse) GetActive() bool {
@@ -676,9 +796,17 @@ const file_user_verification_proto_rawDesc = "" +
 	"\x17user/verification.proto\x12\x04user\"=\n" +
 	"\x11VerifyCodeRequest\x12\x14\n" +
 	"\x05email\x18\x01 \x01(\tR\x05email\x12\x12\n" +
-	"\x04code\x18\x02 \x01(\tR\x04code\"*\n" +
+	"\x04code\x18\x02 \x01(\tR\x04code\"\x8e\x01\n" +
 	"\x12VerifyCodeResponse\x12\x14\n" +
-	"\x05valid\x18\x01 \x01(\bR\x05valid\"*\n" +
+	"\x05valid\x18\x01 \x01(\bR\x05valid\x12-\n" +
+	"\x12remaining_attempts\x18\x02 \x01(\x05R\x11remainingAttempts\x123\n" +
+	"\x15transaction_cancelled\x18\x03 \x01(\bR\x14transactionCancelled\"4\n" +
+	"\x1cCreateTransactionCodeRequest\x12\x14\n" +
+	"\x05email\x18\x01 \x01(\tR\x05email\"\x80\x01\n" +
+	"\x1dCreateTransactionCodeResponse\x12\x12\n" +
+	"\x04code\x18\x01 \x01(\tR\x04code\x12(\n" +
+	"\x10valid_until_unix\x18\x02 \x01(\x03R\x0evalidUntilUnix\x12!\n" +
+	"\fmax_attempts\x18\x03 \x01(\x05R\vmaxAttempts\"*\n" +
 	"\x12EnrollBeginRequest\x12\x14\n" +
 	"\x05email\x18\x01 \x01(\tR\x05email\"'\n" +
 	"\x13EnrollBeginResponse\x12\x10\n" +
@@ -705,10 +833,11 @@ const file_user_verification_proto_rawDesc = "" +
 	"\x11TOTPStatusRequest\x12\x14\n" +
 	"\x05email\x18\x01 \x01(\tR\x05email\",\n" +
 	"\x12TOTPStatusResponse\x12\x16\n" +
-	"\x06active\x18\x01 \x01(\bR\x06active2\xa5\x03\n" +
+	"\x06active\x18\x01 \x01(\bR\x06active2\x87\x04\n" +
 	"\vTOTPService\x12?\n" +
 	"\n" +
-	"VerifyCode\x12\x17.user.VerifyCodeRequest\x1a\x18.user.VerifyCodeResponse\x12B\n" +
+	"VerifyCode\x12\x17.user.VerifyCodeRequest\x1a\x18.user.VerifyCodeResponse\x12`\n" +
+	"\x15CreateTransactionCode\x12\".user.CreateTransactionCodeRequest\x1a#.user.CreateTransactionCodeResponse\x12B\n" +
 	"\vEnrollBegin\x12\x18.user.EnrollBeginRequest\x1a\x19.user.EnrollBeginResponse\x12H\n" +
 	"\rEnrollConfirm\x12\x1a.user.EnrollConfirmRequest\x1a\x1b.user.EnrollConfirmResponse\x12E\n" +
 	"\fDisableBegin\x12\x19.user.DisableBeginRequest\x1a\x1a.user.DisableBeginResponse\x12K\n" +
@@ -727,38 +856,42 @@ func file_user_verification_proto_rawDescGZIP() []byte {
 	return file_user_verification_proto_rawDescData
 }
 
-var file_user_verification_proto_msgTypes = make([]protoimpl.MessageInfo, 14)
+var file_user_verification_proto_msgTypes = make([]protoimpl.MessageInfo, 16)
 var file_user_verification_proto_goTypes = []any{
-	(*VerifyCodeRequest)(nil),      // 0: user.VerifyCodeRequest
-	(*VerifyCodeResponse)(nil),     // 1: user.VerifyCodeResponse
-	(*EnrollBeginRequest)(nil),     // 2: user.EnrollBeginRequest
-	(*EnrollBeginResponse)(nil),    // 3: user.EnrollBeginResponse
-	(*EnrollConfirmRequest)(nil),   // 4: user.EnrollConfirmRequest
-	(*EnrollConfirmResponse)(nil),  // 5: user.EnrollConfirmResponse
-	(*DisableBeginRequest)(nil),    // 6: user.DisableBeginRequest
-	(*DisableBeginResponse)(nil),   // 7: user.DisableBeginResponse
-	(*DisableConfirmRequest)(nil),  // 8: user.DisableConfirmRequest
-	(*DisableConfirmResponse)(nil), // 9: user.DisableConfirmResponse
-	(*StatusRequest)(nil),          // 10: user.StatusRequest
-	(*StatusResponse)(nil),         // 11: user.StatusResponse
-	(*TOTPStatusRequest)(nil),      // 12: user.TOTPStatusRequest
-	(*TOTPStatusResponse)(nil),     // 13: user.TOTPStatusResponse
+	(*VerifyCodeRequest)(nil),             // 0: user.VerifyCodeRequest
+	(*VerifyCodeResponse)(nil),            // 1: user.VerifyCodeResponse
+	(*CreateTransactionCodeRequest)(nil),  // 2: user.CreateTransactionCodeRequest
+	(*CreateTransactionCodeResponse)(nil), // 3: user.CreateTransactionCodeResponse
+	(*EnrollBeginRequest)(nil),            // 4: user.EnrollBeginRequest
+	(*EnrollBeginResponse)(nil),           // 5: user.EnrollBeginResponse
+	(*EnrollConfirmRequest)(nil),          // 6: user.EnrollConfirmRequest
+	(*EnrollConfirmResponse)(nil),         // 7: user.EnrollConfirmResponse
+	(*DisableBeginRequest)(nil),           // 8: user.DisableBeginRequest
+	(*DisableBeginResponse)(nil),          // 9: user.DisableBeginResponse
+	(*DisableConfirmRequest)(nil),         // 10: user.DisableConfirmRequest
+	(*DisableConfirmResponse)(nil),        // 11: user.DisableConfirmResponse
+	(*StatusRequest)(nil),                 // 12: user.StatusRequest
+	(*StatusResponse)(nil),                // 13: user.StatusResponse
+	(*TOTPStatusRequest)(nil),             // 14: user.TOTPStatusRequest
+	(*TOTPStatusResponse)(nil),            // 15: user.TOTPStatusResponse
 }
 var file_user_verification_proto_depIdxs = []int32{
 	0,  // 0: user.TOTPService.VerifyCode:input_type -> user.VerifyCodeRequest
-	2,  // 1: user.TOTPService.EnrollBegin:input_type -> user.EnrollBeginRequest
-	4,  // 2: user.TOTPService.EnrollConfirm:input_type -> user.EnrollConfirmRequest
-	6,  // 3: user.TOTPService.DisableBegin:input_type -> user.DisableBeginRequest
-	8,  // 4: user.TOTPService.DisableConfirm:input_type -> user.DisableConfirmRequest
-	10, // 5: user.TOTPService.Status:input_type -> user.StatusRequest
-	1,  // 6: user.TOTPService.VerifyCode:output_type -> user.VerifyCodeResponse
-	3,  // 7: user.TOTPService.EnrollBegin:output_type -> user.EnrollBeginResponse
-	5,  // 8: user.TOTPService.EnrollConfirm:output_type -> user.EnrollConfirmResponse
-	7,  // 9: user.TOTPService.DisableBegin:output_type -> user.DisableBeginResponse
-	9,  // 10: user.TOTPService.DisableConfirm:output_type -> user.DisableConfirmResponse
-	11, // 11: user.TOTPService.Status:output_type -> user.StatusResponse
-	6,  // [6:12] is the sub-list for method output_type
-	0,  // [0:6] is the sub-list for method input_type
+	2,  // 1: user.TOTPService.CreateTransactionCode:input_type -> user.CreateTransactionCodeRequest
+	4,  // 2: user.TOTPService.EnrollBegin:input_type -> user.EnrollBeginRequest
+	6,  // 3: user.TOTPService.EnrollConfirm:input_type -> user.EnrollConfirmRequest
+	8,  // 4: user.TOTPService.DisableBegin:input_type -> user.DisableBeginRequest
+	10, // 5: user.TOTPService.DisableConfirm:input_type -> user.DisableConfirmRequest
+	12, // 6: user.TOTPService.Status:input_type -> user.StatusRequest
+	1,  // 7: user.TOTPService.VerifyCode:output_type -> user.VerifyCodeResponse
+	3,  // 8: user.TOTPService.CreateTransactionCode:output_type -> user.CreateTransactionCodeResponse
+	5,  // 9: user.TOTPService.EnrollBegin:output_type -> user.EnrollBeginResponse
+	7,  // 10: user.TOTPService.EnrollConfirm:output_type -> user.EnrollConfirmResponse
+	9,  // 11: user.TOTPService.DisableBegin:output_type -> user.DisableBeginResponse
+	11, // 12: user.TOTPService.DisableConfirm:output_type -> user.DisableConfirmResponse
+	13, // 13: user.TOTPService.Status:output_type -> user.StatusResponse
+	7,  // [7:14] is the sub-list for method output_type
+	0,  // [0:7] is the sub-list for method input_type
 	0,  // [0:0] is the sub-list for extension type_name
 	0,  // [0:0] is the sub-list for extension extendee
 	0,  // [0:0] is the sub-list for field type_name
@@ -775,7 +908,7 @@ func file_user_verification_proto_init() {
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
 			RawDescriptor: unsafe.Slice(unsafe.StringData(file_user_verification_proto_rawDesc), len(file_user_verification_proto_rawDesc)),
 			NumEnums:      0,
-			NumMessages:   14,
+			NumMessages:   16,
 			NumExtensions: 0,
 			NumServices:   1,
 		},

@@ -2,7 +2,9 @@ package gateway
 
 import (
 	"net/http"
+	"net/url"
 	"os"
+	"strings"
 	"time"
 
 	"github.com/gin-contrib/cors"
@@ -10,17 +12,36 @@ import (
 )
 
 func setupCors(router *gin.Engine) {
-	origin := os.Getenv("CORS_ORIGIN")
-	if origin == "" {
-		origin = "http://localhost:5173"
+	allowedHosts := map[string]struct{}{
+		"localhost":   {},
+		"127.0.0.1":   {},
+		"192.168.54.108": {},
 	}
+
+	if raw := os.Getenv("CORS_ALLOWED_HOSTS"); raw != "" {
+		for _, host := range strings.Split(raw, ",") {
+			host = strings.TrimSpace(host)
+			if host != "" {
+				allowedHosts[host] = struct{}{}
+			}
+		}
+	}
+
 	router.Use(cors.New(cors.Config{
-		AllowOrigins:     []string{origin},
-		AllowMethods:     []string{"GET, POST, PUT, PATCH, DELETE, OPTIONS"},
-		AllowHeaders:     []string{"Content-Type", "Authorization", "TOTP", "X-Requested-With"},
-		ExposeHeaders:    []string{"Content-Length", "X-Custom-Header"},
+		AllowOriginFunc: func(origin string) bool {
+			u, err := url.Parse(origin)
+			if err != nil {
+				return false
+			}
+
+			_, ok := allowedHosts[u.Hostname()]
+			return ok
+		},
+		AllowMethods: []string{"GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"},
+		AllowHeaders: []string{"Content-Type", "Authorization", "TOTP", "X-Requested-With"},
+		ExposeHeaders: []string{"Content-Length", "X-Custom-Header"},
 		AllowCredentials: true,
-		MaxAge:           12 * time.Hour,
+		MaxAge: time.Hour * 12,
 	}))
 }
 
@@ -30,7 +51,7 @@ func SetupApi(router *gin.Engine, server *Server) {
 	api := router.Group("/api")
 
 	auth := AuthenticatedMiddleware(server.UserClient)
-	secured := PermissionMiddleware(server.UserClient)
+	secured := PermissionMiddleware()
 	totp := TOTPMiddleware(server.TOTPClient)
 
 	{
@@ -39,6 +60,7 @@ func SetupApi(router *gin.Engine, server *Server) {
 		api.POST("/token/refresh", server.Refresh)
 		api.POST("/totp/setup/begin", auth, server.TOTPSetupBegin)
 		api.POST("/totp/setup/confirm", auth, server.TOTPSetupConfirm)
+		api.POST("/totp/transaction-code", auth, secured("role:client"), server.CreateTransactionCode)
 		api.POST("/totp/disable/begin", auth, server.TOTPDisableBegin)
 		api.POST("/totp/disable/confirm", auth, server.TOTPDisableConfirm)
 	}
@@ -67,7 +89,6 @@ func SetupApi(router *gin.Engine, server *Server) {
 		passwordReset.POST("/confirm", server.ConfirmPasswordReset)
 	}
 
-	api.GET("/clients/me", auth, secured("role:client"), server.GetMe) // van grupe
 	clients := api.Group("/clients", auth, secured("manage_clients"))
 	{
 		clients.POST("", server.CreateClientAccount)
@@ -117,10 +138,10 @@ func SetupApi(router *gin.Engine, server *Server) {
 
 	cards := api.Group("/cards")
 	{
-		cards.GET("", auth, secured("role:client"), totp, server.GetCards)
-		cards.POST("", auth, secured("role:client"), totp, server.RequestCard)
-		cards.GET("/confirm", server.ConfirmCard) // Ovo se poziva linkom iz mejla, NE DODAJEMO AUTH OVDE!!!
-		cards.PATCH("/:cardNumber/block", auth, secured("role:client"), totp, server.BlockCard)
+		cards.GET("", auth, secured("role:client"), server.GetCards)
+		cards.POST("", auth, secured("role:client"), server.RequestCard)
+		cards.GET("/confirm", auth, secured("role:client"), server.ConfirmCard)
+		cards.PATCH("/:cardNumber/block", auth, secured("role:client"), server.BlockCard)
 	}
 
 	api.GET("/exchange-rates", auth, secured("role:client"), server.GetExchangeRates)

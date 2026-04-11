@@ -30,7 +30,7 @@ pokretanje (potreban Go na sistemu).
 
 | Komanda        | Opis                                         |
 |----------------|----------------------------------------------|
-| `make all`     | Pokreni sve (proto, up, schema, seed)        |
+| `make all`     | Pokreni sve servise (proto + up)             |
 | `make up`      | Pokreni servise/containere                   |
 | `make down`    | Ugasi servise/containere                     |
 | `make down-v`  | Ugasi i obrisi volume (cist start)           |
@@ -66,6 +66,12 @@ development).
 
 Alternativno, mozete samo da skinete ove packages iz `flake.nix` sa svog package
 managera.
+
+## Baza
+
+Postgres se pri prvom pokretanju automatski inicijalizuje iz snapshot-a u
+`scripts/db/init/001-current-state.sql`, pa nova okruzenja dobijaju isto stanje
+baze koje je bilo u Dockeru u trenutku eksportovanja snapshot-a.
 
 
 ## Secrets

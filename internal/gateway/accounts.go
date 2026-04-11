@@ -2,8 +2,8 @@ package gateway
 
 import (
 	"context"
+	"fmt"
 	"net/http"
-	"strconv"
 	"strings"
 	"time"
 
@@ -13,13 +13,13 @@ import (
 )
 
 func (s *Server) CreateAccount(c *gin.Context) {
-	var req CreateAccountRequest
+	var req createAccountRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
 		writeBindError(c, err)
 		return
 	}
 
-	var employeeID, ok = s.getAuthenticatedEmployeeID(c)
+	employeeID, ok := s.getAuthenticatedEmployeeID(c)
 	if !ok {
 		return
 	}
@@ -27,57 +27,70 @@ func (s *Server) CreateAccount(c *gin.Context) {
 	// TEKUCI -> checking, DEVIZNI -> foreign
 	var accountType string
 	var currency string
+	var maintainanceCost float64
 	switch strings.ToUpper(req.AccountType) {
 	case "TEKUCI":
 		accountType = "checking"
 		currency = "RSD"
+		maintainanceCost = 25500
 	case "DEVIZNI":
 		accountType = "foreign"
 		currency = req.Currency
+		maintainanceCost = 0
 	default:
 		c.JSON(http.StatusBadRequest, gin.H{"error": "account_type must be TEKUCI or DEVIZNI"})
 		return
 	}
 
-	var pbBusinessInfo *bankpb.BusinessInfo
-	if req.BusinessInfo != nil {
-		pbBusinessInfo = &bankpb.BusinessInfo{
-			CompanyName:        req.BusinessInfo.CompanyName,
-			RegistrationNumber: req.BusinessInfo.RegistrationNumber,
-			Pib:                req.BusinessInfo.PIB,
-			ActivityCode:       req.BusinessInfo.ActivityCode,
-			Address:            req.BusinessInfo.Address,
-		}
+	var ownerType string
+	subtypeLower := strings.ToLower(req.Subtype)
+	if strings.Contains(subtypeLower, "business") || strings.Contains(subtypeLower, "poslovni") {
+		ownerType = "business"
+	} else {
+		ownerType = "personal"
 	}
+
+	name := fmt.Sprintf("%s-%s", accountType, req.Subtype)
+
+	validUntil := time.Now().AddDate(5, 0, 0).Unix()
 
 	ctx, cancel := context.WithTimeout(c.Request.Context(), 5*time.Second)
 	defer cancel()
 
-	ctx = metadata.NewOutgoingContext(ctx, metadata.Pairs(
-		"user-email", c.GetString("email"),
-		"employee-id", strconv.FormatInt(employeeID, 10),
-	))
-
 	resp, err := s.BankClient.CreateAccount(ctx, &bankpb.CreateAccountRequest{
-		ClientId:       req.ClientID,
-		AccountType:    accountType,
-		Subtype:        req.Subtype,
-		Currency:       currency,
-		InitialBalance: req.InitialBalance,
-		DailyLimit:     req.DailyLimit,
-		MonthlyLimit:   req.MonthlyLimit,
-		CreateCard:     req.CreateCard,
-		CardType:       req.CardType,
-		CardBrand:      req.CardBrand,
-		BusinessInfo:   pbBusinessInfo,
+		Name:             name,
+		Owner:            req.ClientID,
+		Currency:         currency,
+		OwnerType:        ownerType,
+		AccountType:      accountType,
+		MaintainanceCost: maintainanceCost,
+		DailyLimit:       req.DailyLimit,
+		MonthlyLimit:     req.MonthlyLimit,
+		CreatedBy:        employeeID,
+		ValidUntil:       validUntil,
+		CreateCard:       req.CreateCard,
 	})
-
 	if err != nil {
 		writeGRPCError(c, err)
 		return
 	}
 
-	c.JSON(http.StatusCreated, resp)
+	if !resp.Valid {
+		c.JSON(http.StatusUnprocessableEntity, gin.H{"error": resp.Error})
+		return
+	}
+
+	detailResp, err := s.BankClient.GetAccountDetails(ctx, &bankpb.GetAccountDetailsRequest{
+		AccountNumber: resp.AccountNumber,
+	})
+	if err != nil {
+		c.JSON(http.StatusCreated, gin.H{
+			"account_number": resp.AccountNumber,
+		})
+		return
+	}
+
+	c.JSON(http.StatusCreated, accountResponse(detailResp.Account))
 }
 
 func accountResponse(a *bankpb.Account) gin.H {

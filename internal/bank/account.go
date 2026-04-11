@@ -2,12 +2,8 @@ package bank
 
 import (
 	"context"
-	"errors"
-	"fmt"
 	"os"
-	"strconv"
 	"strings"
-	"time"
 
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/codes"
@@ -96,7 +92,6 @@ func (s *Server) ListClientTransactions(ctx context.Context, req *bankpb.ListCli
 	}
 
 	transactions, err := s.GetFilteredTransactions(accNumbers, req.AccountNumber, req.Date, req.Amount, req.Status)
-	// fmt.Printf("GetFilteredTransactions(%v, %v, %v, %v, %v) = %v, %v\n", accNumbers, req.AccountNumber, req.Date, req.Amount, req.Status, transactions, err)
 	if err != nil {
 		return nil, status.Error(codes.Internal, "failed to fetch transactions")
 	}
@@ -210,7 +205,7 @@ func (s *Server) resolveCaller(ctx context.Context) (*callerIdentity, error) {
 		_ = conn.Close()
 	}(conn)
 
-	empResp, err := userClient.GetEmployeeByEmail(ctx, &userpb.GetUserByEmailRequest{
+	empResp, err := userClient.GetEmployeeByEmail(ctx, &userpb.GetEmployeeByEmailRequest{
 		Email: email,
 	})
 	if err == nil && empResp != nil {
@@ -232,7 +227,7 @@ func (s *Server) resolveCaller(ctx context.Context) (*callerIdentity, error) {
 
 	return &callerIdentity{
 		Email:    email,
-		ClientID: clientResp.Clients[0].Id,
+		ClientID: int64(clientResp.Clients[0].Id),
 		IsClient: true,
 	}, nil
 }
@@ -270,9 +265,9 @@ func (s *Server) mapSliceToProto(accounts []Account) []*bankpb.Account {
 }
 
 func (s *Server) mapToAccountProto(a Account) *bankpb.Account {
-	statusStr := "Neaktivan"
+	statusStr := "Inactive"
 	if a.Active {
-		statusStr = "Aktivan"
+		statusStr = "Active"
 	}
 
 	return &bankpb.Account{
@@ -292,195 +287,4 @@ func (s *Server) mapToAccountProto(a Account) *bankpb.Account {
 		DailySpending:    float64(a.Daily_expenditure),
 		MonthlySpending:  float64(a.Monthly_expenditure),
 	}
-}
-
-func (s *Server) CreateAccount(ctx context.Context, req *bankpb.CreateAccountRequest) (*bankpb.CreateAccountResponse, error) {
-	if err := validateCreateAccountInput(req); err != nil {
-		return nil, err
-	}
-
-	md, ok := metadata.FromIncomingContext(ctx)
-	if !ok {
-		return nil, status.Error(codes.Unauthenticated, "metadata missing")
-	}
-
-	// 1. Get Employee ID from context
-	idVals := md.Get("employee-id")
-	if len(idVals) == 0 {
-		return nil, status.Error(codes.Unauthenticated, "employee-id missing in context")
-	}
-	employeeID, err := strconv.ParseInt(idVals[0], 10, 64)
-	if err != nil {
-		return nil, status.Error(codes.InvalidArgument, "invalid employee-id format")
-	}
-
-	// 2. Get Email from context (needed for CreateCard)
-	emailVals := md.Get("user-email")
-	if len(emailVals) == 0 {
-		return nil, status.Error(codes.Unauthenticated, "user-email missing in context")
-	}
-	email := emailVals[0]
-
-	ownerType := Personal
-	subtypeLower := strings.ToLower(req.Subtype)
-	if req.AccountType == "business" || req.AccountType == "poslovni" || strings.Contains(subtypeLower, "business") || strings.Contains(subtypeLower, "poslovni") {
-		ownerType = Business
-	}
-
-	// Generate a default account name
-	accountName := fmt.Sprintf("%s-%s", req.AccountType, req.Subtype)
-
-	account := Account{
-		Name:              accountName,
-		Owner:             req.ClientId,
-		CompanyID:         nil,
-		Currency:          req.Currency,
-		Owner_type:        ownerType,
-		Account_type:      account_type(strings.ToLower(req.AccountType)),
-		Balance:           int64(req.InitialBalance * 100),
-		Daily_limit:       int64(req.DailyLimit),
-		Monthly_limit:     int64(req.MonthlyLimit),
-		Created_by:        employeeID,
-		Maintainance_cost: 0,
-	}
-
-	// Logika za kompaniju - Izvršava se samo ako postoje podaci o firmi
-	if req.BusinessInfo != nil {
-		pib, err := strconv.ParseInt(req.BusinessInfo.Pib, 10, 64)
-		if err != nil {
-			return nil, status.Errorf(codes.InvalidArgument, "invalid PIB: %v", err)
-		}
-
-		// Provera da li firma već postoji preko PIB-a
-		existing, _ := s.GetCompanyByTaxCode(pib)
-
-		// Ako postoji, dedelimo ID i preskačemo kreiranje
-		if existing != nil {
-			account.CompanyID = &existing.Id
-		} else {
-			// Ako NE postoji, pokušavamo da je kreiramo
-			regID, err := strconv.ParseInt(req.BusinessInfo.RegistrationNumber, 10, 64)
-			if err != nil {
-				return nil, status.Errorf(codes.InvalidArgument, "invalid registration number: %v", err)
-			}
-
-			activityCode, err := strconv.ParseInt(req.BusinessInfo.ActivityCode, 10, 64)
-			if err != nil {
-				return nil, status.Errorf(codes.InvalidArgument, "invalid activity code: %v", err)
-			}
-
-			company := Company{
-				Registered_id:    regID,
-				Name:             req.BusinessInfo.CompanyName,
-				Tax_code:         pib,
-				Activity_code_id: activityCode,
-				Address:          req.BusinessInfo.Address,
-				Owner_id:         req.ClientId,
-			}
-
-			createdCompany, err := s.CreateCompanyRecord(company)
-			if err != nil {
-				return nil, handleCompanyError(err)
-			}
-			account.CompanyID = &createdCompany.Id
-		}
-	}
-
-	created, err := s.CreateAccountRecord(account)
-	if err != nil {
-		return nil, status.Error(codes.Internal, "failed to save account record")
-	}
-
-	if req.CreateCard {
-		s.triggerCardCreation(ctx, email, created.Number, req)
-	}
-
-	return mapToCreateAccountResponse(created), nil
-}
-
-func handleCompanyError(err error) error {
-	switch {
-	case errors.Is(err, ErrCompanyRegisteredIDExists):
-		return status.Errorf(codes.AlreadyExists, "company registration id already exists")
-	case errors.Is(err, ErrCompanyOwnerNotFound):
-		return status.Error(codes.InvalidArgument, "owner does not exist")
-	case errors.Is(err, ErrCompanyActivityCodeNotFound):
-		return status.Error(codes.InvalidArgument, "activity code does not exist")
-	default:
-		return status.Error(codes.Internal, "company creation failed")
-	}
-}
-
-func (s *Server) triggerCardCreation(ctx context.Context, email, accNum string, req *bankpb.CreateAccountRequest) {
-	_, err := s.CreateCard(ctx, &bankpb.CreateCardRequest{
-		Email:         email,
-		AccountNumber: accNum,
-		CardType:      req.CardType,
-		CardBrand:     req.CardBrand,
-	})
-	if err != nil {
-		fmt.Printf("warning: card creation failed for %s: %v\n", accNum, err)
-	}
-}
-
-func mapToCreateAccountResponse(created *Account) *bankpb.CreateAccountResponse {
-	statusStr := "Neaktivan"
-	if created.Active {
-		statusStr = "Aktivan"
-	}
-
-	return &bankpb.CreateAccountResponse{
-		AccountNumber:    created.Number,
-		AccountName:      created.Name,
-		OwnerId:          created.Owner,
-		Balance:          float64(created.Balance) / 100,
-		AvailableBalance: float64(created.Balance) / 100,
-		EmployeeId:       created.Created_by,
-		CreationDate:     created.Created_at.Format(time.RFC3339),
-		ExpirationDate:   created.Valid_until.Format(time.RFC3339),
-		Currency:         created.Currency,
-		Status:           statusStr,
-		AccountType:      string(created.Account_type),
-		DailyLimit:       float64(created.Daily_limit),
-		MonthlyLimit:     float64(created.Monthly_limit),
-		DailySpending:    float64(created.Daily_expenditure),
-		MonthlySpending:  float64(created.Monthly_expenditure),
-	}
-}
-
-func validateCreateAccountInput(req *bankpb.CreateAccountRequest) error {
-	if req.ClientId <= 0 {
-		return status.Error(codes.InvalidArgument, "client_id must be positive")
-	}
-	if strings.TrimSpace(req.Currency) == "" {
-		return status.Error(codes.InvalidArgument, "currency is required")
-	}
-
-	accType := strings.ToLower(req.AccountType)
-	if accType != "checking" && accType != "foreign" && accType != "tekuci" && accType != "devizni" && accType != "business" && accType != "poslovni" {
-		return status.Error(codes.InvalidArgument, "invalid account_type: must be checking, foreign, or business")
-	}
-
-	if req.InitialBalance < 0 {
-		return status.Error(codes.InvalidArgument, "initial_balance cannot be negative")
-	}
-
-	isBusiness := accType == "business" || accType == "poslovni"
-	if isBusiness && req.BusinessInfo == nil {
-		return status.Error(codes.InvalidArgument, "business_info is required for business accounts")
-	}
-
-	if isBusiness && req.BusinessInfo != nil {
-		if strings.TrimSpace(req.BusinessInfo.CompanyName) == "" {
-			return status.Error(codes.InvalidArgument, "business_info.company_name is required")
-		}
-		if strings.TrimSpace(req.BusinessInfo.Pib) == "" {
-			return status.Error(codes.InvalidArgument, "business_info.pib is required")
-		}
-		if strings.TrimSpace(req.BusinessInfo.RegistrationNumber) == "" {
-			return status.Error(codes.InvalidArgument, "business_info.registration_number is required")
-		}
-	}
-
-	return nil
 }
