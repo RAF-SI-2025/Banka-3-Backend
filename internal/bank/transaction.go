@@ -17,8 +17,10 @@ import (
 	"google.golang.org/grpc/status"
 )
 
+// GetTransactions handles the retrieval of a paginated list of transactions for the authenticated client.
+// It filters by the client's account numbers and applies any additional criteria provided in the request.
 func (s *Server) GetTransactions(ctx context.Context, req *bankpb.GetTransactionsRequest) (*bankpb.GetTransactionsResponse, error) {
-	// 1. Dobijanje email-a i klijenta iz konteksta
+	// 1. Retrieve client email and ID from context metadata
 	email, err := s.GetEmailFromMetadata(ctx)
 	if err != nil {
 		return nil, status.Errorf(codes.Unauthenticated, "failed to get email from metadata: %v", err)
@@ -29,19 +31,19 @@ func (s *Server) GetTransactions(ctx context.Context, req *bankpb.GetTransaction
 		return nil, status.Errorf(codes.Internal, "failed to resolve client id: %v", err)
 	}
 
-	// 2. Provera vlasništva nad računima
+	// 2. Fetch all account numbers associated with this client to ensure data isolation
 	accNumbers, err := s.GetClientAccountNumbers(clientId)
 	if err != nil {
 		return nil, status.Errorf(codes.Internal, "failed to fetch client accounts: %v", err)
 	}
 
-	// 3. Poziv Repo sloja
+	// 3. Call repository layer to fetch combined results from payments and transfers
 	rows, total, err := s.GetFilteredTransactionsRepo(accNumbers, req)
 	if err != nil {
 		return nil, status.Errorf(codes.Internal, "database error: %v", err)
 	}
 
-	// 4. Mapiranje rezultata na Proto
+	// 4. Map the UnifiedTransaction database DTOs to Protobuf messages
 	var pbTransactions []*bankpb.Transaction
 	for _, r := range rows {
 		pbTransactions = append(pbTransactions, &bankpb.Transaction{
@@ -64,17 +66,25 @@ func (s *Server) GetTransactions(ctx context.Context, req *bankpb.GetTransaction
 		})
 	}
 
+	// Calculate total pages for pagination response
+	var totalPages int32 = 0
+	if req.PageSize > 0 {
+		totalPages = int32(math.Ceil(float64(total) / float64(req.PageSize)))
+	}
+
 	return &bankpb.GetTransactionsResponse{
 		Transactions: pbTransactions,
 		Page:         req.Page,
 		PageSize:     req.PageSize,
 		Total:        total,
-		TotalPages:   int32(math.Ceil(float64(total) / float64(req.PageSize))),
+		TotalPages:   totalPages,
 	}, nil
 }
 
+// GetTransactionById retrieves a single transaction and verifies that the authenticated
+// client is either the sender or the receiver of the funds.
 func (s *Server) GetTransactionById(ctx context.Context, req *bankpb.GetTransactionByIdRequest) (*bankpb.GetTransactionByIdResponse, error) {
-	// 1. Autorizacija preko konteksta
+	// 1. Authenticate using context metadata
 	email, err := s.GetEmailFromMetadata(ctx)
 	if err != nil {
 		return nil, status.Errorf(codes.Unauthenticated, "unauthenticated")
@@ -85,13 +95,13 @@ func (s *Server) GetTransactionById(ctx context.Context, req *bankpb.GetTransact
 		return nil, status.Errorf(codes.Internal, "error resolving client")
 	}
 
-	// 2. Dobavljanje transakcije
+	// 2. Fetch the specific transaction from the repository
 	row, err := s.GetSingleTransactionRepo(req.Id, req.Type)
 	if err != nil {
 		return nil, status.Errorf(codes.NotFound, "transaction not found")
 	}
 
-	// 3. Sigurnosna provera: Da li klijent poseduje jedan od računa u ovoj transakciji?
+	// 3. Security Check: Verify that the client owns one of the accounts involved in this transaction
 	isOwner, err := s.CheckTransactionOwnership(clientId, row.FromAccount, row.ToAccount)
 	if err != nil || !isOwner {
 		return nil, status.Error(codes.PermissionDenied, "you do not have access to this transaction")
@@ -100,7 +110,7 @@ func (s *Server) GetTransactionById(ctx context.Context, req *bankpb.GetTransact
 	return &bankpb.GetTransactionByIdResponse{
 		Transaction: &bankpb.Transaction{
 			Id:              row.ID,
-			Type:            req.Type,
+			Type:            row.Type,
 			FromAccount:     row.FromAccount,
 			ToAccount:       row.ToAccount,
 			InitialAmount:   row.InitialAmount,
@@ -119,8 +129,10 @@ func (s *Server) GetTransactionById(ctx context.Context, req *bankpb.GetTransact
 	}, nil
 }
 
+// GenerateTransactionPdf creates a PDF receipt for a specific transaction.
+// It reuses GetTransactionById logic to ensure the user has permission to access the data.
 func (s *Server) GenerateTransactionPdf(ctx context.Context, req *bankpb.GenerateTransactionPdfRequest) (*bankpb.GenerateTransactionPdfResponse, error) {
-	// Koristimo postojeću metodu da dobijemo podatke
+	// Re-use existing retrieval logic (this handles authentication and ownership verification)
 	txResp, err := s.GetTransactionById(ctx, &bankpb.GetTransactionByIdRequest{
 		Id:   req.Id,
 		Type: req.Type,
@@ -133,18 +145,19 @@ func (s *Server) GenerateTransactionPdf(ctx context.Context, req *bankpb.Generat
 	pdf := fpdf.New("P", "mm", "A4", "")
 	pdf.AddPage()
 	pdf.SetFont("Arial", "B", 16)
-	pdf.Cell(190, 10, "Potvrda o transakciji")
+	pdf.Cell(190, 10, "Transaction Confirmation") // Translated header
 	pdf.Ln(14)
 	pdf.SetFont("Arial", "", 12)
 
-	// Generisanje linija teksta
+	// Build PDF content lines
 	content := []string{
-		fmt.Sprintf("ID: %d", t.Id),
-		fmt.Sprintf("Sa računa: %s", t.FromAccount),
-		fmt.Sprintf("Na račun: %s", t.ToAccount),
-		fmt.Sprintf("Iznos: %d", t.InitialAmount),
+		fmt.Sprintf("Transaction ID: %d", t.Id),
+		fmt.Sprintf("From Account: %s", t.FromAccount),
+		fmt.Sprintf("To Account: %s", t.ToAccount),
+		fmt.Sprintf("Initial Amount: %d", t.InitialAmount),
+		fmt.Sprintf("Currency: %s", t.Currency),
 		fmt.Sprintf("Status: %s", t.Status),
-		fmt.Sprintf("Datum: %s", t.Timestamp),
+		fmt.Sprintf("Timestamp: %s", t.Timestamp),
 	}
 
 	for _, line := range content {
@@ -159,7 +172,7 @@ func (s *Server) GenerateTransactionPdf(ctx context.Context, req *bankpb.Generat
 
 	return &bankpb.GenerateTransactionPdfResponse{
 		Pdf:      buf.Bytes(),
-		FileName: fmt.Sprintf("transakcija_%d.pdf", t.Id),
+		FileName: fmt.Sprintf("transaction_%d.pdf", t.Id),
 	}, nil
 }
 

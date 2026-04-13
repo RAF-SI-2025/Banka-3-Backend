@@ -201,23 +201,28 @@ message UpdateCompanyResponse {
 }
 
 message Transaction {
+  // Common fields:
   int64 id = 1;
   string type = 2; // da li je transfer ili placanje
+  // Note: PK == id + type, jer transfer i placanje mogu imati iste id-jeve
   string from_account = 3;
   string to_account = 4;
   int64 initial_amount = 5;
   int64 final_amount = 6;
   int64 fee = 7;
   string currency = 8;
+  string status = 12;
+  string timestamp = 13;
+
+  // Payment specific;
   string payment_code = 9;
   string reference_number = 10;
   string purpose = 11;
-  string status = 12;
-  string timestamp = 13;
-  // placanje polja:
   int64 recipient_id = 14;
-  // transfer polja:
+
+  // Transfer specific;
   int64 start_currency_id = 15;
+  int64 target_currency_id = 17;
   double exchange_rate = 16;
 }
 
@@ -227,8 +232,8 @@ message GetTransactionsRequest {
   string date_from = 2;
   string date_to = 3;
 
-  double amount_from = 4;
-  double amount_to = 5;
+  int64 amount_from = 4;
+  int64 amount_to = 5;
 
   string status = 6;
 

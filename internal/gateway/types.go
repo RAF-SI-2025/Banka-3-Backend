@@ -200,16 +200,16 @@ type transactionTypeQuery struct {
 }
 
 type getTransactionsQuery struct {
-	AccountNumber string  `form:"account_number"`
-	DateFrom      string  `form:"date_from"`
-	DateTo        string  `form:"date_to"`
-	AmountFrom    float64 `form:"amount_from"`
-	AmountTo      float64 `form:"amount_to"`
-	Status        string  `form:"status"`
-	Page          int32   `form:"page"`
-	PageSize      int32   `form:"page_size"`
-	SortBy        string  `form:"sort_by"`
-	SortOrder     string  `form:"sort_order"`
+	AccountNumber string `form:"account_number"`
+	DateFrom      string `form:"date_from"`
+	DateTo        string `form:"date_to"`
+	AmountFrom    int64  `form:"amount_from"`
+	AmountTo      int64  `form:"amount_to"`
+	Status        string `form:"status"`
+	Page          int32  `form:"page"`
+	PageSize      int32  `form:"page_size"`
+	SortBy        string `form:"sort_by"`
+	SortOrder     string `form:"sort_order"`
 }
 
 type requestCardRequest struct {

@@ -11,8 +11,9 @@ import (
 	"github.com/RAF-SI-2025/Banka-3-Backend/gen/exchange"
 )
 
-// TransactionRow mapira uniju tabela payments i transfers
-type TransactionRow struct {
+// UnifiedTransaction represents a combined view of payments and transfers.
+// This is a DTO (Data Transfer Object) used for unified processing of different transaction types.
+type UnifiedTransaction struct {
 	ID              int64     `gorm:"column:id"`
 	Type            string    `gorm:"column:type"`
 	FromAccount     string    `gorm:"column:from_account"`
@@ -31,21 +32,23 @@ type TransactionRow struct {
 	ExchangeRate    float64   `gorm:"column:exchange_rate"`
 }
 
-func (s *Server) GetFilteredTransactionsRepo(accNumbers []string, req *bankpb.GetTransactionsRequest) ([]TransactionRow, int64, error) {
-	var results []TransactionRow
+// GetFilteredTransactionsRepo fetches a paginated list of both payments and transfers
+// for a given set of account numbers, applying optional filters.
+func (s *Server) GetFilteredTransactionsRepo(accNumbers []string, req *bankpb.GetTransactionsRequest) ([]UnifiedTransaction, int64, error) {
+	var results []UnifiedTransaction
 	var total int64
 
-	// 1. Pod-upit za Payments - ispravljen spelling: transaction_code
+	// 1. Sub-query for Payments: Mapping payment-specific fields and casting status to text for UNION compatibility
 	paymentSub := s.db_gorm.Table("payments p").
 		Select(`p.transaction_id AS id, 'payment' AS type, p.from_account, p.to_account, 
                 p.start_amount AS initial_amount, p.end_amount AS final_amount, p.commission AS fee, 
                 a.currency AS currency, p.transaction_code::text AS payment_code, 
                 p.call_number AS reference_number, p.reason AS purpose, 
-                p.status, p.timestamp, p.recipient_id, 0 AS start_currency_id, 0 AS exchange_rate`).
+                p.status::text AS status, p.timestamp, p.recipient_id, 0 AS start_currency_id, 0 AS exchange_rate`).
 		Joins("JOIN accounts a ON a.number = p.from_account").
 		Where("p.from_account IN ? OR p.to_account IN ?", accNumbers, accNumbers)
 
-	// 2. Pod-upit za Transfers - kastujemo status u tekst zbog unije
+	// 2. Sub-query for Transfers: Mapping transfer-specific fields and casting status to text
 	transferSub := s.db_gorm.Table("transfers t").
 		Select(`t.transaction_id AS id, 'transfer' AS type, t.from_account, t.to_account, 
                 t.start_amount AS initial_amount, t.end_amount AS final_amount, t.commission AS fee, 
@@ -54,11 +57,11 @@ func (s *Server) GetFilteredTransactionsRepo(accNumbers []string, req *bankpb.Ge
 		Joins("JOIN accounts a ON a.number = t.from_account").
 		Where("t.from_account IN ? OR t.to_account IN ?", accNumbers, accNumbers)
 
-	// 3. Kreiranje unije
+	// 3. Combine both tables using UNION ALL
 	unionQuery := s.db_gorm.Raw("? UNION ALL ?", paymentSub, transferSub)
 	query := s.db_gorm.Table("(?) AS tx", unionQuery)
 
-	// 4. Primena svih filtera iz Request-a
+	// 4. Applying Request Filters
 	if req.AccountNumber != "" {
 		query = query.Where("(tx.from_account = ? OR tx.to_account = ?)", req.AccountNumber, req.AccountNumber)
 	}
@@ -78,12 +81,12 @@ func (s *Server) GetFilteredTransactionsRepo(accNumbers []string, req *bankpb.Ge
 		query = query.Where("tx.status = ?", req.Status)
 	}
 
-	// 5. Count total pre paginacije
+	// 5. Total Count for pagination metadata
 	if err := query.Count(&total).Error; err != nil {
 		return nil, 0, err
 	}
 
-	// 6. Logika sortiranja
+	// 6. Sorting Logic
 	sortBy := "timestamp"
 	if req.SortBy != "" {
 		sortBy = req.SortBy
@@ -93,7 +96,7 @@ func (s *Server) GetFilteredTransactionsRepo(accNumbers []string, req *bankpb.Ge
 		sortOrder = req.SortOrder
 	}
 
-	// 7. Paginacija i finalno izvršavanje
+	// 7. Pagination and final scanning
 	offset := (req.Page - 1) * req.PageSize
 	err := query.Order(fmt.Sprintf("tx.%s %s", sortBy, sortOrder)).
 		Limit(int(req.PageSize)).
@@ -103,8 +106,10 @@ func (s *Server) GetFilteredTransactionsRepo(accNumbers []string, req *bankpb.Ge
 	return results, total, err
 }
 
-func (s *Server) GetSingleTransactionRepo(id int64, txType string) (TransactionRow, error) {
-	var row TransactionRow
+// GetSingleTransactionRepo retrieves a specific transaction by ID and type, ensuring
+// compatibility with the UnifiedTransaction structure.
+func (s *Server) GetSingleTransactionRepo(id int64, txType string) (UnifiedTransaction, error) {
+	var row UnifiedTransaction
 
 	if txType == "payment" {
 		err := s.db_gorm.Table("payments p").
@@ -112,14 +117,14 @@ func (s *Server) GetSingleTransactionRepo(id int64, txType string) (TransactionR
                     p.start_amount AS initial_amount, p.end_amount AS final_amount, p.commission AS fee, 
                     a.currency AS currency, p.transaction_code::text AS payment_code, 
                     p.call_number AS reference_number, p.reason AS purpose, 
-                    p.status, p.timestamp, p.recipient_id, 0 AS start_currency_id, 0 AS exchange_rate`).
+                    p.status::text AS status, p.timestamp, p.recipient_id, 0 AS start_currency_id, 0 AS exchange_rate`).
 			Joins("JOIN accounts a ON a.number = p.from_account").
 			Where("p.transaction_id = ?", id).
 			First(&row).Error
 		return row, err
 	}
 
-	// Ako je transfer
+	// Fetching from transfers table if type is not payment
 	err := s.db_gorm.Table("transfers t").
 		Select(`t.transaction_id AS id, 'transfer' AS type, t.from_account, t.to_account, 
                 t.start_amount AS initial_amount, t.end_amount AS final_amount, t.commission AS fee, 
@@ -133,36 +138,25 @@ func (s *Server) GetSingleTransactionRepo(id int64, txType string) (TransactionR
 	return row, err
 }
 
+// GetClientAccountNumbers returns a slice of all account numbers owned by a specific client.
 func (s *Server) GetClientAccountNumbers(clientID int64) ([]string, error) {
 	var accountNumbers []string
-
-	// Koristimo Pluck da bismo izvukli samo kolonu 'number' u slice stringova
 	err := s.db_gorm.Table("accounts").
 		Where("owner = ?", clientID).
 		Pluck("number", &accountNumbers).Error
 
-	if err != nil {
-		return nil, err
-	}
-
-	return accountNumbers, nil
+	return accountNumbers, err
 }
 
+// CheckTransactionOwnership verifies if a client is either the sender or receiver
+// in a transaction to enforce security policies.
 func (s *Server) CheckTransactionOwnership(clientID int64, fromAccount string, toAccount string) (bool, error) {
 	var count int64
-
-	// Proveravamo da li u tabeli accounts postoji red gde je owner naš klijent
-	// i gde je broj računa ili onaj sa kojeg je poslato ili onaj na koji je primljeno.
 	err := s.db_gorm.Table("accounts").
 		Where("owner = ? AND (number = ? OR number = ?)", clientID, fromAccount, toAccount).
 		Count(&count).Error
 
-	if err != nil {
-		return false, err
-	}
-
-	// Ako je count > 0, znači da klijent poseduje bar jedan od ta dva računa
-	return count > 0, nil
+	return count > 0, err
 }
 
 // ==================================================================================

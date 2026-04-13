@@ -26,6 +26,7 @@ type (
 )
 
 // These are the enums which will be used by the models below
+// fmt.Sprintf()
 //
 //goland:noinspection ALL
 const (

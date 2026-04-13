@@ -1631,27 +1631,30 @@ func (x *UpdateCompanyResponse) GetCompany() *Company {
 }
 
 type Transaction struct {
-	state           protoimpl.MessageState `protogen:"open.v1"`
-	Id              int64                  `protobuf:"varint,1,opt,name=id,proto3" json:"id,omitempty"`
-	Type            string                 `protobuf:"bytes,2,opt,name=type,proto3" json:"type,omitempty"` // da li je transfer ili placanje
-	FromAccount     string                 `protobuf:"bytes,3,opt,name=from_account,json=fromAccount,proto3" json:"from_account,omitempty"`
-	ToAccount       string                 `protobuf:"bytes,4,opt,name=to_account,json=toAccount,proto3" json:"to_account,omitempty"`
-	InitialAmount   int64                  `protobuf:"varint,5,opt,name=initial_amount,json=initialAmount,proto3" json:"initial_amount,omitempty"`
-	FinalAmount     int64                  `protobuf:"varint,6,opt,name=final_amount,json=finalAmount,proto3" json:"final_amount,omitempty"`
-	Fee             int64                  `protobuf:"varint,7,opt,name=fee,proto3" json:"fee,omitempty"`
-	Currency        string                 `protobuf:"bytes,8,opt,name=currency,proto3" json:"currency,omitempty"`
-	PaymentCode     string                 `protobuf:"bytes,9,opt,name=payment_code,json=paymentCode,proto3" json:"payment_code,omitempty"`
-	ReferenceNumber string                 `protobuf:"bytes,10,opt,name=reference_number,json=referenceNumber,proto3" json:"reference_number,omitempty"`
-	Purpose         string                 `protobuf:"bytes,11,opt,name=purpose,proto3" json:"purpose,omitempty"`
-	Status          string                 `protobuf:"bytes,12,opt,name=status,proto3" json:"status,omitempty"`
-	Timestamp       string                 `protobuf:"bytes,13,opt,name=timestamp,proto3" json:"timestamp,omitempty"`
-	// placanje polja:
-	RecipientId int64 `protobuf:"varint,14,opt,name=recipient_id,json=recipientId,proto3" json:"recipient_id,omitempty"`
-	// transfer polja:
-	StartCurrencyId int64   `protobuf:"varint,15,opt,name=start_currency_id,json=startCurrencyId,proto3" json:"start_currency_id,omitempty"`
-	ExchangeRate    float64 `protobuf:"fixed64,16,opt,name=exchange_rate,json=exchangeRate,proto3" json:"exchange_rate,omitempty"`
-	unknownFields   protoimpl.UnknownFields
-	sizeCache       protoimpl.SizeCache
+	state protoimpl.MessageState `protogen:"open.v1"`
+	// Common fields:
+	Id   int64  `protobuf:"varint,1,opt,name=id,proto3" json:"id,omitempty"`
+	Type string `protobuf:"bytes,2,opt,name=type,proto3" json:"type,omitempty"` // da li je transfer ili placanje
+	// Note: PK == id + type, jer transfer i placanje mogu imati iste id-jeve
+	FromAccount   string `protobuf:"bytes,3,opt,name=from_account,json=fromAccount,proto3" json:"from_account,omitempty"`
+	ToAccount     string `protobuf:"bytes,4,opt,name=to_account,json=toAccount,proto3" json:"to_account,omitempty"`
+	InitialAmount int64  `protobuf:"varint,5,opt,name=initial_amount,json=initialAmount,proto3" json:"initial_amount,omitempty"`
+	FinalAmount   int64  `protobuf:"varint,6,opt,name=final_amount,json=finalAmount,proto3" json:"final_amount,omitempty"`
+	Fee           int64  `protobuf:"varint,7,opt,name=fee,proto3" json:"fee,omitempty"`
+	Currency      string `protobuf:"bytes,8,opt,name=currency,proto3" json:"currency,omitempty"`
+	Status        string `protobuf:"bytes,12,opt,name=status,proto3" json:"status,omitempty"`
+	Timestamp     string `protobuf:"bytes,13,opt,name=timestamp,proto3" json:"timestamp,omitempty"`
+	// Payment specific;
+	PaymentCode     string `protobuf:"bytes,9,opt,name=payment_code,json=paymentCode,proto3" json:"payment_code,omitempty"`
+	ReferenceNumber string `protobuf:"bytes,10,opt,name=reference_number,json=referenceNumber,proto3" json:"reference_number,omitempty"`
+	Purpose         string `protobuf:"bytes,11,opt,name=purpose,proto3" json:"purpose,omitempty"`
+	RecipientId     int64  `protobuf:"varint,14,opt,name=recipient_id,json=recipientId,proto3" json:"recipient_id,omitempty"`
+	// Transfer specific;
+	StartCurrencyId  int64   `protobuf:"varint,15,opt,name=start_currency_id,json=startCurrencyId,proto3" json:"start_currency_id,omitempty"`
+	TargetCurrencyId int64   `protobuf:"varint,17,opt,name=target_currency_id,json=targetCurrencyId,proto3" json:"target_currency_id,omitempty"`
+	ExchangeRate     float64 `protobuf:"fixed64,16,opt,name=exchange_rate,json=exchangeRate,proto3" json:"exchange_rate,omitempty"`
+	unknownFields    protoimpl.UnknownFields
+	sizeCache        protoimpl.SizeCache
 }
 
 func (x *Transaction) Reset() {
@@ -1740,6 +1743,20 @@ func (x *Transaction) GetCurrency() string {
 	return ""
 }
 
+func (x *Transaction) GetStatus() string {
+	if x != nil {
+		return x.Status
+	}
+	return ""
+}
+
+func (x *Transaction) GetTimestamp() string {
+	if x != nil {
+		return x.Timestamp
+	}
+	return ""
+}
+
 func (x *Transaction) GetPaymentCode() string {
 	if x != nil {
 		return x.PaymentCode
@@ -1761,20 +1778,6 @@ func (x *Transaction) GetPurpose() string {
 	return ""
 }
 
-func (x *Transaction) GetStatus() string {
-	if x != nil {
-		return x.Status
-	}
-	return ""
-}
-
-func (x *Transaction) GetTimestamp() string {
-	if x != nil {
-		return x.Timestamp
-	}
-	return ""
-}
-
 func (x *Transaction) GetRecipientId() int64 {
 	if x != nil {
 		return x.RecipientId
@@ -1785,6 +1788,13 @@ func (x *Transaction) GetRecipientId() int64 {
 func (x *Transaction) GetStartCurrencyId() int64 {
 	if x != nil {
 		return x.StartCurrencyId
+	}
+	return 0
+}
+
+func (x *Transaction) GetTargetCurrencyId() int64 {
+	if x != nil {
+		return x.TargetCurrencyId
 	}
 	return 0
 }
@@ -1801,8 +1811,8 @@ type GetTransactionsRequest struct {
 	AccountNumber string                 `protobuf:"bytes,1,opt,name=account_number,json=accountNumber,proto3" json:"account_number,omitempty"`
 	DateFrom      string                 `protobuf:"bytes,2,opt,name=date_from,json=dateFrom,proto3" json:"date_from,omitempty"`
 	DateTo        string                 `protobuf:"bytes,3,opt,name=date_to,json=dateTo,proto3" json:"date_to,omitempty"`
-	AmountFrom    float64                `protobuf:"fixed64,4,opt,name=amount_from,json=amountFrom,proto3" json:"amount_from,omitempty"`
-	AmountTo      float64                `protobuf:"fixed64,5,opt,name=amount_to,json=amountTo,proto3" json:"amount_to,omitempty"`
+	AmountFrom    int64                  `protobuf:"varint,4,opt,name=amount_from,json=amountFrom,proto3" json:"amount_from,omitempty"`
+	AmountTo      int64                  `protobuf:"varint,5,opt,name=amount_to,json=amountTo,proto3" json:"amount_to,omitempty"`
 	Status        string                 `protobuf:"bytes,6,opt,name=status,proto3" json:"status,omitempty"`
 	Page          int32                  `protobuf:"varint,7,opt,name=page,proto3" json:"page,omitempty"`
 	PageSize      int32                  `protobuf:"varint,8,opt,name=page_size,json=pageSize,proto3" json:"page_size,omitempty"`
@@ -1863,14 +1873,14 @@ func (x *GetTransactionsRequest) GetDateTo() string {
 	return ""
 }
 
-func (x *GetTransactionsRequest) GetAmountFrom() float64 {
+func (x *GetTransactionsRequest) GetAmountFrom() int64 {
 	if x != nil {
 		return x.AmountFrom
 	}
 	return 0
 }
 
-func (x *GetTransactionsRequest) GetAmountTo() float64 {
+func (x *GetTransactionsRequest) GetAmountTo() int64 {
 	if x != nil {
 		return x.AmountTo
 	}
@@ -4772,7 +4782,7 @@ const file_bank_bank_proto_rawDesc = "" +
 	"\aaddress\x18\x06 \x01(\tR\aaddress\x12\x19\n" +
 	"\bowner_id\x18\a \x01(\x03R\aownerId\"@\n" +
 	"\x15UpdateCompanyResponse\x12'\n" +
-	"\acompany\x18\x01 \x01(\v2\r.bank.CompanyR\acompany\"\xfd\x03\n" +
+	"\acompany\x18\x01 \x01(\v2\r.bank.CompanyR\acompany\"\xab\x04\n" +
 	"\vTransaction\x12\x0e\n" +
 	"\x02id\x18\x01 \x01(\x03R\x02id\x12\x12\n" +
 	"\x04type\x18\x02 \x01(\tR\x04type\x12!\n" +
@@ -4782,23 +4792,24 @@ const file_bank_bank_proto_rawDesc = "" +
 	"\x0einitial_amount\x18\x05 \x01(\x03R\rinitialAmount\x12!\n" +
 	"\ffinal_amount\x18\x06 \x01(\x03R\vfinalAmount\x12\x10\n" +
 	"\x03fee\x18\a \x01(\x03R\x03fee\x12\x1a\n" +
-	"\bcurrency\x18\b \x01(\tR\bcurrency\x12!\n" +
+	"\bcurrency\x18\b \x01(\tR\bcurrency\x12\x16\n" +
+	"\x06status\x18\f \x01(\tR\x06status\x12\x1c\n" +
+	"\ttimestamp\x18\r \x01(\tR\ttimestamp\x12!\n" +
 	"\fpayment_code\x18\t \x01(\tR\vpaymentCode\x12)\n" +
 	"\x10reference_number\x18\n" +
 	" \x01(\tR\x0freferenceNumber\x12\x18\n" +
-	"\apurpose\x18\v \x01(\tR\apurpose\x12\x16\n" +
-	"\x06status\x18\f \x01(\tR\x06status\x12\x1c\n" +
-	"\ttimestamp\x18\r \x01(\tR\ttimestamp\x12!\n" +
+	"\apurpose\x18\v \x01(\tR\apurpose\x12!\n" +
 	"\frecipient_id\x18\x0e \x01(\x03R\vrecipientId\x12*\n" +
-	"\x11start_currency_id\x18\x0f \x01(\x03R\x0fstartCurrencyId\x12#\n" +
+	"\x11start_currency_id\x18\x0f \x01(\x03R\x0fstartCurrencyId\x12,\n" +
+	"\x12target_currency_id\x18\x11 \x01(\x03R\x10targetCurrencyId\x12#\n" +
 	"\rexchange_rate\x18\x10 \x01(\x01R\fexchangeRate\"\xb4\x02\n" +
 	"\x16GetTransactionsRequest\x12%\n" +
 	"\x0eaccount_number\x18\x01 \x01(\tR\raccountNumber\x12\x1b\n" +
 	"\tdate_from\x18\x02 \x01(\tR\bdateFrom\x12\x17\n" +
 	"\adate_to\x18\x03 \x01(\tR\x06dateTo\x12\x1f\n" +
-	"\vamount_from\x18\x04 \x01(\x01R\n" +
+	"\vamount_from\x18\x04 \x01(\x03R\n" +
 	"amountFrom\x12\x1b\n" +
-	"\tamount_to\x18\x05 \x01(\x01R\bamountTo\x12\x16\n" +
+	"\tamount_to\x18\x05 \x01(\x03R\bamountTo\x12\x16\n" +
 	"\x06status\x18\x06 \x01(\tR\x06status\x12\x12\n" +
 	"\x04page\x18\a \x01(\x05R\x04page\x12\x1b\n" +
 	"\tpage_size\x18\b \x01(\x05R\bpageSize\x12\x17\n" +
