@@ -146,13 +146,15 @@ func TestApproveLoanRequest_Success(t *testing.T) {
 		WithArgs(int64(1), 1).
 		WillReturnRows(currencyRows)
 
-	// Transaction: create loan, create installment, update loan request
+	// Transaction: create loan, create installment, update loan request, deposit into account
 	mock.ExpectBegin()
 	mock.ExpectQuery(`INSERT INTO "loans"`).
 		WillReturnRows(sqlmock.NewRows([]string{"id"}).AddRow(int64(1)))
 	mock.ExpectQuery(`INSERT INTO "loan_installment"`).
 		WillReturnRows(sqlmock.NewRows([]string{"id"}).AddRow(int64(1)))
 	mock.ExpectExec(`UPDATE "loan_request"`).
+		WillReturnResult(sqlmock.NewResult(0, 1))
+	mock.ExpectExec(`UPDATE "accounts"`).
 		WillReturnResult(sqlmock.NewResult(0, 1))
 	mock.ExpectCommit()
 

@@ -260,31 +260,6 @@ func (s *Server) CreateAccountRecord(account Account) (*Account, error) {
 	return nil, ErrAccountNumberGenerationFailed
 }
 
-func (s *Server) scanAccount(row *sql.Row) (*Account, error) {
-	var a Account
-	var dailyLimit, monthlyLimit, dailyExp, monthlyExp sql.NullInt64
-	// Use NullStrings for business fields to prevent errors on NULL database values
-	var compName, regNum, pib, actCode, addr sql.NullString
-
-	err := row.Scan(
-		&a.Id, &a.Number, &a.Name, &a.Owner, &a.Balance, &a.Created_by, &a.Created_at, &a.Valid_until,
-		&a.Currency, &a.Active, &a.Owner_type, &a.Account_type, &a.Maintainance_cost, &dailyLimit,
-		&monthlyLimit, &dailyExp, &monthlyExp,
-		&compName, &regNum, &pib, &actCode, &addr,
-	)
-	if err != nil {
-		return nil, err
-	}
-
-	// Map NullInt64 back to int64
-	a.Daily_limit = dailyLimit.Int64
-	a.Monthly_limit = monthlyLimit.Int64
-	a.Daily_expenditure = dailyExp.Int64
-	a.Monthly_expenditure = monthlyExp.Int64
-
-	return &a, nil
-}
-
 func (s *Server) scanCreateAccount(row *sql.Row) (*Account, error) {
 	var a Account
 	var dailyLimit, monthlyLimit, dailyExp, monthlyExp sql.NullInt64
