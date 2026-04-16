@@ -2771,6 +2771,7 @@ type CreateAccountRequest struct {
 	CardType       string                 `protobuf:"bytes,9,opt,name=card_type,json=cardType,proto3" json:"card_type,omitempty"`
 	CardBrand      string                 `protobuf:"bytes,10,opt,name=card_brand,json=cardBrand,proto3" json:"card_brand,omitempty"`
 	BusinessInfo   *BusinessInfo          `protobuf:"bytes,11,opt,name=business_info,json=businessInfo,proto3" json:"business_info,omitempty"`
+	Name           string                 `protobuf:"bytes,12,opt,name=name,proto3" json:"name,omitempty"`
 	unknownFields  protoimpl.UnknownFields
 	sizeCache      protoimpl.SizeCache
 }
@@ -2880,6 +2881,13 @@ func (x *CreateAccountRequest) GetBusinessInfo() *BusinessInfo {
 		return x.BusinessInfo
 	}
 	return nil
+}
+
+func (x *CreateAccountRequest) GetName() string {
+	if x != nil {
+		return x.Name
+	}
+	return ""
 }
 
 type BusinessInfo struct {
@@ -4895,7 +4903,7 @@ const file_bank_bank_proto_rawDesc = "" +
 	"dailyLimit\x12#\n" +
 	"\rmonthly_limit\x18\r \x01(\x01R\fmonthlyLimit\x12%\n" +
 	"\x0edaily_spending\x18\x0e \x01(\x01R\rdailySpending\x12)\n" +
-	"\x10monthly_spending\x18\x0f \x01(\x01R\x0fmonthlySpending\"\x91\x03\n" +
+	"\x10monthly_spending\x18\x0f \x01(\x01R\x0fmonthlySpending\"\xa5\x03\n" +
 	"\x14CreateAccountRequest\x12\x1b\n" +
 	"\tclient_id\x18\x01 \x01(\x03R\bclientId\x12!\n" +
 	"\faccount_type\x18\x02 \x01(\tR\vaccountType\x12\x18\n" +
@@ -4911,7 +4919,8 @@ const file_bank_bank_proto_rawDesc = "" +
 	"\n" +
 	"card_brand\x18\n" +
 	" \x01(\tR\tcardBrand\x127\n" +
-	"\rbusiness_info\x18\v \x01(\v2\x12.bank.BusinessInfoR\fbusinessInfo\"\xb3\x01\n" +
+	"\rbusiness_info\x18\v \x01(\v2\x12.bank.BusinessInfoR\fbusinessInfo\x12\x12\n" +
+	"\x04name\x18\f \x01(\tR\x04name\"\xb3\x01\n" +
 	"\fBusinessInfo\x12!\n" +
 	"\fcompany_name\x18\x01 \x01(\tR\vcompanyName\x12/\n" +
 	"\x13registration_number\x18\x02 \x01(\tR\x12registrationNumber\x12\x10\n" +

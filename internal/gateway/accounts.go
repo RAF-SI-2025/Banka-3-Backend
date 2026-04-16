@@ -60,6 +60,7 @@ func (s *Server) CreateAccount(c *gin.Context) {
 
 	resp, err := s.BankClient.CreateAccount(ctx, &bankpb.CreateAccountRequest{
 		ClientId:       req.ClientID,
+		Name:           req.Name,
 		AccountType:    accountType,
 		Subtype:        req.Subtype,
 		Currency:       currency,

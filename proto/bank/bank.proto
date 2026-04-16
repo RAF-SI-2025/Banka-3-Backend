@@ -341,6 +341,7 @@ message CreateAccountRequest {
   string card_type = 9;
   string card_brand = 10;
   BusinessInfo business_info = 11;
+  string name = 12;
 }
 
 message BusinessInfo {

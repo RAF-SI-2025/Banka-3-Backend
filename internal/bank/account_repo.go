@@ -233,7 +233,7 @@ func (s *Server) CreateAccountRecord(account Account) (*Account, error) {
     )
     VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16)
     RETURNING
-     id, number, name, owner, company_id, balance, created_by, created_at, valid_until,
+     id, number, name, owner, balance, created_by, created_at, valid_until,
      currency, active, owner_type, account_type, maintainance_cost, daily_limit,
      monthly_limit, daily_expenditure, monthly_expenditure
    `,
@@ -243,7 +243,7 @@ func (s *Server) CreateAccountRecord(account Account) (*Account, error) {
 			account.Daily_expenditure, account.Monthly_expenditure,
 		)
 
-		created, err := s.scanAccount(row)
+		created, err := s.scanCreateAccount(row)
 		if err != nil {
 			_ = tx.Rollback()
 			if isUniqueViolation(err) {
@@ -260,23 +260,19 @@ func (s *Server) CreateAccountRecord(account Account) (*Account, error) {
 	return nil, ErrAccountNumberGenerationFailed
 }
 
-func (s *Server) scanAccount(row *sql.Row) (*Account, error) {
+func (s *Server) scanCreateAccount(row *sql.Row) (*Account, error) {
 	var a Account
 	var dailyLimit, monthlyLimit, dailyExp, monthlyExp sql.NullInt64
-	// Use NullStrings for business fields to prevent errors on NULL database values
-	var compName, regNum, pib, actCode, addr sql.NullString
 
 	err := row.Scan(
 		&a.Id, &a.Number, &a.Name, &a.Owner, &a.Balance, &a.Created_by, &a.Created_at, &a.Valid_until,
 		&a.Currency, &a.Active, &a.Owner_type, &a.Account_type, &a.Maintainance_cost, &dailyLimit,
 		&monthlyLimit, &dailyExp, &monthlyExp,
-		&compName, &regNum, &pib, &actCode, &addr,
 	)
 	if err != nil {
 		return nil, err
 	}
 
-	// Map NullInt64 back to int64
 	a.Daily_limit = dailyLimit.Int64
 	a.Monthly_limit = monthlyLimit.Int64
 	a.Daily_expenditure = dailyExp.Int64

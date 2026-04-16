@@ -6,6 +6,8 @@ import (
 	"log"
 	"math/rand"
 	"time"
+
+	"gorm.io/gorm"
 )
 
 // kicks off background jobs for loan stuff, returns a cancel func for cleanup
@@ -133,11 +135,17 @@ func (s *Server) RunDailyInstallmentCollection() {
 }
 
 func (s *Server) processLoanPayment(loan *Loan, today time.Time, isRetry bool) {
-	// TODO(#51/#52): actually deduct from account, for now we just pretend it worked
-	log.Printf("[Cron] WOULD DEDUCT %d from account %d (loan %d, retry=%v)",
-		loan.Monthly_payment, loan.Account_id, loan.Id, isRetry)
+	// Deduct the installment from the client's account
+	result := s.db_gorm.Model(&Account{}).
+		Where("id = ? AND balance >= ?", loan.Account_id, loan.Monthly_payment).
+		Update("balance", gorm.Expr("balance - ?", loan.Monthly_payment))
+	paymentSucceeded := result.Error == nil && result.RowsAffected > 0
 
-	paymentSucceeded := true
+	if paymentSucceeded {
+		log.Printf("[Cron] Deducted %d from account %d (loan %d)", loan.Monthly_payment, loan.Account_id, loan.Id)
+	} else {
+		log.Printf("[Cron] Failed to deduct %d from account %d (loan %d, insufficient funds or error)", loan.Monthly_payment, loan.Account_id, loan.Id)
+	}
 
 	if paymentSucceeded {
 		installment := LoanInstallment{
@@ -172,6 +180,18 @@ func (s *Server) processLoanPayment(loan *Loan, today time.Time, isRetry bool) {
 		}
 
 		log.Printf("[Cron] Loan %d: payment recorded, remaining_debt=%d", loan.Id, newDebt)
+
+		currencyLabel, _ := s.getCurrencyLabelByID(loan.Currency_id)
+		email, _ := s.getClientEmailByAccountID(loan.Account_id)
+		if email != "" {
+			_ = s.sendLoanPaymentSuccessEmail(
+				context.Background(),
+				email,
+				fmt.Sprintf("%d", loan.Id),
+				fmt.Sprintf("%d", loan.Monthly_payment),
+				currencyLabel,
+			)
+		}
 	} else {
 		installment := LoanInstallment{
 			Loan_id:            loan.Id,

@@ -75,6 +75,12 @@ func TestRunDailyInstallmentCollection_Success(t *testing.T) {
 		WithArgs(sqlmock.AnyArg(), "approved", "late").
 		WillReturnRows(loanRows)
 
+	// processLoanPayment: deduct from account
+	mock.ExpectBegin()
+	mock.ExpectExec(`UPDATE "accounts"`).
+		WillReturnResult(sqlmock.NewResult(0, 1))
+	mock.ExpectCommit()
+
 	// processLoanPayment: create installment
 	mock.ExpectBegin()
 	mock.ExpectQuery(`INSERT INTO "loan_installment"`).
@@ -122,6 +128,12 @@ func TestRunDailyInstallmentCollection_FullPayoff(t *testing.T) {
 	mock.ExpectQuery(regexp.QuoteMeta(`SELECT * FROM "loans" WHERE next_payment_due <= $1 AND loan_status IN ($2,$3)`)).
 		WithArgs(sqlmock.AnyArg(), "approved", "late").
 		WillReturnRows(loanRows)
+
+	// processLoanPayment: deduct from account
+	mock.ExpectBegin()
+	mock.ExpectExec(`UPDATE "accounts"`).
+		WillReturnResult(sqlmock.NewResult(0, 1))
+	mock.ExpectCommit()
 
 	// processLoanPayment: create installment
 	mock.ExpectBegin()
