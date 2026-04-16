@@ -815,7 +815,7 @@ func (s *Server) CreateEmployeeAccount(ctx context.Context, req *userpb.CreateEm
 		Gender: req.Gender, Email: req.Email, Phone_number: req.PhoneNumber,
 		Address: req.Address, Username: req.Username, Position: req.Position,
 		Department: req.Department, Salt_password: salt,
-		Password: []byte{}, Permissions: permissions}
+		Password: []byte{}, Active: true, Permissions: permissions}
 
 	err := create_user_from_model(employee, s)
 

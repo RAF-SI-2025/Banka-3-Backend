@@ -484,10 +484,7 @@ func (s *Server) BlockCard(ctx context.Context, req *bankpb.BlockCardRequest) (*
 		return nil, status.Error(codes.Internal, "failed to resolve client email")
 	}
 
-	err = s.sendCardBlockedEmail(ctx, clientEmail, newStatus == Blocked)
-	if err != nil {
-		return nil, err
-	}
+	_ = s.sendCardBlockedEmail(ctx, clientEmail, newStatus == Blocked)
 
 	return &bankpb.BlockCardResponse{Success: true}, nil
 }
@@ -1423,6 +1420,18 @@ func (s *Server) CreateLoanRequest(_ context.Context, req *bankpb.CreateLoanRequ
 		return nil, status.Error(codes.Internal, "failed to create loan request")
 	}
 
+	// Send confirmation notification (best-effort)
+	go func() {
+		currencyLabel, _ := s.getCurrencyLabelByID(loanRequest.Currency_id)
+		subject := "Zahtev za kredit primljen"
+		body := fmt.Sprintf("Poštovani,\n\nVaš zahtev za kredit u iznosu od %d %s je uspešno podnet.\nObavestićemo Vas kada zahtev bude obrađen.\n\nBanka 3", loanRequest.Amount, currencyLabel)
+		_, _ = s.NotificationService.SendConfirmationEmail(context.Background(), &notificationpb.ConfirmationMailRequest{
+			ToAddr:  clientEmail,
+			Subject: subject,
+			Body:    body,
+		})
+	}()
+
 	return &bankpb.CreateLoanRequestResponse{}, nil
 }
 
@@ -1648,11 +1657,32 @@ func (s *Server) ApproveLoanRequest(_ context.Context, req *bankpb.ApproveLoanRe
 		if err := tx.Model(&LoanRequest{}).Where("id = ?", req.Id).Update("status", LoanRequestApproved).Error; err != nil {
 			return err
 		}
+		// Deposit the loan amount into the client's account
+		if err := tx.Model(&Account{}).Where("id = ?", loanReq.Account_id).
+			Update("balance", gorm.Expr("balance + ?", loanReq.Amount)).Error; err != nil {
+			return err
+		}
 		return nil
 	})
 	if err != nil {
 		return nil, status.Error(codes.Internal, "failed to approve loan request")
 	}
+
+	// Send approval notification (best-effort)
+	go func() {
+		email, emailErr := s.getClientEmailByAccountID(loanReq.Account_id)
+		if emailErr != nil || email == "" {
+			return
+		}
+		currencyLabel, _ := s.getCurrencyLabelByID(loanReq.Currency_id)
+		subject := "Kredit odobren"
+		body := fmt.Sprintf("Poštovani,\n\nVaš zahtev za kredit u iznosu od %d %s je odobren.\nSredstva su uplaćena na Vaš račun.\n\nBanka 3", loanReq.Amount, currencyLabel)
+		_, _ = s.NotificationService.SendConfirmationEmail(context.Background(), &notificationpb.ConfirmationMailRequest{
+			ToAddr:  email,
+			Subject: subject,
+			Body:    body,
+		})
+	}()
 
 	return &bankpb.ApproveLoanRequestResponse{}, nil
 }

@@ -327,8 +327,11 @@ func (s *Server) CreateAccount(ctx context.Context, req *bankpb.CreateAccountReq
 		ownerType = Business
 	}
 
-	// Generate a default account name
-	accountName := fmt.Sprintf("%s-%s", req.AccountType, req.Subtype)
+	// Use provided name, or generate a default
+	accountName := strings.TrimSpace(req.Name)
+	if accountName == "" {
+		accountName = fmt.Sprintf("%s-%s", req.AccountType, req.Subtype)
+	}
 
 	account := Account{
 		Name:              accountName,
@@ -392,6 +395,12 @@ func (s *Server) CreateAccount(ctx context.Context, req *bankpb.CreateAccountReq
 	}
 
 	if req.CreateCard {
+		if req.CardType == "" {
+			req.CardType = "DEBIT"
+		}
+		if req.CardBrand == "" {
+			req.CardBrand = "VISA"
+		}
 		s.triggerCardCreation(ctx, email, created.Number, req)
 	}
 

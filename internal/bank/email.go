@@ -2,6 +2,7 @@ package bank
 
 import (
 	"context"
+	"fmt"
 	"log"
 
 	notificationpb "github.com/RAF-SI-2025/Banka-3-Backend/gen/notification"
@@ -40,6 +41,27 @@ func (s *Server) sendLoanPaymentFailedEmail(ctx context.Context, email, loanNumb
 	}
 
 	log.Printf("[NotificationClient] SUCCESS: LoanPaymentFailed email sent to %s", email)
+	return nil
+}
+
+func (s *Server) sendLoanPaymentSuccessEmail(ctx context.Context, email, loanID, amount, currency string) error {
+	log.Printf("[NotificationClient] Sending LoanPaymentSuccess email to: %s", email)
+
+	subject := "Uspešna uplata rate kredita"
+	body := fmt.Sprintf("Poštovani,\n\nUspešno je naplaćena rata za kredit #%s u iznosu od %s %s.\n\nHvala na korišćenju naših usluga.\n\nBanka 3", loanID, amount, currency)
+
+	_, err := s.NotificationService.SendConfirmationEmail(ctx, &notificationpb.ConfirmationMailRequest{
+		ToAddr:  email,
+		Subject: subject,
+		Body:    body,
+	})
+
+	if err != nil {
+		log.Printf("[NotificationClient] ERROR: Failed to send loan payment success email for %s: %v", email, err)
+		return err
+	}
+
+	log.Printf("[NotificationClient] SUCCESS: LoanPaymentSuccess email sent to %s", email)
 	return nil
 }
 

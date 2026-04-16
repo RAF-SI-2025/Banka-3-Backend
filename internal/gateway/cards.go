@@ -6,6 +6,7 @@ import (
 	"time"
 
 	bankpb "github.com/RAF-SI-2025/Banka-3-Backend/gen/bank"
+	notificationpb "github.com/RAF-SI-2025/Banka-3-Backend/gen/notification"
 	"github.com/gin-gonic/gin"
 	"google.golang.org/grpc/metadata"
 )
@@ -52,24 +53,31 @@ func (s *Server) RequestCard(c *gin.Context) {
 		return
 	}
 
-	md := metadata.Pairs("user-email", email)
-	ctx := metadata.NewOutgoingContext(c.Request.Context(), md)
-
-	ctx, cancel := context.WithTimeout(ctx, 5*time.Second)
+	ctx, cancel := context.WithTimeout(c.Request.Context(), 5*time.Second)
 	defer cancel()
 
-	_, err := s.BankClient.RequestCard(ctx, &bankpb.RequestCardRequest{
+	resp, err := s.BankClient.CreateCard(ctx, &bankpb.CreateCardRequest{
+		Email:         email,
 		AccountNumber: req.AccountNumber,
 		CardType:      req.CardType,
 		CardBrand:     req.CardBrand,
 	})
-
 	if err != nil {
 		writeGRPCError(c, err)
 		return
 	}
 
+	// Send notification email (best-effort)
+	go func() {
+		notifCtx, notifCancel := context.WithTimeout(context.Background(), 10*time.Second)
+		defer notifCancel()
+		_, _ = s.NotificationClient.SendCardCreatedEmail(notifCtx, &notificationpb.CardCreatedMailRequest{
+			ToAddr: email,
+		})
+	}()
+
 	c.JSON(http.StatusCreated, gin.H{
+		"card_number":    resp.CardNumber,
 		"account_number": req.AccountNumber,
 		"card_type":      req.CardType,
 		"card_brand":     req.CardBrand,

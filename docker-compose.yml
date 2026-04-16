@@ -36,6 +36,7 @@ services:
     build:
       context: .
       dockerfile: cmd/bank/Dockerfile
+    restart: on-failure
     ports:
       - "${BANK_GRPC_PORT:-50053}:50051"
     environment:
@@ -52,6 +53,7 @@ services:
     build:
       context: .
       dockerfile: cmd/exchange/Dockerfile
+    restart: on-failure
     ports:
       - "${EXCHANGE_GRPC_PORT:-50054}:50051"
     environment:
@@ -68,6 +70,7 @@ services:
     build:
       context: .
       dockerfile: cmd/user/Dockerfile
+    restart: on-failure
     ports:
       - "${USER_GRPC_PORT:-50051}:50051"
     environment:

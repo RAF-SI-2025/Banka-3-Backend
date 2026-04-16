@@ -139,10 +139,11 @@ type updateCompanyRequest struct {
 
 type CreateAccountRequest struct {
 	ClientID       int64         `json:"client_id" binding:"required"`
+	Name           string        `json:"name"`
 	AccountType    string        `json:"account_type" binding:"required"`
 	Subtype        string        `json:"subtype" binding:"required"`
 	Currency       string        `json:"currency" binding:"required"`
-	InitialBalance float64       `json:"initial_balance" binding:"required"`
+	InitialBalance float64       `json:"initial_balance"`
 	DailyLimit     float64       `json:"daily_limit"`
 	MonthlyLimit   float64       `json:"monthly_limit"`
 	CreateCard     bool          `json:"create_card"`
