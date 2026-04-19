@@ -381,6 +381,185 @@ func (x *ListListingsResponse) GetListings() []*Listing {
 	return nil
 }
 
+// Exactly one of listing_id / option_id / forex_pair_id must be set — that's
+// the instrument being traded. limit_price / stop_price are required only
+// for LIMIT / STOP / STOP_LIMIT; senders must leave them 0 otherwise.
+type CreateOrderRequest struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	ListingId     int64                  `protobuf:"varint,1,opt,name=listing_id,json=listingId,proto3" json:"listing_id,omitempty"`
+	OptionId      int64                  `protobuf:"varint,2,opt,name=option_id,json=optionId,proto3" json:"option_id,omitempty"`
+	ForexPairId   int64                  `protobuf:"varint,3,opt,name=forex_pair_id,json=forexPairId,proto3" json:"forex_pair_id,omitempty"`
+	AccountNumber string                 `protobuf:"bytes,4,opt,name=account_number,json=accountNumber,proto3" json:"account_number,omitempty"`
+	OrderType     string                 `protobuf:"bytes,5,opt,name=order_type,json=orderType,proto3" json:"order_type,omitempty"`
+	Direction     string                 `protobuf:"bytes,6,opt,name=direction,proto3" json:"direction,omitempty"`
+	Quantity      int64                  `protobuf:"varint,7,opt,name=quantity,proto3" json:"quantity,omitempty"`
+	LimitPrice    int64                  `protobuf:"varint,8,opt,name=limit_price,json=limitPrice,proto3" json:"limit_price,omitempty"`
+	StopPrice     int64                  `protobuf:"varint,9,opt,name=stop_price,json=stopPrice,proto3" json:"stop_price,omitempty"`
+	AllOrNone     bool                   `protobuf:"varint,10,opt,name=all_or_none,json=allOrNone,proto3" json:"all_or_none,omitempty"`
+	Margin        bool                   `protobuf:"varint,11,opt,name=margin,proto3" json:"margin,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *CreateOrderRequest) Reset() {
+	*x = CreateOrderRequest{}
+	mi := &file_trading_trading_proto_msgTypes[6]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *CreateOrderRequest) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*CreateOrderRequest) ProtoMessage() {}
+
+func (x *CreateOrderRequest) ProtoReflect() protoreflect.Message {
+	mi := &file_trading_trading_proto_msgTypes[6]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use CreateOrderRequest.ProtoReflect.Descriptor instead.
+func (*CreateOrderRequest) Descriptor() ([]byte, []int) {
+	return file_trading_trading_proto_rawDescGZIP(), []int{6}
+}
+
+func (x *CreateOrderRequest) GetListingId() int64 {
+	if x != nil {
+		return x.ListingId
+	}
+	return 0
+}
+
+func (x *CreateOrderRequest) GetOptionId() int64 {
+	if x != nil {
+		return x.OptionId
+	}
+	return 0
+}
+
+func (x *CreateOrderRequest) GetForexPairId() int64 {
+	if x != nil {
+		return x.ForexPairId
+	}
+	return 0
+}
+
+func (x *CreateOrderRequest) GetAccountNumber() string {
+	if x != nil {
+		return x.AccountNumber
+	}
+	return ""
+}
+
+func (x *CreateOrderRequest) GetOrderType() string {
+	if x != nil {
+		return x.OrderType
+	}
+	return ""
+}
+
+func (x *CreateOrderRequest) GetDirection() string {
+	if x != nil {
+		return x.Direction
+	}
+	return ""
+}
+
+func (x *CreateOrderRequest) GetQuantity() int64 {
+	if x != nil {
+		return x.Quantity
+	}
+	return 0
+}
+
+func (x *CreateOrderRequest) GetLimitPrice() int64 {
+	if x != nil {
+		return x.LimitPrice
+	}
+	return 0
+}
+
+func (x *CreateOrderRequest) GetStopPrice() int64 {
+	if x != nil {
+		return x.StopPrice
+	}
+	return 0
+}
+
+func (x *CreateOrderRequest) GetAllOrNone() bool {
+	if x != nil {
+		return x.AllOrNone
+	}
+	return false
+}
+
+func (x *CreateOrderRequest) GetMargin() bool {
+	if x != nil {
+		return x.Margin
+	}
+	return false
+}
+
+type CreateOrderResponse struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	OrderId       int64                  `protobuf:"varint,1,opt,name=order_id,json=orderId,proto3" json:"order_id,omitempty"`
+	Status        string                 `protobuf:"bytes,2,opt,name=status,proto3" json:"status,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *CreateOrderResponse) Reset() {
+	*x = CreateOrderResponse{}
+	mi := &file_trading_trading_proto_msgTypes[7]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *CreateOrderResponse) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*CreateOrderResponse) ProtoMessage() {}
+
+func (x *CreateOrderResponse) ProtoReflect() protoreflect.Message {
+	mi := &file_trading_trading_proto_msgTypes[7]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use CreateOrderResponse.ProtoReflect.Descriptor instead.
+func (*CreateOrderResponse) Descriptor() ([]byte, []int) {
+	return file_trading_trading_proto_rawDescGZIP(), []int{7}
+}
+
+func (x *CreateOrderResponse) GetOrderId() int64 {
+	if x != nil {
+		return x.OrderId
+	}
+	return 0
+}
+
+func (x *CreateOrderResponse) GetStatus() string {
+	if x != nil {
+		return x.Status
+	}
+	return ""
+}
+
 var File_trading_trading_proto protoreflect.FileDescriptor
 
 const file_trading_trading_proto_rawDesc = "" +
@@ -410,10 +589,31 @@ const file_trading_trading_proto_rawDesc = "" +
 	"\x11last_refresh_unix\x18\b \x01(\x03R\x0flastRefreshUnix\"\x15\n" +
 	"\x13ListListingsRequest\"D\n" +
 	"\x14ListListingsResponse\x12,\n" +
-	"\blistings\x18\x01 \x03(\v2\x10.trading.ListingR\blistings2\xad\x01\n" +
+	"\blistings\x18\x01 \x03(\v2\x10.trading.ListingR\blistings\"\xec\x02\n" +
+	"\x12CreateOrderRequest\x12\x1d\n" +
+	"\n" +
+	"listing_id\x18\x01 \x01(\x03R\tlistingId\x12\x1b\n" +
+	"\toption_id\x18\x02 \x01(\x03R\boptionId\x12\"\n" +
+	"\rforex_pair_id\x18\x03 \x01(\x03R\vforexPairId\x12%\n" +
+	"\x0eaccount_number\x18\x04 \x01(\tR\raccountNumber\x12\x1d\n" +
+	"\n" +
+	"order_type\x18\x05 \x01(\tR\torderType\x12\x1c\n" +
+	"\tdirection\x18\x06 \x01(\tR\tdirection\x12\x1a\n" +
+	"\bquantity\x18\a \x01(\x03R\bquantity\x12\x1f\n" +
+	"\vlimit_price\x18\b \x01(\x03R\n" +
+	"limitPrice\x12\x1d\n" +
+	"\n" +
+	"stop_price\x18\t \x01(\x03R\tstopPrice\x12\x1e\n" +
+	"\vall_or_none\x18\n" +
+	" \x01(\bR\tallOrNone\x12\x16\n" +
+	"\x06margin\x18\v \x01(\bR\x06margin\"H\n" +
+	"\x13CreateOrderResponse\x12\x19\n" +
+	"\border_id\x18\x01 \x01(\x03R\aorderId\x12\x16\n" +
+	"\x06status\x18\x02 \x01(\tR\x06status2\xf7\x01\n" +
 	"\x0eTradingService\x12N\n" +
 	"\rListExchanges\x12\x1d.trading.ListExchangesRequest\x1a\x1e.trading.ListExchangesResponse\x12K\n" +
-	"\fListListings\x12\x1c.trading.ListListingsRequest\x1a\x1d.trading.ListListingsResponseB4Z2github.com/RAF-SI-2025/Banka-3-Backend/gen/tradingb\x06proto3"
+	"\fListListings\x12\x1c.trading.ListListingsRequest\x1a\x1d.trading.ListListingsResponse\x12H\n" +
+	"\vCreateOrder\x12\x1b.trading.CreateOrderRequest\x1a\x1c.trading.CreateOrderResponseB4Z2github.com/RAF-SI-2025/Banka-3-Backend/gen/tradingb\x06proto3"
 
 var (
 	file_trading_trading_proto_rawDescOnce sync.Once
@@ -427,7 +627,7 @@ func file_trading_trading_proto_rawDescGZIP() []byte {
 	return file_trading_trading_proto_rawDescData
 }
 
-var file_trading_trading_proto_msgTypes = make([]protoimpl.MessageInfo, 6)
+var file_trading_trading_proto_msgTypes = make([]protoimpl.MessageInfo, 8)
 var file_trading_trading_proto_goTypes = []any{
 	(*Exchange)(nil),              // 0: trading.Exchange
 	(*ListExchangesRequest)(nil),  // 1: trading.ListExchangesRequest
@@ -435,16 +635,20 @@ var file_trading_trading_proto_goTypes = []any{
 	(*Listing)(nil),               // 3: trading.Listing
 	(*ListListingsRequest)(nil),   // 4: trading.ListListingsRequest
 	(*ListListingsResponse)(nil),  // 5: trading.ListListingsResponse
+	(*CreateOrderRequest)(nil),    // 6: trading.CreateOrderRequest
+	(*CreateOrderResponse)(nil),   // 7: trading.CreateOrderResponse
 }
 var file_trading_trading_proto_depIdxs = []int32{
 	0, // 0: trading.ListExchangesResponse.exchanges:type_name -> trading.Exchange
 	3, // 1: trading.ListListingsResponse.listings:type_name -> trading.Listing
 	1, // 2: trading.TradingService.ListExchanges:input_type -> trading.ListExchangesRequest
 	4, // 3: trading.TradingService.ListListings:input_type -> trading.ListListingsRequest
-	2, // 4: trading.TradingService.ListExchanges:output_type -> trading.ListExchangesResponse
-	5, // 5: trading.TradingService.ListListings:output_type -> trading.ListListingsResponse
-	4, // [4:6] is the sub-list for method output_type
-	2, // [2:4] is the sub-list for method input_type
+	6, // 4: trading.TradingService.CreateOrder:input_type -> trading.CreateOrderRequest
+	2, // 5: trading.TradingService.ListExchanges:output_type -> trading.ListExchangesResponse
+	5, // 6: trading.TradingService.ListListings:output_type -> trading.ListListingsResponse
+	7, // 7: trading.TradingService.CreateOrder:output_type -> trading.CreateOrderResponse
+	5, // [5:8] is the sub-list for method output_type
+	2, // [2:5] is the sub-list for method input_type
 	2, // [2:2] is the sub-list for extension type_name
 	2, // [2:2] is the sub-list for extension extendee
 	0, // [0:2] is the sub-list for field type_name
@@ -461,7 +665,7 @@ func file_trading_trading_proto_init() {
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
 			RawDescriptor: unsafe.Slice(unsafe.StringData(file_trading_trading_proto_rawDesc), len(file_trading_trading_proto_rawDesc)),
 			NumEnums:      0,
-			NumMessages:   6,
+			NumMessages:   8,
 			NumExtensions: 0,
 			NumServices:   1,
 		},

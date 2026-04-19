@@ -129,6 +129,11 @@ func SetupApi(router *gin.Engine, server *Server) {
 	{
 		exchange.POST("/convert", auth, secured("role:client"), server.ConvertMoney)
 	}
+
+	orders := api.Group("/orders", auth, secured("role:client|employee"))
+	{
+		orders.POST("", server.CreateOrder)
+	}
 }
 
 func (s *Server) Healthz(c *gin.Context) {

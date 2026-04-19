@@ -60,7 +60,7 @@ func main() {
 	stopScheduler := bankService.StartScheduler()
 	defer stopScheduler()
 
-	tradingService := internalTrading.NewServer(gorm_db)
+	tradingService := internalTrading.NewServer(gorm_db, bankService)
 
 	srv := grpc.NewServer()
 	bank.RegisterBankServiceServer(srv, bankService)

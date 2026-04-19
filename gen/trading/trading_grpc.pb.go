@@ -21,19 +21,16 @@ const _ = grpc.SupportPackageIsVersion9
 const (
 	TradingService_ListExchanges_FullMethodName = "/trading.TradingService/ListExchanges"
 	TradingService_ListListings_FullMethodName  = "/trading.TradingService/ListListings"
+	TradingService_CreateOrder_FullMethodName   = "/trading.TradingService/CreateOrder"
 )
 
 // TradingServiceClient is the client API for TradingService service.
 //
 // For semantics around ctx use and closing/ending streaming RPCs, please refer to https://pkg.go.dev/google.golang.org/grpc/?tab=doc#ClientConn.NewStream.
-//
-// Minimal surface for #183 — this service only exposes health-style RPCs
-// and a handful of reads so callers can verify the service is wired up.
-// Order placement, listing refresh from external APIs, and stock-price
-// queries are owned by follow-up issues (#184, #186, #189).
 type TradingServiceClient interface {
 	ListExchanges(ctx context.Context, in *ListExchangesRequest, opts ...grpc.CallOption) (*ListExchangesResponse, error)
 	ListListings(ctx context.Context, in *ListListingsRequest, opts ...grpc.CallOption) (*ListListingsResponse, error)
+	CreateOrder(ctx context.Context, in *CreateOrderRequest, opts ...grpc.CallOption) (*CreateOrderResponse, error)
 }
 
 type tradingServiceClient struct {
@@ -64,17 +61,23 @@ func (c *tradingServiceClient) ListListings(ctx context.Context, in *ListListing
 	return out, nil
 }
 
+func (c *tradingServiceClient) CreateOrder(ctx context.Context, in *CreateOrderRequest, opts ...grpc.CallOption) (*CreateOrderResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(CreateOrderResponse)
+	err := c.cc.Invoke(ctx, TradingService_CreateOrder_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
 // TradingServiceServer is the server API for TradingService service.
 // All implementations must embed UnimplementedTradingServiceServer
 // for forward compatibility.
-//
-// Minimal surface for #183 — this service only exposes health-style RPCs
-// and a handful of reads so callers can verify the service is wired up.
-// Order placement, listing refresh from external APIs, and stock-price
-// queries are owned by follow-up issues (#184, #186, #189).
 type TradingServiceServer interface {
 	ListExchanges(context.Context, *ListExchangesRequest) (*ListExchangesResponse, error)
 	ListListings(context.Context, *ListListingsRequest) (*ListListingsResponse, error)
+	CreateOrder(context.Context, *CreateOrderRequest) (*CreateOrderResponse, error)
 	mustEmbedUnimplementedTradingServiceServer()
 }
 
@@ -90,6 +93,9 @@ func (UnimplementedTradingServiceServer) ListExchanges(context.Context, *ListExc
 }
 func (UnimplementedTradingServiceServer) ListListings(context.Context, *ListListingsRequest) (*ListListingsResponse, error) {
 	return nil, status.Error(codes.Unimplemented, "method ListListings not implemented")
+}
+func (UnimplementedTradingServiceServer) CreateOrder(context.Context, *CreateOrderRequest) (*CreateOrderResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method CreateOrder not implemented")
 }
 func (UnimplementedTradingServiceServer) mustEmbedUnimplementedTradingServiceServer() {}
 func (UnimplementedTradingServiceServer) testEmbeddedByValue()                        {}
@@ -148,6 +154,24 @@ func _TradingService_ListListings_Handler(srv interface{}, ctx context.Context, 
 	return interceptor(ctx, in, info, handler)
 }
 
+func _TradingService_CreateOrder_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(CreateOrderRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(TradingServiceServer).CreateOrder(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: TradingService_CreateOrder_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(TradingServiceServer).CreateOrder(ctx, req.(*CreateOrderRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
 // TradingService_ServiceDesc is the grpc.ServiceDesc for TradingService service.
 // It's only intended for direct use with grpc.RegisterService,
 // and not to be introspected or modified (even as a copy)
@@ -162,6 +186,10 @@ var TradingService_ServiceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "ListListings",
 			Handler:    _TradingService_ListListings_Handler,
+		},
+		{
+			MethodName: "CreateOrder",
+			Handler:    _TradingService_CreateOrder_Handler,
 		},
 	},
 	Streams:  []grpc.StreamDesc{},
