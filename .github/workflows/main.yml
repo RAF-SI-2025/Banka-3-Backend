@@ -148,7 +148,7 @@ jobs:
     runs-on: ubuntu-latest
     strategy:
       matrix:
-        service: [user, notification, gateway, bank, exchange]
+        service: [user, notification, gateway, bank, exchange, trading]
     steps:
       - uses: actions/checkout@v5
       - uses: docker/setup-buildx-action@v3

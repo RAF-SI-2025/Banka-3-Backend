@@ -649,3 +649,15 @@ INSERT INTO authorized_party (name, last_name, date_of_birth, gender, email, pho
 VALUES
     ('Ana', 'Petrovic', '1992-07-12', 'F', 'ana.petrovic@example.com', '+381641111111', 'Nemanjina 5')
 ON CONFLICT DO NOTHING;
+
+-------------------------------------------------------------------------------
+-- Trading: a handful of exchanges so the schema is exercised end-to-end.
+-- Listings/orders are seeded in follow-up issues that plug in real data.
+-------------------------------------------------------------------------------
+INSERT INTO exchanges (name, acronym, mic_code, polity, currency, time_zone_offset)
+VALUES
+    ('New York Stock Exchange', 'NYSE', 'XNYS', 'United States', 'USD', '-05:00'),
+    ('NASDAQ',                  'NASDAQ', 'XNAS', 'United States', 'USD', '-05:00'),
+    ('London Stock Exchange',   'LSE',  'XLON', 'United Kingdom', 'GBP', '+00:00'),
+    ('Tokyo Stock Exchange',    'TSE',  'XTKS', 'Japan',          'JPY', '+09:00')
+ON CONFLICT (mic_code) DO NOTHING;

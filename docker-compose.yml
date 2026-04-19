@@ -108,6 +108,22 @@ services:
       SMTP_ADDR: "${SMTP_ADDR}"
     networks: [banka]
 
+  trading:
+    container_name: trading
+    build:
+      context: .
+      dockerfile: cmd/trading/Dockerfile
+    restart: on-failure
+    ports:
+      - "${TRADING_GRPC_PORT:-50055}:50051"
+    environment:
+      DATABASE_URL: "postgres://${POSTGRES_USER}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB}?sslmode=disable"
+      GRPC_PORT: "50051"
+    depends_on:
+      postgres:
+        condition: service_healthy
+    networks: [banka]
+
   gateway:
     container_name: gateway
     build:
@@ -121,11 +137,13 @@ services:
       NOTIFICATION_GRPC_ADDR: "notification:50051"
       BANK_GRPC_ADDR: "bank:50051"
       EXCHANGE_GRPC_ADDR: "exchange:50051"
+      TRADING_GRPC_ADDR: "trading:50051"
     depends_on:
       - user
       - notification
       - bank
       - exchange
+      - trading
     networks: [banka]
 
 volumes:

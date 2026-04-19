@@ -281,6 +281,136 @@ CREATE TABLE IF NOT EXISTS exchange_rates (
     valid_until   TIMESTAMP      NOT NULL DEFAULT NOW()
 );
 
+-- ============================================================================
+-- Trading: securities, listings, orders
+-- ============================================================================
+
+CREATE TABLE IF NOT EXISTS exchanges (
+    id                  BIGSERIAL       PRIMARY KEY,
+    name                VARCHAR(127)    NOT NULL,
+    acronym             VARCHAR(31)     NOT NULL,
+    mic_code            VARCHAR(8)      NOT NULL,
+    polity              VARCHAR(127)    NOT NULL,
+    currency            VARCHAR(8)      NOT NULL REFERENCES currencies(label) ON UPDATE CASCADE ON DELETE RESTRICT,
+    time_zone_offset    VARCHAR(8)      NOT NULL,
+    open_override       BOOLEAN         NOT NULL DEFAULT FALSE,
+    UNIQUE(mic_code)
+);
+
+CREATE TABLE IF NOT EXISTS stocks (
+    id                  BIGSERIAL       PRIMARY KEY,
+    ticker              VARCHAR(8)      NOT NULL,
+    name                VARCHAR(127)    NOT NULL,
+    outstanding_shares  BIGINT          NOT NULL DEFAULT 0,
+    dividend_yield      DECIMAL(10, 6)  NOT NULL DEFAULT 0,
+    UNIQUE(ticker)
+);
+
+CREATE TABLE IF NOT EXISTS futures (
+    id                  BIGSERIAL       PRIMARY KEY,
+    ticker              VARCHAR(16)     NOT NULL,
+    name                VARCHAR(127)    NOT NULL,
+    contract_size       BIGINT          NOT NULL,
+    contract_unit       VARCHAR(31)     NOT NULL,
+    settlement_date     DATE            NOT NULL,
+    UNIQUE(ticker)
+);
+
+CREATE TYPE forex_liquidity AS ENUM ('high', 'medium', 'low');
+
+CREATE TABLE IF NOT EXISTS forex_pairs (
+    id                  BIGSERIAL       PRIMARY KEY,
+    ticker              VARCHAR(8)      NOT NULL,
+    name                VARCHAR(127)    NOT NULL,
+    base_currency       VARCHAR(8)      NOT NULL REFERENCES currencies(label) ON UPDATE CASCADE ON DELETE RESTRICT,
+    quote_currency      VARCHAR(8)      NOT NULL REFERENCES currencies(label) ON UPDATE CASCADE ON DELETE RESTRICT,
+    exchange_rate       DECIMAL(20, 6)  NOT NULL,
+    liquidity           forex_liquidity NOT NULL DEFAULT 'medium',
+    UNIQUE(ticker),
+    UNIQUE(base_currency, quote_currency)
+);
+
+CREATE TYPE option_type AS ENUM ('call', 'put');
+
+CREATE TABLE IF NOT EXISTS options (
+    id                  BIGSERIAL       PRIMARY KEY,
+    ticker              VARCHAR(32)     NOT NULL,
+    name                VARCHAR(127)    NOT NULL,
+    stock_id            BIGINT          NOT NULL REFERENCES stocks(id) ON UPDATE CASCADE ON DELETE CASCADE,
+    option_type         option_type     NOT NULL,
+    strike_price        BIGINT          NOT NULL,
+    premium             BIGINT          NOT NULL,
+    implied_volatility  DECIMAL(10, 4)  NOT NULL DEFAULT 0,
+    open_interest       BIGINT          NOT NULL DEFAULT 0,
+    settlement_date     DATE            NOT NULL,
+    UNIQUE(ticker)
+);
+
+-- A listing pairs a tradable security (stock or future) with an exchange
+-- and carries the current market-data snapshot. ForexPairs have no listings
+-- (spec: "Ideja 1 — ForexPairs nemaju listinge").
+-- Options have no listings either; they hang off their underlying stock.
+CREATE TABLE IF NOT EXISTS listings (
+    id                  BIGSERIAL       PRIMARY KEY,
+    exchange_id         BIGINT          NOT NULL REFERENCES exchanges(id) ON UPDATE CASCADE ON DELETE RESTRICT,
+    stock_id            BIGINT          REFERENCES stocks(id) ON UPDATE CASCADE ON DELETE CASCADE,
+    future_id           BIGINT          REFERENCES futures(id) ON UPDATE CASCADE ON DELETE CASCADE,
+    last_refresh        TIMESTAMP       NOT NULL DEFAULT NOW(),
+    price               BIGINT          NOT NULL DEFAULT 0,
+    ask_price           BIGINT          NOT NULL DEFAULT 0,
+    bid_price           BIGINT          NOT NULL DEFAULT 0,
+    CHECK ((stock_id IS NOT NULL)::int + (future_id IS NOT NULL)::int = 1)
+);
+
+CREATE TABLE IF NOT EXISTS listing_daily_price_info (
+    id                  BIGSERIAL       PRIMARY KEY,
+    listing_id          BIGINT          NOT NULL REFERENCES listings(id) ON UPDATE CASCADE ON DELETE CASCADE,
+    date                DATE            NOT NULL,
+    price               BIGINT          NOT NULL,
+    ask_price           BIGINT          NOT NULL,
+    bid_price           BIGINT          NOT NULL,
+    change              BIGINT          NOT NULL DEFAULT 0,
+    volume              BIGINT          NOT NULL DEFAULT 0,
+    UNIQUE(listing_id, date)
+);
+
+-- Orders can be placed by either a client or an employee (actuary); the
+-- order_placers table holds exactly one of the two, so `orders` carries a
+-- single FK regardless of the placer's kind.
+CREATE TABLE IF NOT EXISTS order_placers (
+    id                  BIGSERIAL       PRIMARY KEY,
+    client_id           BIGINT          REFERENCES clients(id) ON UPDATE CASCADE ON DELETE CASCADE,
+    employee_id         BIGINT          REFERENCES employees(id) ON UPDATE CASCADE ON DELETE CASCADE,
+    CHECK ((client_id IS NOT NULL)::int + (employee_id IS NOT NULL)::int = 1)
+);
+
+CREATE TYPE order_type AS ENUM ('market', 'limit', 'stop', 'stop_limit');
+CREATE TYPE order_direction AS ENUM ('buy', 'sell');
+CREATE TYPE order_status AS ENUM ('pending', 'approved', 'declined', 'done');
+
+CREATE TABLE IF NOT EXISTS orders (
+    id                  BIGSERIAL       PRIMARY KEY,
+    placer_id           BIGINT          NOT NULL REFERENCES order_placers(id) ON UPDATE CASCADE ON DELETE RESTRICT,
+    listing_id          BIGINT          REFERENCES listings(id) ON UPDATE CASCADE ON DELETE RESTRICT,
+    option_id           BIGINT          REFERENCES options(id) ON UPDATE CASCADE ON DELETE RESTRICT,
+    forex_pair_id       BIGINT          REFERENCES forex_pairs(id) ON UPDATE CASCADE ON DELETE RESTRICT,
+    order_type          order_type      NOT NULL,
+    direction           order_direction NOT NULL,
+    status              order_status    NOT NULL DEFAULT 'pending',
+    quantity            BIGINT          NOT NULL,
+    contract_size       BIGINT          NOT NULL DEFAULT 1,
+    price_per_unit      BIGINT          NOT NULL,
+    remaining_portions  BIGINT          NOT NULL,
+    approved_by         BIGINT          REFERENCES employees(id) ON UPDATE CASCADE ON DELETE SET NULL,
+    is_done             BOOLEAN         NOT NULL DEFAULT FALSE,
+    after_hours         BOOLEAN         NOT NULL DEFAULT FALSE,
+    all_or_none         BOOLEAN         NOT NULL DEFAULT FALSE,
+    margin              BOOLEAN         NOT NULL DEFAULT FALSE,
+    last_modification   TIMESTAMP       NOT NULL DEFAULT NOW(),
+    created_at          TIMESTAMP       NOT NULL DEFAULT NOW(),
+    CHECK ((listing_id IS NOT NULL)::int + (option_id IS NOT NULL)::int + (forex_pair_id IS NOT NULL)::int = 1)
+);
+
 -- Notify Redis when employee permissions change
 CREATE OR REPLACE FUNCTION notify_permission_change() RETURNS trigger AS $$
 DECLARE

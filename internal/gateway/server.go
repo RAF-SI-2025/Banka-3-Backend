@@ -9,6 +9,7 @@ import (
 	bankpb "github.com/RAF-SI-2025/Banka-3-Backend/gen/bank"
 	exchangepb "github.com/RAF-SI-2025/Banka-3-Backend/gen/exchange"
 	notificationpb "github.com/RAF-SI-2025/Banka-3-Backend/gen/notification"
+	tradingpb "github.com/RAF-SI-2025/Banka-3-Backend/gen/trading"
 	userpb "github.com/RAF-SI-2025/Banka-3-Backend/gen/user"
 )
 
@@ -18,6 +19,7 @@ type Server struct {
 	NotificationClient notificationpb.NotificationServiceClient
 	BankClient         bankpb.BankServiceClient
 	ExchangeClient     exchangepb.ExchangeServiceClient
+	TradingClient      tradingpb.TradingServiceClient
 }
 
 func NewServer() (*Server, error) {
@@ -39,6 +41,11 @@ func NewServer() (*Server, error) {
 	exchangeAddr := os.Getenv("EXCHANGE_GRPC_ADDR")
 	if exchangeAddr == "" {
 		exchangeAddr = "exhcange:50051"
+	}
+
+	tradingAddr := os.Getenv("TRADING_GRPC_ADDR")
+	if tradingAddr == "" {
+		tradingAddr = "trading:50051"
 	}
 
 	userConn, err := grpc.NewClient(userAddr, grpc.WithTransportCredentials(insecure.NewCredentials()))
@@ -67,11 +74,21 @@ func NewServer() (*Server, error) {
 		return nil, err
 	}
 
+	tradingConn, err := grpc.NewClient(tradingAddr, grpc.WithTransportCredentials(insecure.NewCredentials()))
+	if err != nil {
+		_ = userConn.Close()
+		_ = notificationConn.Close()
+		_ = bankConn.Close()
+		_ = exchangeConn.Close()
+		return nil, err
+	}
+
 	return &Server{
 		UserClient:         userpb.NewUserServiceClient(userConn),
 		TOTPClient:         userpb.NewTOTPServiceClient(userConn),
 		NotificationClient: notificationpb.NewNotificationServiceClient(notificationConn),
 		BankClient:         bankpb.NewBankServiceClient(bankConn),
 		ExchangeClient:     exchangepb.NewExchangeServiceClient(exchangeConn),
+		TradingClient:      tradingpb.NewTradingServiceClient(tradingConn),
 	}, nil
 }
