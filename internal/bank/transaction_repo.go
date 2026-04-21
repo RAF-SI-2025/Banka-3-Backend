@@ -38,6 +38,11 @@ func (s *Server) GetFilteredTransactionsRepo(accNumbers []string, req *bankpb.Ge
 	var results []UnifiedTransaction
 	var total int64
 
+	// Prevent empty account list from causing unexpected query behavior
+	if len(accNumbers) == 0 {
+		return results, 0, nil
+	}
+
 	// 1. Sub-query for Payments: Mapping payment-specific fields and casting status to text for UNION compatibility
 	paymentSub := s.db_gorm.Table("payments p").
 		Select(`p.transaction_id AS id, 'payment' AS type, p.from_account, p.to_account, 
@@ -86,21 +91,39 @@ func (s *Server) GetFilteredTransactionsRepo(accNumbers []string, req *bankpb.Ge
 		return nil, 0, err
 	}
 
-	// 6. Sorting Logic
+	// 6. Sorting Logic (SQL Injection Protection: Whitelisting)
+	// GORM's .Order() is vulnerable to string injection. We must validate against allowed columns.
 	sortBy := "timestamp"
-	if req.SortBy != "" {
+	allowedSortFields := map[string]bool{
+		"timestamp": true,
+		"type":      true,
+		"currency":  true,
+		"status":    true,
+	}
+	if req.SortBy != "" && allowedSortFields[req.SortBy] {
 		sortBy = req.SortBy
 	}
+
 	sortOrder := "DESC"
-	if req.SortOrder != "" {
+	if req.SortOrder == "ASC" || req.SortOrder == "DESC" {
 		sortOrder = req.SortOrder
 	}
 
 	// 7. Pagination and final scanning
-	offset := (req.Page - 1) * req.PageSize
+	// Use Limit and Offset methods which are safe from injection
+	pageSize := int(req.PageSize)
+	if pageSize <= 0 {
+		pageSize = 10
+	}
+	offset := (int(req.Page) - 1) * pageSize
+	if offset < 0 {
+		offset = 0
+	}
+
+	// Combine Order with validated strings
 	err := query.Order(fmt.Sprintf("tx.%s %s", sortBy, sortOrder)).
-		Limit(int(req.PageSize)).
-		Offset(int(offset)).
+		Limit(pageSize).
+		Offset(offset).
 		Scan(&results).Error
 
 	return results, total, err
