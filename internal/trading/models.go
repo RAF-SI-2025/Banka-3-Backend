@@ -50,7 +50,12 @@ type Exchange struct {
 	Polity         string `gorm:"column:polity;type:varchar(127);not null"`
 	Currency       string `gorm:"column:currency;type:varchar(8);not null"`
 	TimeZoneOffset string `gorm:"column:time_zone_offset;type:varchar(8);not null"`
-	OpenOverride   bool   `gorm:"column:open_override;not null;default:false"`
+	// Local-time working hours. Stored as Postgres TIME; surfaced as "HH:MM:SS"
+	// strings so that IsOpen can parse them directly without dragging in a
+	// gorm-specific time-of-day type.
+	OpenTime     string `gorm:"column:open_time;type:time;not null"`
+	CloseTime    string `gorm:"column:close_time;type:time;not null"`
+	OpenOverride bool   `gorm:"column:open_override;not null;default:false"`
 }
 
 func (Exchange) TableName() string { return "exchanges" }

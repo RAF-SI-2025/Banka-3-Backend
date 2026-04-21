@@ -698,10 +698,10 @@ ON CONFLICT DO NOTHING;
 -- Trading: a handful of exchanges so the schema is exercised end-to-end.
 -- Listings/orders are seeded in follow-up issues that plug in real data.
 -------------------------------------------------------------------------------
-INSERT INTO exchanges (name, acronym, mic_code, polity, currency, time_zone_offset)
+INSERT INTO exchanges (name, acronym, mic_code, polity, currency, time_zone_offset, open_time, close_time)
 VALUES
-    ('New York Stock Exchange', 'NYSE', 'XNYS', 'United States', 'USD', '-05:00'),
-    ('NASDAQ',                  'NASDAQ', 'XNAS', 'United States', 'USD', '-05:00'),
-    ('London Stock Exchange',   'LSE',  'XLON', 'United Kingdom', 'GBP', '+00:00'),
-    ('Tokyo Stock Exchange',    'TSE',  'XTKS', 'Japan',          'JPY', '+09:00')
+    ('New York Stock Exchange', 'NYSE',   'XNYS', 'United States',  'USD', '-05:00', '09:30', '16:00'),
+    ('NASDAQ',                  'NASDAQ', 'XNAS', 'United States',  'USD', '-05:00', '09:30', '16:00'),
+    ('London Stock Exchange',   'LSE',    'XLON', 'United Kingdom', 'GBP', '+00:00', '08:00', '16:30'),
+    ('Tokyo Stock Exchange',    'TSE',    'XTKS', 'Japan',          'JPY', '+09:00', '09:00', '15:00')
 ON CONFLICT (mic_code) DO NOTHING;

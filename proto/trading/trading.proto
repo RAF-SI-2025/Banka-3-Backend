@@ -8,6 +8,7 @@ service TradingService {
   rpc ListExchanges(ListExchangesRequest) returns (ListExchangesResponse);
   rpc ListListings(ListListingsRequest) returns (ListListingsResponse);
   rpc CreateOrder(CreateOrderRequest) returns (CreateOrderResponse);
+  rpc SetExchangeOpenOverride(SetExchangeOpenOverrideRequest) returns (SetExchangeOpenOverrideResponse);
 }
 
 message Exchange {
@@ -19,6 +20,25 @@ message Exchange {
   string currency = 6;
   string time_zone_offset = 7;
   bool open_override = 8;
+  // Local-time working hours as "HH:MM:SS" (Postgres TIME). Clients that only
+  // care about HH:MM can truncate.
+  string open_time = 9;
+  string close_time = 10;
+}
+
+// Supervisor-only (gated at the gateway by `secured("supervisor")`; the
+// trading server re-checks against employee_permissions). Flips the
+// exchange's open_override flag — when true, IsOpen returns true regardless
+// of the clock, which lets us exercise the trading flow outside real market
+// hours.
+message SetExchangeOpenOverrideRequest {
+  int64 exchange_id = 1;
+  bool open_override = 2;
+  string caller_email = 3;
+}
+
+message SetExchangeOpenOverrideResponse {
+  Exchange exchange = 1;
 }
 
 message ListExchangesRequest {}

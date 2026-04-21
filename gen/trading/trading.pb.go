@@ -31,8 +31,12 @@ type Exchange struct {
 	Currency       string                 `protobuf:"bytes,6,opt,name=currency,proto3" json:"currency,omitempty"`
 	TimeZoneOffset string                 `protobuf:"bytes,7,opt,name=time_zone_offset,json=timeZoneOffset,proto3" json:"time_zone_offset,omitempty"`
 	OpenOverride   bool                   `protobuf:"varint,8,opt,name=open_override,json=openOverride,proto3" json:"open_override,omitempty"`
-	unknownFields  protoimpl.UnknownFields
-	sizeCache      protoimpl.SizeCache
+	// Local-time working hours as "HH:MM:SS" (Postgres TIME). Clients that only
+	// care about HH:MM can truncate.
+	OpenTime      string `protobuf:"bytes,9,opt,name=open_time,json=openTime,proto3" json:"open_time,omitempty"`
+	CloseTime     string `protobuf:"bytes,10,opt,name=close_time,json=closeTime,proto3" json:"close_time,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
 }
 
 func (x *Exchange) Reset() {
@@ -121,6 +125,129 @@ func (x *Exchange) GetOpenOverride() bool {
 	return false
 }
 
+func (x *Exchange) GetOpenTime() string {
+	if x != nil {
+		return x.OpenTime
+	}
+	return ""
+}
+
+func (x *Exchange) GetCloseTime() string {
+	if x != nil {
+		return x.CloseTime
+	}
+	return ""
+}
+
+// Supervisor-only (gated at the gateway by `secured("supervisor")`; the
+// trading server re-checks against employee_permissions). Flips the
+// exchange's open_override flag — when true, IsOpen returns true regardless
+// of the clock, which lets us exercise the trading flow outside real market
+// hours.
+type SetExchangeOpenOverrideRequest struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	ExchangeId    int64                  `protobuf:"varint,1,opt,name=exchange_id,json=exchangeId,proto3" json:"exchange_id,omitempty"`
+	OpenOverride  bool                   `protobuf:"varint,2,opt,name=open_override,json=openOverride,proto3" json:"open_override,omitempty"`
+	CallerEmail   string                 `protobuf:"bytes,3,opt,name=caller_email,json=callerEmail,proto3" json:"caller_email,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *SetExchangeOpenOverrideRequest) Reset() {
+	*x = SetExchangeOpenOverrideRequest{}
+	mi := &file_trading_trading_proto_msgTypes[1]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *SetExchangeOpenOverrideRequest) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*SetExchangeOpenOverrideRequest) ProtoMessage() {}
+
+func (x *SetExchangeOpenOverrideRequest) ProtoReflect() protoreflect.Message {
+	mi := &file_trading_trading_proto_msgTypes[1]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use SetExchangeOpenOverrideRequest.ProtoReflect.Descriptor instead.
+func (*SetExchangeOpenOverrideRequest) Descriptor() ([]byte, []int) {
+	return file_trading_trading_proto_rawDescGZIP(), []int{1}
+}
+
+func (x *SetExchangeOpenOverrideRequest) GetExchangeId() int64 {
+	if x != nil {
+		return x.ExchangeId
+	}
+	return 0
+}
+
+func (x *SetExchangeOpenOverrideRequest) GetOpenOverride() bool {
+	if x != nil {
+		return x.OpenOverride
+	}
+	return false
+}
+
+func (x *SetExchangeOpenOverrideRequest) GetCallerEmail() string {
+	if x != nil {
+		return x.CallerEmail
+	}
+	return ""
+}
+
+type SetExchangeOpenOverrideResponse struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	Exchange      *Exchange              `protobuf:"bytes,1,opt,name=exchange,proto3" json:"exchange,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *SetExchangeOpenOverrideResponse) Reset() {
+	*x = SetExchangeOpenOverrideResponse{}
+	mi := &file_trading_trading_proto_msgTypes[2]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *SetExchangeOpenOverrideResponse) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*SetExchangeOpenOverrideResponse) ProtoMessage() {}
+
+func (x *SetExchangeOpenOverrideResponse) ProtoReflect() protoreflect.Message {
+	mi := &file_trading_trading_proto_msgTypes[2]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use SetExchangeOpenOverrideResponse.ProtoReflect.Descriptor instead.
+func (*SetExchangeOpenOverrideResponse) Descriptor() ([]byte, []int) {
+	return file_trading_trading_proto_rawDescGZIP(), []int{2}
+}
+
+func (x *SetExchangeOpenOverrideResponse) GetExchange() *Exchange {
+	if x != nil {
+		return x.Exchange
+	}
+	return nil
+}
+
 type ListExchangesRequest struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
 	unknownFields protoimpl.UnknownFields
@@ -129,7 +256,7 @@ type ListExchangesRequest struct {
 
 func (x *ListExchangesRequest) Reset() {
 	*x = ListExchangesRequest{}
-	mi := &file_trading_trading_proto_msgTypes[1]
+	mi := &file_trading_trading_proto_msgTypes[3]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -141,7 +268,7 @@ func (x *ListExchangesRequest) String() string {
 func (*ListExchangesRequest) ProtoMessage() {}
 
 func (x *ListExchangesRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_trading_trading_proto_msgTypes[1]
+	mi := &file_trading_trading_proto_msgTypes[3]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -154,7 +281,7 @@ func (x *ListExchangesRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ListExchangesRequest.ProtoReflect.Descriptor instead.
 func (*ListExchangesRequest) Descriptor() ([]byte, []int) {
-	return file_trading_trading_proto_rawDescGZIP(), []int{1}
+	return file_trading_trading_proto_rawDescGZIP(), []int{3}
 }
 
 type ListExchangesResponse struct {
@@ -166,7 +293,7 @@ type ListExchangesResponse struct {
 
 func (x *ListExchangesResponse) Reset() {
 	*x = ListExchangesResponse{}
-	mi := &file_trading_trading_proto_msgTypes[2]
+	mi := &file_trading_trading_proto_msgTypes[4]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -178,7 +305,7 @@ func (x *ListExchangesResponse) String() string {
 func (*ListExchangesResponse) ProtoMessage() {}
 
 func (x *ListExchangesResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_trading_trading_proto_msgTypes[2]
+	mi := &file_trading_trading_proto_msgTypes[4]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -191,7 +318,7 @@ func (x *ListExchangesResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ListExchangesResponse.ProtoReflect.Descriptor instead.
 func (*ListExchangesResponse) Descriptor() ([]byte, []int) {
-	return file_trading_trading_proto_rawDescGZIP(), []int{2}
+	return file_trading_trading_proto_rawDescGZIP(), []int{4}
 }
 
 func (x *ListExchangesResponse) GetExchanges() []*Exchange {
@@ -217,7 +344,7 @@ type Listing struct {
 
 func (x *Listing) Reset() {
 	*x = Listing{}
-	mi := &file_trading_trading_proto_msgTypes[3]
+	mi := &file_trading_trading_proto_msgTypes[5]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -229,7 +356,7 @@ func (x *Listing) String() string {
 func (*Listing) ProtoMessage() {}
 
 func (x *Listing) ProtoReflect() protoreflect.Message {
-	mi := &file_trading_trading_proto_msgTypes[3]
+	mi := &file_trading_trading_proto_msgTypes[5]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -242,7 +369,7 @@ func (x *Listing) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use Listing.ProtoReflect.Descriptor instead.
 func (*Listing) Descriptor() ([]byte, []int) {
-	return file_trading_trading_proto_rawDescGZIP(), []int{3}
+	return file_trading_trading_proto_rawDescGZIP(), []int{5}
 }
 
 func (x *Listing) GetId() int64 {
@@ -309,7 +436,7 @@ type ListListingsRequest struct {
 
 func (x *ListListingsRequest) Reset() {
 	*x = ListListingsRequest{}
-	mi := &file_trading_trading_proto_msgTypes[4]
+	mi := &file_trading_trading_proto_msgTypes[6]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -321,7 +448,7 @@ func (x *ListListingsRequest) String() string {
 func (*ListListingsRequest) ProtoMessage() {}
 
 func (x *ListListingsRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_trading_trading_proto_msgTypes[4]
+	mi := &file_trading_trading_proto_msgTypes[6]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -334,7 +461,7 @@ func (x *ListListingsRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ListListingsRequest.ProtoReflect.Descriptor instead.
 func (*ListListingsRequest) Descriptor() ([]byte, []int) {
-	return file_trading_trading_proto_rawDescGZIP(), []int{4}
+	return file_trading_trading_proto_rawDescGZIP(), []int{6}
 }
 
 type ListListingsResponse struct {
@@ -346,7 +473,7 @@ type ListListingsResponse struct {
 
 func (x *ListListingsResponse) Reset() {
 	*x = ListListingsResponse{}
-	mi := &file_trading_trading_proto_msgTypes[5]
+	mi := &file_trading_trading_proto_msgTypes[7]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -358,7 +485,7 @@ func (x *ListListingsResponse) String() string {
 func (*ListListingsResponse) ProtoMessage() {}
 
 func (x *ListListingsResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_trading_trading_proto_msgTypes[5]
+	mi := &file_trading_trading_proto_msgTypes[7]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -371,7 +498,7 @@ func (x *ListListingsResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ListListingsResponse.ProtoReflect.Descriptor instead.
 func (*ListListingsResponse) Descriptor() ([]byte, []int) {
-	return file_trading_trading_proto_rawDescGZIP(), []int{5}
+	return file_trading_trading_proto_rawDescGZIP(), []int{7}
 }
 
 func (x *ListListingsResponse) GetListings() []*Listing {
@@ -403,7 +530,7 @@ type CreateOrderRequest struct {
 
 func (x *CreateOrderRequest) Reset() {
 	*x = CreateOrderRequest{}
-	mi := &file_trading_trading_proto_msgTypes[6]
+	mi := &file_trading_trading_proto_msgTypes[8]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -415,7 +542,7 @@ func (x *CreateOrderRequest) String() string {
 func (*CreateOrderRequest) ProtoMessage() {}
 
 func (x *CreateOrderRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_trading_trading_proto_msgTypes[6]
+	mi := &file_trading_trading_proto_msgTypes[8]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -428,7 +555,7 @@ func (x *CreateOrderRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use CreateOrderRequest.ProtoReflect.Descriptor instead.
 func (*CreateOrderRequest) Descriptor() ([]byte, []int) {
-	return file_trading_trading_proto_rawDescGZIP(), []int{6}
+	return file_trading_trading_proto_rawDescGZIP(), []int{8}
 }
 
 func (x *CreateOrderRequest) GetListingId() int64 {
@@ -518,7 +645,7 @@ type CreateOrderResponse struct {
 
 func (x *CreateOrderResponse) Reset() {
 	*x = CreateOrderResponse{}
-	mi := &file_trading_trading_proto_msgTypes[7]
+	mi := &file_trading_trading_proto_msgTypes[9]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -530,7 +657,7 @@ func (x *CreateOrderResponse) String() string {
 func (*CreateOrderResponse) ProtoMessage() {}
 
 func (x *CreateOrderResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_trading_trading_proto_msgTypes[7]
+	mi := &file_trading_trading_proto_msgTypes[9]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -543,7 +670,7 @@ func (x *CreateOrderResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use CreateOrderResponse.ProtoReflect.Descriptor instead.
 func (*CreateOrderResponse) Descriptor() ([]byte, []int) {
-	return file_trading_trading_proto_rawDescGZIP(), []int{7}
+	return file_trading_trading_proto_rawDescGZIP(), []int{9}
 }
 
 func (x *CreateOrderResponse) GetOrderId() int64 {
@@ -564,7 +691,7 @@ var File_trading_trading_proto protoreflect.FileDescriptor
 
 const file_trading_trading_proto_rawDesc = "" +
 	"\n" +
-	"\x15trading/trading.proto\x12\atrading\"\xe6\x01\n" +
+	"\x15trading/trading.proto\x12\atrading\"\xa2\x02\n" +
 	"\bExchange\x12\x0e\n" +
 	"\x02id\x18\x01 \x01(\x03R\x02id\x12\x12\n" +
 	"\x04name\x18\x02 \x01(\tR\x04name\x12\x18\n" +
@@ -573,7 +700,18 @@ const file_trading_trading_proto_rawDesc = "" +
 	"\x06polity\x18\x05 \x01(\tR\x06polity\x12\x1a\n" +
 	"\bcurrency\x18\x06 \x01(\tR\bcurrency\x12(\n" +
 	"\x10time_zone_offset\x18\a \x01(\tR\x0etimeZoneOffset\x12#\n" +
-	"\ropen_override\x18\b \x01(\bR\fopenOverride\"\x16\n" +
+	"\ropen_override\x18\b \x01(\bR\fopenOverride\x12\x1b\n" +
+	"\topen_time\x18\t \x01(\tR\bopenTime\x12\x1d\n" +
+	"\n" +
+	"close_time\x18\n" +
+	" \x01(\tR\tcloseTime\"\x89\x01\n" +
+	"\x1eSetExchangeOpenOverrideRequest\x12\x1f\n" +
+	"\vexchange_id\x18\x01 \x01(\x03R\n" +
+	"exchangeId\x12#\n" +
+	"\ropen_override\x18\x02 \x01(\bR\fopenOverride\x12!\n" +
+	"\fcaller_email\x18\x03 \x01(\tR\vcallerEmail\"P\n" +
+	"\x1fSetExchangeOpenOverrideResponse\x12-\n" +
+	"\bexchange\x18\x01 \x01(\v2\x11.trading.ExchangeR\bexchange\"\x16\n" +
 	"\x14ListExchangesRequest\"H\n" +
 	"\x15ListExchangesResponse\x12/\n" +
 	"\texchanges\x18\x01 \x03(\v2\x11.trading.ExchangeR\texchanges\"\xee\x01\n" +
@@ -609,11 +747,12 @@ const file_trading_trading_proto_rawDesc = "" +
 	"\x06margin\x18\v \x01(\bR\x06margin\"H\n" +
 	"\x13CreateOrderResponse\x12\x19\n" +
 	"\border_id\x18\x01 \x01(\x03R\aorderId\x12\x16\n" +
-	"\x06status\x18\x02 \x01(\tR\x06status2\xf7\x01\n" +
+	"\x06status\x18\x02 \x01(\tR\x06status2\xe5\x02\n" +
 	"\x0eTradingService\x12N\n" +
 	"\rListExchanges\x12\x1d.trading.ListExchangesRequest\x1a\x1e.trading.ListExchangesResponse\x12K\n" +
 	"\fListListings\x12\x1c.trading.ListListingsRequest\x1a\x1d.trading.ListListingsResponse\x12H\n" +
-	"\vCreateOrder\x12\x1b.trading.CreateOrderRequest\x1a\x1c.trading.CreateOrderResponseB4Z2github.com/RAF-SI-2025/Banka-3-Backend/gen/tradingb\x06proto3"
+	"\vCreateOrder\x12\x1b.trading.CreateOrderRequest\x1a\x1c.trading.CreateOrderResponse\x12l\n" +
+	"\x17SetExchangeOpenOverride\x12'.trading.SetExchangeOpenOverrideRequest\x1a(.trading.SetExchangeOpenOverrideResponseB4Z2github.com/RAF-SI-2025/Banka-3-Backend/gen/tradingb\x06proto3"
 
 var (
 	file_trading_trading_proto_rawDescOnce sync.Once
@@ -627,31 +766,36 @@ func file_trading_trading_proto_rawDescGZIP() []byte {
 	return file_trading_trading_proto_rawDescData
 }
 
-var file_trading_trading_proto_msgTypes = make([]protoimpl.MessageInfo, 8)
+var file_trading_trading_proto_msgTypes = make([]protoimpl.MessageInfo, 10)
 var file_trading_trading_proto_goTypes = []any{
-	(*Exchange)(nil),              // 0: trading.Exchange
-	(*ListExchangesRequest)(nil),  // 1: trading.ListExchangesRequest
-	(*ListExchangesResponse)(nil), // 2: trading.ListExchangesResponse
-	(*Listing)(nil),               // 3: trading.Listing
-	(*ListListingsRequest)(nil),   // 4: trading.ListListingsRequest
-	(*ListListingsResponse)(nil),  // 5: trading.ListListingsResponse
-	(*CreateOrderRequest)(nil),    // 6: trading.CreateOrderRequest
-	(*CreateOrderResponse)(nil),   // 7: trading.CreateOrderResponse
+	(*Exchange)(nil),                        // 0: trading.Exchange
+	(*SetExchangeOpenOverrideRequest)(nil),  // 1: trading.SetExchangeOpenOverrideRequest
+	(*SetExchangeOpenOverrideResponse)(nil), // 2: trading.SetExchangeOpenOverrideResponse
+	(*ListExchangesRequest)(nil),            // 3: trading.ListExchangesRequest
+	(*ListExchangesResponse)(nil),           // 4: trading.ListExchangesResponse
+	(*Listing)(nil),                         // 5: trading.Listing
+	(*ListListingsRequest)(nil),             // 6: trading.ListListingsRequest
+	(*ListListingsResponse)(nil),            // 7: trading.ListListingsResponse
+	(*CreateOrderRequest)(nil),              // 8: trading.CreateOrderRequest
+	(*CreateOrderResponse)(nil),             // 9: trading.CreateOrderResponse
 }
 var file_trading_trading_proto_depIdxs = []int32{
-	0, // 0: trading.ListExchangesResponse.exchanges:type_name -> trading.Exchange
-	3, // 1: trading.ListListingsResponse.listings:type_name -> trading.Listing
-	1, // 2: trading.TradingService.ListExchanges:input_type -> trading.ListExchangesRequest
-	4, // 3: trading.TradingService.ListListings:input_type -> trading.ListListingsRequest
-	6, // 4: trading.TradingService.CreateOrder:input_type -> trading.CreateOrderRequest
-	2, // 5: trading.TradingService.ListExchanges:output_type -> trading.ListExchangesResponse
-	5, // 6: trading.TradingService.ListListings:output_type -> trading.ListListingsResponse
-	7, // 7: trading.TradingService.CreateOrder:output_type -> trading.CreateOrderResponse
-	5, // [5:8] is the sub-list for method output_type
-	2, // [2:5] is the sub-list for method input_type
-	2, // [2:2] is the sub-list for extension type_name
-	2, // [2:2] is the sub-list for extension extendee
-	0, // [0:2] is the sub-list for field type_name
+	0, // 0: trading.SetExchangeOpenOverrideResponse.exchange:type_name -> trading.Exchange
+	0, // 1: trading.ListExchangesResponse.exchanges:type_name -> trading.Exchange
+	5, // 2: trading.ListListingsResponse.listings:type_name -> trading.Listing
+	3, // 3: trading.TradingService.ListExchanges:input_type -> trading.ListExchangesRequest
+	6, // 4: trading.TradingService.ListListings:input_type -> trading.ListListingsRequest
+	8, // 5: trading.TradingService.CreateOrder:input_type -> trading.CreateOrderRequest
+	1, // 6: trading.TradingService.SetExchangeOpenOverride:input_type -> trading.SetExchangeOpenOverrideRequest
+	4, // 7: trading.TradingService.ListExchanges:output_type -> trading.ListExchangesResponse
+	7, // 8: trading.TradingService.ListListings:output_type -> trading.ListListingsResponse
+	9, // 9: trading.TradingService.CreateOrder:output_type -> trading.CreateOrderResponse
+	2, // 10: trading.TradingService.SetExchangeOpenOverride:output_type -> trading.SetExchangeOpenOverrideResponse
+	7, // [7:11] is the sub-list for method output_type
+	3, // [3:7] is the sub-list for method input_type
+	3, // [3:3] is the sub-list for extension type_name
+	3, // [3:3] is the sub-list for extension extendee
+	0, // [0:3] is the sub-list for field type_name
 }
 
 func init() { file_trading_trading_proto_init() }
@@ -665,7 +809,7 @@ func file_trading_trading_proto_init() {
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
 			RawDescriptor: unsafe.Slice(unsafe.StringData(file_trading_trading_proto_rawDesc), len(file_trading_trading_proto_rawDesc)),
 			NumEnums:      0,
-			NumMessages:   8,
+			NumMessages:   10,
 			NumExtensions: 0,
 			NumServices:   1,
 		},

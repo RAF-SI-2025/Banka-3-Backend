@@ -138,6 +138,11 @@ func SetupApi(router *gin.Engine, server *Server) {
 	{
 		orders.POST("", server.CreateOrder)
 	}
+
+	// Supervisor-only toggle used to exercise the trading flow outside real
+	// market hours (see spec p.40 and issue #194). Admin bypass still applies
+	// through `secured("supervisor")`.
+	api.PATCH("/exchanges/:id/open-override", auth, secured("supervisor"), server.SetExchangeOpenOverride)
 }
 
 func (s *Server) Healthz(c *gin.Context) {

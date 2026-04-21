@@ -289,6 +289,10 @@ CREATE TABLE IF NOT EXISTS exchange_rates (
 -- Trading: securities, listings, orders
 -- ============================================================================
 
+-- open_time / close_time are the exchange's local-time working hours
+-- (see spec p.40). All exchanges within the same polity share the same
+-- hours and holiday calendar; the holiday table is hardcoded in Go
+-- (internal/trading/hours.go) rather than modeled here.
 CREATE TABLE IF NOT EXISTS exchanges (
     id                  BIGSERIAL       PRIMARY KEY,
     name                VARCHAR(127)    NOT NULL,
@@ -297,6 +301,8 @@ CREATE TABLE IF NOT EXISTS exchanges (
     polity              VARCHAR(127)    NOT NULL,
     currency            VARCHAR(8)      NOT NULL REFERENCES currencies(label) ON UPDATE CASCADE ON DELETE RESTRICT,
     time_zone_offset    VARCHAR(8)      NOT NULL,
+    open_time           TIME            NOT NULL DEFAULT '09:30',
+    close_time          TIME            NOT NULL DEFAULT '16:00',
     open_override       BOOLEAN         NOT NULL DEFAULT FALSE,
     UNIQUE(mic_code)
 );

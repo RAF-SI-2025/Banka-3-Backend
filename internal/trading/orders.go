@@ -77,12 +77,12 @@ func marketReferencePrice(ot OrderType, req *tradingpb.CreateOrderRequest) int64
 	return 0
 }
 
-// resolveInstrumentCurrency returns the currency in which the instrument
-// trades, so it can be compared to the debit account's currency. Listings
-// inherit currency from their exchange; options inherit from their underlying
-// stock's exchange; forex pairs use the quote currency (that's what the user
-// pays out of).
-func (s *Server) resolveInstrumentCurrency(req *tradingpb.CreateOrderRequest) (string, error) {
+// resolveInstrument returns (exchange, currency) for the order's instrument.
+// Listings inherit both from their exchange; options follow the underlying
+// stock's listing to its exchange; forex pairs aren't tied to any exchange
+// and use the quote currency (exchange is returned as nil). Callers that
+// need the clock (IsOpen / IsAfterHours) should skip forex.
+func (s *Server) resolveInstrument(req *tradingpb.CreateOrderRequest) (*Exchange, string, error) {
 	set := 0
 	if req.ListingId != 0 {
 		set++
@@ -94,7 +94,7 @@ func (s *Server) resolveInstrumentCurrency(req *tradingpb.CreateOrderRequest) (s
 		set++
 	}
 	if set != 1 {
-		return "", status.Error(codes.InvalidArgument, "exactly one of listing_id, option_id, forex_pair_id must be set")
+		return nil, "", status.Error(codes.InvalidArgument, "exactly one of listing_id, option_id, forex_pair_id must be set")
 	}
 
 	switch {
@@ -102,46 +102,46 @@ func (s *Server) resolveInstrumentCurrency(req *tradingpb.CreateOrderRequest) (s
 		var listing Listing
 		if err := s.db.First(&listing, req.ListingId).Error; err != nil {
 			if errors.Is(err, gorm.ErrRecordNotFound) {
-				return "", status.Error(codes.NotFound, "listing not found")
+				return nil, "", status.Error(codes.NotFound, "listing not found")
 			}
-			return "", status.Errorf(codes.Internal, "%v", err)
+			return nil, "", status.Errorf(codes.Internal, "%v", err)
 		}
 		var exch Exchange
 		if err := s.db.First(&exch, listing.ExchangeID).Error; err != nil {
-			return "", status.Errorf(codes.Internal, "%v", err)
+			return nil, "", status.Errorf(codes.Internal, "%v", err)
 		}
-		return exch.Currency, nil
+		return &exch, exch.Currency, nil
 
 	case req.OptionId != 0:
 		var opt Option
 		if err := s.db.First(&opt, req.OptionId).Error; err != nil {
 			if errors.Is(err, gorm.ErrRecordNotFound) {
-				return "", status.Error(codes.NotFound, "option not found")
+				return nil, "", status.Error(codes.NotFound, "option not found")
 			}
-			return "", status.Errorf(codes.Internal, "%v", err)
+			return nil, "", status.Errorf(codes.Internal, "%v", err)
 		}
 		var listing Listing
 		if err := s.db.Where("stock_id = ?", opt.StockID).First(&listing).Error; err != nil {
 			if errors.Is(err, gorm.ErrRecordNotFound) {
-				return "", status.Error(codes.FailedPrecondition, "underlying stock has no listing")
+				return nil, "", status.Error(codes.FailedPrecondition, "underlying stock has no listing")
 			}
-			return "", status.Errorf(codes.Internal, "%v", err)
+			return nil, "", status.Errorf(codes.Internal, "%v", err)
 		}
 		var exch Exchange
 		if err := s.db.First(&exch, listing.ExchangeID).Error; err != nil {
-			return "", status.Errorf(codes.Internal, "%v", err)
+			return nil, "", status.Errorf(codes.Internal, "%v", err)
 		}
-		return exch.Currency, nil
+		return &exch, exch.Currency, nil
 
-	default: // forex pair
+	default: // forex pair — no exchange
 		var fx ForexPair
 		if err := s.db.First(&fx, req.ForexPairId).Error; err != nil {
 			if errors.Is(err, gorm.ErrRecordNotFound) {
-				return "", status.Error(codes.NotFound, "forex pair not found")
+				return nil, "", status.Error(codes.NotFound, "forex pair not found")
 			}
-			return "", status.Errorf(codes.Internal, "%v", err)
+			return nil, "", status.Errorf(codes.Internal, "%v", err)
 		}
-		return fx.QuoteCurrency, nil
+		return nil, fx.QuoteCurrency, nil
 	}
 }
 

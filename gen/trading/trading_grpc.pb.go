@@ -19,9 +19,10 @@ import (
 const _ = grpc.SupportPackageIsVersion9
 
 const (
-	TradingService_ListExchanges_FullMethodName = "/trading.TradingService/ListExchanges"
-	TradingService_ListListings_FullMethodName  = "/trading.TradingService/ListListings"
-	TradingService_CreateOrder_FullMethodName   = "/trading.TradingService/CreateOrder"
+	TradingService_ListExchanges_FullMethodName           = "/trading.TradingService/ListExchanges"
+	TradingService_ListListings_FullMethodName            = "/trading.TradingService/ListListings"
+	TradingService_CreateOrder_FullMethodName             = "/trading.TradingService/CreateOrder"
+	TradingService_SetExchangeOpenOverride_FullMethodName = "/trading.TradingService/SetExchangeOpenOverride"
 )
 
 // TradingServiceClient is the client API for TradingService service.
@@ -31,6 +32,7 @@ type TradingServiceClient interface {
 	ListExchanges(ctx context.Context, in *ListExchangesRequest, opts ...grpc.CallOption) (*ListExchangesResponse, error)
 	ListListings(ctx context.Context, in *ListListingsRequest, opts ...grpc.CallOption) (*ListListingsResponse, error)
 	CreateOrder(ctx context.Context, in *CreateOrderRequest, opts ...grpc.CallOption) (*CreateOrderResponse, error)
+	SetExchangeOpenOverride(ctx context.Context, in *SetExchangeOpenOverrideRequest, opts ...grpc.CallOption) (*SetExchangeOpenOverrideResponse, error)
 }
 
 type tradingServiceClient struct {
@@ -71,6 +73,16 @@ func (c *tradingServiceClient) CreateOrder(ctx context.Context, in *CreateOrderR
 	return out, nil
 }
 
+func (c *tradingServiceClient) SetExchangeOpenOverride(ctx context.Context, in *SetExchangeOpenOverrideRequest, opts ...grpc.CallOption) (*SetExchangeOpenOverrideResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(SetExchangeOpenOverrideResponse)
+	err := c.cc.Invoke(ctx, TradingService_SetExchangeOpenOverride_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
 // TradingServiceServer is the server API for TradingService service.
 // All implementations must embed UnimplementedTradingServiceServer
 // for forward compatibility.
@@ -78,6 +90,7 @@ type TradingServiceServer interface {
 	ListExchanges(context.Context, *ListExchangesRequest) (*ListExchangesResponse, error)
 	ListListings(context.Context, *ListListingsRequest) (*ListListingsResponse, error)
 	CreateOrder(context.Context, *CreateOrderRequest) (*CreateOrderResponse, error)
+	SetExchangeOpenOverride(context.Context, *SetExchangeOpenOverrideRequest) (*SetExchangeOpenOverrideResponse, error)
 	mustEmbedUnimplementedTradingServiceServer()
 }
 
@@ -96,6 +109,9 @@ func (UnimplementedTradingServiceServer) ListListings(context.Context, *ListList
 }
 func (UnimplementedTradingServiceServer) CreateOrder(context.Context, *CreateOrderRequest) (*CreateOrderResponse, error) {
 	return nil, status.Error(codes.Unimplemented, "method CreateOrder not implemented")
+}
+func (UnimplementedTradingServiceServer) SetExchangeOpenOverride(context.Context, *SetExchangeOpenOverrideRequest) (*SetExchangeOpenOverrideResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method SetExchangeOpenOverride not implemented")
 }
 func (UnimplementedTradingServiceServer) mustEmbedUnimplementedTradingServiceServer() {}
 func (UnimplementedTradingServiceServer) testEmbeddedByValue()                        {}
@@ -172,6 +188,24 @@ func _TradingService_CreateOrder_Handler(srv interface{}, ctx context.Context, d
 	return interceptor(ctx, in, info, handler)
 }
 
+func _TradingService_SetExchangeOpenOverride_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(SetExchangeOpenOverrideRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(TradingServiceServer).SetExchangeOpenOverride(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: TradingService_SetExchangeOpenOverride_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(TradingServiceServer).SetExchangeOpenOverride(ctx, req.(*SetExchangeOpenOverrideRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
 // TradingService_ServiceDesc is the grpc.ServiceDesc for TradingService service.
 // It's only intended for direct use with grpc.RegisterService,
 // and not to be introspected or modified (even as a copy)
@@ -190,6 +224,10 @@ var TradingService_ServiceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "CreateOrder",
 			Handler:    _TradingService_CreateOrder_Handler,
+		},
+		{
+			MethodName: "SetExchangeOpenOverride",
+			Handler:    _TradingService_SetExchangeOpenOverride_Handler,
 		},
 	},
 	Streams:  []grpc.StreamDesc{},

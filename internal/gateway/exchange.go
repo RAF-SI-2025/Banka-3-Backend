@@ -1,9 +1,13 @@
 package gateway
 
 import (
+	"context"
 	"net/http"
+	"strconv"
+	"time"
 
 	exchangepb "github.com/RAF-SI-2025/Banka-3-Backend/gen/exchange"
+	tradingpb "github.com/RAF-SI-2025/Banka-3-Backend/gen/trading"
 	"github.com/gin-gonic/gin"
 	"google.golang.org/grpc/status"
 )
@@ -41,6 +45,55 @@ func (s *Server) GetExchangeRates(c *gin.Context) {
 	}
 
 	c.JSON(http.StatusOK, rates)
+}
+
+type setExchangeOpenOverrideBody struct {
+	OpenOverride *bool `json:"open_override" binding:"required"`
+}
+
+// SetExchangeOpenOverride flips the open_override flag on an exchange.
+// Supervisor-only — route is gated at `secured("supervisor")` and the trading
+// RPC re-checks the caller's permissions against employee_permissions.
+func (s *Server) SetExchangeOpenOverride(c *gin.Context) {
+	idStr := c.Param("id")
+	id, err := strconv.ParseInt(idStr, 10, 64)
+	if err != nil || id <= 0 {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "exchange id must be a positive integer"})
+		return
+	}
+
+	var body setExchangeOpenOverrideBody
+	if err := c.ShouldBindJSON(&body); err != nil {
+		writeBindError(c, err)
+		return
+	}
+
+	ctx, cancel := context.WithTimeout(c.Request.Context(), 5*time.Second)
+	defer cancel()
+
+	resp, err := s.TradingClient.SetExchangeOpenOverride(ctx, &tradingpb.SetExchangeOpenOverrideRequest{
+		ExchangeId:   id,
+		OpenOverride: *body.OpenOverride,
+		CallerEmail:  c.GetString("email"),
+	})
+	if err != nil {
+		writeGRPCError(c, err)
+		return
+	}
+
+	ex := resp.Exchange
+	c.JSON(http.StatusOK, gin.H{
+		"id":               ex.Id,
+		"name":             ex.Name,
+		"acronym":          ex.Acronym,
+		"mic_code":         ex.MicCode,
+		"polity":           ex.Polity,
+		"currency":         ex.Currency,
+		"time_zone_offset": ex.TimeZoneOffset,
+		"open_time":        ex.OpenTime,
+		"close_time":       ex.CloseTime,
+		"open_override":    ex.OpenOverride,
+	})
 }
 
 func (s *Server) ConvertMoney(c *gin.Context) {
