@@ -174,7 +174,13 @@ func (s *Server) PayoutMoneyToOtherAccount(c *gin.Context) {
 		})
 		return
 	}
-	res, err := s.BankClient.PayoutMoneyToOtherAccount(context.Background(), &bankpb.PaymentRequest{
+	email := c.GetString("email")
+
+	ctx, cancel := context.WithTimeout(c.Request.Context(), 5*time.Second)
+	defer cancel()
+
+	ctx = metadata.NewOutgoingContext(ctx, metadata.Pairs("user-email", email))
+	res, err := s.BankClient.PayoutMoneyToOtherAccount(ctx, &bankpb.PaymentRequest{
 		SenderAccount:    req.SenderAccount,
 		RecipientAccount: req.RecipientAccount,
 		RecipientName:    req.RecipientName,
@@ -187,6 +193,9 @@ func (s *Server) PayoutMoneyToOtherAccount(c *gin.Context) {
 		st, ok := status.FromError(err)
 		if ok {
 			switch st.Code() {
+
+			case codes.Unauthenticated:
+				c.JSON(http.StatusUnauthorized, gin.H{"error": st.Message()})
 
 			case codes.NotFound:
 				c.JSON(http.StatusNotFound, gin.H{
@@ -237,7 +246,16 @@ func (s *Server) TransferMoneyBetweenAccounts(c *gin.Context) {
 		return
 	}
 
-	res, err := s.BankClient.TransferMoneyBetweenAccounts(context.Background(), &bankpb.TransferRequest{
+	email := c.GetString("email")
+
+	ctx, cancel := context.WithTimeout(c.Request.Context(), 5*time.Second)
+	defer cancel()
+
+	ctx = metadata.NewOutgoingContext(ctx, metadata.Pairs(
+		"user-email", email,
+	))
+
+	res, err := s.BankClient.TransferMoneyBetweenAccounts(ctx, &bankpb.TransferRequest{
 		FromAccount: req.FromAccount,
 		ToAccount:   req.ToAccount,
 		Amount:      req.Amount,
@@ -248,6 +266,8 @@ func (s *Server) TransferMoneyBetweenAccounts(c *gin.Context) {
 		st, ok := status.FromError(err)
 		if ok {
 			switch st.Code() {
+			case codes.Unauthenticated:
+				c.JSON(http.StatusUnauthorized, gin.H{"error": st.Message()})
 			case codes.NotFound:
 				c.JSON(http.StatusNotFound, gin.H{"error": st.Message()})
 			case codes.FailedPrecondition, codes.InvalidArgument:
