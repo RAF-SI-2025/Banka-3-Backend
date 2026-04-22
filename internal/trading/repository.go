@@ -8,14 +8,6 @@ func (s *Server) ListExchangesRecord() ([]Exchange, error) {
 	return out, nil
 }
 
-func (s *Server) ListListingsRecord() ([]Listing, error) {
-	var out []Listing
-	if err := s.db.Find(&out).Error; err != nil {
-		return nil, err
-	}
-	return out, nil
-}
-
 func (s *Server) CreateOrderPlacerRecord(p *OrderPlacer) error {
 	return s.db.Create(p).Error
 }

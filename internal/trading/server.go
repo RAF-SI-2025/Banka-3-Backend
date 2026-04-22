@@ -54,35 +54,6 @@ func exchangeToProto(r Exchange) *tradingpb.Exchange {
 	}
 }
 
-func (s *Server) ListListings(_ context.Context, _ *tradingpb.ListListingsRequest) (*tradingpb.ListListingsResponse, error) {
-	rows, err := s.ListListingsRecord()
-	if err != nil {
-		return nil, status.Errorf(codes.Internal, "%v", err)
-	}
-
-	out := make([]*tradingpb.Listing, 0, len(rows))
-	for _, r := range rows {
-		var stockID, futureID int64
-		if r.StockID != nil {
-			stockID = *r.StockID
-		}
-		if r.FutureID != nil {
-			futureID = *r.FutureID
-		}
-		out = append(out, &tradingpb.Listing{
-			Id:              r.ID,
-			ExchangeId:      r.ExchangeID,
-			StockId:         stockID,
-			FutureId:        futureID,
-			Price:           r.Price,
-			AskPrice:        r.AskPrice,
-			BidPrice:        r.BidPrice,
-			LastRefreshUnix: r.LastRefresh.Unix(),
-		})
-	}
-	return &tradingpb.ListListingsResponse{Listings: out}, nil
-}
-
 func (s *Server) CreateOrder(ctx context.Context, req *tradingpb.CreateOrderRequest) (*tradingpb.CreateOrderResponse, error) {
 	if req.Quantity <= 0 {
 		return nil, status.Error(codes.InvalidArgument, "quantity must be positive")

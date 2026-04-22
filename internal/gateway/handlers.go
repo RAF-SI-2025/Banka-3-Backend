@@ -139,6 +139,18 @@ func SetupApi(router *gin.Engine, server *Server) {
 		orders.POST("", server.CreateOrder)
 	}
 
+	// Trading read API (issue #196). Clients and employees share the same
+	// routes; forex is gated inside the trading RPC since listings only
+	// ever carry stocks/futures.
+	tradingReaders := api.Group("", auth, secured("role:client|employee"))
+	{
+		tradingReaders.GET("/exchanges", server.ListExchanges)
+		tradingReaders.GET("/listings", server.ListListings)
+		tradingReaders.GET("/listings/:id", server.GetListing)
+		tradingReaders.GET("/listings/:id/history", server.GetListingHistory)
+		tradingReaders.GET("/forex-pairs", server.ListForexPairs)
+	}
+
 	// Supervisor-only toggle used to exercise the trading flow outside real
 	// market hours (see spec p.40 and issue #194). Admin bypass still applies
 	// through `secured("supervisor")`.
