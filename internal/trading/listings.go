@@ -367,4 +367,3 @@ func (s *Server) ListForexPairs(ctx context.Context, req *tradingpb.ListForexPai
 	}
 	return &tradingpb.ListForexPairsResponse{Pairs: out}, nil
 }
-
