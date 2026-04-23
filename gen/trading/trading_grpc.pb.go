@@ -27,6 +27,10 @@ const (
 	TradingService_ListOptionDates_FullMethodName         = "/trading.TradingService/ListOptionDates"
 	TradingService_ListOptions_FullMethodName             = "/trading.TradingService/ListOptions"
 	TradingService_CreateOrder_FullMethodName             = "/trading.TradingService/CreateOrder"
+	TradingService_ListOrders_FullMethodName              = "/trading.TradingService/ListOrders"
+	TradingService_ApproveOrder_FullMethodName            = "/trading.TradingService/ApproveOrder"
+	TradingService_DeclineOrder_FullMethodName            = "/trading.TradingService/DeclineOrder"
+	TradingService_CancelOrder_FullMethodName             = "/trading.TradingService/CancelOrder"
 	TradingService_SetExchangeOpenOverride_FullMethodName = "/trading.TradingService/SetExchangeOpenOverride"
 )
 
@@ -42,6 +46,10 @@ type TradingServiceClient interface {
 	ListOptionDates(ctx context.Context, in *ListOptionDatesRequest, opts ...grpc.CallOption) (*ListOptionDatesResponse, error)
 	ListOptions(ctx context.Context, in *ListOptionsRequest, opts ...grpc.CallOption) (*ListOptionsResponse, error)
 	CreateOrder(ctx context.Context, in *CreateOrderRequest, opts ...grpc.CallOption) (*CreateOrderResponse, error)
+	ListOrders(ctx context.Context, in *ListOrdersRequest, opts ...grpc.CallOption) (*ListOrdersResponse, error)
+	ApproveOrder(ctx context.Context, in *ApproveOrderRequest, opts ...grpc.CallOption) (*ApproveOrderResponse, error)
+	DeclineOrder(ctx context.Context, in *DeclineOrderRequest, opts ...grpc.CallOption) (*DeclineOrderResponse, error)
+	CancelOrder(ctx context.Context, in *CancelOrderRequest, opts ...grpc.CallOption) (*CancelOrderResponse, error)
 	SetExchangeOpenOverride(ctx context.Context, in *SetExchangeOpenOverrideRequest, opts ...grpc.CallOption) (*SetExchangeOpenOverrideResponse, error)
 }
 
@@ -133,6 +141,46 @@ func (c *tradingServiceClient) CreateOrder(ctx context.Context, in *CreateOrderR
 	return out, nil
 }
 
+func (c *tradingServiceClient) ListOrders(ctx context.Context, in *ListOrdersRequest, opts ...grpc.CallOption) (*ListOrdersResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(ListOrdersResponse)
+	err := c.cc.Invoke(ctx, TradingService_ListOrders_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *tradingServiceClient) ApproveOrder(ctx context.Context, in *ApproveOrderRequest, opts ...grpc.CallOption) (*ApproveOrderResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(ApproveOrderResponse)
+	err := c.cc.Invoke(ctx, TradingService_ApproveOrder_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *tradingServiceClient) DeclineOrder(ctx context.Context, in *DeclineOrderRequest, opts ...grpc.CallOption) (*DeclineOrderResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(DeclineOrderResponse)
+	err := c.cc.Invoke(ctx, TradingService_DeclineOrder_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *tradingServiceClient) CancelOrder(ctx context.Context, in *CancelOrderRequest, opts ...grpc.CallOption) (*CancelOrderResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(CancelOrderResponse)
+	err := c.cc.Invoke(ctx, TradingService_CancelOrder_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
 func (c *tradingServiceClient) SetExchangeOpenOverride(ctx context.Context, in *SetExchangeOpenOverrideRequest, opts ...grpc.CallOption) (*SetExchangeOpenOverrideResponse, error) {
 	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
 	out := new(SetExchangeOpenOverrideResponse)
@@ -155,6 +203,10 @@ type TradingServiceServer interface {
 	ListOptionDates(context.Context, *ListOptionDatesRequest) (*ListOptionDatesResponse, error)
 	ListOptions(context.Context, *ListOptionsRequest) (*ListOptionsResponse, error)
 	CreateOrder(context.Context, *CreateOrderRequest) (*CreateOrderResponse, error)
+	ListOrders(context.Context, *ListOrdersRequest) (*ListOrdersResponse, error)
+	ApproveOrder(context.Context, *ApproveOrderRequest) (*ApproveOrderResponse, error)
+	DeclineOrder(context.Context, *DeclineOrderRequest) (*DeclineOrderResponse, error)
+	CancelOrder(context.Context, *CancelOrderRequest) (*CancelOrderResponse, error)
 	SetExchangeOpenOverride(context.Context, *SetExchangeOpenOverrideRequest) (*SetExchangeOpenOverrideResponse, error)
 	mustEmbedUnimplementedTradingServiceServer()
 }
@@ -189,6 +241,18 @@ func (UnimplementedTradingServiceServer) ListOptions(context.Context, *ListOptio
 }
 func (UnimplementedTradingServiceServer) CreateOrder(context.Context, *CreateOrderRequest) (*CreateOrderResponse, error) {
 	return nil, status.Error(codes.Unimplemented, "method CreateOrder not implemented")
+}
+func (UnimplementedTradingServiceServer) ListOrders(context.Context, *ListOrdersRequest) (*ListOrdersResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method ListOrders not implemented")
+}
+func (UnimplementedTradingServiceServer) ApproveOrder(context.Context, *ApproveOrderRequest) (*ApproveOrderResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method ApproveOrder not implemented")
+}
+func (UnimplementedTradingServiceServer) DeclineOrder(context.Context, *DeclineOrderRequest) (*DeclineOrderResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method DeclineOrder not implemented")
+}
+func (UnimplementedTradingServiceServer) CancelOrder(context.Context, *CancelOrderRequest) (*CancelOrderResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method CancelOrder not implemented")
 }
 func (UnimplementedTradingServiceServer) SetExchangeOpenOverride(context.Context, *SetExchangeOpenOverrideRequest) (*SetExchangeOpenOverrideResponse, error) {
 	return nil, status.Error(codes.Unimplemented, "method SetExchangeOpenOverride not implemented")
@@ -358,6 +422,78 @@ func _TradingService_CreateOrder_Handler(srv interface{}, ctx context.Context, d
 	return interceptor(ctx, in, info, handler)
 }
 
+func _TradingService_ListOrders_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(ListOrdersRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(TradingServiceServer).ListOrders(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: TradingService_ListOrders_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(TradingServiceServer).ListOrders(ctx, req.(*ListOrdersRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _TradingService_ApproveOrder_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(ApproveOrderRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(TradingServiceServer).ApproveOrder(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: TradingService_ApproveOrder_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(TradingServiceServer).ApproveOrder(ctx, req.(*ApproveOrderRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _TradingService_DeclineOrder_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(DeclineOrderRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(TradingServiceServer).DeclineOrder(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: TradingService_DeclineOrder_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(TradingServiceServer).DeclineOrder(ctx, req.(*DeclineOrderRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _TradingService_CancelOrder_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(CancelOrderRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(TradingServiceServer).CancelOrder(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: TradingService_CancelOrder_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(TradingServiceServer).CancelOrder(ctx, req.(*CancelOrderRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
 func _TradingService_SetExchangeOpenOverride_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
 	in := new(SetExchangeOpenOverrideRequest)
 	if err := dec(in); err != nil {
@@ -414,6 +550,22 @@ var TradingService_ServiceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "CreateOrder",
 			Handler:    _TradingService_CreateOrder_Handler,
+		},
+		{
+			MethodName: "ListOrders",
+			Handler:    _TradingService_ListOrders_Handler,
+		},
+		{
+			MethodName: "ApproveOrder",
+			Handler:    _TradingService_ApproveOrder_Handler,
+		},
+		{
+			MethodName: "DeclineOrder",
+			Handler:    _TradingService_DeclineOrder_Handler,
+		},
+		{
+			MethodName: "CancelOrder",
+			Handler:    _TradingService_CancelOrder_Handler,
 		},
 		{
 			MethodName: "SetExchangeOpenOverride",

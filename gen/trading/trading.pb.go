@@ -1886,6 +1886,584 @@ func (x *CreateOrderResponse) GetStatus() string {
 	return ""
 }
 
+// OrderDetail is the row shape used by the supervisor orders portal (spec
+// pp.57–58). asset_label is a human-readable instrument identifier: the
+// listing's ticker for stocks/futures, the option or forex-pair ticker
+// otherwise. placer_name is derived from the placer row (employee or client).
+// past_settlement signals "approve blocked, decline only" at the UI layer —
+// the RPC re-checks server-side.
+type OrderDetail struct {
+	state             protoimpl.MessageState `protogen:"open.v1"`
+	Id                int64                  `protobuf:"varint,1,opt,name=id,proto3" json:"id,omitempty"`
+	Status            string                 `protobuf:"bytes,2,opt,name=status,proto3" json:"status,omitempty"`
+	OrderType         string                 `protobuf:"bytes,3,opt,name=order_type,json=orderType,proto3" json:"order_type,omitempty"`
+	Direction         string                 `protobuf:"bytes,4,opt,name=direction,proto3" json:"direction,omitempty"`
+	Quantity          int64                  `protobuf:"varint,5,opt,name=quantity,proto3" json:"quantity,omitempty"`
+	ContractSize      int64                  `protobuf:"varint,6,opt,name=contract_size,json=contractSize,proto3" json:"contract_size,omitempty"`
+	PricePerUnit      int64                  `protobuf:"varint,7,opt,name=price_per_unit,json=pricePerUnit,proto3" json:"price_per_unit,omitempty"`
+	RemainingPortions int64                  `protobuf:"varint,8,opt,name=remaining_portions,json=remainingPortions,proto3" json:"remaining_portions,omitempty"`
+	AssetLabel        string                 `protobuf:"bytes,9,opt,name=asset_label,json=assetLabel,proto3" json:"asset_label,omitempty"`
+	PlacerName        string                 `protobuf:"bytes,10,opt,name=placer_name,json=placerName,proto3" json:"placer_name,omitempty"`
+	PlacerEmployeeId  int64                  `protobuf:"varint,11,opt,name=placer_employee_id,json=placerEmployeeId,proto3" json:"placer_employee_id,omitempty"`
+	PlacerClientId    int64                  `protobuf:"varint,12,opt,name=placer_client_id,json=placerClientId,proto3" json:"placer_client_id,omitempty"`
+	PastSettlement    bool                   `protobuf:"varint,13,opt,name=past_settlement,json=pastSettlement,proto3" json:"past_settlement,omitempty"`
+	ApprovedBy        int64                  `protobuf:"varint,14,opt,name=approved_by,json=approvedBy,proto3" json:"approved_by,omitempty"`
+	CreatedAtUnix     int64                  `protobuf:"varint,15,opt,name=created_at_unix,json=createdAtUnix,proto3" json:"created_at_unix,omitempty"`
+	Margin            bool                   `protobuf:"varint,16,opt,name=margin,proto3" json:"margin,omitempty"`
+	AllOrNone         bool                   `protobuf:"varint,17,opt,name=all_or_none,json=allOrNone,proto3" json:"all_or_none,omitempty"`
+	Commission        int64                  `protobuf:"varint,18,opt,name=commission,proto3" json:"commission,omitempty"`
+	unknownFields     protoimpl.UnknownFields
+	sizeCache         protoimpl.SizeCache
+}
+
+func (x *OrderDetail) Reset() {
+	*x = OrderDetail{}
+	mi := &file_trading_trading_proto_msgTypes[25]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *OrderDetail) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*OrderDetail) ProtoMessage() {}
+
+func (x *OrderDetail) ProtoReflect() protoreflect.Message {
+	mi := &file_trading_trading_proto_msgTypes[25]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use OrderDetail.ProtoReflect.Descriptor instead.
+func (*OrderDetail) Descriptor() ([]byte, []int) {
+	return file_trading_trading_proto_rawDescGZIP(), []int{25}
+}
+
+func (x *OrderDetail) GetId() int64 {
+	if x != nil {
+		return x.Id
+	}
+	return 0
+}
+
+func (x *OrderDetail) GetStatus() string {
+	if x != nil {
+		return x.Status
+	}
+	return ""
+}
+
+func (x *OrderDetail) GetOrderType() string {
+	if x != nil {
+		return x.OrderType
+	}
+	return ""
+}
+
+func (x *OrderDetail) GetDirection() string {
+	if x != nil {
+		return x.Direction
+	}
+	return ""
+}
+
+func (x *OrderDetail) GetQuantity() int64 {
+	if x != nil {
+		return x.Quantity
+	}
+	return 0
+}
+
+func (x *OrderDetail) GetContractSize() int64 {
+	if x != nil {
+		return x.ContractSize
+	}
+	return 0
+}
+
+func (x *OrderDetail) GetPricePerUnit() int64 {
+	if x != nil {
+		return x.PricePerUnit
+	}
+	return 0
+}
+
+func (x *OrderDetail) GetRemainingPortions() int64 {
+	if x != nil {
+		return x.RemainingPortions
+	}
+	return 0
+}
+
+func (x *OrderDetail) GetAssetLabel() string {
+	if x != nil {
+		return x.AssetLabel
+	}
+	return ""
+}
+
+func (x *OrderDetail) GetPlacerName() string {
+	if x != nil {
+		return x.PlacerName
+	}
+	return ""
+}
+
+func (x *OrderDetail) GetPlacerEmployeeId() int64 {
+	if x != nil {
+		return x.PlacerEmployeeId
+	}
+	return 0
+}
+
+func (x *OrderDetail) GetPlacerClientId() int64 {
+	if x != nil {
+		return x.PlacerClientId
+	}
+	return 0
+}
+
+func (x *OrderDetail) GetPastSettlement() bool {
+	if x != nil {
+		return x.PastSettlement
+	}
+	return false
+}
+
+func (x *OrderDetail) GetApprovedBy() int64 {
+	if x != nil {
+		return x.ApprovedBy
+	}
+	return 0
+}
+
+func (x *OrderDetail) GetCreatedAtUnix() int64 {
+	if x != nil {
+		return x.CreatedAtUnix
+	}
+	return 0
+}
+
+func (x *OrderDetail) GetMargin() bool {
+	if x != nil {
+		return x.Margin
+	}
+	return false
+}
+
+func (x *OrderDetail) GetAllOrNone() bool {
+	if x != nil {
+		return x.AllOrNone
+	}
+	return false
+}
+
+func (x *OrderDetail) GetCommission() int64 {
+	if x != nil {
+		return x.Commission
+	}
+	return 0
+}
+
+// Supervisor-only. status: "" or "all" returns every order, otherwise one of
+// "pending|approved|declined|done|cancelled". agent_id filters by the placer's
+// employee_id (0 = no filter); client-placed orders are excluded when a
+// positive agent_id is passed.
+type ListOrdersRequest struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	CallerEmail   string                 `protobuf:"bytes,1,opt,name=caller_email,json=callerEmail,proto3" json:"caller_email,omitempty"`
+	Status        string                 `protobuf:"bytes,2,opt,name=status,proto3" json:"status,omitempty"`
+	AgentId       int64                  `protobuf:"varint,3,opt,name=agent_id,json=agentId,proto3" json:"agent_id,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *ListOrdersRequest) Reset() {
+	*x = ListOrdersRequest{}
+	mi := &file_trading_trading_proto_msgTypes[26]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *ListOrdersRequest) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*ListOrdersRequest) ProtoMessage() {}
+
+func (x *ListOrdersRequest) ProtoReflect() protoreflect.Message {
+	mi := &file_trading_trading_proto_msgTypes[26]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use ListOrdersRequest.ProtoReflect.Descriptor instead.
+func (*ListOrdersRequest) Descriptor() ([]byte, []int) {
+	return file_trading_trading_proto_rawDescGZIP(), []int{26}
+}
+
+func (x *ListOrdersRequest) GetCallerEmail() string {
+	if x != nil {
+		return x.CallerEmail
+	}
+	return ""
+}
+
+func (x *ListOrdersRequest) GetStatus() string {
+	if x != nil {
+		return x.Status
+	}
+	return ""
+}
+
+func (x *ListOrdersRequest) GetAgentId() int64 {
+	if x != nil {
+		return x.AgentId
+	}
+	return 0
+}
+
+type ListOrdersResponse struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	Orders        []*OrderDetail         `protobuf:"bytes,1,rep,name=orders,proto3" json:"orders,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *ListOrdersResponse) Reset() {
+	*x = ListOrdersResponse{}
+	mi := &file_trading_trading_proto_msgTypes[27]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *ListOrdersResponse) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*ListOrdersResponse) ProtoMessage() {}
+
+func (x *ListOrdersResponse) ProtoReflect() protoreflect.Message {
+	mi := &file_trading_trading_proto_msgTypes[27]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use ListOrdersResponse.ProtoReflect.Descriptor instead.
+func (*ListOrdersResponse) Descriptor() ([]byte, []int) {
+	return file_trading_trading_proto_rawDescGZIP(), []int{27}
+}
+
+func (x *ListOrdersResponse) GetOrders() []*OrderDetail {
+	if x != nil {
+		return x.Orders
+	}
+	return nil
+}
+
+type ApproveOrderRequest struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	OrderId       int64                  `protobuf:"varint,1,opt,name=order_id,json=orderId,proto3" json:"order_id,omitempty"`
+	CallerEmail   string                 `protobuf:"bytes,2,opt,name=caller_email,json=callerEmail,proto3" json:"caller_email,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *ApproveOrderRequest) Reset() {
+	*x = ApproveOrderRequest{}
+	mi := &file_trading_trading_proto_msgTypes[28]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *ApproveOrderRequest) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*ApproveOrderRequest) ProtoMessage() {}
+
+func (x *ApproveOrderRequest) ProtoReflect() protoreflect.Message {
+	mi := &file_trading_trading_proto_msgTypes[28]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use ApproveOrderRequest.ProtoReflect.Descriptor instead.
+func (*ApproveOrderRequest) Descriptor() ([]byte, []int) {
+	return file_trading_trading_proto_rawDescGZIP(), []int{28}
+}
+
+func (x *ApproveOrderRequest) GetOrderId() int64 {
+	if x != nil {
+		return x.OrderId
+	}
+	return 0
+}
+
+func (x *ApproveOrderRequest) GetCallerEmail() string {
+	if x != nil {
+		return x.CallerEmail
+	}
+	return ""
+}
+
+type ApproveOrderResponse struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	Order         *OrderDetail           `protobuf:"bytes,1,opt,name=order,proto3" json:"order,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *ApproveOrderResponse) Reset() {
+	*x = ApproveOrderResponse{}
+	mi := &file_trading_trading_proto_msgTypes[29]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *ApproveOrderResponse) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*ApproveOrderResponse) ProtoMessage() {}
+
+func (x *ApproveOrderResponse) ProtoReflect() protoreflect.Message {
+	mi := &file_trading_trading_proto_msgTypes[29]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use ApproveOrderResponse.ProtoReflect.Descriptor instead.
+func (*ApproveOrderResponse) Descriptor() ([]byte, []int) {
+	return file_trading_trading_proto_rawDescGZIP(), []int{29}
+}
+
+func (x *ApproveOrderResponse) GetOrder() *OrderDetail {
+	if x != nil {
+		return x.Order
+	}
+	return nil
+}
+
+type DeclineOrderRequest struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	OrderId       int64                  `protobuf:"varint,1,opt,name=order_id,json=orderId,proto3" json:"order_id,omitempty"`
+	CallerEmail   string                 `protobuf:"bytes,2,opt,name=caller_email,json=callerEmail,proto3" json:"caller_email,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *DeclineOrderRequest) Reset() {
+	*x = DeclineOrderRequest{}
+	mi := &file_trading_trading_proto_msgTypes[30]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *DeclineOrderRequest) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*DeclineOrderRequest) ProtoMessage() {}
+
+func (x *DeclineOrderRequest) ProtoReflect() protoreflect.Message {
+	mi := &file_trading_trading_proto_msgTypes[30]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use DeclineOrderRequest.ProtoReflect.Descriptor instead.
+func (*DeclineOrderRequest) Descriptor() ([]byte, []int) {
+	return file_trading_trading_proto_rawDescGZIP(), []int{30}
+}
+
+func (x *DeclineOrderRequest) GetOrderId() int64 {
+	if x != nil {
+		return x.OrderId
+	}
+	return 0
+}
+
+func (x *DeclineOrderRequest) GetCallerEmail() string {
+	if x != nil {
+		return x.CallerEmail
+	}
+	return ""
+}
+
+type DeclineOrderResponse struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	Order         *OrderDetail           `protobuf:"bytes,1,opt,name=order,proto3" json:"order,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *DeclineOrderResponse) Reset() {
+	*x = DeclineOrderResponse{}
+	mi := &file_trading_trading_proto_msgTypes[31]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *DeclineOrderResponse) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*DeclineOrderResponse) ProtoMessage() {}
+
+func (x *DeclineOrderResponse) ProtoReflect() protoreflect.Message {
+	mi := &file_trading_trading_proto_msgTypes[31]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use DeclineOrderResponse.ProtoReflect.Descriptor instead.
+func (*DeclineOrderResponse) Descriptor() ([]byte, []int) {
+	return file_trading_trading_proto_rawDescGZIP(), []int{31}
+}
+
+func (x *DeclineOrderResponse) GetOrder() *OrderDetail {
+	if x != nil {
+		return x.Order
+	}
+	return nil
+}
+
+// CancelOrder accepts either the order's owner or a supervisor. The caller
+// identity comes from the `user-email` gRPC metadata header (same as
+// CreateOrder) so the server can distinguish client owner vs. employee owner
+// vs. supervisor without an extra DB round trip on the gateway.
+type CancelOrderRequest struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	OrderId       int64                  `protobuf:"varint,1,opt,name=order_id,json=orderId,proto3" json:"order_id,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *CancelOrderRequest) Reset() {
+	*x = CancelOrderRequest{}
+	mi := &file_trading_trading_proto_msgTypes[32]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *CancelOrderRequest) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*CancelOrderRequest) ProtoMessage() {}
+
+func (x *CancelOrderRequest) ProtoReflect() protoreflect.Message {
+	mi := &file_trading_trading_proto_msgTypes[32]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use CancelOrderRequest.ProtoReflect.Descriptor instead.
+func (*CancelOrderRequest) Descriptor() ([]byte, []int) {
+	return file_trading_trading_proto_rawDescGZIP(), []int{32}
+}
+
+func (x *CancelOrderRequest) GetOrderId() int64 {
+	if x != nil {
+		return x.OrderId
+	}
+	return 0
+}
+
+type CancelOrderResponse struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	Order         *OrderDetail           `protobuf:"bytes,1,opt,name=order,proto3" json:"order,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *CancelOrderResponse) Reset() {
+	*x = CancelOrderResponse{}
+	mi := &file_trading_trading_proto_msgTypes[33]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *CancelOrderResponse) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*CancelOrderResponse) ProtoMessage() {}
+
+func (x *CancelOrderResponse) ProtoReflect() protoreflect.Message {
+	mi := &file_trading_trading_proto_msgTypes[33]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use CancelOrderResponse.ProtoReflect.Descriptor instead.
+func (*CancelOrderResponse) Descriptor() ([]byte, []int) {
+	return file_trading_trading_proto_rawDescGZIP(), []int{33}
+}
+
+func (x *CancelOrderResponse) GetOrder() *OrderDetail {
+	if x != nil {
+		return x.Order
+	}
+	return nil
+}
+
 var File_trading_trading_proto protoreflect.FileDescriptor
 
 const file_trading_trading_proto_rawDesc = "" +
@@ -2054,7 +2632,53 @@ const file_trading_trading_proto_rawDesc = "" +
 	"\x06margin\x18\v \x01(\bR\x06margin\"H\n" +
 	"\x13CreateOrderResponse\x12\x19\n" +
 	"\border_id\x18\x01 \x01(\x03R\aorderId\x12\x16\n" +
-	"\x06status\x18\x02 \x01(\tR\x06status2\xfe\x05\n" +
+	"\x06status\x18\x02 \x01(\tR\x06status\"\xec\x04\n" +
+	"\vOrderDetail\x12\x0e\n" +
+	"\x02id\x18\x01 \x01(\x03R\x02id\x12\x16\n" +
+	"\x06status\x18\x02 \x01(\tR\x06status\x12\x1d\n" +
+	"\n" +
+	"order_type\x18\x03 \x01(\tR\torderType\x12\x1c\n" +
+	"\tdirection\x18\x04 \x01(\tR\tdirection\x12\x1a\n" +
+	"\bquantity\x18\x05 \x01(\x03R\bquantity\x12#\n" +
+	"\rcontract_size\x18\x06 \x01(\x03R\fcontractSize\x12$\n" +
+	"\x0eprice_per_unit\x18\a \x01(\x03R\fpricePerUnit\x12-\n" +
+	"\x12remaining_portions\x18\b \x01(\x03R\x11remainingPortions\x12\x1f\n" +
+	"\vasset_label\x18\t \x01(\tR\n" +
+	"assetLabel\x12\x1f\n" +
+	"\vplacer_name\x18\n" +
+	" \x01(\tR\n" +
+	"placerName\x12,\n" +
+	"\x12placer_employee_id\x18\v \x01(\x03R\x10placerEmployeeId\x12(\n" +
+	"\x10placer_client_id\x18\f \x01(\x03R\x0eplacerClientId\x12'\n" +
+	"\x0fpast_settlement\x18\r \x01(\bR\x0epastSettlement\x12\x1f\n" +
+	"\vapproved_by\x18\x0e \x01(\x03R\n" +
+	"approvedBy\x12&\n" +
+	"\x0fcreated_at_unix\x18\x0f \x01(\x03R\rcreatedAtUnix\x12\x16\n" +
+	"\x06margin\x18\x10 \x01(\bR\x06margin\x12\x1e\n" +
+	"\vall_or_none\x18\x11 \x01(\bR\tallOrNone\x12\x1e\n" +
+	"\n" +
+	"commission\x18\x12 \x01(\x03R\n" +
+	"commission\"i\n" +
+	"\x11ListOrdersRequest\x12!\n" +
+	"\fcaller_email\x18\x01 \x01(\tR\vcallerEmail\x12\x16\n" +
+	"\x06status\x18\x02 \x01(\tR\x06status\x12\x19\n" +
+	"\bagent_id\x18\x03 \x01(\x03R\aagentId\"B\n" +
+	"\x12ListOrdersResponse\x12,\n" +
+	"\x06orders\x18\x01 \x03(\v2\x14.trading.OrderDetailR\x06orders\"S\n" +
+	"\x13ApproveOrderRequest\x12\x19\n" +
+	"\border_id\x18\x01 \x01(\x03R\aorderId\x12!\n" +
+	"\fcaller_email\x18\x02 \x01(\tR\vcallerEmail\"B\n" +
+	"\x14ApproveOrderResponse\x12*\n" +
+	"\x05order\x18\x01 \x01(\v2\x14.trading.OrderDetailR\x05order\"S\n" +
+	"\x13DeclineOrderRequest\x12\x19\n" +
+	"\border_id\x18\x01 \x01(\x03R\aorderId\x12!\n" +
+	"\fcaller_email\x18\x02 \x01(\tR\vcallerEmail\"B\n" +
+	"\x14DeclineOrderResponse\x12*\n" +
+	"\x05order\x18\x01 \x01(\v2\x14.trading.OrderDetailR\x05order\"/\n" +
+	"\x12CancelOrderRequest\x12\x19\n" +
+	"\border_id\x18\x01 \x01(\x03R\aorderId\"A\n" +
+	"\x13CancelOrderResponse\x12*\n" +
+	"\x05order\x18\x01 \x01(\v2\x14.trading.OrderDetailR\x05order2\xa9\b\n" +
 	"\x0eTradingService\x12N\n" +
 	"\rListExchanges\x12\x1d.trading.ListExchangesRequest\x1a\x1e.trading.ListExchangesResponse\x12K\n" +
 	"\fListListings\x12\x1c.trading.ListListingsRequest\x1a\x1d.trading.ListListingsResponse\x12E\n" +
@@ -2064,7 +2688,12 @@ const file_trading_trading_proto_rawDesc = "" +
 	"\x0eListForexPairs\x12\x1e.trading.ListForexPairsRequest\x1a\x1f.trading.ListForexPairsResponse\x12T\n" +
 	"\x0fListOptionDates\x12\x1f.trading.ListOptionDatesRequest\x1a .trading.ListOptionDatesResponse\x12H\n" +
 	"\vListOptions\x12\x1b.trading.ListOptionsRequest\x1a\x1c.trading.ListOptionsResponse\x12H\n" +
-	"\vCreateOrder\x12\x1b.trading.CreateOrderRequest\x1a\x1c.trading.CreateOrderResponse\x12l\n" +
+	"\vCreateOrder\x12\x1b.trading.CreateOrderRequest\x1a\x1c.trading.CreateOrderResponse\x12E\n" +
+	"\n" +
+	"ListOrders\x12\x1a.trading.ListOrdersRequest\x1a\x1b.trading.ListOrdersResponse\x12K\n" +
+	"\fApproveOrder\x12\x1c.trading.ApproveOrderRequest\x1a\x1d.trading.ApproveOrderResponse\x12K\n" +
+	"\fDeclineOrder\x12\x1c.trading.DeclineOrderRequest\x1a\x1d.trading.DeclineOrderResponse\x12H\n" +
+	"\vCancelOrder\x12\x1b.trading.CancelOrderRequest\x1a\x1c.trading.CancelOrderResponse\x12l\n" +
 	"\x17SetExchangeOpenOverride\x12'.trading.SetExchangeOpenOverrideRequest\x1a(.trading.SetExchangeOpenOverrideResponseB4Z2github.com/RAF-SI-2025/Banka-3-Backend/gen/tradingb\x06proto3"
 
 var (
@@ -2079,7 +2708,7 @@ func file_trading_trading_proto_rawDescGZIP() []byte {
 	return file_trading_trading_proto_rawDescData
 }
 
-var file_trading_trading_proto_msgTypes = make([]protoimpl.MessageInfo, 25)
+var file_trading_trading_proto_msgTypes = make([]protoimpl.MessageInfo, 34)
 var file_trading_trading_proto_goTypes = []any{
 	(*Exchange)(nil),                        // 0: trading.Exchange
 	(*SetExchangeOpenOverrideRequest)(nil),  // 1: trading.SetExchangeOpenOverrideRequest
@@ -2106,6 +2735,15 @@ var file_trading_trading_proto_goTypes = []any{
 	(*ListOptionsResponse)(nil),             // 22: trading.ListOptionsResponse
 	(*CreateOrderRequest)(nil),              // 23: trading.CreateOrderRequest
 	(*CreateOrderResponse)(nil),             // 24: trading.CreateOrderResponse
+	(*OrderDetail)(nil),                     // 25: trading.OrderDetail
+	(*ListOrdersRequest)(nil),               // 26: trading.ListOrdersRequest
+	(*ListOrdersResponse)(nil),              // 27: trading.ListOrdersResponse
+	(*ApproveOrderRequest)(nil),             // 28: trading.ApproveOrderRequest
+	(*ApproveOrderResponse)(nil),            // 29: trading.ApproveOrderResponse
+	(*DeclineOrderRequest)(nil),             // 30: trading.DeclineOrderRequest
+	(*DeclineOrderResponse)(nil),            // 31: trading.DeclineOrderResponse
+	(*CancelOrderRequest)(nil),              // 32: trading.CancelOrderRequest
+	(*CancelOrderResponse)(nil),             // 33: trading.CancelOrderResponse
 }
 var file_trading_trading_proto_depIdxs = []int32{
 	0,  // 0: trading.SetExchangeOpenOverrideResponse.exchange:type_name -> trading.Exchange
@@ -2118,29 +2756,41 @@ var file_trading_trading_proto_depIdxs = []int32{
 	20, // 7: trading.OptionGridRow.call:type_name -> trading.OptionContract
 	20, // 8: trading.OptionGridRow.put:type_name -> trading.OptionContract
 	21, // 9: trading.ListOptionsResponse.rows:type_name -> trading.OptionGridRow
-	3,  // 10: trading.TradingService.ListExchanges:input_type -> trading.ListExchangesRequest
-	6,  // 11: trading.TradingService.ListListings:input_type -> trading.ListListingsRequest
-	8,  // 12: trading.TradingService.GetListing:input_type -> trading.GetListingRequest
-	10, // 13: trading.TradingService.ListListingHistory:input_type -> trading.ListListingHistoryRequest
-	14, // 14: trading.TradingService.ListForexPairs:input_type -> trading.ListForexPairsRequest
-	16, // 15: trading.TradingService.ListOptionDates:input_type -> trading.ListOptionDatesRequest
-	19, // 16: trading.TradingService.ListOptions:input_type -> trading.ListOptionsRequest
-	23, // 17: trading.TradingService.CreateOrder:input_type -> trading.CreateOrderRequest
-	1,  // 18: trading.TradingService.SetExchangeOpenOverride:input_type -> trading.SetExchangeOpenOverrideRequest
-	4,  // 19: trading.TradingService.ListExchanges:output_type -> trading.ListExchangesResponse
-	7,  // 20: trading.TradingService.ListListings:output_type -> trading.ListListingsResponse
-	9,  // 21: trading.TradingService.GetListing:output_type -> trading.GetListingResponse
-	12, // 22: trading.TradingService.ListListingHistory:output_type -> trading.ListListingHistoryResponse
-	15, // 23: trading.TradingService.ListForexPairs:output_type -> trading.ListForexPairsResponse
-	18, // 24: trading.TradingService.ListOptionDates:output_type -> trading.ListOptionDatesResponse
-	22, // 25: trading.TradingService.ListOptions:output_type -> trading.ListOptionsResponse
-	24, // 26: trading.TradingService.CreateOrder:output_type -> trading.CreateOrderResponse
-	2,  // 27: trading.TradingService.SetExchangeOpenOverride:output_type -> trading.SetExchangeOpenOverrideResponse
-	19, // [19:28] is the sub-list for method output_type
-	10, // [10:19] is the sub-list for method input_type
-	10, // [10:10] is the sub-list for extension type_name
-	10, // [10:10] is the sub-list for extension extendee
-	0,  // [0:10] is the sub-list for field type_name
+	25, // 10: trading.ListOrdersResponse.orders:type_name -> trading.OrderDetail
+	25, // 11: trading.ApproveOrderResponse.order:type_name -> trading.OrderDetail
+	25, // 12: trading.DeclineOrderResponse.order:type_name -> trading.OrderDetail
+	25, // 13: trading.CancelOrderResponse.order:type_name -> trading.OrderDetail
+	3,  // 14: trading.TradingService.ListExchanges:input_type -> trading.ListExchangesRequest
+	6,  // 15: trading.TradingService.ListListings:input_type -> trading.ListListingsRequest
+	8,  // 16: trading.TradingService.GetListing:input_type -> trading.GetListingRequest
+	10, // 17: trading.TradingService.ListListingHistory:input_type -> trading.ListListingHistoryRequest
+	14, // 18: trading.TradingService.ListForexPairs:input_type -> trading.ListForexPairsRequest
+	16, // 19: trading.TradingService.ListOptionDates:input_type -> trading.ListOptionDatesRequest
+	19, // 20: trading.TradingService.ListOptions:input_type -> trading.ListOptionsRequest
+	23, // 21: trading.TradingService.CreateOrder:input_type -> trading.CreateOrderRequest
+	26, // 22: trading.TradingService.ListOrders:input_type -> trading.ListOrdersRequest
+	28, // 23: trading.TradingService.ApproveOrder:input_type -> trading.ApproveOrderRequest
+	30, // 24: trading.TradingService.DeclineOrder:input_type -> trading.DeclineOrderRequest
+	32, // 25: trading.TradingService.CancelOrder:input_type -> trading.CancelOrderRequest
+	1,  // 26: trading.TradingService.SetExchangeOpenOverride:input_type -> trading.SetExchangeOpenOverrideRequest
+	4,  // 27: trading.TradingService.ListExchanges:output_type -> trading.ListExchangesResponse
+	7,  // 28: trading.TradingService.ListListings:output_type -> trading.ListListingsResponse
+	9,  // 29: trading.TradingService.GetListing:output_type -> trading.GetListingResponse
+	12, // 30: trading.TradingService.ListListingHistory:output_type -> trading.ListListingHistoryResponse
+	15, // 31: trading.TradingService.ListForexPairs:output_type -> trading.ListForexPairsResponse
+	18, // 32: trading.TradingService.ListOptionDates:output_type -> trading.ListOptionDatesResponse
+	22, // 33: trading.TradingService.ListOptions:output_type -> trading.ListOptionsResponse
+	24, // 34: trading.TradingService.CreateOrder:output_type -> trading.CreateOrderResponse
+	27, // 35: trading.TradingService.ListOrders:output_type -> trading.ListOrdersResponse
+	29, // 36: trading.TradingService.ApproveOrder:output_type -> trading.ApproveOrderResponse
+	31, // 37: trading.TradingService.DeclineOrder:output_type -> trading.DeclineOrderResponse
+	33, // 38: trading.TradingService.CancelOrder:output_type -> trading.CancelOrderResponse
+	2,  // 39: trading.TradingService.SetExchangeOpenOverride:output_type -> trading.SetExchangeOpenOverrideResponse
+	27, // [27:40] is the sub-list for method output_type
+	14, // [14:27] is the sub-list for method input_type
+	14, // [14:14] is the sub-list for extension type_name
+	14, // [14:14] is the sub-list for extension extendee
+	0,  // [0:14] is the sub-list for field type_name
 }
 
 func init() { file_trading_trading_proto_init() }
@@ -2154,7 +2804,7 @@ func file_trading_trading_proto_init() {
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
 			RawDescriptor: unsafe.Slice(unsafe.StringData(file_trading_trading_proto_rawDesc), len(file_trading_trading_proto_rawDesc)),
 			NumEnums:      0,
-			NumMessages:   25,
+			NumMessages:   34,
 			NumExtensions: 0,
 			NumServices:   1,
 		},

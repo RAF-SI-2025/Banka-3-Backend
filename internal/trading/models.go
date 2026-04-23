@@ -36,10 +36,11 @@ const (
 type OrderStatus string
 
 const (
-	StatusPending  OrderStatus = "pending"
-	StatusApproved OrderStatus = "approved"
-	StatusDeclined OrderStatus = "declined"
-	StatusDone     OrderStatus = "done"
+	StatusPending   OrderStatus = "pending"
+	StatusApproved  OrderStatus = "approved"
+	StatusDeclined  OrderStatus = "declined"
+	StatusDone      OrderStatus = "done"
+	StatusCancelled OrderStatus = "cancelled"
 )
 
 type Exchange struct {

@@ -39,6 +39,8 @@ func writeGRPCError(c *gin.Context, err error) {
 		})
 	case codes.PermissionDenied:
 		c.String(http.StatusForbidden, st.Message())
+	case codes.FailedPrecondition:
+		c.String(http.StatusConflict, st.Message())
 	case TotpAleadyEnabledCode:
 		c.String(http.StatusConflict, st.Message())
 	default:

@@ -12,7 +12,8 @@ VALUES
     ('manage_cards'),
     ('agent'),
     ('supervisor'),
-    ('margin_trading')
+    ('margin_trading'),
+    ('trading_cancel')
 ON CONFLICT (name) DO NOTHING;
 
 -- default admin (password: "Admin123!")
@@ -101,7 +102,7 @@ ON CONFLICT (email) DO NOTHING;
 INSERT INTO employee_permissions (employee_id, permission_id)
 SELECT e.id, p.id
 FROM employees e, permissions p
-WHERE e.email = 'agent@banka.raf' AND p.name IN ('agent', 'trade_stocks', 'view_stocks')
+WHERE e.email = 'agent@banka.raf' AND p.name IN ('agent', 'trade_stocks', 'view_stocks', 'trading_cancel')
 ON CONFLICT DO NOTHING;
 
 -- trading supervisor (password: "Test1234!") — has `supervisor` perm, no trading limit
@@ -122,7 +123,7 @@ ON CONFLICT (email) DO NOTHING;
 INSERT INTO employee_permissions (employee_id, permission_id)
 SELECT e.id, p.id
 FROM employees e, permissions p
-WHERE e.email = 'supervisor@banka.raf' AND p.name IN ('supervisor', 'trade_stocks', 'view_stocks', 'margin_trading')
+WHERE e.email = 'supervisor@banka.raf' AND p.name IN ('supervisor', 'trade_stocks', 'view_stocks', 'margin_trading', 'trading_cancel')
 ON CONFLICT DO NOTHING;
 
 -- test client (password: "Test1234!")

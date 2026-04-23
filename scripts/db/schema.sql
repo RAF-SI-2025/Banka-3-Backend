@@ -397,7 +397,11 @@ CREATE TABLE IF NOT EXISTS order_placers (
 
 CREATE TYPE order_type AS ENUM ('market', 'limit', 'stop', 'stop_limit');
 CREATE TYPE order_direction AS ENUM ('buy', 'sell');
-CREATE TYPE order_status AS ENUM ('pending', 'approved', 'declined', 'done');
+-- 'cancelled' distinguishes supervisor/owner withdrawals from supervisor-declined
+-- orders: declined is for pending orders that never went live (and get a
+-- commission refund); cancelled is for orders that were approved but are being
+-- withdrawn against their remaining unfilled portion (spec pp.57–58, #204).
+CREATE TYPE order_status AS ENUM ('pending', 'approved', 'declined', 'done', 'cancelled');
 
 CREATE TABLE IF NOT EXISTS orders (
     id                  BIGSERIAL       PRIMARY KEY,

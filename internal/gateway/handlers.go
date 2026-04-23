@@ -143,9 +143,16 @@ func SetupApi(router *gin.Engine, server *Server) {
 		exchange.POST("/convert", auth, secured("role:client"), server.ConvertMoney)
 	}
 
-	orders := api.Group("/orders", auth, secured("role:client|employee"))
+	orders := api.Group("/orders", auth)
 	{
-		orders.POST("", server.CreateOrder)
+		orders.POST("", secured("role:client|employee"), server.CreateOrder)
+		// Supervisor orders portal (spec pp.57–58 / #204). list+approve+decline
+		// are supervisor-only; cancel is open to placers and supervisors, with
+		// the owner-vs-permission check done inside the trading RPC.
+		orders.GET("", secured("supervisor"), server.ListOrders)
+		orders.POST("/:id/approve", secured("supervisor"), server.ApproveOrder)
+		orders.POST("/:id/decline", secured("supervisor"), server.DeclineOrder)
+		orders.POST("/:id/cancel", secured("role:client|employee"), server.CancelOrder)
 	}
 
 	// Trading read API (issue #196). Clients and employees share the same
