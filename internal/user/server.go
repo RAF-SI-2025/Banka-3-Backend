@@ -100,21 +100,22 @@ func (emp Employee) toProtobuf() *userpb.GetEmployeeResponse {
 		permissions[i] = v.Name
 	}
 	return &userpb.GetEmployeeResponse{
-		Id:          int64(emp.Id),
-		FirstName:   emp.First_name,
-		LastName:    emp.Last_name,
-		BirthDate:   emp.Date_of_birth.Unix(),
-		Gender:      emp.Gender,
-		Email:       emp.Email,
-		PhoneNumber: emp.Phone_number,
-		Address:     emp.Address,
-		Username:    emp.Username,
-		Position:    emp.Position,
-		Department:  emp.Department,
-		Active:      emp.Active,
-		Permissions: permissions,
-		Limit:       emp.Limit,
-		UsedLimit:   emp.Used_limit,
+		Id:           int64(emp.Id),
+		FirstName:    emp.First_name,
+		LastName:     emp.Last_name,
+		BirthDate:    emp.Date_of_birth.Unix(),
+		Gender:       emp.Gender,
+		Email:        emp.Email,
+		PhoneNumber:  emp.Phone_number,
+		Address:      emp.Address,
+		Username:     emp.Username,
+		Position:     emp.Position,
+		Department:   emp.Department,
+		Active:       emp.Active,
+		Permissions:  permissions,
+		Limit:        emp.Limit,
+		UsedLimit:    emp.Used_limit,
+		NeedApproval: emp.Need_approval,
 	}
 }
 
@@ -184,13 +185,16 @@ func (s *Server) DeleteEmployee(_ context.Context, req *userpb.DeleteEmployeeReq
 func (s *Server) GetEmployees(_ context.Context, req *userpb.GetEmployeesRequest) (*userpb.GetEmployeesResponse, error) {
 	map_func := func(emp Employee) *userpb.GetEmployeesResponse_Employee {
 		return &userpb.GetEmployeesResponse_Employee{
-			Id:          int64(emp.Id),
-			FirstName:   emp.First_name,
-			LastName:    emp.Last_name,
-			Email:       emp.Email,
-			Position:    emp.Position,
-			PhoneNumber: emp.Phone_number,
-			Active:      emp.Active,
+			Id:           int64(emp.Id),
+			FirstName:    emp.First_name,
+			LastName:     emp.Last_name,
+			Email:        emp.Email,
+			Position:     emp.Position,
+			PhoneNumber:  emp.Phone_number,
+			Active:       emp.Active,
+			Limit:        emp.Limit,
+			UsedLimit:    emp.Used_limit,
+			NeedApproval: emp.Need_approval,
 		}
 	}
 	restrictions := user_restrictions{"first_name": req.FirstName, "last_name": req.LastName, "email": req.Email, "position": req.Position}
@@ -323,6 +327,82 @@ func (s *Server) UpdateEmployeeTradingLimit(ctx context.Context, req *userpb.Upd
 		return nil, status.Error(codes.Internal, "failed to reload employee")
 	}
 	return reloaded.toProtobuf(), nil
+}
+
+// UpdateEmployeeNeedApproval flips the need_approval flag on an employee. Admins
+// and supervisors only — caller is identified by CallerEmail.
+func (s *Server) UpdateEmployeeNeedApproval(ctx context.Context, req *userpb.UpdateEmployeeNeedApprovalRequest) (*userpb.GetEmployeeResponse, error) {
+	if req.Id <= 0 {
+		return nil, status.Error(codes.InvalidArgument, "id must be greater than zero")
+	}
+	if !callerCanManageLimits(ctx, s, req.CallerEmail) {
+		return nil, status.Error(codes.PermissionDenied, "only admins and supervisors may change need_approval")
+	}
+
+	target, err := getUserByAttribute(Employee{}, s.db_gorm, "id", req.Id)
+	if err != nil {
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			return nil, status.Error(codes.NotFound, "employee not found")
+		}
+		return nil, status.Error(codes.Internal, "failed to load employee")
+	}
+
+	if err := s.db_gorm.Model(&Employee{}).Where("id = ?", target.Id).Updates(map[string]any{
+		"need_approval": req.NeedApproval,
+		"updated_at":    time.Now(),
+	}).Error; err != nil {
+		return nil, status.Error(codes.Internal, "failed to update need_approval")
+	}
+
+	reloaded, err := getUserByAttribute(Employee{}, s.db_gorm, "id", req.Id)
+	if err != nil {
+		return nil, status.Error(codes.Internal, "failed to reload employee")
+	}
+	return reloaded.toProtobuf(), nil
+}
+
+// GetActuaries returns employees that hold the `agent` permission, with the same
+// filter set as GetEmployees. Spec page 39 — supervisor portal.
+func (s *Server) GetActuaries(_ context.Context, req *userpb.GetEmployeesRequest) (*userpb.GetEmployeesResponse, error) {
+	restrictions := user_restrictions{
+		"first_name": req.FirstName,
+		"last_name":  req.LastName,
+		"email":      req.Email,
+		"position":   req.Position,
+	}
+
+	employees, err := GetAllUsersFromModel(Employee{}, s, restrictions)
+	if err != nil {
+		log.Printf("Error in retrieving actuaries: %s", err.Error())
+		return nil, status.Error(codes.Internal, "Failed to retrieve actuaries")
+	}
+
+	out := make([]*userpb.GetEmployeesResponse_Employee, 0, len(employees))
+	for _, emp := range employees {
+		isAgent := false
+		for _, p := range emp.Permissions {
+			if p.Name == "agent" {
+				isAgent = true
+				break
+			}
+		}
+		if !isAgent {
+			continue
+		}
+		out = append(out, &userpb.GetEmployeesResponse_Employee{
+			Id:           int64(emp.Id),
+			FirstName:    emp.First_name,
+			LastName:     emp.Last_name,
+			Email:        emp.Email,
+			Position:     emp.Position,
+			PhoneNumber:  emp.Phone_number,
+			Active:       emp.Active,
+			Limit:        emp.Limit,
+			UsedLimit:    emp.Used_limit,
+			NeedApproval: emp.Need_approval,
+		})
+	}
+	return &userpb.GetEmployeesResponse{Employees: out}, nil
 }
 
 // permissionSet converts a list of Permission rows to a string set for easy membership tests.

@@ -88,6 +88,15 @@ func SetupApi(router *gin.Engine, server *Server) {
 	// and/or reset their used_limit. Gated by `supervisor`; admin bypass still applies.
 	api.PATCH("/employees/:employeeId/trading-limit", auth, secured("supervisor"), server.UpdateEmployeeTradingLimit)
 
+	// Supervisor portal for actuaries (spec p.39).
+	actuaries := api.Group("/actuaries", auth, secured("supervisor"))
+	{
+		actuaries.GET("", server.GetActuaries)
+		actuaries.PATCH("/:id/limit", server.SetActuaryLimit)
+		actuaries.POST("/:id/reset-used-limit", server.ResetActuaryUsedLimit)
+		actuaries.PATCH("/:id/need-approval", server.SetActuaryNeedApproval)
+	}
+
 	companies := api.Group("/companies", auth, secured("manage_companies"))
 	{
 		companies.POST("", server.CreateCompany)

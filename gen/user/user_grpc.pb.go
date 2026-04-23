@@ -24,6 +24,8 @@ const (
 	UserService_GetEmployees_FullMethodName               = "/user.UserService/GetEmployees"
 	UserService_UpdateEmployee_FullMethodName             = "/user.UserService/UpdateEmployee"
 	UserService_UpdateEmployeeTradingLimit_FullMethodName = "/user.UserService/UpdateEmployeeTradingLimit"
+	UserService_UpdateEmployeeNeedApproval_FullMethodName = "/user.UserService/UpdateEmployeeNeedApproval"
+	UserService_GetActuaries_FullMethodName               = "/user.UserService/GetActuaries"
 	UserService_DeleteEmployee_FullMethodName             = "/user.UserService/DeleteEmployee"
 	UserService_Login_FullMethodName                      = "/user.UserService/Login"
 	UserService_Logout_FullMethodName                     = "/user.UserService/Logout"
@@ -51,6 +53,8 @@ type UserServiceClient interface {
 	GetEmployees(ctx context.Context, in *GetEmployeesRequest, opts ...grpc.CallOption) (*GetEmployeesResponse, error)
 	UpdateEmployee(ctx context.Context, in *UpdateEmployeeRequest, opts ...grpc.CallOption) (*GetEmployeeResponse, error)
 	UpdateEmployeeTradingLimit(ctx context.Context, in *UpdateEmployeeTradingLimitRequest, opts ...grpc.CallOption) (*GetEmployeeResponse, error)
+	UpdateEmployeeNeedApproval(ctx context.Context, in *UpdateEmployeeNeedApprovalRequest, opts ...grpc.CallOption) (*GetEmployeeResponse, error)
+	GetActuaries(ctx context.Context, in *GetEmployeesRequest, opts ...grpc.CallOption) (*GetEmployeesResponse, error)
 	DeleteEmployee(ctx context.Context, in *DeleteEmployeeRequest, opts ...grpc.CallOption) (*DeleteEmployeeResponse, error)
 	Login(ctx context.Context, in *LoginRequest, opts ...grpc.CallOption) (*LoginResponse, error)
 	Logout(ctx context.Context, in *LogoutRequest, opts ...grpc.CallOption) (*LogoutResponse, error)
@@ -121,6 +125,26 @@ func (c *userServiceClient) UpdateEmployeeTradingLimit(ctx context.Context, in *
 	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
 	out := new(GetEmployeeResponse)
 	err := c.cc.Invoke(ctx, UserService_UpdateEmployeeTradingLimit_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *userServiceClient) UpdateEmployeeNeedApproval(ctx context.Context, in *UpdateEmployeeNeedApprovalRequest, opts ...grpc.CallOption) (*GetEmployeeResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(GetEmployeeResponse)
+	err := c.cc.Invoke(ctx, UserService_UpdateEmployeeNeedApproval_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *userServiceClient) GetActuaries(ctx context.Context, in *GetEmployeesRequest, opts ...grpc.CallOption) (*GetEmployeesResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(GetEmployeesResponse)
+	err := c.cc.Invoke(ctx, UserService_GetActuaries_FullMethodName, in, out, cOpts...)
 	if err != nil {
 		return nil, err
 	}
@@ -296,6 +320,8 @@ type UserServiceServer interface {
 	GetEmployees(context.Context, *GetEmployeesRequest) (*GetEmployeesResponse, error)
 	UpdateEmployee(context.Context, *UpdateEmployeeRequest) (*GetEmployeeResponse, error)
 	UpdateEmployeeTradingLimit(context.Context, *UpdateEmployeeTradingLimitRequest) (*GetEmployeeResponse, error)
+	UpdateEmployeeNeedApproval(context.Context, *UpdateEmployeeNeedApprovalRequest) (*GetEmployeeResponse, error)
+	GetActuaries(context.Context, *GetEmployeesRequest) (*GetEmployeesResponse, error)
 	DeleteEmployee(context.Context, *DeleteEmployeeRequest) (*DeleteEmployeeResponse, error)
 	Login(context.Context, *LoginRequest) (*LoginResponse, error)
 	Logout(context.Context, *LogoutRequest) (*LogoutResponse, error)
@@ -336,6 +362,12 @@ func (UnimplementedUserServiceServer) UpdateEmployee(context.Context, *UpdateEmp
 }
 func (UnimplementedUserServiceServer) UpdateEmployeeTradingLimit(context.Context, *UpdateEmployeeTradingLimitRequest) (*GetEmployeeResponse, error) {
 	return nil, status.Error(codes.Unimplemented, "method UpdateEmployeeTradingLimit not implemented")
+}
+func (UnimplementedUserServiceServer) UpdateEmployeeNeedApproval(context.Context, *UpdateEmployeeNeedApprovalRequest) (*GetEmployeeResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method UpdateEmployeeNeedApproval not implemented")
+}
+func (UnimplementedUserServiceServer) GetActuaries(context.Context, *GetEmployeesRequest) (*GetEmployeesResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method GetActuaries not implemented")
 }
 func (UnimplementedUserServiceServer) DeleteEmployee(context.Context, *DeleteEmployeeRequest) (*DeleteEmployeeResponse, error) {
 	return nil, status.Error(codes.Unimplemented, "method DeleteEmployee not implemented")
@@ -492,6 +524,42 @@ func _UserService_UpdateEmployeeTradingLimit_Handler(srv interface{}, ctx contex
 	}
 	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
 		return srv.(UserServiceServer).UpdateEmployeeTradingLimit(ctx, req.(*UpdateEmployeeTradingLimitRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _UserService_UpdateEmployeeNeedApproval_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(UpdateEmployeeNeedApprovalRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(UserServiceServer).UpdateEmployeeNeedApproval(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: UserService_UpdateEmployeeNeedApproval_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(UserServiceServer).UpdateEmployeeNeedApproval(ctx, req.(*UpdateEmployeeNeedApprovalRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _UserService_GetActuaries_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(GetEmployeesRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(UserServiceServer).GetActuaries(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: UserService_GetActuaries_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(UserServiceServer).GetActuaries(ctx, req.(*GetEmployeesRequest))
 	}
 	return interceptor(ctx, in, info, handler)
 }
@@ -810,6 +878,14 @@ var UserService_ServiceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "UpdateEmployeeTradingLimit",
 			Handler:    _UserService_UpdateEmployeeTradingLimit_Handler,
+		},
+		{
+			MethodName: "UpdateEmployeeNeedApproval",
+			Handler:    _UserService_UpdateEmployeeNeedApproval_Handler,
+		},
+		{
+			MethodName: "GetActuaries",
+			Handler:    _UserService_GetActuaries_Handler,
 		},
 		{
 			MethodName: "DeleteEmployee",
