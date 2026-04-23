@@ -57,6 +57,18 @@ type updateEmployeeTradingLimitRequest struct {
 	UsedLimit *int64 `json:"used_limit"`
 }
 
+type actuaryByIDURI struct {
+	ActuaryID int64 `uri:"id" binding:"required"`
+}
+
+type updateActuaryLimitRequest struct {
+	Limit *int64 `json:"limit" binding:"required"`
+}
+
+type updateActuaryNeedApprovalRequest struct {
+	NeedApproval *bool `json:"need_approval" binding:"required"`
+}
+
 type createClientAccountRequest struct {
 	FirstName   string `json:"first_name" binding:"required"`
 	LastName    string `json:"last_name" binding:"required"`

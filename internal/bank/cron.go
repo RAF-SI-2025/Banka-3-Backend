@@ -16,6 +16,8 @@ func (s *Server) StartScheduler() func() {
 
 	go s.runOnSchedule(ctx, 2, isFirstOfMonth, s.RunMonthlyVariableRateUpdate)
 	go s.runOnSchedule(ctx, 6, always, s.RunDailyInstallmentCollection)
+	// Spec p.39: zero each agent's used_limit at end of day so the next day starts fresh.
+	go s.runOnScheduleAt(ctx, 23, 59, always, s.RunDailyUsedLimitReset)
 
 	return cancel
 }
@@ -25,9 +27,14 @@ func isFirstOfMonth(t time.Time) bool { return t.Day() == 1 }
 
 // poor man's cron - wakes up at the target hour, runs fn if filter says yes
 func (s *Server) runOnSchedule(ctx context.Context, hour int, filter func(time.Time) bool, fn func()) {
+	s.runOnScheduleAt(ctx, hour, 0, filter, fn)
+}
+
+// runOnScheduleAt is the same as runOnSchedule but lets the caller specify the minute too.
+func (s *Server) runOnScheduleAt(ctx context.Context, hour, minute int, filter func(time.Time) bool, fn func()) {
 	for {
 		now := time.Now()
-		next := time.Date(now.Year(), now.Month(), now.Day(), hour, 0, 0, 0, now.Location())
+		next := time.Date(now.Year(), now.Month(), now.Day(), hour, minute, 0, 0, now.Location())
 		if !next.After(now) {
 			next = next.Add(24 * time.Hour)
 		}
@@ -42,6 +49,20 @@ func (s *Server) runOnSchedule(ctx context.Context, hour int, filter func(time.T
 			}
 		}
 	}
+}
+
+// RunDailyUsedLimitReset zeroes used_limit on every employee row at end of day so
+// the per-actuary daily trading limit refreshes for the next day (spec p.39).
+func (s *Server) RunDailyUsedLimitReset() {
+	log.Println("[Cron] Resetting employees.used_limit")
+	res := s.db_gorm.Table("employees").
+		Where("used_limit > 0").
+		Updates(map[string]any{"used_limit": 0, "updated_at": time.Now()})
+	if res.Error != nil {
+		log.Printf("[Cron] ERROR resetting used_limit: %v", res.Error)
+		return
+	}
+	log.Printf("[Cron] used_limit reset for %d employees", res.RowsAffected)
 }
 
 // recalculates rates for variable loans on the 1st of each month

@@ -38,6 +38,7 @@ type (
 		Active        bool         `gorm:"column:active;type:bool; not null"`
 		Limit         int64        `gorm:"column:limit;type:bigint;not null;default:0"`
 		Used_limit    int64        `gorm:"column:used_limit;type:bigint;not null;default:0"`
+		Need_approval bool         `gorm:"column:need_approval;type:bool;not null;default:false"`
 		Created_at    time.Time    `gorm:"column:created_at;not null;autoCreateTime"`
 		Updated_at    time.Time    `gorm:"column:updated_at;not null;autoUpdateTime"`
 		Permissions   []Permission `gorm:"many2many:employee_permissions;joinForeignKey:Employee_id;joinReferences:PermissionId"`

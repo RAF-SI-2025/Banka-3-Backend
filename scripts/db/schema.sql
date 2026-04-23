@@ -22,6 +22,7 @@ CREATE TABLE IF NOT EXISTS employees (
     -- Supervisors and admins ignore the limit.
     "limit"       BIGINT       NOT NULL DEFAULT 0 CHECK ("limit" >= 0),
     used_limit    BIGINT       NOT NULL DEFAULT 0 CHECK (used_limit >= 0),
+    need_approval BOOLEAN      NOT NULL DEFAULT false,
     created_at    TIMESTAMP    NOT NULL DEFAULT NOW(),
     updated_at    TIMESTAMP    NOT NULL DEFAULT NOW()
 );

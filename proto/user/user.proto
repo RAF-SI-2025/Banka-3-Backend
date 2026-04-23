@@ -10,6 +10,8 @@ service UserService {
   rpc GetEmployees(GetEmployeesRequest) returns (GetEmployeesResponse);
   rpc UpdateEmployee(UpdateEmployeeRequest) returns (GetEmployeeResponse);
   rpc UpdateEmployeeTradingLimit(UpdateEmployeeTradingLimitRequest) returns (GetEmployeeResponse);
+  rpc UpdateEmployeeNeedApproval(UpdateEmployeeNeedApprovalRequest) returns (GetEmployeeResponse);
+  rpc GetActuaries(GetEmployeesRequest) returns (GetEmployeesResponse);
   rpc DeleteEmployee(DeleteEmployeeRequest) returns (DeleteEmployeeResponse);
   rpc Login(LoginRequest) returns (LoginResponse);
   rpc Logout(LogoutRequest) returns (LogoutResponse);
@@ -203,6 +205,9 @@ message GetEmployeesResponse {
     string position = 5;
     string phone_number = 6;
     bool active = 8;
+    int64 limit = 9;
+    int64 used_limit = 10;
+    bool need_approval = 11;
   }
   repeated Employee employees = 1;
 }
@@ -231,6 +236,7 @@ message GetEmployeeResponse {
   repeated string permissions = 13;
   int64 limit = 14;
   int64 used_limit = 15;
+  bool need_approval = 16;
 }
 
 message GetClientResponse {
@@ -269,4 +275,10 @@ message UpdateEmployeeTradingLimitRequest {
   optional int64 used_limit = 3;
   // email of the caller; required so the user service can verify the caller is admin/supervisor.
   string caller_email = 4;
+}
+
+message UpdateEmployeeNeedApprovalRequest {
+  int64 id = 1;
+  bool need_approval = 2;
+  string caller_email = 3;
 }
