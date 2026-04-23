@@ -187,4 +187,3 @@ func (s *Server) resolveInstrument(req *tradingpb.CreateOrderRequest) (*instrume
 		}, nil
 	}
 }
-
