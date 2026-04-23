@@ -244,7 +244,7 @@ ON CONFLICT (currency_code) DO NOTHING;
 -- Internal bank accounts (one per currency)
 --
 -- These are the bank's own accounts used for:
---   1. Receiving transaction commissions
+--   1. Receiving transaction commissions (payments + trading, spec pp. 51–52)
 --   2. Intermediary in currency exchange (menjacnica)
 --   3. Loan disbursements and repayments
 --

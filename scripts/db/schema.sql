@@ -412,6 +412,7 @@ CREATE TABLE IF NOT EXISTS orders (
     contract_size       BIGINT          NOT NULL DEFAULT 1,
     price_per_unit      BIGINT          NOT NULL,
     remaining_portions  BIGINT          NOT NULL,
+    commission          BIGINT          NOT NULL DEFAULT 0,
     approved_by         BIGINT          REFERENCES employees(id) ON UPDATE CASCADE ON DELETE SET NULL,
     is_done             BOOLEAN         NOT NULL DEFAULT FALSE,
     after_hours         BOOLEAN         NOT NULL DEFAULT FALSE,

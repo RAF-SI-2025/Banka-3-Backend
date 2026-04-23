@@ -110,11 +110,13 @@ func (s *Server) CreateOrder(ctx context.Context, req *tradingpb.CreateOrderRequ
 	// but approval math still needs a concrete number — that's what
 	// approvalPricePerUnit provides.
 	approvalPPU := approvalPricePerUnit(orderType, req, info.MarketPrice)
+	approxNative := info.ContractSize * approvalPPU * req.Quantity
 	approxRSD, err := s.approxPriceRSD(info.Currency, info.ContractSize, approvalPPU, req.Quantity)
 	if err != nil {
 		return nil, err
 	}
 	pastSettlement := isPastSettlement(info.SettlementDate, now)
+	commission := computeCommission(orderType, approxNative)
 
 	order := Order{
 		OrderType:         orderType,
@@ -126,6 +128,7 @@ func (s *Server) CreateOrder(ctx context.Context, req *tradingpb.CreateOrderRequ
 		AfterHours:        afterHours,
 		AllOrNone:         req.AllOrNone,
 		Margin:            req.Margin,
+		Commission:        commission,
 	}
 	if req.ListingId != 0 {
 		v := req.ListingId
@@ -173,6 +176,15 @@ func (s *Server) CreateOrder(ctx context.Context, req *tradingpb.CreateOrderRequ
 		order.PlacerID = placer.ID
 		if err := tx.Create(&order).Error; err != nil {
 			return err
+		}
+
+		// Commission is reserved at placement (spec pp. 51–52): transfer from
+		// the placer's account to the bank's fee-collection account in the
+		// same currency. Declined orders (past settlement) skip the charge.
+		if order.Status != StatusDeclined {
+			if err := chargeCommission(tx, req.AccountNumber, info.Currency, commission); err != nil {
+				return err
+			}
 		}
 
 		// Agent self-approved orders consume daily limit immediately so a
