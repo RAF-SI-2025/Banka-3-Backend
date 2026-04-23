@@ -155,6 +155,7 @@ type Order struct {
 	ContractSize      int64          `gorm:"column:contract_size;not null;default:1"`
 	PricePerUnit      int64          `gorm:"column:price_per_unit;not null"`
 	RemainingPortions int64          `gorm:"column:remaining_portions;not null"`
+	Commission        int64          `gorm:"column:commission;not null;default:0"`
 	ApprovedBy        *int64         `gorm:"column:approved_by"`
 	IsDone            bool           `gorm:"column:is_done;not null;default:false"`
 	AfterHours        bool           `gorm:"column:after_hours;not null;default:false"`
