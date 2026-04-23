@@ -103,10 +103,18 @@ func (s *Server) CreateOrder(ctx context.Context, req *tradingpb.CreateOrderRequ
 	if err != nil {
 		return nil, err
 	}
+
+	// Cross-currency orders go through Menjačnica (spec pp.27, 57). Rates are
+	// loaded once here so downstream math (margin eligibility, commission
+	// conversion) uses a consistent snapshot.
+	var rateAccRSD, rateInstrRSD float64 = 1, 1
 	if acc.Currency != info.Currency {
-		return nil, status.Errorf(codes.InvalidArgument,
-			"account currency %s does not match instrument currency %s",
-			acc.Currency, info.Currency)
+		if rateAccRSD, err = s.bank.GetExchangeRateToRSD(acc.Currency); err != nil {
+			return nil, status.Errorf(codes.Internal, "failed to load exchange rate for %s: %v", acc.Currency, err)
+		}
+		if rateInstrRSD, err = s.bank.GetExchangeRateToRSD(info.Currency); err != nil {
+			return nil, status.Errorf(codes.Internal, "failed to load exchange rate for %s: %v", info.Currency, err)
+		}
 	}
 
 	now := time.Now()
@@ -188,7 +196,13 @@ func (s *Server) CreateOrder(ctx context.Context, req *tradingpb.CreateOrderRequ
 			if caller.IsClient {
 				clientID = caller.ClientID
 			}
-			if err := s.checkMarginEligibility(tx, clientID, caller.IsClient, acc.Balance, info, req.Quantity); err != nil {
+			// Margin's native-currency check compares against the instrument
+			// currency, so cross-currency balances convert through RSD first.
+			debitBalance := acc.Balance
+			if acc.Currency != info.Currency {
+				debitBalance = int64(float64(acc.Balance) * rateAccRSD / rateInstrRSD)
+			}
+			if err := s.checkMarginEligibility(tx, clientID, caller.IsClient, debitBalance, info, req.Quantity); err != nil {
 				return err
 			}
 		}
@@ -201,11 +215,17 @@ func (s *Server) CreateOrder(ctx context.Context, req *tradingpb.CreateOrderRequ
 			return err
 		}
 
-		// Commission is reserved at placement (spec pp. 51–52): transfer from
-		// the placer's account to the bank's fee-collection account in the
-		// same currency. Declined orders (past settlement) skip the charge.
+		// Commission is reserved at placement (spec pp. 51–52): debit the
+		// placer's account and credit the bank's fee pool. Cross-currency
+		// orders convert through RSD and, for client placers, additionally
+		// charge the Menjačnica commission (spec pp.27, 57). Declined orders
+		// (past settlement) skip the whole charge.
 		if order.Status != StatusDeclined {
-			if err := chargeCommission(tx, req.AccountNumber, info.Currency, commission); err != nil {
+			plan := planCommissionCharge(
+				req.AccountNumber, acc.Currency, info.Currency,
+				commission, rateAccRSD, rateInstrRSD, caller.IsClient,
+			)
+			if err := chargeCommission(tx, plan); err != nil {
 				return err
 			}
 		}

@@ -2,6 +2,7 @@ package trading
 
 import (
 	"errors"
+	"math"
 
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
@@ -18,6 +19,10 @@ const (
 	// 14% = 140‰, 24% = 240‰.
 	commissionPermilleMarket int64 = 140
 	commissionPermilleLimit  int64 = 240
+	// menjacnicaCommissionPermille mirrors bank.commission_rate (1%). Applied
+	// to the account-currency equivalent of a cross-currency debit when the
+	// placer is a client (spec pp.27, 57).
+	menjacnicaCommissionPermille int64 = 10
 )
 
 // bankSystemOwnerEmail is the system client whose per-currency internal
@@ -44,12 +49,66 @@ func computeCommission(ot OrderType, approxNative int64) int64 {
 	return capAmount
 }
 
-// chargeCommission debits the placer's account and credits the bank's
-// fee-collection account in the same currency, atomically inside the caller's
-// transaction. Returns FailedPrecondition if the placer cannot cover the fee,
-// FailedPrecondition if no bank fee account exists for the currency.
-func chargeCommission(tx *gorm.DB, debitAccount, currency string, amount int64) error {
-	if amount <= 0 {
+// commissionPlan captures the bookkeeping for charging a placement commission
+// across potentially different account and instrument currencies. Same-currency
+// orders leave InstrumentCurrency == DebitCurrency, FeeInstrument == DebitAmount,
+// and MenjacnicaFee == 0 so chargeCommission collapses to a single debit/credit
+// pair. Cross-currency orders additionally pocket a menjacnica commission in
+// the account's currency (clients only — spec pp.27, 57).
+type commissionPlan struct {
+	DebitAccount       string
+	DebitCurrency      string
+	DebitAmount        int64
+	InstrumentCurrency string
+	FeeInstrument      int64
+	MenjacnicaFee      int64
+}
+
+// planCommissionCharge derives how much to pull from the placer's account and
+// how much to credit each fee pool, given the instrument-currency commission
+// and the account/instrument exchange rates. Rates are RSD-per-unit so a
+// conversion from instrument to account currency is `x * rateInstrRSD /
+// rateAccRSD`. Clients eat a 1% menjacnica fee on the converted amount
+// (isClient=true); employee placers pay no conversion fee — bank-owned
+// accounts are debited in the employee case too (spec p.57).
+func planCommissionCharge(
+	debitAccount, debitCurrency, instrumentCurrency string,
+	feeInstrument int64,
+	rateAccRSD, rateInstrRSD float64,
+	isClient bool,
+) commissionPlan {
+	plan := commissionPlan{
+		DebitAccount:       debitAccount,
+		DebitCurrency:      debitCurrency,
+		InstrumentCurrency: instrumentCurrency,
+		FeeInstrument:      feeInstrument,
+	}
+	if feeInstrument <= 0 {
+		return plan
+	}
+	if debitCurrency == instrumentCurrency {
+		plan.DebitAmount = feeInstrument
+		return plan
+	}
+	// Round up so rounding never under-charges the placer.
+	feeInAccount := int64(math.Ceil(float64(feeInstrument) * rateInstrRSD / rateAccRSD))
+	var menjacnica int64
+	if isClient {
+		menjacnica = (feeInAccount*menjacnicaCommissionPermille + 999) / 1000
+	}
+	plan.DebitAmount = feeInAccount + menjacnica
+	plan.MenjacnicaFee = menjacnica
+	return plan
+}
+
+// chargeCommission debits the placer's account in its own currency and credits
+// the bank's fee-collection accounts: the instrument-currency pool for the
+// order commission and, for cross-currency client orders, the account-currency
+// pool for the menjacnica commission. Runs inside the caller's transaction.
+// Returns FailedPrecondition if the placer cannot cover the debit or a fee
+// pool for the needed currency does not exist.
+func chargeCommission(tx *gorm.DB, p commissionPlan) error {
+	if p.DebitAmount <= 0 {
 		return nil
 	}
 
@@ -57,7 +116,7 @@ func chargeCommission(tx *gorm.DB, debitAccount, currency string, amount int64) 
 	// silently driving the account negative.
 	res := tx.Exec(
 		`UPDATE accounts SET balance = balance - ? WHERE number = ? AND balance >= ?`,
-		amount, debitAccount, amount,
+		p.DebitAmount, p.DebitAccount, p.DebitAmount,
 	)
 	if res.Error != nil {
 		return status.Errorf(codes.Internal, "%v", res.Error)
@@ -66,8 +125,23 @@ func chargeCommission(tx *gorm.DB, debitAccount, currency string, amount int64) 
 		return status.Error(codes.FailedPrecondition, "insufficient funds for commission")
 	}
 
-	// Credit the bank's fee-collection account for this currency. Seeded per
-	// currency under the system client; see seed.sql.
+	if p.FeeInstrument > 0 {
+		if err := creditFeeAccount(tx, p.InstrumentCurrency, p.FeeInstrument); err != nil {
+			return err
+		}
+	}
+	if p.MenjacnicaFee > 0 {
+		if err := creditFeeAccount(tx, p.DebitCurrency, p.MenjacnicaFee); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+// creditFeeAccount adds `amount` to the bank's system account for `currency`.
+// System accounts are seeded per supported currency (seed.sql) and act as both
+// the commission collector and the menjacnica intermediary.
+func creditFeeAccount(tx *gorm.DB, currency string, amount int64) error {
 	var feeAccount string
 	err := tx.Raw(
 		`SELECT a.number FROM accounts a
@@ -86,7 +160,7 @@ func chargeCommission(tx *gorm.DB, debitAccount, currency string, amount int64) 
 		return status.Errorf(codes.FailedPrecondition, "no fee-collection account for %s", currency)
 	}
 
-	res = tx.Exec(
+	res := tx.Exec(
 		`UPDATE accounts SET balance = balance + ? WHERE number = ?`,
 		amount, feeAccount,
 	)
