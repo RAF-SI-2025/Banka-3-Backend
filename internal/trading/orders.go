@@ -78,6 +78,17 @@ func marketReferencePrice(ot OrderType, req *tradingpb.CreateOrderRequest) int64
 	return 0
 }
 
+// stopTriggerPrice populates orders.stop_price, the activation threshold for
+// stop_limit orders (price_per_unit already carries their limit). Plain stop
+// orders keep the trigger in price_per_unit — populating it here too would be
+// redundant, so we leave stop_price at 0 for them and branch in the executor.
+func stopTriggerPrice(ot OrderType, req *tradingpb.CreateOrderRequest) int64 {
+	if ot == OrderStopLimit {
+		return req.StopPrice
+	}
+	return 0
+}
+
 // instrumentInfo bundles everything CreateOrder needs to know about the
 // underlying for auth, accounting, and approval routing. Exchange is nil for
 // forex pairs (they have no listing/exchange per spec). SettlementDate is set

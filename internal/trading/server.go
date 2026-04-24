@@ -150,6 +150,7 @@ func (s *Server) CreateOrder(ctx context.Context, req *tradingpb.CreateOrderRequ
 		Quantity:          req.Quantity,
 		ContractSize:      info.ContractSize,
 		PricePerUnit:      marketReferencePrice(orderType, req),
+		StopPrice:         stopTriggerPrice(orderType, req),
 		RemainingPortions: req.Quantity,
 		AfterHours:        afterHours,
 		AllOrNone:         req.AllOrNone,
