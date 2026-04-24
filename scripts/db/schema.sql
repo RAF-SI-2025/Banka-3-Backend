@@ -419,6 +419,15 @@ CREATE TABLE IF NOT EXISTS orders (
     quantity            BIGINT          NOT NULL,
     contract_size       BIGINT          NOT NULL DEFAULT 1,
     price_per_unit      BIGINT          NOT NULL,
+    -- stop_price holds the activation trigger for stop_limit orders (where
+    -- price_per_unit already carries the limit). Stop orders keep the trigger
+    -- in price_per_unit for backward compatibility and leave this at 0.
+    stop_price          BIGINT          NOT NULL DEFAULT 0,
+    -- triggered_at is set once a stop / stop_limit order's activation
+    -- condition is first met; after that the executor treats it like a
+    -- plain market / limit respectively. NULL = not yet activated. Persisted
+    -- so restarts don't re-arm an already-triggered order.
+    triggered_at        TIMESTAMP,
     remaining_portions  BIGINT          NOT NULL,
     commission          BIGINT          NOT NULL DEFAULT 0,
     approved_by         BIGINT          REFERENCES employees(id) ON UPDATE CASCADE ON DELETE SET NULL,

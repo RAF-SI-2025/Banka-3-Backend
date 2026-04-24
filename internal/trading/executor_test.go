@@ -92,6 +92,110 @@ func TestNextDelayHighVolumeClampsToOneSecond(t *testing.T) {
 	}
 }
 
+func TestFillPriceForOrderMarket(t *testing.T) {
+	l := Listing{AskPrice: 12500, BidPrice: 12400}
+	buy := &Order{OrderType: OrderMarket, Direction: DirectionBuy}
+	sell := &Order{OrderType: OrderMarket, Direction: DirectionSell}
+	if p, ok := fillPriceForOrder(buy, l); !ok || p != 12500 {
+		t.Errorf("buy market: got %d/%v, want 12500/true", p, ok)
+	}
+	if p, ok := fillPriceForOrder(sell, l); !ok || p != 12400 {
+		t.Errorf("sell market: got %d/%v, want 12400/true", p, ok)
+	}
+}
+
+func TestFillPriceForOrderLimit(t *testing.T) {
+	// Buy limit at 12600: ask 12500 is favorable (fill at ask); ask 12700 is
+	// unfavorable (skip). Sell limit at 12500: bid 12600 favorable (fill at
+	// bid); bid 12400 unfavorable.
+	buy := &Order{OrderType: OrderLimit, Direction: DirectionBuy, PricePerUnit: 12600}
+	if p, ok := fillPriceForOrder(buy, Listing{AskPrice: 12500, BidPrice: 12400}); !ok || p != 12500 {
+		t.Errorf("buy favorable: got %d/%v, want 12500/true", p, ok)
+	}
+	if _, ok := fillPriceForOrder(buy, Listing{AskPrice: 12700, BidPrice: 12600}); ok {
+		t.Errorf("buy unfavorable should skip")
+	}
+
+	sell := &Order{OrderType: OrderLimit, Direction: DirectionSell, PricePerUnit: 12500}
+	if p, ok := fillPriceForOrder(sell, Listing{AskPrice: 12700, BidPrice: 12600}); !ok || p != 12600 {
+		t.Errorf("sell favorable: got %d/%v, want 12600/true", p, ok)
+	}
+	if _, ok := fillPriceForOrder(sell, Listing{AskPrice: 12500, BidPrice: 12400}); ok {
+		t.Errorf("sell unfavorable should skip")
+	}
+}
+
+func TestFillPriceForOrderStopLimitBehavesAsLimit(t *testing.T) {
+	// Once triggered_at is set, stop_limit should reuse the limit path.
+	ttime := time.Now()
+	o := &Order{OrderType: OrderStopLimit, Direction: DirectionBuy, PricePerUnit: 12600, StopPrice: 12500, TriggeredAt: &ttime}
+	if p, ok := fillPriceForOrder(o, Listing{AskPrice: 12550, BidPrice: 12540}); !ok || p != 12550 {
+		t.Errorf("stop_limit favorable: got %d/%v, want 12550/true", p, ok)
+	}
+	if _, ok := fillPriceForOrder(o, Listing{AskPrice: 12700, BidPrice: 12690}); ok {
+		t.Errorf("stop_limit unfavorable should skip")
+	}
+}
+
+func TestNeedsActivation(t *testing.T) {
+	cases := []struct {
+		name string
+		o    *Order
+		want bool
+	}{
+		{"market", &Order{OrderType: OrderMarket}, false},
+		{"limit", &Order{OrderType: OrderLimit}, false},
+		{"stop untriggered", &Order{OrderType: OrderStop}, true},
+		{"stop_limit untriggered", &Order{OrderType: OrderStopLimit}, true},
+		{"stop already triggered", &Order{OrderType: OrderStop, TriggeredAt: ptrTime(time.Now())}, false},
+	}
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			if got := needsActivation(c.o); got != c.want {
+				t.Errorf("got %v, want %v", got, c.want)
+			}
+		})
+	}
+}
+
+func ptrTime(t time.Time) *time.Time { return &t }
+
+func TestChooseChunkAON(t *testing.T) {
+	// AON orders must commit the full remaining quantity every attempt so
+	// the executor never emits a partial fill.
+	o := &Order{RemainingPortions: 7, AllOrNone: true}
+	for i := 0; i < 20; i++ {
+		if got := chooseChunk(o); got != 7 {
+			t.Fatalf("AON chunk: got %d, want 7", got)
+		}
+	}
+}
+
+func TestChooseChunkNonAON(t *testing.T) {
+	// Non-AON falls back to the standard randomChunk, so chunk stays in
+	// [1, remaining].
+	o := &Order{RemainingPortions: 10, AllOrNone: false}
+	for i := 0; i < 50; i++ {
+		got := chooseChunk(o)
+		if got < 1 || got > 10 {
+			t.Fatalf("chunk %d out of range", got)
+		}
+	}
+}
+
+func TestStopTrigger(t *testing.T) {
+	// Stop stores trigger in price_per_unit (legacy), stop_limit in stop_price.
+	if got := stopTrigger(&Order{OrderType: OrderStop, PricePerUnit: 150}); got != 150 {
+		t.Errorf("stop: got %d, want 150", got)
+	}
+	if got := stopTrigger(&Order{OrderType: OrderStopLimit, PricePerUnit: 155, StopPrice: 150}); got != 150 {
+		t.Errorf("stop_limit: got %d, want 150", got)
+	}
+	if got := stopTrigger(&Order{OrderType: OrderMarket}); got != 0 {
+		t.Errorf("market: got %d, want 0", got)
+	}
+}
+
 func TestPlanSettlementSameCurrency(t *testing.T) {
 	// Same-currency orders leave rate unset and copy the instrument-
 	// currency cost straight through.

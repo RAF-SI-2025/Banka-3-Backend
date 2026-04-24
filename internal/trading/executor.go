@@ -13,13 +13,22 @@ import (
 	"gorm.io/gorm"
 )
 
-// Market-order execution engine (#205). Per spec pp. 51, 57–58 the engine
-// fills approved market orders in randomly sized chunks at randomly spaced
-// intervals, with the interval scaled by the listing's daily volume. The
-// implementation is a single ticker goroutine rather than per-order
+// Order execution engine (#205, #206). Per spec pp. 51–56, 57–58 the engine
+// fills approved orders in randomly sized chunks at randomly spaced
+// intervals, with the interval scaled by the listing's daily volume. Covers
+// all four order types: market fills every tick once scheduled; limit fills
+// only when the quote is favourable against the user's limit (p.52); stop
+// waits for its trigger (buy: ask ≥ stop, sell: bid ≤ stop) then behaves as
+// market (p.53); stop_limit triggers identically and then behaves as limit
+// (p.55). AON (p.56) commits the full remaining quantity in one chunk and
+// relies on the settlement transaction to roll back when the placer/stub
+// can't cover it — see chooseChunk for the heuristic.
+//
+// The implementation is a single ticker goroutine rather than per-order
 // goroutines so cancellation/shutdown stays simple and state (next-fill
 // time per order) lives in one map. In-memory state is intentional:
-// restart re-rolls delays, which is acceptable at sim fidelity.
+// restart re-rolls delays, which is acceptable at sim fidelity. Activation
+// (triggered_at) is persisted so a restart doesn't re-arm a live stop.
 const (
 	executorTickInterval = 1 * time.Second
 	// executorDefaultDelaySeconds is used when today's listing volume is
@@ -59,15 +68,18 @@ func (s *Server) runExecutor(ctx context.Context) {
 	}
 }
 
-// executorTick scans the approved market-order pool and fires any whose
-// scheduled fill time has elapsed. Listings only for now: options and forex
-// have no ask/bid + listing_daily_price_info.volume, so they need their own
-// engine and are out of scope for #205.
+// executorTick scans the approved order pool and fires any whose scheduled
+// fill time has elapsed. Covers market, limit, stop and stop_limit orders —
+// stop variants have a pre-trigger phase (checked every tick, not on the
+// delay queue, so price movement is seen immediately) and a post-trigger
+// fill phase that reuses the market/limit path. Listings only: options and
+// forex have no ask/bid + listing_daily_price_info.volume, so they'd need
+// their own engine and are out of scope here.
 func (s *Server) executorTick(now time.Time, nextFillAt map[int64]time.Time) {
 	var orders []Order
 	err := s.db.Where(
-		"status = ? AND is_done = ? AND order_type = ? AND listing_id IS NOT NULL",
-		StatusApproved, false, OrderMarket,
+		"status = ? AND is_done = ? AND listing_id IS NOT NULL",
+		StatusApproved, false,
 	).Find(&orders).Error
 	if err != nil {
 		log.Printf("[Executor] ERROR loading orders: %v", err)
@@ -86,11 +98,28 @@ func (s *Server) executorTick(now time.Time, nextFillAt map[int64]time.Time) {
 
 	for i := range orders {
 		o := &orders[i]
+
+		// Stop / stop_limit activation is price-driven and runs every tick
+		// regardless of the fill delay — the delay queue only governs fill
+		// cadence, not trigger detection. Once armed, the order falls into
+		// the delay-driven branch below on subsequent ticks.
+		if needsActivation(o) {
+			fired, err := s.checkActivation(o, now)
+			if err != nil {
+				log.Printf("[Executor] order %d activation check failed: %v", o.ID, err)
+				continue
+			}
+			if !fired {
+				continue
+			}
+			// Fire the first fill on the next tick so it goes through the
+			// same locked-read path as everything else.
+			nextFillAt[o.ID] = now
+			continue
+		}
+
 		due, scheduled := nextFillAt[o.ID]
 		if !scheduled {
-			// New order seen this tick: schedule immediately so the first
-			// fill happens next tick instead of waiting on a delay
-			// computed against zero progress.
 			nextFillAt[o.ID] = now
 			continue
 		}
@@ -111,6 +140,65 @@ func (s *Server) executorTick(now time.Time, nextFillAt map[int64]time.Time) {
 	}
 }
 
+// needsActivation reports whether the order is a stop-style order still
+// waiting on its trigger. Plain market/limit orders always return false.
+func needsActivation(o *Order) bool {
+	if o.TriggeredAt != nil {
+		return false
+	}
+	return o.OrderType == OrderStop || o.OrderType == OrderStopLimit
+}
+
+// checkActivation reads the current listing quote and, if the trigger
+// condition is met, stamps triggered_at on the row. Spec (p.53, p.55):
+// buy-side fires when ask ≥ stop, sell-side fires when bid ≤ stop.
+func (s *Server) checkActivation(o *Order, now time.Time) (bool, error) {
+	stop := stopTrigger(o)
+	if stop <= 0 {
+		return false, nil
+	}
+	var listing Listing
+	if o.ListingID == nil {
+		return false, nil
+	}
+	if err := s.db.First(&listing, *o.ListingID).Error; err != nil {
+		return false, err
+	}
+	var triggered bool
+	if o.Direction == DirectionBuy {
+		triggered = listing.AskPrice > 0 && listing.AskPrice >= stop
+	} else {
+		triggered = listing.BidPrice > 0 && listing.BidPrice <= stop
+	}
+	if !triggered {
+		return false, nil
+	}
+	// Persist triggered_at so a restart doesn't re-arm the order. Memory
+	// copy updated too so the caller can tell activation fired.
+	res := s.db.Model(&Order{}).
+		Where("id = ? AND triggered_at IS NULL", o.ID).
+		Update("triggered_at", now)
+	if res.Error != nil {
+		return false, res.Error
+	}
+	t := now
+	o.TriggeredAt = &t
+	return true, nil
+}
+
+// stopTrigger returns the activation threshold for a stop-style order. Plain
+// stop orders keep it in price_per_unit; stop_limit orders keep it in
+// stop_price (price_per_unit is their limit).
+func stopTrigger(o *Order) int64 {
+	switch o.OrderType {
+	case OrderStop:
+		return o.PricePerUnit
+	case OrderStopLimit:
+		return o.StopPrice
+	}
+	return 0
+}
+
 // executeFill fills one chunk in a transaction. Returns the scheduled time
 // for the next chunk; the zero time signals "order is complete, drop it".
 func (s *Server) executeFill(o *Order, now time.Time) (time.Time, error) {
@@ -126,8 +214,15 @@ func (s *Server) executeFill(o *Order, now time.Time) (time.Time, error) {
 			next = time.Time{}
 			return nil
 		}
-		if locked.OrderType != OrderMarket || locked.ListingID == nil {
+		if locked.ListingID == nil {
 			next = time.Time{}
+			return nil
+		}
+		// Stop / stop_limit orders only reach here post-activation. If an
+		// activation race left triggered_at unset, defer to the next tick —
+		// checkActivation will re-evaluate and arm the row.
+		if needsActivation(locked) {
+			next = now.Add(executorTickInterval)
 			return nil
 		}
 
@@ -149,12 +244,14 @@ func (s *Server) executeFill(o *Order, now time.Time) (time.Time, error) {
 			return nil
 		}
 
-		fillPPU := fillPricePerUnit(locked.Direction, listing)
-		if fillPPU <= 0 {
+		fillPPU, ok := fillPriceForOrder(locked, listing)
+		if !ok {
+			// Limit/stop_limit: ask/bid moved away from the user's limit.
+			// Skip this fill and let the standard delay schedule retry.
 			next = now.Add(executorTickInterval)
 			return nil
 		}
-		chunk := randomChunk(locked.RemainingPortions)
+		chunk := chooseChunk(locked)
 		chunkCostInstr := chunk * locked.ContractSize * fillPPU
 
 		acc, err := s.bank.GetAccountByNumber(locked.AccountNumber)
@@ -221,6 +318,54 @@ func fillPricePerUnit(d OrderDirection, l Listing) int64 {
 		return l.AskPrice
 	}
 	return l.BidPrice
+}
+
+// fillPriceForOrder resolves the per-unit fill price for any order type.
+// Market and triggered stop orders take the ask/bid directly. Limit and
+// triggered stop_limit orders fill only when the quote is favourable against
+// the user's limit (spec p.52): buy fills at min(limit, ask) when ask ≤
+// limit; sell fills at max(limit, bid) when bid ≥ limit. ok=false means the
+// quote is out of range and the executor should skip the tick.
+func fillPriceForOrder(o *Order, l Listing) (int64, bool) {
+	switch o.OrderType {
+	case OrderMarket, OrderStop:
+		ppu := fillPricePerUnit(o.Direction, l)
+		return ppu, ppu > 0
+	case OrderLimit, OrderStopLimit:
+		limit := o.PricePerUnit
+		if o.Direction == DirectionBuy {
+			if l.AskPrice <= 0 || l.AskPrice > limit {
+				return 0, false
+			}
+			if limit < l.AskPrice {
+				return limit, true
+			}
+			return l.AskPrice, true
+		}
+		if l.BidPrice <= 0 || l.BidPrice < limit {
+			return 0, false
+		}
+		if limit > l.BidPrice {
+			return limit, true
+		}
+		return l.BidPrice, true
+	}
+	return 0, false
+}
+
+// chooseChunk picks how many portions to fill this tick. AON orders must
+// fill in a single shot (spec p.56): we commit to the full remaining
+// quantity and let the settlement transaction decide whether the notional
+// liquidity is there — a failed debit rolls the whole chunk back and the
+// executor retries next tick. That's our proxy for "notional liquidity
+// allows": without a real orderbook we can't pre-probe depth, so we use a
+// commit-and-rollback probe, which for this sim maps to the placer's (buy)
+// or bank-stub's (sell) balance at the fill currency.
+func chooseChunk(o *Order) int64 {
+	if o.AllOrNone {
+		return o.RemainingPortions
+	}
+	return randomChunk(o.RemainingPortions)
 }
 
 // randomChunk picks the portion count for this fill: Random(1, remaining).
