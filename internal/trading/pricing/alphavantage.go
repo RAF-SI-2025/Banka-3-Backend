@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"net/http"
 	"net/url"
+	"sort"
 	"strconv"
 	"strings"
 	"time"
@@ -104,4 +105,97 @@ func (c *AlphaVantageClient) GetQuote(ctx context.Context, ticker string) (Quote
 		BidCents:   cents,
 		At:         time.Now().UTC(),
 	}, nil
+}
+
+// DailyBar is a single day of OHLC data from a provider's daily-history
+// endpoint. Volume is intentionally omitted — our `listing_daily_price_info`
+// volume column is owned by the executor's intraday fills (#184), and the
+// provider's reported volume is on a different population (full-market book vs
+// our matched book) so mixing them would corrupt the executor's `nextDelay`
+// formula.
+type DailyBar struct {
+	Date       time.Time
+	OpenCents  int64
+	HighCents  int64
+	LowCents   int64
+	CloseCents int64
+}
+
+// avDailyResponse maps the TIME_SERIES_DAILY shape. Same zero-padded keys as
+// GLOBAL_QUOTE; the rate-limit / not-found / error envelope is also identical.
+type avDailyResponse struct {
+	TimeSeries  map[string]map[string]string `json:"Time Series (Daily)"`
+	Note        string                       `json:"Note"`
+	Information string                       `json:"Information"`
+	ErrorMsg    string                       `json:"Error Message"`
+}
+
+// GetDailyHistory hits TIME_SERIES_DAILY for the ticker and returns parsed
+// OHLC bars sorted newest-first. We rely on the default `outputsize=compact`
+// (last 100 trading days) since the backfiller only persists a recent window
+// and we'd be paying bandwidth for nothing on `full` (20+ years).
+func (c *AlphaVantageClient) GetDailyHistory(ctx context.Context, ticker string) ([]DailyBar, error) {
+	if c.APIKey == "" {
+		return nil, fmt.Errorf("alphavantage: missing API key")
+	}
+	q := url.Values{}
+	q.Set("function", "TIME_SERIES_DAILY")
+	q.Set("symbol", strings.ToUpper(strings.TrimSpace(ticker)))
+	q.Set("apikey", c.APIKey)
+
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, c.BaseURL+"/query?"+q.Encode(), nil)
+	if err != nil {
+		return nil, err
+	}
+	resp, err := c.HTTP.Do(req)
+	if err != nil {
+		return nil, err
+	}
+	defer func() { _ = resp.Body.Close() }()
+
+	if resp.StatusCode != http.StatusOK {
+		return nil, fmt.Errorf("alphavantage: status %d", resp.StatusCode)
+	}
+
+	var body avDailyResponse
+	if err := json.NewDecoder(resp.Body).Decode(&body); err != nil {
+		return nil, err
+	}
+	if body.Note != "" || body.Information != "" {
+		return nil, ErrRateLimited
+	}
+	if body.ErrorMsg != "" {
+		return nil, ErrNotFound
+	}
+	if len(body.TimeSeries) == 0 {
+		return nil, ErrNotFound
+	}
+
+	bars := make([]DailyBar, 0, len(body.TimeSeries))
+	for dateStr, vals := range body.TimeSeries {
+		d, err := time.ParseInLocation("2006-01-02", dateStr, time.UTC)
+		if err != nil {
+			continue
+		}
+		open, errOpen := strconv.ParseFloat(vals["1. open"], 64)
+		high, errHigh := strconv.ParseFloat(vals["2. high"], 64)
+		low, errLow := strconv.ParseFloat(vals["3. low"], 64)
+		closeP, errClose := strconv.ParseFloat(vals["4. close"], 64)
+		if errOpen != nil || errHigh != nil || errLow != nil || errClose != nil {
+			continue
+		}
+		oc, ok1 := dollarsToCents(open)
+		hc, ok2 := dollarsToCents(high)
+		lc, ok3 := dollarsToCents(low)
+		cc, ok4 := dollarsToCents(closeP)
+		if !ok1 || !ok2 || !ok3 || !ok4 {
+			continue
+		}
+		bars = append(bars, DailyBar{Date: d, OpenCents: oc, HighCents: hc, LowCents: lc, CloseCents: cc})
+	}
+	if len(bars) == 0 {
+		return nil, ErrNotFound
+	}
+	sort.Slice(bars, func(i, j int) bool { return bars[i].Date.After(bars[j].Date) })
+	return bars, nil
 }

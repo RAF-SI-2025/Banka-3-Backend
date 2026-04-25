@@ -57,6 +57,16 @@ func buildPricingClient() pricing.Client {
 	return pricing.NewMulti(clients...)
 }
 
+// buildDailyHistoryClient is AV-only: TIME_SERIES_DAILY is the spec-named
+// daily-history source (p.40) and Alpaca's bars endpoint is out of scope for
+// #228. nil here disables the backfiller, same convention as the refresher.
+func buildDailyHistoryClient() internalTrading.DailyHistoryClient {
+	if key := os.Getenv("ALPHAVANTAGE_KEY"); key != "" {
+		return pricing.NewAlphaVantage(key)
+	}
+	return nil
+}
+
 func main() {
 	port := os.Getenv("GRPC_PORT")
 	if port == "" {
@@ -90,6 +100,10 @@ func main() {
 	// #195.
 	stopRefresher := internalTrading.NewRefresher(gorm_db, buildPricingClient()).Start()
 	defer stopRefresher()
+
+	// Daily-history backfiller (#228). No-op without ALPHAVANTAGE_KEY.
+	stopBackfiller := internalTrading.NewBackfiller(gorm_db, buildDailyHistoryClient()).Start()
+	defer stopBackfiller()
 
 	srv := grpc.NewServer()
 	bank.RegisterBankServiceServer(srv, bankService)
