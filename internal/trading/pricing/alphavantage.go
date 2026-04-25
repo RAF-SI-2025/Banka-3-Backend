@@ -199,3 +199,89 @@ func (c *AlphaVantageClient) GetDailyHistory(ctx context.Context, ticker string)
 	sort.Slice(bars, func(i, j int) bool { return bars[i].Date.After(bars[j].Date) })
 	return bars, nil
 }
+
+// CompanyOverview is the trimmed projection of AV's OVERVIEW endpoint we
+// actually persist. AV's response carries ~60 fields (sector, industry,
+// margins, ratios, ...); we only need the two the spec table on p.40 calls
+// out as derived from this source.
+type CompanyOverview struct {
+	Ticker            string
+	SharesOutstanding int64
+	// DividendYield is a fraction (0.0072 = 0.72%). AV returns it as a string
+	// in that exact form; "None" means the issuer doesn't pay a dividend, in
+	// which case we surface 0.
+	DividendYield float64
+}
+
+// avOverviewResponse is the relevant subset of AV's OVERVIEW shape. The
+// envelope (Note/Information/Error Message) matches the other endpoints; the
+// not-found case for OVERVIEW is an empty JSON object `{}`, which decodes to
+// a zero Symbol.
+type avOverviewResponse struct {
+	Symbol            string `json:"Symbol"`
+	SharesOutstanding string `json:"SharesOutstanding"`
+	DividendYield     string `json:"DividendYield"`
+	Note              string `json:"Note"`
+	Information       string `json:"Information"`
+	ErrorMsg          string `json:"Error Message"`
+}
+
+// GetCompanyOverview hits function=OVERVIEW for the ticker. Used by the
+// weekly metadata syncer (#229). Treats the empty-body and "None"-dividend
+// cases as soft skips so dummy seeds (RAFA/RAFB) and non-dividend payers
+// don't pollute logs.
+func (c *AlphaVantageClient) GetCompanyOverview(ctx context.Context, ticker string) (CompanyOverview, error) {
+	if c.APIKey == "" {
+		return CompanyOverview{}, fmt.Errorf("alphavantage: missing API key")
+	}
+	q := url.Values{}
+	q.Set("function", "OVERVIEW")
+	q.Set("symbol", strings.ToUpper(strings.TrimSpace(ticker)))
+	q.Set("apikey", c.APIKey)
+
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, c.BaseURL+"/query?"+q.Encode(), nil)
+	if err != nil {
+		return CompanyOverview{}, err
+	}
+	resp, err := c.HTTP.Do(req)
+	if err != nil {
+		return CompanyOverview{}, err
+	}
+	defer func() { _ = resp.Body.Close() }()
+
+	if resp.StatusCode != http.StatusOK {
+		return CompanyOverview{}, fmt.Errorf("alphavantage: status %d", resp.StatusCode)
+	}
+
+	var body avOverviewResponse
+	if err := json.NewDecoder(resp.Body).Decode(&body); err != nil {
+		return CompanyOverview{}, err
+	}
+	if body.Note != "" || body.Information != "" {
+		return CompanyOverview{}, ErrRateLimited
+	}
+	if body.ErrorMsg != "" {
+		return CompanyOverview{}, ErrNotFound
+	}
+	if body.Symbol == "" {
+		return CompanyOverview{}, ErrNotFound
+	}
+
+	out := CompanyOverview{Ticker: strings.ToUpper(ticker)}
+	// SharesOutstanding: required for the field to be useful. Treat unparseable
+	// or zero as not-found so we never overwrite a valid seed with garbage.
+	shares, err := strconv.ParseInt(strings.TrimSpace(body.SharesOutstanding), 10, 64)
+	if err != nil || shares <= 0 {
+		return CompanyOverview{}, ErrNotFound
+	}
+	out.SharesOutstanding = shares
+	// DividendYield: "None" or empty means non-dividend payer; surface 0.
+	if dy := strings.TrimSpace(body.DividendYield); dy != "" && !strings.EqualFold(dy, "None") {
+		v, err := strconv.ParseFloat(dy, 64)
+		if err != nil {
+			return CompanyOverview{}, fmt.Errorf("alphavantage: bad dividend yield %q: %w", dy, err)
+		}
+		out.DividendYield = v
+	}
+	return out, nil
+}

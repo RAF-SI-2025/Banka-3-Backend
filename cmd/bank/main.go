@@ -67,6 +67,16 @@ func buildDailyHistoryClient() internalTrading.DailyHistoryClient {
 	return nil
 }
 
+// buildCompanyOverviewClient is AV-only as well: OVERVIEW has no Alpaca
+// equivalent and the spec table on p.40 names AV as the source for the
+// metadata fields the syncer touches (#229).
+func buildCompanyOverviewClient() internalTrading.CompanyOverviewClient {
+	if key := os.Getenv("ALPHAVANTAGE_KEY"); key != "" {
+		return pricing.NewAlphaVantage(key)
+	}
+	return nil
+}
+
 func main() {
 	port := os.Getenv("GRPC_PORT")
 	if port == "" {
@@ -104,6 +114,11 @@ func main() {
 	// Daily-history backfiller (#228). No-op without ALPHAVANTAGE_KEY.
 	stopBackfiller := internalTrading.NewBackfiller(gorm_db, buildDailyHistoryClient()).Start()
 	defer stopBackfiller()
+
+	// Stock metadata syncer (#229). Weekly OVERVIEW pull. No-op without
+	// ALPHAVANTAGE_KEY.
+	stopMetadata := internalTrading.NewMetadataSyncer(gorm_db, buildCompanyOverviewClient()).Start()
+	defer stopMetadata()
 
 	srv := grpc.NewServer()
 	bank.RegisterBankServiceServer(srv, bankService)
