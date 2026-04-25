@@ -11,6 +11,7 @@ import (
 	tradingpb "github.com/RAF-SI-2025/Banka-3-Backend/gen/trading"
 	internalBank "github.com/RAF-SI-2025/Banka-3-Backend/internal/bank"
 	internalTrading "github.com/RAF-SI-2025/Banka-3-Backend/internal/trading"
+	"github.com/RAF-SI-2025/Banka-3-Backend/internal/trading/pricing"
 	_ "github.com/jackc/pgx/v5/stdlib"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/reflection"
@@ -34,6 +35,26 @@ func connectToDB() *sql.DB {
 		log.Fatal(err)
 	}
 	return db
+}
+
+// buildPricingClient assembles the external-pricing client from env vars.
+// Returns nil when no provider is configured — Refresher.Start treats that
+// as a no-op, so dev/CI runs without API keys keep working off the static
+// seed prices from #195. Order matters: Alpaca is tried first because its
+// quote endpoint exposes ask/bid (which AV's free tier doesn't); AV serves
+// as a fallback for tickers Alpaca refuses.
+func buildPricingClient() pricing.Client {
+	var clients []pricing.Client
+	if id, secret := os.Getenv("ALPACA_KEY_ID"), os.Getenv("ALPACA_SECRET"); id != "" && secret != "" {
+		clients = append(clients, pricing.NewAlpaca(id, secret))
+	}
+	if key := os.Getenv("ALPHAVANTAGE_KEY"); key != "" {
+		clients = append(clients, pricing.NewAlphaVantage(key))
+	}
+	if len(clients) == 0 {
+		return nil
+	}
+	return pricing.NewMulti(clients...)
 }
 
 func main() {
@@ -63,6 +84,12 @@ func main() {
 	tradingService := internalTrading.NewServer(gorm_db, bankService)
 	stopExecutor := tradingService.StartExecutor()
 	defer stopExecutor()
+
+	// External-pricing refresher (#184). No-op when no API keys are
+	// configured, so dev/CI keep operating off the static seed data from
+	// #195.
+	stopRefresher := internalTrading.NewRefresher(gorm_db, buildPricingClient()).Start()
+	defer stopRefresher()
 
 	srv := grpc.NewServer()
 	bank.RegisterBankServiceServer(srv, bankService)
