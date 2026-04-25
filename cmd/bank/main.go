@@ -77,6 +77,27 @@ func buildCompanyOverviewClient() internalTrading.CompanyOverviewClient {
 	return nil
 }
 
+// buildOptionsChainClient wires Yahoo Finance's options endpoint (#230).
+// Yahoo's public endpoint requires no API key, so we expose a single boolean
+// gate (TRADING_OPTIONS_REFRESH=1) to opt in — defaulting off so dev/CI runs
+// don't make outbound calls every hour.
+func buildOptionsChainClient() internalTrading.OptionsChainClient {
+	if os.Getenv("TRADING_OPTIONS_REFRESH") == "1" {
+		return pricing.NewYahoo()
+	}
+	return nil
+}
+
+// buildForexRatesClient wires exchangerate-api (#230). Open endpoint is
+// keyless; EXCHANGERATE_KEY routes to the paid host with the same response
+// shape. nil disables the forex refresher.
+func buildForexRatesClient() internalTrading.ForexRatesClient {
+	if os.Getenv("TRADING_FOREX_REFRESH") == "1" || os.Getenv("EXCHANGERATE_KEY") != "" {
+		return pricing.NewExchangeRate(os.Getenv("EXCHANGERATE_KEY"))
+	}
+	return nil
+}
+
 func main() {
 	port := os.Getenv("GRPC_PORT")
 	if port == "" {
@@ -119,6 +140,16 @@ func main() {
 	// ALPHAVANTAGE_KEY.
 	stopMetadata := internalTrading.NewMetadataSyncer(gorm_db, buildCompanyOverviewClient()).Start()
 	defer stopMetadata()
+
+	// Options-chain refresher (#230). Yahoo Finance, opt-in via
+	// TRADING_OPTIONS_REFRESH=1.
+	stopOptions := internalTrading.NewOptionsRefresher(gorm_db, buildOptionsChainClient()).Start()
+	defer stopOptions()
+
+	// Forex-rates refresher (#230). exchangerate-api, opt-in via
+	// TRADING_FOREX_REFRESH=1 or by setting EXCHANGERATE_KEY.
+	stopForex := internalTrading.NewForexRefresher(gorm_db, buildForexRatesClient()).Start()
+	defer stopForex()
 
 	srv := grpc.NewServer()
 	bank.RegisterBankServiceServer(srv, bankService)
