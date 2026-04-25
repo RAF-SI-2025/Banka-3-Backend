@@ -175,6 +175,18 @@ func SetupApi(router *gin.Engine, server *Server) {
 		stockOptions.GET("/stocks/:id/options", server.ListStockOptions)
 	}
 
+	// Portfolio portal (spec p.62 / #207). Listing + sell are open to both
+	// clients and employees (everyone has a portfolio); public_amount is
+	// stock-only and the trading RPC enforces that. ExerciseOption is
+	// actuary-only at the gateway and re-checks server-side.
+	portfolio := api.Group("/portfolio", auth, secured("role:client|employee"))
+	{
+		portfolio.GET("", server.ListPortfolio)
+		portfolio.POST("/sell", server.SellHolding)
+		portfolio.PATCH("/:id/public", server.SetHoldingPublic)
+	}
+	api.POST("/options/:id/exercise", auth, secured("role:employee"), server.ExerciseOption)
+
 	// Supervisor-only toggle used to exercise the trading flow outside real
 	// market hours (see spec p.40 and issue #194). Admin bypass still applies
 	// through `secured("supervisor")`.

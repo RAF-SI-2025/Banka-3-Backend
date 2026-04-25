@@ -32,6 +32,10 @@ const (
 	TradingService_DeclineOrder_FullMethodName            = "/trading.TradingService/DeclineOrder"
 	TradingService_CancelOrder_FullMethodName             = "/trading.TradingService/CancelOrder"
 	TradingService_SetExchangeOpenOverride_FullMethodName = "/trading.TradingService/SetExchangeOpenOverride"
+	TradingService_ListHoldings_FullMethodName            = "/trading.TradingService/ListHoldings"
+	TradingService_SellHolding_FullMethodName             = "/trading.TradingService/SellHolding"
+	TradingService_SetHoldingPublic_FullMethodName        = "/trading.TradingService/SetHoldingPublic"
+	TradingService_ExerciseOption_FullMethodName          = "/trading.TradingService/ExerciseOption"
 )
 
 // TradingServiceClient is the client API for TradingService service.
@@ -51,6 +55,10 @@ type TradingServiceClient interface {
 	DeclineOrder(ctx context.Context, in *DeclineOrderRequest, opts ...grpc.CallOption) (*DeclineOrderResponse, error)
 	CancelOrder(ctx context.Context, in *CancelOrderRequest, opts ...grpc.CallOption) (*CancelOrderResponse, error)
 	SetExchangeOpenOverride(ctx context.Context, in *SetExchangeOpenOverrideRequest, opts ...grpc.CallOption) (*SetExchangeOpenOverrideResponse, error)
+	ListHoldings(ctx context.Context, in *ListHoldingsRequest, opts ...grpc.CallOption) (*ListHoldingsResponse, error)
+	SellHolding(ctx context.Context, in *SellHoldingRequest, opts ...grpc.CallOption) (*SellHoldingResponse, error)
+	SetHoldingPublic(ctx context.Context, in *SetHoldingPublicRequest, opts ...grpc.CallOption) (*SetHoldingPublicResponse, error)
+	ExerciseOption(ctx context.Context, in *ExerciseOptionRequest, opts ...grpc.CallOption) (*ExerciseOptionResponse, error)
 }
 
 type tradingServiceClient struct {
@@ -191,6 +199,46 @@ func (c *tradingServiceClient) SetExchangeOpenOverride(ctx context.Context, in *
 	return out, nil
 }
 
+func (c *tradingServiceClient) ListHoldings(ctx context.Context, in *ListHoldingsRequest, opts ...grpc.CallOption) (*ListHoldingsResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(ListHoldingsResponse)
+	err := c.cc.Invoke(ctx, TradingService_ListHoldings_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *tradingServiceClient) SellHolding(ctx context.Context, in *SellHoldingRequest, opts ...grpc.CallOption) (*SellHoldingResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(SellHoldingResponse)
+	err := c.cc.Invoke(ctx, TradingService_SellHolding_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *tradingServiceClient) SetHoldingPublic(ctx context.Context, in *SetHoldingPublicRequest, opts ...grpc.CallOption) (*SetHoldingPublicResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(SetHoldingPublicResponse)
+	err := c.cc.Invoke(ctx, TradingService_SetHoldingPublic_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *tradingServiceClient) ExerciseOption(ctx context.Context, in *ExerciseOptionRequest, opts ...grpc.CallOption) (*ExerciseOptionResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(ExerciseOptionResponse)
+	err := c.cc.Invoke(ctx, TradingService_ExerciseOption_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
 // TradingServiceServer is the server API for TradingService service.
 // All implementations must embed UnimplementedTradingServiceServer
 // for forward compatibility.
@@ -208,6 +256,10 @@ type TradingServiceServer interface {
 	DeclineOrder(context.Context, *DeclineOrderRequest) (*DeclineOrderResponse, error)
 	CancelOrder(context.Context, *CancelOrderRequest) (*CancelOrderResponse, error)
 	SetExchangeOpenOverride(context.Context, *SetExchangeOpenOverrideRequest) (*SetExchangeOpenOverrideResponse, error)
+	ListHoldings(context.Context, *ListHoldingsRequest) (*ListHoldingsResponse, error)
+	SellHolding(context.Context, *SellHoldingRequest) (*SellHoldingResponse, error)
+	SetHoldingPublic(context.Context, *SetHoldingPublicRequest) (*SetHoldingPublicResponse, error)
+	ExerciseOption(context.Context, *ExerciseOptionRequest) (*ExerciseOptionResponse, error)
 	mustEmbedUnimplementedTradingServiceServer()
 }
 
@@ -256,6 +308,18 @@ func (UnimplementedTradingServiceServer) CancelOrder(context.Context, *CancelOrd
 }
 func (UnimplementedTradingServiceServer) SetExchangeOpenOverride(context.Context, *SetExchangeOpenOverrideRequest) (*SetExchangeOpenOverrideResponse, error) {
 	return nil, status.Error(codes.Unimplemented, "method SetExchangeOpenOverride not implemented")
+}
+func (UnimplementedTradingServiceServer) ListHoldings(context.Context, *ListHoldingsRequest) (*ListHoldingsResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method ListHoldings not implemented")
+}
+func (UnimplementedTradingServiceServer) SellHolding(context.Context, *SellHoldingRequest) (*SellHoldingResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method SellHolding not implemented")
+}
+func (UnimplementedTradingServiceServer) SetHoldingPublic(context.Context, *SetHoldingPublicRequest) (*SetHoldingPublicResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method SetHoldingPublic not implemented")
+}
+func (UnimplementedTradingServiceServer) ExerciseOption(context.Context, *ExerciseOptionRequest) (*ExerciseOptionResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method ExerciseOption not implemented")
 }
 func (UnimplementedTradingServiceServer) mustEmbedUnimplementedTradingServiceServer() {}
 func (UnimplementedTradingServiceServer) testEmbeddedByValue()                        {}
@@ -512,6 +576,78 @@ func _TradingService_SetExchangeOpenOverride_Handler(srv interface{}, ctx contex
 	return interceptor(ctx, in, info, handler)
 }
 
+func _TradingService_ListHoldings_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(ListHoldingsRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(TradingServiceServer).ListHoldings(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: TradingService_ListHoldings_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(TradingServiceServer).ListHoldings(ctx, req.(*ListHoldingsRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _TradingService_SellHolding_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(SellHoldingRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(TradingServiceServer).SellHolding(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: TradingService_SellHolding_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(TradingServiceServer).SellHolding(ctx, req.(*SellHoldingRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _TradingService_SetHoldingPublic_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(SetHoldingPublicRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(TradingServiceServer).SetHoldingPublic(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: TradingService_SetHoldingPublic_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(TradingServiceServer).SetHoldingPublic(ctx, req.(*SetHoldingPublicRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _TradingService_ExerciseOption_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(ExerciseOptionRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(TradingServiceServer).ExerciseOption(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: TradingService_ExerciseOption_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(TradingServiceServer).ExerciseOption(ctx, req.(*ExerciseOptionRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
 // TradingService_ServiceDesc is the grpc.ServiceDesc for TradingService service.
 // It's only intended for direct use with grpc.RegisterService,
 // and not to be introspected or modified (even as a copy)
@@ -570,6 +706,22 @@ var TradingService_ServiceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "SetExchangeOpenOverride",
 			Handler:    _TradingService_SetExchangeOpenOverride_Handler,
+		},
+		{
+			MethodName: "ListHoldings",
+			Handler:    _TradingService_ListHoldings_Handler,
+		},
+		{
+			MethodName: "SellHolding",
+			Handler:    _TradingService_SellHolding_Handler,
+		},
+		{
+			MethodName: "SetHoldingPublic",
+			Handler:    _TradingService_SetHoldingPublic_Handler,
+		},
+		{
+			MethodName: "ExerciseOption",
+			Handler:    _TradingService_ExerciseOption_Handler,
 		},
 	},
 	Streams:  []grpc.StreamDesc{},

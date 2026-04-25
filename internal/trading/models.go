@@ -185,3 +185,32 @@ type OrderFill struct {
 }
 
 func (OrderFill) TableName() string { return "order_fills" }
+
+// Holding is the per-placer asset position written by the execution engine
+// (#207). Polymorphic across the four asset kinds: exactly one of StockID,
+// FutureID, ForexPairID, OptionID is set on every row (DB CHECK).
+//
+// AvgCost is denominated in the booking account's currency, which keeps the
+// tax-tracking story self-contained: profit on a sell is simply
+// (current_price_in_account_ccy - avg_cost) * amount, no per-row FX history
+// required. AccountID is the destination for sell proceeds and is updated to
+// the most-recent buy's account on each upsert.
+//
+// PublicAmount applies to stock holdings only and seeds the OTC counter (the
+// actual OTC flow lives in the fourth celina); a CHECK constraint pins it to
+// 0 for non-stock holdings.
+type Holding struct {
+	ID           int64     `gorm:"column:id;primaryKey"`
+	PlacerID     int64     `gorm:"column:placer_id;not null"`
+	StockID      *int64    `gorm:"column:stock_id"`
+	FutureID     *int64    `gorm:"column:future_id"`
+	ForexPairID  *int64    `gorm:"column:forex_pair_id"`
+	OptionID     *int64    `gorm:"column:option_id"`
+	AccountID    int64     `gorm:"column:account_id;not null"`
+	Amount       int64     `gorm:"column:amount;not null;default:0"`
+	AvgCost      int64     `gorm:"column:avg_cost;not null;default:0"`
+	PublicAmount int64     `gorm:"column:public_amount;not null;default:0"`
+	LastModified time.Time `gorm:"column:last_modified;not null;autoUpdateTime"`
+}
+
+func (Holding) TableName() string { return "holdings" }

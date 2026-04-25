@@ -269,6 +269,31 @@ func (s *Server) executeFill(o *Order, now time.Time) (time.Time, error) {
 			return err
 		}
 
+		// Holding bookkeeping (#207): buy-fills upsert into the placer's
+		// position with a quantity-weighted avg_cost; sell-fills deduct and
+		// fail (FailedPrecondition → tick-level backoff) when the seller is
+		// short. The check happens after applySettlement so a refused sell
+		// rolls the money movement back too — the deferred error path the
+		// gorm Transaction wrapper already provides.
+		assetCol, assetID, err := holdingAssetKey(tx, locked)
+		if err != nil {
+			return err
+		}
+		if locked.Direction == DirectionBuy {
+			accountID, err := holdingAccountID(tx, locked.AccountNumber)
+			if err != nil {
+				return err
+			}
+			perContractAccCost := settle.accAmount / chunk
+			if err := upsertHoldingOnBuy(tx, locked.PlacerID, accountID, assetCol, assetID, chunk, perContractAccCost, now); err != nil {
+				return err
+			}
+		} else {
+			if err := deductHoldingOnSell(tx, locked.PlacerID, assetCol, assetID, chunk, now); err != nil {
+				return err
+			}
+		}
+
 		fill := OrderFill{
 			OrderID:      locked.ID,
 			Portions:     chunk,

@@ -395,6 +395,12 @@ CREATE TABLE IF NOT EXISTS order_placers (
     CHECK ((client_id IS NOT NULL)::int + (employee_id IS NOT NULL)::int = 1)
 );
 
+-- One placer row per client / employee identity. Holdings (#207) are keyed on
+-- placer_id, so the row has to outlive any single order — the partial indexes
+-- enforce this without breaking the polymorphic NULL pattern.
+CREATE UNIQUE INDEX IF NOT EXISTS order_placers_client_uniq   ON order_placers(client_id)   WHERE client_id   IS NOT NULL;
+CREATE UNIQUE INDEX IF NOT EXISTS order_placers_employee_uniq ON order_placers(employee_id) WHERE employee_id IS NOT NULL;
+
 CREATE TYPE order_type AS ENUM ('market', 'limit', 'stop', 'stop_limit');
 CREATE TYPE order_direction AS ENUM ('buy', 'sell');
 -- 'cancelled' distinguishes supervisor/owner withdrawals from supervisor-declined
@@ -439,6 +445,38 @@ CREATE TABLE IF NOT EXISTS orders (
     created_at          TIMESTAMP       NOT NULL DEFAULT NOW(),
     CHECK ((listing_id IS NOT NULL)::int + (option_id IS NOT NULL)::int + (forex_pair_id IS NOT NULL)::int = 1)
 );
+
+-- Portfolio holdings (#207, spec p.62). Polymorphic over the four asset
+-- kinds — stock / future / forex_pair / option — same exactly-one pattern
+-- as orders.asset. Keyed by (placer_id, asset) so a buy-fill upserts the
+-- existing row instead of creating duplicates; account_id records where
+-- subsequent sell proceeds should land (relevant for tax). public_amount
+-- is the OTC-discoverable share count (stocks only); the OTC flow itself
+-- ships in the fourth celina, this column is just the counter.
+CREATE TABLE IF NOT EXISTS holdings (
+    id              BIGSERIAL       PRIMARY KEY,
+    placer_id       BIGINT          NOT NULL REFERENCES order_placers(id) ON UPDATE CASCADE ON DELETE CASCADE,
+    stock_id        BIGINT          REFERENCES stocks(id)       ON UPDATE CASCADE ON DELETE CASCADE,
+    future_id       BIGINT          REFERENCES futures(id)      ON UPDATE CASCADE ON DELETE CASCADE,
+    forex_pair_id   BIGINT          REFERENCES forex_pairs(id)  ON UPDATE CASCADE ON DELETE CASCADE,
+    option_id       BIGINT          REFERENCES options(id)      ON UPDATE CASCADE ON DELETE CASCADE,
+    account_id      BIGINT          NOT NULL REFERENCES accounts(id) ON UPDATE CASCADE ON DELETE RESTRICT,
+    amount          BIGINT          NOT NULL DEFAULT 0 CHECK (amount >= 0),
+    avg_cost        BIGINT          NOT NULL DEFAULT 0 CHECK (avg_cost >= 0),
+    public_amount   BIGINT          NOT NULL DEFAULT 0 CHECK (public_amount >= 0),
+    last_modified   TIMESTAMP       NOT NULL DEFAULT NOW(),
+    CHECK ((stock_id IS NOT NULL)::int + (future_id IS NOT NULL)::int + (forex_pair_id IS NOT NULL)::int + (option_id IS NOT NULL)::int = 1),
+    -- public_amount is meaningful only for stocks; everywhere else it stays 0.
+    CHECK (stock_id IS NOT NULL OR public_amount = 0)
+);
+
+-- One holding per (placer, asset). Partial unique indexes keep the polymorphic
+-- shape working with NULLs (default Postgres NULLS DISTINCT would otherwise
+-- let two stock_id-NULL rows coexist on the same future_id).
+CREATE UNIQUE INDEX IF NOT EXISTS holdings_placer_stock_uniq  ON holdings(placer_id, stock_id)      WHERE stock_id      IS NOT NULL;
+CREATE UNIQUE INDEX IF NOT EXISTS holdings_placer_future_uniq ON holdings(placer_id, future_id)     WHERE future_id     IS NOT NULL;
+CREATE UNIQUE INDEX IF NOT EXISTS holdings_placer_forex_uniq  ON holdings(placer_id, forex_pair_id) WHERE forex_pair_id IS NOT NULL;
+CREATE UNIQUE INDEX IF NOT EXISTS holdings_placer_option_uniq ON holdings(placer_id, option_id)     WHERE option_id     IS NOT NULL;
 
 -- Per-chunk fills written by the execution engine (#205). price_per_unit is
 -- in the instrument's currency; fx_rate is NULL for same-currency fills and

@@ -171,14 +171,15 @@ func (s *Server) CreateOrder(ctx context.Context, req *tradingpb.CreateOrderRequ
 	}
 
 	if err := s.db.Transaction(func(tx *gorm.DB) error {
-		placer := OrderPlacer{}
 		role := roleClient
 		var limits agentLimits
 		var employeeID int64
+		var clientPlacer *int64
+		var employeePlacer *int64
 
 		if caller.IsClient {
 			id := caller.ClientID
-			placer.ClientID = &id
+			clientPlacer = &id
 		} else if caller.IsEmployee {
 			if caller.Email == "" {
 				return status.Error(codes.Internal, "employee email missing from caller")
@@ -190,7 +191,7 @@ func (s *Server) CreateOrder(ctx context.Context, req *tradingpb.CreateOrderRequ
 			employeeID = empID
 			role = r
 			limits = lim
-			placer.EmployeeID = &empID
+			employeePlacer = &empID
 		} else {
 			return status.Error(codes.PermissionDenied, "caller is neither client nor employee")
 		}
@@ -217,10 +218,11 @@ func (s *Server) CreateOrder(ctx context.Context, req *tradingpb.CreateOrderRequ
 			}
 		}
 
-		if err := tx.Create(&placer).Error; err != nil {
+		placerID, err := findOrCreatePlacer(tx, clientPlacer, employeePlacer)
+		if err != nil {
 			return err
 		}
-		order.PlacerID = placer.ID
+		order.PlacerID = placerID
 		if err := tx.Create(&order).Error; err != nil {
 			return err
 		}

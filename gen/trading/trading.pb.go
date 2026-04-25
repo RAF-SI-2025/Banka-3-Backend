@@ -2464,6 +2464,632 @@ func (x *CancelOrderResponse) GetOrder() *OrderDetail {
 	return nil
 }
 
+// Holding is one row in the portfolio portal (spec p.62 / #207). Exactly one
+// of stock_id / future_id / forex_pair_id / option_id is set — the asset_type
+// string ("stock"|"future"|"forex"|"option") gives the UI a single switch.
+// avg_cost is denominated in the booking account's currency; current_price
+// uses the instrument's quote currency (listing price, option premium, or
+// forex_pair.exchange_rate × 100). profit converts the current quote into the
+// account's currency before subtracting avg_cost so the displayed P/L lines
+// up with what would actually settle on a sell. public_amount is meaningful
+// only for stock holdings (OTC counter, fourth celina) and stays 0 elsewhere.
+type Holding struct {
+	state            protoimpl.MessageState `protogen:"open.v1"`
+	Id               int64                  `protobuf:"varint,1,opt,name=id,proto3" json:"id,omitempty"`
+	PlacerId         int64                  `protobuf:"varint,2,opt,name=placer_id,json=placerId,proto3" json:"placer_id,omitempty"`
+	StockId          int64                  `protobuf:"varint,3,opt,name=stock_id,json=stockId,proto3" json:"stock_id,omitempty"`
+	FutureId         int64                  `protobuf:"varint,4,opt,name=future_id,json=futureId,proto3" json:"future_id,omitempty"`
+	ForexPairId      int64                  `protobuf:"varint,5,opt,name=forex_pair_id,json=forexPairId,proto3" json:"forex_pair_id,omitempty"`
+	OptionId         int64                  `protobuf:"varint,6,opt,name=option_id,json=optionId,proto3" json:"option_id,omitempty"`
+	Amount           int64                  `protobuf:"varint,7,opt,name=amount,proto3" json:"amount,omitempty"`
+	AvgCost          int64                  `protobuf:"varint,8,opt,name=avg_cost,json=avgCost,proto3" json:"avg_cost,omitempty"`
+	AccountId        int64                  `protobuf:"varint,9,opt,name=account_id,json=accountId,proto3" json:"account_id,omitempty"`
+	AccountNumber    string                 `protobuf:"bytes,10,opt,name=account_number,json=accountNumber,proto3" json:"account_number,omitempty"`
+	PublicAmount     int64                  `protobuf:"varint,11,opt,name=public_amount,json=publicAmount,proto3" json:"public_amount,omitempty"`
+	Ticker           string                 `protobuf:"bytes,12,opt,name=ticker,proto3" json:"ticker,omitempty"`
+	CurrentPrice     int64                  `protobuf:"varint,13,opt,name=current_price,json=currentPrice,proto3" json:"current_price,omitempty"`
+	Profit           int64                  `protobuf:"varint,14,opt,name=profit,proto3" json:"profit,omitempty"`
+	LastModifiedUnix int64                  `protobuf:"varint,15,opt,name=last_modified_unix,json=lastModifiedUnix,proto3" json:"last_modified_unix,omitempty"`
+	AssetType        string                 `protobuf:"bytes,16,opt,name=asset_type,json=assetType,proto3" json:"asset_type,omitempty"`
+	unknownFields    protoimpl.UnknownFields
+	sizeCache        protoimpl.SizeCache
+}
+
+func (x *Holding) Reset() {
+	*x = Holding{}
+	mi := &file_trading_trading_proto_msgTypes[34]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *Holding) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*Holding) ProtoMessage() {}
+
+func (x *Holding) ProtoReflect() protoreflect.Message {
+	mi := &file_trading_trading_proto_msgTypes[34]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use Holding.ProtoReflect.Descriptor instead.
+func (*Holding) Descriptor() ([]byte, []int) {
+	return file_trading_trading_proto_rawDescGZIP(), []int{34}
+}
+
+func (x *Holding) GetId() int64 {
+	if x != nil {
+		return x.Id
+	}
+	return 0
+}
+
+func (x *Holding) GetPlacerId() int64 {
+	if x != nil {
+		return x.PlacerId
+	}
+	return 0
+}
+
+func (x *Holding) GetStockId() int64 {
+	if x != nil {
+		return x.StockId
+	}
+	return 0
+}
+
+func (x *Holding) GetFutureId() int64 {
+	if x != nil {
+		return x.FutureId
+	}
+	return 0
+}
+
+func (x *Holding) GetForexPairId() int64 {
+	if x != nil {
+		return x.ForexPairId
+	}
+	return 0
+}
+
+func (x *Holding) GetOptionId() int64 {
+	if x != nil {
+		return x.OptionId
+	}
+	return 0
+}
+
+func (x *Holding) GetAmount() int64 {
+	if x != nil {
+		return x.Amount
+	}
+	return 0
+}
+
+func (x *Holding) GetAvgCost() int64 {
+	if x != nil {
+		return x.AvgCost
+	}
+	return 0
+}
+
+func (x *Holding) GetAccountId() int64 {
+	if x != nil {
+		return x.AccountId
+	}
+	return 0
+}
+
+func (x *Holding) GetAccountNumber() string {
+	if x != nil {
+		return x.AccountNumber
+	}
+	return ""
+}
+
+func (x *Holding) GetPublicAmount() int64 {
+	if x != nil {
+		return x.PublicAmount
+	}
+	return 0
+}
+
+func (x *Holding) GetTicker() string {
+	if x != nil {
+		return x.Ticker
+	}
+	return ""
+}
+
+func (x *Holding) GetCurrentPrice() int64 {
+	if x != nil {
+		return x.CurrentPrice
+	}
+	return 0
+}
+
+func (x *Holding) GetProfit() int64 {
+	if x != nil {
+		return x.Profit
+	}
+	return 0
+}
+
+func (x *Holding) GetLastModifiedUnix() int64 {
+	if x != nil {
+		return x.LastModifiedUnix
+	}
+	return 0
+}
+
+func (x *Holding) GetAssetType() string {
+	if x != nil {
+		return x.AssetType
+	}
+	return ""
+}
+
+type ListHoldingsRequest struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	CallerEmail   string                 `protobuf:"bytes,1,opt,name=caller_email,json=callerEmail,proto3" json:"caller_email,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *ListHoldingsRequest) Reset() {
+	*x = ListHoldingsRequest{}
+	mi := &file_trading_trading_proto_msgTypes[35]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *ListHoldingsRequest) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*ListHoldingsRequest) ProtoMessage() {}
+
+func (x *ListHoldingsRequest) ProtoReflect() protoreflect.Message {
+	mi := &file_trading_trading_proto_msgTypes[35]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use ListHoldingsRequest.ProtoReflect.Descriptor instead.
+func (*ListHoldingsRequest) Descriptor() ([]byte, []int) {
+	return file_trading_trading_proto_rawDescGZIP(), []int{35}
+}
+
+func (x *ListHoldingsRequest) GetCallerEmail() string {
+	if x != nil {
+		return x.CallerEmail
+	}
+	return ""
+}
+
+type ListHoldingsResponse struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	Holdings      []*Holding             `protobuf:"bytes,1,rep,name=holdings,proto3" json:"holdings,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *ListHoldingsResponse) Reset() {
+	*x = ListHoldingsResponse{}
+	mi := &file_trading_trading_proto_msgTypes[36]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *ListHoldingsResponse) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*ListHoldingsResponse) ProtoMessage() {}
+
+func (x *ListHoldingsResponse) ProtoReflect() protoreflect.Message {
+	mi := &file_trading_trading_proto_msgTypes[36]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use ListHoldingsResponse.ProtoReflect.Descriptor instead.
+func (*ListHoldingsResponse) Descriptor() ([]byte, []int) {
+	return file_trading_trading_proto_rawDescGZIP(), []int{36}
+}
+
+func (x *ListHoldingsResponse) GetHoldings() []*Holding {
+	if x != nil {
+		return x.Holdings
+	}
+	return nil
+}
+
+// SellHolding is the spec's `POST /api/portfolio/sell` thin wrapper. The
+// server resolves the holding to its underlying asset and forwards a
+// CreateOrder with direction=sell, so the same execution / approval / margin
+// pipeline applies. The caller must own the holding (placer matches) — the
+// server enforces this rather than the gateway since the holding row carries
+// the authoritative placer link.
+type SellHoldingRequest struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	HoldingId     int64                  `protobuf:"varint,1,opt,name=holding_id,json=holdingId,proto3" json:"holding_id,omitempty"`
+	AccountNumber string                 `protobuf:"bytes,2,opt,name=account_number,json=accountNumber,proto3" json:"account_number,omitempty"`
+	OrderType     string                 `protobuf:"bytes,3,opt,name=order_type,json=orderType,proto3" json:"order_type,omitempty"`
+	Quantity      int64                  `protobuf:"varint,4,opt,name=quantity,proto3" json:"quantity,omitempty"`
+	LimitPrice    int64                  `protobuf:"varint,5,opt,name=limit_price,json=limitPrice,proto3" json:"limit_price,omitempty"`
+	StopPrice     int64                  `protobuf:"varint,6,opt,name=stop_price,json=stopPrice,proto3" json:"stop_price,omitempty"`
+	AllOrNone     bool                   `protobuf:"varint,7,opt,name=all_or_none,json=allOrNone,proto3" json:"all_or_none,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *SellHoldingRequest) Reset() {
+	*x = SellHoldingRequest{}
+	mi := &file_trading_trading_proto_msgTypes[37]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *SellHoldingRequest) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*SellHoldingRequest) ProtoMessage() {}
+
+func (x *SellHoldingRequest) ProtoReflect() protoreflect.Message {
+	mi := &file_trading_trading_proto_msgTypes[37]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use SellHoldingRequest.ProtoReflect.Descriptor instead.
+func (*SellHoldingRequest) Descriptor() ([]byte, []int) {
+	return file_trading_trading_proto_rawDescGZIP(), []int{37}
+}
+
+func (x *SellHoldingRequest) GetHoldingId() int64 {
+	if x != nil {
+		return x.HoldingId
+	}
+	return 0
+}
+
+func (x *SellHoldingRequest) GetAccountNumber() string {
+	if x != nil {
+		return x.AccountNumber
+	}
+	return ""
+}
+
+func (x *SellHoldingRequest) GetOrderType() string {
+	if x != nil {
+		return x.OrderType
+	}
+	return ""
+}
+
+func (x *SellHoldingRequest) GetQuantity() int64 {
+	if x != nil {
+		return x.Quantity
+	}
+	return 0
+}
+
+func (x *SellHoldingRequest) GetLimitPrice() int64 {
+	if x != nil {
+		return x.LimitPrice
+	}
+	return 0
+}
+
+func (x *SellHoldingRequest) GetStopPrice() int64 {
+	if x != nil {
+		return x.StopPrice
+	}
+	return 0
+}
+
+func (x *SellHoldingRequest) GetAllOrNone() bool {
+	if x != nil {
+		return x.AllOrNone
+	}
+	return false
+}
+
+type SellHoldingResponse struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	OrderId       int64                  `protobuf:"varint,1,opt,name=order_id,json=orderId,proto3" json:"order_id,omitempty"`
+	Status        string                 `protobuf:"bytes,2,opt,name=status,proto3" json:"status,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *SellHoldingResponse) Reset() {
+	*x = SellHoldingResponse{}
+	mi := &file_trading_trading_proto_msgTypes[38]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *SellHoldingResponse) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*SellHoldingResponse) ProtoMessage() {}
+
+func (x *SellHoldingResponse) ProtoReflect() protoreflect.Message {
+	mi := &file_trading_trading_proto_msgTypes[38]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use SellHoldingResponse.ProtoReflect.Descriptor instead.
+func (*SellHoldingResponse) Descriptor() ([]byte, []int) {
+	return file_trading_trading_proto_rawDescGZIP(), []int{38}
+}
+
+func (x *SellHoldingResponse) GetOrderId() int64 {
+	if x != nil {
+		return x.OrderId
+	}
+	return 0
+}
+
+func (x *SellHoldingResponse) GetStatus() string {
+	if x != nil {
+		return x.Status
+	}
+	return ""
+}
+
+// SetHoldingPublic adjusts the public_amount counter on a stock holding. The
+// schema CHECK pins public_amount to 0 for non-stock holdings — the server
+// rejects any attempt to set it on a non-stock row with FailedPrecondition.
+// 0 ≤ public_amount ≤ amount; out-of-range values come back as
+// InvalidArgument so the portal can surface the problem inline.
+type SetHoldingPublicRequest struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	HoldingId     int64                  `protobuf:"varint,1,opt,name=holding_id,json=holdingId,proto3" json:"holding_id,omitempty"`
+	PublicAmount  int64                  `protobuf:"varint,2,opt,name=public_amount,json=publicAmount,proto3" json:"public_amount,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *SetHoldingPublicRequest) Reset() {
+	*x = SetHoldingPublicRequest{}
+	mi := &file_trading_trading_proto_msgTypes[39]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *SetHoldingPublicRequest) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*SetHoldingPublicRequest) ProtoMessage() {}
+
+func (x *SetHoldingPublicRequest) ProtoReflect() protoreflect.Message {
+	mi := &file_trading_trading_proto_msgTypes[39]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use SetHoldingPublicRequest.ProtoReflect.Descriptor instead.
+func (*SetHoldingPublicRequest) Descriptor() ([]byte, []int) {
+	return file_trading_trading_proto_rawDescGZIP(), []int{39}
+}
+
+func (x *SetHoldingPublicRequest) GetHoldingId() int64 {
+	if x != nil {
+		return x.HoldingId
+	}
+	return 0
+}
+
+func (x *SetHoldingPublicRequest) GetPublicAmount() int64 {
+	if x != nil {
+		return x.PublicAmount
+	}
+	return 0
+}
+
+type SetHoldingPublicResponse struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	Holding       *Holding               `protobuf:"bytes,1,opt,name=holding,proto3" json:"holding,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *SetHoldingPublicResponse) Reset() {
+	*x = SetHoldingPublicResponse{}
+	mi := &file_trading_trading_proto_msgTypes[40]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *SetHoldingPublicResponse) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*SetHoldingPublicResponse) ProtoMessage() {}
+
+func (x *SetHoldingPublicResponse) ProtoReflect() protoreflect.Message {
+	mi := &file_trading_trading_proto_msgTypes[40]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use SetHoldingPublicResponse.ProtoReflect.Descriptor instead.
+func (*SetHoldingPublicResponse) Descriptor() ([]byte, []int) {
+	return file_trading_trading_proto_rawDescGZIP(), []int{40}
+}
+
+func (x *SetHoldingPublicResponse) GetHolding() *Holding {
+	if x != nil {
+		return x.Holding
+	}
+	return nil
+}
+
+// ExerciseOption settles an option held by the caller. Actuary-only, the
+// option must not be past settlement, and it has to be in-the-money — calls
+// fire when spot > strike, puts when strike > spot. Payout per spec p.62:
+//
+//	call: (spot - strike) * contract_size * quantity − premium * quantity
+//	put : (strike - spot) * contract_size * quantity − premium * quantity
+//
+// The premium is paid back per contract held (not just once) — the user
+// effectively recoups what they paid to acquire the position. Settlement is
+// against the account_number passed in, which must belong to the caller.
+type ExerciseOptionRequest struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	OptionId      int64                  `protobuf:"varint,1,opt,name=option_id,json=optionId,proto3" json:"option_id,omitempty"`
+	AccountNumber string                 `protobuf:"bytes,2,opt,name=account_number,json=accountNumber,proto3" json:"account_number,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *ExerciseOptionRequest) Reset() {
+	*x = ExerciseOptionRequest{}
+	mi := &file_trading_trading_proto_msgTypes[41]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *ExerciseOptionRequest) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*ExerciseOptionRequest) ProtoMessage() {}
+
+func (x *ExerciseOptionRequest) ProtoReflect() protoreflect.Message {
+	mi := &file_trading_trading_proto_msgTypes[41]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use ExerciseOptionRequest.ProtoReflect.Descriptor instead.
+func (*ExerciseOptionRequest) Descriptor() ([]byte, []int) {
+	return file_trading_trading_proto_rawDescGZIP(), []int{41}
+}
+
+func (x *ExerciseOptionRequest) GetOptionId() int64 {
+	if x != nil {
+		return x.OptionId
+	}
+	return 0
+}
+
+func (x *ExerciseOptionRequest) GetAccountNumber() string {
+	if x != nil {
+		return x.AccountNumber
+	}
+	return ""
+}
+
+type ExerciseOptionResponse struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	Payout        int64                  `protobuf:"varint,1,opt,name=payout,proto3" json:"payout,omitempty"`
+	Quantity      int64                  `protobuf:"varint,2,opt,name=quantity,proto3" json:"quantity,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *ExerciseOptionResponse) Reset() {
+	*x = ExerciseOptionResponse{}
+	mi := &file_trading_trading_proto_msgTypes[42]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *ExerciseOptionResponse) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*ExerciseOptionResponse) ProtoMessage() {}
+
+func (x *ExerciseOptionResponse) ProtoReflect() protoreflect.Message {
+	mi := &file_trading_trading_proto_msgTypes[42]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use ExerciseOptionResponse.ProtoReflect.Descriptor instead.
+func (*ExerciseOptionResponse) Descriptor() ([]byte, []int) {
+	return file_trading_trading_proto_rawDescGZIP(), []int{42}
+}
+
+func (x *ExerciseOptionResponse) GetPayout() int64 {
+	if x != nil {
+		return x.Payout
+	}
+	return 0
+}
+
+func (x *ExerciseOptionResponse) GetQuantity() int64 {
+	if x != nil {
+		return x.Quantity
+	}
+	return 0
+}
+
 var File_trading_trading_proto protoreflect.FileDescriptor
 
 const file_trading_trading_proto_rawDesc = "" +
@@ -2678,7 +3304,59 @@ const file_trading_trading_proto_rawDesc = "" +
 	"\x12CancelOrderRequest\x12\x19\n" +
 	"\border_id\x18\x01 \x01(\x03R\aorderId\"A\n" +
 	"\x13CancelOrderResponse\x12*\n" +
-	"\x05order\x18\x01 \x01(\v2\x14.trading.OrderDetailR\x05order2\xa9\b\n" +
+	"\x05order\x18\x01 \x01(\v2\x14.trading.OrderDetailR\x05order\"\xef\x03\n" +
+	"\aHolding\x12\x0e\n" +
+	"\x02id\x18\x01 \x01(\x03R\x02id\x12\x1b\n" +
+	"\tplacer_id\x18\x02 \x01(\x03R\bplacerId\x12\x19\n" +
+	"\bstock_id\x18\x03 \x01(\x03R\astockId\x12\x1b\n" +
+	"\tfuture_id\x18\x04 \x01(\x03R\bfutureId\x12\"\n" +
+	"\rforex_pair_id\x18\x05 \x01(\x03R\vforexPairId\x12\x1b\n" +
+	"\toption_id\x18\x06 \x01(\x03R\boptionId\x12\x16\n" +
+	"\x06amount\x18\a \x01(\x03R\x06amount\x12\x19\n" +
+	"\bavg_cost\x18\b \x01(\x03R\aavgCost\x12\x1d\n" +
+	"\n" +
+	"account_id\x18\t \x01(\x03R\taccountId\x12%\n" +
+	"\x0eaccount_number\x18\n" +
+	" \x01(\tR\raccountNumber\x12#\n" +
+	"\rpublic_amount\x18\v \x01(\x03R\fpublicAmount\x12\x16\n" +
+	"\x06ticker\x18\f \x01(\tR\x06ticker\x12#\n" +
+	"\rcurrent_price\x18\r \x01(\x03R\fcurrentPrice\x12\x16\n" +
+	"\x06profit\x18\x0e \x01(\x03R\x06profit\x12,\n" +
+	"\x12last_modified_unix\x18\x0f \x01(\x03R\x10lastModifiedUnix\x12\x1d\n" +
+	"\n" +
+	"asset_type\x18\x10 \x01(\tR\tassetType\"8\n" +
+	"\x13ListHoldingsRequest\x12!\n" +
+	"\fcaller_email\x18\x01 \x01(\tR\vcallerEmail\"D\n" +
+	"\x14ListHoldingsResponse\x12,\n" +
+	"\bholdings\x18\x01 \x03(\v2\x10.trading.HoldingR\bholdings\"\xf5\x01\n" +
+	"\x12SellHoldingRequest\x12\x1d\n" +
+	"\n" +
+	"holding_id\x18\x01 \x01(\x03R\tholdingId\x12%\n" +
+	"\x0eaccount_number\x18\x02 \x01(\tR\raccountNumber\x12\x1d\n" +
+	"\n" +
+	"order_type\x18\x03 \x01(\tR\torderType\x12\x1a\n" +
+	"\bquantity\x18\x04 \x01(\x03R\bquantity\x12\x1f\n" +
+	"\vlimit_price\x18\x05 \x01(\x03R\n" +
+	"limitPrice\x12\x1d\n" +
+	"\n" +
+	"stop_price\x18\x06 \x01(\x03R\tstopPrice\x12\x1e\n" +
+	"\vall_or_none\x18\a \x01(\bR\tallOrNone\"H\n" +
+	"\x13SellHoldingResponse\x12\x19\n" +
+	"\border_id\x18\x01 \x01(\x03R\aorderId\x12\x16\n" +
+	"\x06status\x18\x02 \x01(\tR\x06status\"]\n" +
+	"\x17SetHoldingPublicRequest\x12\x1d\n" +
+	"\n" +
+	"holding_id\x18\x01 \x01(\x03R\tholdingId\x12#\n" +
+	"\rpublic_amount\x18\x02 \x01(\x03R\fpublicAmount\"F\n" +
+	"\x18SetHoldingPublicResponse\x12*\n" +
+	"\aholding\x18\x01 \x01(\v2\x10.trading.HoldingR\aholding\"[\n" +
+	"\x15ExerciseOptionRequest\x12\x1b\n" +
+	"\toption_id\x18\x01 \x01(\x03R\boptionId\x12%\n" +
+	"\x0eaccount_number\x18\x02 \x01(\tR\raccountNumber\"L\n" +
+	"\x16ExerciseOptionResponse\x12\x16\n" +
+	"\x06payout\x18\x01 \x01(\x03R\x06payout\x12\x1a\n" +
+	"\bquantity\x18\x02 \x01(\x03R\bquantity2\xec\n" +
+	"\n" +
 	"\x0eTradingService\x12N\n" +
 	"\rListExchanges\x12\x1d.trading.ListExchangesRequest\x1a\x1e.trading.ListExchangesResponse\x12K\n" +
 	"\fListListings\x12\x1c.trading.ListListingsRequest\x1a\x1d.trading.ListListingsResponse\x12E\n" +
@@ -2694,7 +3372,11 @@ const file_trading_trading_proto_rawDesc = "" +
 	"\fApproveOrder\x12\x1c.trading.ApproveOrderRequest\x1a\x1d.trading.ApproveOrderResponse\x12K\n" +
 	"\fDeclineOrder\x12\x1c.trading.DeclineOrderRequest\x1a\x1d.trading.DeclineOrderResponse\x12H\n" +
 	"\vCancelOrder\x12\x1b.trading.CancelOrderRequest\x1a\x1c.trading.CancelOrderResponse\x12l\n" +
-	"\x17SetExchangeOpenOverride\x12'.trading.SetExchangeOpenOverrideRequest\x1a(.trading.SetExchangeOpenOverrideResponseB4Z2github.com/RAF-SI-2025/Banka-3-Backend/gen/tradingb\x06proto3"
+	"\x17SetExchangeOpenOverride\x12'.trading.SetExchangeOpenOverrideRequest\x1a(.trading.SetExchangeOpenOverrideResponse\x12K\n" +
+	"\fListHoldings\x12\x1c.trading.ListHoldingsRequest\x1a\x1d.trading.ListHoldingsResponse\x12H\n" +
+	"\vSellHolding\x12\x1b.trading.SellHoldingRequest\x1a\x1c.trading.SellHoldingResponse\x12W\n" +
+	"\x10SetHoldingPublic\x12 .trading.SetHoldingPublicRequest\x1a!.trading.SetHoldingPublicResponse\x12Q\n" +
+	"\x0eExerciseOption\x12\x1e.trading.ExerciseOptionRequest\x1a\x1f.trading.ExerciseOptionResponseB4Z2github.com/RAF-SI-2025/Banka-3-Backend/gen/tradingb\x06proto3"
 
 var (
 	file_trading_trading_proto_rawDescOnce sync.Once
@@ -2708,7 +3390,7 @@ func file_trading_trading_proto_rawDescGZIP() []byte {
 	return file_trading_trading_proto_rawDescData
 }
 
-var file_trading_trading_proto_msgTypes = make([]protoimpl.MessageInfo, 34)
+var file_trading_trading_proto_msgTypes = make([]protoimpl.MessageInfo, 43)
 var file_trading_trading_proto_goTypes = []any{
 	(*Exchange)(nil),                        // 0: trading.Exchange
 	(*SetExchangeOpenOverrideRequest)(nil),  // 1: trading.SetExchangeOpenOverrideRequest
@@ -2744,6 +3426,15 @@ var file_trading_trading_proto_goTypes = []any{
 	(*DeclineOrderResponse)(nil),            // 31: trading.DeclineOrderResponse
 	(*CancelOrderRequest)(nil),              // 32: trading.CancelOrderRequest
 	(*CancelOrderResponse)(nil),             // 33: trading.CancelOrderResponse
+	(*Holding)(nil),                         // 34: trading.Holding
+	(*ListHoldingsRequest)(nil),             // 35: trading.ListHoldingsRequest
+	(*ListHoldingsResponse)(nil),            // 36: trading.ListHoldingsResponse
+	(*SellHoldingRequest)(nil),              // 37: trading.SellHoldingRequest
+	(*SellHoldingResponse)(nil),             // 38: trading.SellHoldingResponse
+	(*SetHoldingPublicRequest)(nil),         // 39: trading.SetHoldingPublicRequest
+	(*SetHoldingPublicResponse)(nil),        // 40: trading.SetHoldingPublicResponse
+	(*ExerciseOptionRequest)(nil),           // 41: trading.ExerciseOptionRequest
+	(*ExerciseOptionResponse)(nil),          // 42: trading.ExerciseOptionResponse
 }
 var file_trading_trading_proto_depIdxs = []int32{
 	0,  // 0: trading.SetExchangeOpenOverrideResponse.exchange:type_name -> trading.Exchange
@@ -2760,37 +3451,47 @@ var file_trading_trading_proto_depIdxs = []int32{
 	25, // 11: trading.ApproveOrderResponse.order:type_name -> trading.OrderDetail
 	25, // 12: trading.DeclineOrderResponse.order:type_name -> trading.OrderDetail
 	25, // 13: trading.CancelOrderResponse.order:type_name -> trading.OrderDetail
-	3,  // 14: trading.TradingService.ListExchanges:input_type -> trading.ListExchangesRequest
-	6,  // 15: trading.TradingService.ListListings:input_type -> trading.ListListingsRequest
-	8,  // 16: trading.TradingService.GetListing:input_type -> trading.GetListingRequest
-	10, // 17: trading.TradingService.ListListingHistory:input_type -> trading.ListListingHistoryRequest
-	14, // 18: trading.TradingService.ListForexPairs:input_type -> trading.ListForexPairsRequest
-	16, // 19: trading.TradingService.ListOptionDates:input_type -> trading.ListOptionDatesRequest
-	19, // 20: trading.TradingService.ListOptions:input_type -> trading.ListOptionsRequest
-	23, // 21: trading.TradingService.CreateOrder:input_type -> trading.CreateOrderRequest
-	26, // 22: trading.TradingService.ListOrders:input_type -> trading.ListOrdersRequest
-	28, // 23: trading.TradingService.ApproveOrder:input_type -> trading.ApproveOrderRequest
-	30, // 24: trading.TradingService.DeclineOrder:input_type -> trading.DeclineOrderRequest
-	32, // 25: trading.TradingService.CancelOrder:input_type -> trading.CancelOrderRequest
-	1,  // 26: trading.TradingService.SetExchangeOpenOverride:input_type -> trading.SetExchangeOpenOverrideRequest
-	4,  // 27: trading.TradingService.ListExchanges:output_type -> trading.ListExchangesResponse
-	7,  // 28: trading.TradingService.ListListings:output_type -> trading.ListListingsResponse
-	9,  // 29: trading.TradingService.GetListing:output_type -> trading.GetListingResponse
-	12, // 30: trading.TradingService.ListListingHistory:output_type -> trading.ListListingHistoryResponse
-	15, // 31: trading.TradingService.ListForexPairs:output_type -> trading.ListForexPairsResponse
-	18, // 32: trading.TradingService.ListOptionDates:output_type -> trading.ListOptionDatesResponse
-	22, // 33: trading.TradingService.ListOptions:output_type -> trading.ListOptionsResponse
-	24, // 34: trading.TradingService.CreateOrder:output_type -> trading.CreateOrderResponse
-	27, // 35: trading.TradingService.ListOrders:output_type -> trading.ListOrdersResponse
-	29, // 36: trading.TradingService.ApproveOrder:output_type -> trading.ApproveOrderResponse
-	31, // 37: trading.TradingService.DeclineOrder:output_type -> trading.DeclineOrderResponse
-	33, // 38: trading.TradingService.CancelOrder:output_type -> trading.CancelOrderResponse
-	2,  // 39: trading.TradingService.SetExchangeOpenOverride:output_type -> trading.SetExchangeOpenOverrideResponse
-	27, // [27:40] is the sub-list for method output_type
-	14, // [14:27] is the sub-list for method input_type
-	14, // [14:14] is the sub-list for extension type_name
-	14, // [14:14] is the sub-list for extension extendee
-	0,  // [0:14] is the sub-list for field type_name
+	34, // 14: trading.ListHoldingsResponse.holdings:type_name -> trading.Holding
+	34, // 15: trading.SetHoldingPublicResponse.holding:type_name -> trading.Holding
+	3,  // 16: trading.TradingService.ListExchanges:input_type -> trading.ListExchangesRequest
+	6,  // 17: trading.TradingService.ListListings:input_type -> trading.ListListingsRequest
+	8,  // 18: trading.TradingService.GetListing:input_type -> trading.GetListingRequest
+	10, // 19: trading.TradingService.ListListingHistory:input_type -> trading.ListListingHistoryRequest
+	14, // 20: trading.TradingService.ListForexPairs:input_type -> trading.ListForexPairsRequest
+	16, // 21: trading.TradingService.ListOptionDates:input_type -> trading.ListOptionDatesRequest
+	19, // 22: trading.TradingService.ListOptions:input_type -> trading.ListOptionsRequest
+	23, // 23: trading.TradingService.CreateOrder:input_type -> trading.CreateOrderRequest
+	26, // 24: trading.TradingService.ListOrders:input_type -> trading.ListOrdersRequest
+	28, // 25: trading.TradingService.ApproveOrder:input_type -> trading.ApproveOrderRequest
+	30, // 26: trading.TradingService.DeclineOrder:input_type -> trading.DeclineOrderRequest
+	32, // 27: trading.TradingService.CancelOrder:input_type -> trading.CancelOrderRequest
+	1,  // 28: trading.TradingService.SetExchangeOpenOverride:input_type -> trading.SetExchangeOpenOverrideRequest
+	35, // 29: trading.TradingService.ListHoldings:input_type -> trading.ListHoldingsRequest
+	37, // 30: trading.TradingService.SellHolding:input_type -> trading.SellHoldingRequest
+	39, // 31: trading.TradingService.SetHoldingPublic:input_type -> trading.SetHoldingPublicRequest
+	41, // 32: trading.TradingService.ExerciseOption:input_type -> trading.ExerciseOptionRequest
+	4,  // 33: trading.TradingService.ListExchanges:output_type -> trading.ListExchangesResponse
+	7,  // 34: trading.TradingService.ListListings:output_type -> trading.ListListingsResponse
+	9,  // 35: trading.TradingService.GetListing:output_type -> trading.GetListingResponse
+	12, // 36: trading.TradingService.ListListingHistory:output_type -> trading.ListListingHistoryResponse
+	15, // 37: trading.TradingService.ListForexPairs:output_type -> trading.ListForexPairsResponse
+	18, // 38: trading.TradingService.ListOptionDates:output_type -> trading.ListOptionDatesResponse
+	22, // 39: trading.TradingService.ListOptions:output_type -> trading.ListOptionsResponse
+	24, // 40: trading.TradingService.CreateOrder:output_type -> trading.CreateOrderResponse
+	27, // 41: trading.TradingService.ListOrders:output_type -> trading.ListOrdersResponse
+	29, // 42: trading.TradingService.ApproveOrder:output_type -> trading.ApproveOrderResponse
+	31, // 43: trading.TradingService.DeclineOrder:output_type -> trading.DeclineOrderResponse
+	33, // 44: trading.TradingService.CancelOrder:output_type -> trading.CancelOrderResponse
+	2,  // 45: trading.TradingService.SetExchangeOpenOverride:output_type -> trading.SetExchangeOpenOverrideResponse
+	36, // 46: trading.TradingService.ListHoldings:output_type -> trading.ListHoldingsResponse
+	38, // 47: trading.TradingService.SellHolding:output_type -> trading.SellHoldingResponse
+	40, // 48: trading.TradingService.SetHoldingPublic:output_type -> trading.SetHoldingPublicResponse
+	42, // 49: trading.TradingService.ExerciseOption:output_type -> trading.ExerciseOptionResponse
+	33, // [33:50] is the sub-list for method output_type
+	16, // [16:33] is the sub-list for method input_type
+	16, // [16:16] is the sub-list for extension type_name
+	16, // [16:16] is the sub-list for extension extendee
+	0,  // [0:16] is the sub-list for field type_name
 }
 
 func init() { file_trading_trading_proto_init() }
@@ -2804,7 +3505,7 @@ func file_trading_trading_proto_init() {
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
 			RawDescriptor: unsafe.Slice(unsafe.StringData(file_trading_trading_proto_rawDesc), len(file_trading_trading_proto_rawDesc)),
 			NumEnums:      0,
-			NumMessages:   34,
+			NumMessages:   43,
 			NumExtensions: 0,
 			NumServices:   1,
 		},
