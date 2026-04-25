@@ -18,12 +18,21 @@ func (s *Server) StartScheduler() func() {
 	go s.runOnSchedule(ctx, 6, always, s.RunDailyInstallmentCollection)
 	// Spec p.39: zero each agent's used_limit at end of day so the next day starts fresh.
 	go s.runOnScheduleAt(ctx, 23, 59, always, s.RunDailyUsedLimitReset)
+	// Spec p.63: capital-gains tax sweeps at the end of the calendar month.
+	// Scheduled at 23:50 on the last day so it fires before the day-end
+	// limit-reset at 23:59 (no overlap, deterministic ordering).
+	go s.runOnScheduleAt(ctx, 23, 50, isLastOfMonth, s.RunMonthlyCapitalGainsCollection)
 
 	return cancel
 }
 
 func always(time.Time) bool           { return true }
 func isFirstOfMonth(t time.Time) bool { return t.Day() == 1 }
+
+// isLastOfMonth returns true when t is the calendar last day of its month —
+// "tomorrow is the 1st". Robust against month length (28/29/30/31) without
+// hard-coding day numbers.
+func isLastOfMonth(t time.Time) bool { return t.AddDate(0, 0, 1).Day() == 1 }
 
 // poor man's cron - wakes up at the target hour, runs fn if filter says yes
 func (s *Server) runOnSchedule(ctx context.Context, hour int, filter func(time.Time) bool, fn func()) {

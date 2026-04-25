@@ -3090,6 +3090,341 @@ func (x *ExerciseOptionResponse) GetQuantity() int64 {
 	return 0
 }
 
+// Supervisor-only manual trigger for the monthly capital-gains tax sweep
+// (spec p.63 "Supervizori mogu ručno pokrenuti ovu operaciju putem portala").
+// month is YYYY-MM; passing an empty string sweeps every still-unpaid row
+// regardless of period — useful for back-fills.
+type RunCapitalGainsRequest struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	CallerEmail   string                 `protobuf:"bytes,1,opt,name=caller_email,json=callerEmail,proto3" json:"caller_email,omitempty"`
+	Month         string                 `protobuf:"bytes,2,opt,name=month,proto3" json:"month,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *RunCapitalGainsRequest) Reset() {
+	*x = RunCapitalGainsRequest{}
+	mi := &file_trading_trading_proto_msgTypes[43]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *RunCapitalGainsRequest) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*RunCapitalGainsRequest) ProtoMessage() {}
+
+func (x *RunCapitalGainsRequest) ProtoReflect() protoreflect.Message {
+	mi := &file_trading_trading_proto_msgTypes[43]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use RunCapitalGainsRequest.ProtoReflect.Descriptor instead.
+func (*RunCapitalGainsRequest) Descriptor() ([]byte, []int) {
+	return file_trading_trading_proto_rawDescGZIP(), []int{43}
+}
+
+func (x *RunCapitalGainsRequest) GetCallerEmail() string {
+	if x != nil {
+		return x.CallerEmail
+	}
+	return ""
+}
+
+func (x *RunCapitalGainsRequest) GetMonth() string {
+	if x != nil {
+		return x.Month
+	}
+	return ""
+}
+
+type RunCapitalGainsResponse struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	Period        string                 `protobuf:"bytes,1,opt,name=period,proto3" json:"period,omitempty"`
+	AccountsPaid  int32                  `protobuf:"varint,2,opt,name=accounts_paid,json=accountsPaid,proto3" json:"accounts_paid,omitempty"`
+	RowsPaid      int32                  `protobuf:"varint,3,opt,name=rows_paid,json=rowsPaid,proto3" json:"rows_paid,omitempty"`
+	Insufficient  int32                  `protobuf:"varint,4,opt,name=insufficient,proto3" json:"insufficient,omitempty"`
+	TotalDebtRsd  int64                  `protobuf:"varint,5,opt,name=total_debt_rsd,json=totalDebtRsd,proto3" json:"total_debt_rsd,omitempty"`
+	CollectedRsd  int64                  `protobuf:"varint,6,opt,name=collected_rsd,json=collectedRsd,proto3" json:"collected_rsd,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *RunCapitalGainsResponse) Reset() {
+	*x = RunCapitalGainsResponse{}
+	mi := &file_trading_trading_proto_msgTypes[44]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *RunCapitalGainsResponse) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*RunCapitalGainsResponse) ProtoMessage() {}
+
+func (x *RunCapitalGainsResponse) ProtoReflect() protoreflect.Message {
+	mi := &file_trading_trading_proto_msgTypes[44]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use RunCapitalGainsResponse.ProtoReflect.Descriptor instead.
+func (*RunCapitalGainsResponse) Descriptor() ([]byte, []int) {
+	return file_trading_trading_proto_rawDescGZIP(), []int{44}
+}
+
+func (x *RunCapitalGainsResponse) GetPeriod() string {
+	if x != nil {
+		return x.Period
+	}
+	return ""
+}
+
+func (x *RunCapitalGainsResponse) GetAccountsPaid() int32 {
+	if x != nil {
+		return x.AccountsPaid
+	}
+	return 0
+}
+
+func (x *RunCapitalGainsResponse) GetRowsPaid() int32 {
+	if x != nil {
+		return x.RowsPaid
+	}
+	return 0
+}
+
+func (x *RunCapitalGainsResponse) GetInsufficient() int32 {
+	if x != nil {
+		return x.Insufficient
+	}
+	return 0
+}
+
+func (x *RunCapitalGainsResponse) GetTotalDebtRsd() int64 {
+	if x != nil {
+		return x.TotalDebtRsd
+	}
+	return 0
+}
+
+func (x *RunCapitalGainsResponse) GetCollectedRsd() int64 {
+	if x != nil {
+		return x.CollectedRsd
+	}
+	return 0
+}
+
+// TaxDebtor is one user's current unpaid RSD tax debt summed across all of
+// their accounts (spec p.63: "Dugovanja korisnika prikazana su u RSD"). team
+// is "client" or "actuary". Users without any capital-gains rows are not
+// listed — the portal scopes itself to participants in the trading flow.
+type TaxDebtor struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	UserId        int64                  `protobuf:"varint,1,opt,name=user_id,json=userId,proto3" json:"user_id,omitempty"`
+	FirstName     string                 `protobuf:"bytes,2,opt,name=first_name,json=firstName,proto3" json:"first_name,omitempty"`
+	LastName      string                 `protobuf:"bytes,3,opt,name=last_name,json=lastName,proto3" json:"last_name,omitempty"`
+	Team          string                 `protobuf:"bytes,4,opt,name=team,proto3" json:"team,omitempty"`
+	UnpaidRsd     int64                  `protobuf:"varint,5,opt,name=unpaid_rsd,json=unpaidRsd,proto3" json:"unpaid_rsd,omitempty"`
+	PaidRsd       int64                  `protobuf:"varint,6,opt,name=paid_rsd,json=paidRsd,proto3" json:"paid_rsd,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *TaxDebtor) Reset() {
+	*x = TaxDebtor{}
+	mi := &file_trading_trading_proto_msgTypes[45]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *TaxDebtor) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*TaxDebtor) ProtoMessage() {}
+
+func (x *TaxDebtor) ProtoReflect() protoreflect.Message {
+	mi := &file_trading_trading_proto_msgTypes[45]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use TaxDebtor.ProtoReflect.Descriptor instead.
+func (*TaxDebtor) Descriptor() ([]byte, []int) {
+	return file_trading_trading_proto_rawDescGZIP(), []int{45}
+}
+
+func (x *TaxDebtor) GetUserId() int64 {
+	if x != nil {
+		return x.UserId
+	}
+	return 0
+}
+
+func (x *TaxDebtor) GetFirstName() string {
+	if x != nil {
+		return x.FirstName
+	}
+	return ""
+}
+
+func (x *TaxDebtor) GetLastName() string {
+	if x != nil {
+		return x.LastName
+	}
+	return ""
+}
+
+func (x *TaxDebtor) GetTeam() string {
+	if x != nil {
+		return x.Team
+	}
+	return ""
+}
+
+func (x *TaxDebtor) GetUnpaidRsd() int64 {
+	if x != nil {
+		return x.UnpaidRsd
+	}
+	return 0
+}
+
+func (x *TaxDebtor) GetPaidRsd() int64 {
+	if x != nil {
+		return x.PaidRsd
+	}
+	return 0
+}
+
+// Filters mirror the spec's two portal filters: team (klijent/aktuar) and
+// name (case-insensitive substring on first or last name). Empty values
+// disable the corresponding filter.
+type ListTaxDebtsRequest struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	CallerEmail   string                 `protobuf:"bytes,1,opt,name=caller_email,json=callerEmail,proto3" json:"caller_email,omitempty"`
+	Team          string                 `protobuf:"bytes,2,opt,name=team,proto3" json:"team,omitempty"`
+	Name          string                 `protobuf:"bytes,3,opt,name=name,proto3" json:"name,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *ListTaxDebtsRequest) Reset() {
+	*x = ListTaxDebtsRequest{}
+	mi := &file_trading_trading_proto_msgTypes[46]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *ListTaxDebtsRequest) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*ListTaxDebtsRequest) ProtoMessage() {}
+
+func (x *ListTaxDebtsRequest) ProtoReflect() protoreflect.Message {
+	mi := &file_trading_trading_proto_msgTypes[46]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use ListTaxDebtsRequest.ProtoReflect.Descriptor instead.
+func (*ListTaxDebtsRequest) Descriptor() ([]byte, []int) {
+	return file_trading_trading_proto_rawDescGZIP(), []int{46}
+}
+
+func (x *ListTaxDebtsRequest) GetCallerEmail() string {
+	if x != nil {
+		return x.CallerEmail
+	}
+	return ""
+}
+
+func (x *ListTaxDebtsRequest) GetTeam() string {
+	if x != nil {
+		return x.Team
+	}
+	return ""
+}
+
+func (x *ListTaxDebtsRequest) GetName() string {
+	if x != nil {
+		return x.Name
+	}
+	return ""
+}
+
+type ListTaxDebtsResponse struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	Debtors       []*TaxDebtor           `protobuf:"bytes,1,rep,name=debtors,proto3" json:"debtors,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *ListTaxDebtsResponse) Reset() {
+	*x = ListTaxDebtsResponse{}
+	mi := &file_trading_trading_proto_msgTypes[47]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *ListTaxDebtsResponse) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*ListTaxDebtsResponse) ProtoMessage() {}
+
+func (x *ListTaxDebtsResponse) ProtoReflect() protoreflect.Message {
+	mi := &file_trading_trading_proto_msgTypes[47]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use ListTaxDebtsResponse.ProtoReflect.Descriptor instead.
+func (*ListTaxDebtsResponse) Descriptor() ([]byte, []int) {
+	return file_trading_trading_proto_rawDescGZIP(), []int{47}
+}
+
+func (x *ListTaxDebtsResponse) GetDebtors() []*TaxDebtor {
+	if x != nil {
+		return x.Debtors
+	}
+	return nil
+}
+
 var File_trading_trading_proto protoreflect.FileDescriptor
 
 const file_trading_trading_proto_rawDesc = "" +
@@ -3355,8 +3690,32 @@ const file_trading_trading_proto_rawDesc = "" +
 	"\x0eaccount_number\x18\x02 \x01(\tR\raccountNumber\"L\n" +
 	"\x16ExerciseOptionResponse\x12\x16\n" +
 	"\x06payout\x18\x01 \x01(\x03R\x06payout\x12\x1a\n" +
-	"\bquantity\x18\x02 \x01(\x03R\bquantity2\xec\n" +
+	"\bquantity\x18\x02 \x01(\x03R\bquantity\"Q\n" +
+	"\x16RunCapitalGainsRequest\x12!\n" +
+	"\fcaller_email\x18\x01 \x01(\tR\vcallerEmail\x12\x14\n" +
+	"\x05month\x18\x02 \x01(\tR\x05month\"\xe2\x01\n" +
+	"\x17RunCapitalGainsResponse\x12\x16\n" +
+	"\x06period\x18\x01 \x01(\tR\x06period\x12#\n" +
+	"\raccounts_paid\x18\x02 \x01(\x05R\faccountsPaid\x12\x1b\n" +
+	"\trows_paid\x18\x03 \x01(\x05R\browsPaid\x12\"\n" +
+	"\finsufficient\x18\x04 \x01(\x05R\finsufficient\x12$\n" +
+	"\x0etotal_debt_rsd\x18\x05 \x01(\x03R\ftotalDebtRsd\x12#\n" +
+	"\rcollected_rsd\x18\x06 \x01(\x03R\fcollectedRsd\"\xae\x01\n" +
+	"\tTaxDebtor\x12\x17\n" +
+	"\auser_id\x18\x01 \x01(\x03R\x06userId\x12\x1d\n" +
 	"\n" +
+	"first_name\x18\x02 \x01(\tR\tfirstName\x12\x1b\n" +
+	"\tlast_name\x18\x03 \x01(\tR\blastName\x12\x12\n" +
+	"\x04team\x18\x04 \x01(\tR\x04team\x12\x1d\n" +
+	"\n" +
+	"unpaid_rsd\x18\x05 \x01(\x03R\tunpaidRsd\x12\x19\n" +
+	"\bpaid_rsd\x18\x06 \x01(\x03R\apaidRsd\"`\n" +
+	"\x13ListTaxDebtsRequest\x12!\n" +
+	"\fcaller_email\x18\x01 \x01(\tR\vcallerEmail\x12\x12\n" +
+	"\x04team\x18\x02 \x01(\tR\x04team\x12\x12\n" +
+	"\x04name\x18\x03 \x01(\tR\x04name\"D\n" +
+	"\x14ListTaxDebtsResponse\x12,\n" +
+	"\adebtors\x18\x01 \x03(\v2\x12.trading.TaxDebtorR\adebtors2\x8f\f\n" +
 	"\x0eTradingService\x12N\n" +
 	"\rListExchanges\x12\x1d.trading.ListExchangesRequest\x1a\x1e.trading.ListExchangesResponse\x12K\n" +
 	"\fListListings\x12\x1c.trading.ListListingsRequest\x1a\x1d.trading.ListListingsResponse\x12E\n" +
@@ -3376,7 +3735,9 @@ const file_trading_trading_proto_rawDesc = "" +
 	"\fListHoldings\x12\x1c.trading.ListHoldingsRequest\x1a\x1d.trading.ListHoldingsResponse\x12H\n" +
 	"\vSellHolding\x12\x1b.trading.SellHoldingRequest\x1a\x1c.trading.SellHoldingResponse\x12W\n" +
 	"\x10SetHoldingPublic\x12 .trading.SetHoldingPublicRequest\x1a!.trading.SetHoldingPublicResponse\x12Q\n" +
-	"\x0eExerciseOption\x12\x1e.trading.ExerciseOptionRequest\x1a\x1f.trading.ExerciseOptionResponseB4Z2github.com/RAF-SI-2025/Banka-3-Backend/gen/tradingb\x06proto3"
+	"\x0eExerciseOption\x12\x1e.trading.ExerciseOptionRequest\x1a\x1f.trading.ExerciseOptionResponse\x12T\n" +
+	"\x0fRunCapitalGains\x12\x1f.trading.RunCapitalGainsRequest\x1a .trading.RunCapitalGainsResponse\x12K\n" +
+	"\fListTaxDebts\x12\x1c.trading.ListTaxDebtsRequest\x1a\x1d.trading.ListTaxDebtsResponseB4Z2github.com/RAF-SI-2025/Banka-3-Backend/gen/tradingb\x06proto3"
 
 var (
 	file_trading_trading_proto_rawDescOnce sync.Once
@@ -3390,7 +3751,7 @@ func file_trading_trading_proto_rawDescGZIP() []byte {
 	return file_trading_trading_proto_rawDescData
 }
 
-var file_trading_trading_proto_msgTypes = make([]protoimpl.MessageInfo, 43)
+var file_trading_trading_proto_msgTypes = make([]protoimpl.MessageInfo, 48)
 var file_trading_trading_proto_goTypes = []any{
 	(*Exchange)(nil),                        // 0: trading.Exchange
 	(*SetExchangeOpenOverrideRequest)(nil),  // 1: trading.SetExchangeOpenOverrideRequest
@@ -3435,6 +3796,11 @@ var file_trading_trading_proto_goTypes = []any{
 	(*SetHoldingPublicResponse)(nil),        // 40: trading.SetHoldingPublicResponse
 	(*ExerciseOptionRequest)(nil),           // 41: trading.ExerciseOptionRequest
 	(*ExerciseOptionResponse)(nil),          // 42: trading.ExerciseOptionResponse
+	(*RunCapitalGainsRequest)(nil),          // 43: trading.RunCapitalGainsRequest
+	(*RunCapitalGainsResponse)(nil),         // 44: trading.RunCapitalGainsResponse
+	(*TaxDebtor)(nil),                       // 45: trading.TaxDebtor
+	(*ListTaxDebtsRequest)(nil),             // 46: trading.ListTaxDebtsRequest
+	(*ListTaxDebtsResponse)(nil),            // 47: trading.ListTaxDebtsResponse
 }
 var file_trading_trading_proto_depIdxs = []int32{
 	0,  // 0: trading.SetExchangeOpenOverrideResponse.exchange:type_name -> trading.Exchange
@@ -3453,45 +3819,50 @@ var file_trading_trading_proto_depIdxs = []int32{
 	25, // 13: trading.CancelOrderResponse.order:type_name -> trading.OrderDetail
 	34, // 14: trading.ListHoldingsResponse.holdings:type_name -> trading.Holding
 	34, // 15: trading.SetHoldingPublicResponse.holding:type_name -> trading.Holding
-	3,  // 16: trading.TradingService.ListExchanges:input_type -> trading.ListExchangesRequest
-	6,  // 17: trading.TradingService.ListListings:input_type -> trading.ListListingsRequest
-	8,  // 18: trading.TradingService.GetListing:input_type -> trading.GetListingRequest
-	10, // 19: trading.TradingService.ListListingHistory:input_type -> trading.ListListingHistoryRequest
-	14, // 20: trading.TradingService.ListForexPairs:input_type -> trading.ListForexPairsRequest
-	16, // 21: trading.TradingService.ListOptionDates:input_type -> trading.ListOptionDatesRequest
-	19, // 22: trading.TradingService.ListOptions:input_type -> trading.ListOptionsRequest
-	23, // 23: trading.TradingService.CreateOrder:input_type -> trading.CreateOrderRequest
-	26, // 24: trading.TradingService.ListOrders:input_type -> trading.ListOrdersRequest
-	28, // 25: trading.TradingService.ApproveOrder:input_type -> trading.ApproveOrderRequest
-	30, // 26: trading.TradingService.DeclineOrder:input_type -> trading.DeclineOrderRequest
-	32, // 27: trading.TradingService.CancelOrder:input_type -> trading.CancelOrderRequest
-	1,  // 28: trading.TradingService.SetExchangeOpenOverride:input_type -> trading.SetExchangeOpenOverrideRequest
-	35, // 29: trading.TradingService.ListHoldings:input_type -> trading.ListHoldingsRequest
-	37, // 30: trading.TradingService.SellHolding:input_type -> trading.SellHoldingRequest
-	39, // 31: trading.TradingService.SetHoldingPublic:input_type -> trading.SetHoldingPublicRequest
-	41, // 32: trading.TradingService.ExerciseOption:input_type -> trading.ExerciseOptionRequest
-	4,  // 33: trading.TradingService.ListExchanges:output_type -> trading.ListExchangesResponse
-	7,  // 34: trading.TradingService.ListListings:output_type -> trading.ListListingsResponse
-	9,  // 35: trading.TradingService.GetListing:output_type -> trading.GetListingResponse
-	12, // 36: trading.TradingService.ListListingHistory:output_type -> trading.ListListingHistoryResponse
-	15, // 37: trading.TradingService.ListForexPairs:output_type -> trading.ListForexPairsResponse
-	18, // 38: trading.TradingService.ListOptionDates:output_type -> trading.ListOptionDatesResponse
-	22, // 39: trading.TradingService.ListOptions:output_type -> trading.ListOptionsResponse
-	24, // 40: trading.TradingService.CreateOrder:output_type -> trading.CreateOrderResponse
-	27, // 41: trading.TradingService.ListOrders:output_type -> trading.ListOrdersResponse
-	29, // 42: trading.TradingService.ApproveOrder:output_type -> trading.ApproveOrderResponse
-	31, // 43: trading.TradingService.DeclineOrder:output_type -> trading.DeclineOrderResponse
-	33, // 44: trading.TradingService.CancelOrder:output_type -> trading.CancelOrderResponse
-	2,  // 45: trading.TradingService.SetExchangeOpenOverride:output_type -> trading.SetExchangeOpenOverrideResponse
-	36, // 46: trading.TradingService.ListHoldings:output_type -> trading.ListHoldingsResponse
-	38, // 47: trading.TradingService.SellHolding:output_type -> trading.SellHoldingResponse
-	40, // 48: trading.TradingService.SetHoldingPublic:output_type -> trading.SetHoldingPublicResponse
-	42, // 49: trading.TradingService.ExerciseOption:output_type -> trading.ExerciseOptionResponse
-	33, // [33:50] is the sub-list for method output_type
-	16, // [16:33] is the sub-list for method input_type
-	16, // [16:16] is the sub-list for extension type_name
-	16, // [16:16] is the sub-list for extension extendee
-	0,  // [0:16] is the sub-list for field type_name
+	45, // 16: trading.ListTaxDebtsResponse.debtors:type_name -> trading.TaxDebtor
+	3,  // 17: trading.TradingService.ListExchanges:input_type -> trading.ListExchangesRequest
+	6,  // 18: trading.TradingService.ListListings:input_type -> trading.ListListingsRequest
+	8,  // 19: trading.TradingService.GetListing:input_type -> trading.GetListingRequest
+	10, // 20: trading.TradingService.ListListingHistory:input_type -> trading.ListListingHistoryRequest
+	14, // 21: trading.TradingService.ListForexPairs:input_type -> trading.ListForexPairsRequest
+	16, // 22: trading.TradingService.ListOptionDates:input_type -> trading.ListOptionDatesRequest
+	19, // 23: trading.TradingService.ListOptions:input_type -> trading.ListOptionsRequest
+	23, // 24: trading.TradingService.CreateOrder:input_type -> trading.CreateOrderRequest
+	26, // 25: trading.TradingService.ListOrders:input_type -> trading.ListOrdersRequest
+	28, // 26: trading.TradingService.ApproveOrder:input_type -> trading.ApproveOrderRequest
+	30, // 27: trading.TradingService.DeclineOrder:input_type -> trading.DeclineOrderRequest
+	32, // 28: trading.TradingService.CancelOrder:input_type -> trading.CancelOrderRequest
+	1,  // 29: trading.TradingService.SetExchangeOpenOverride:input_type -> trading.SetExchangeOpenOverrideRequest
+	35, // 30: trading.TradingService.ListHoldings:input_type -> trading.ListHoldingsRequest
+	37, // 31: trading.TradingService.SellHolding:input_type -> trading.SellHoldingRequest
+	39, // 32: trading.TradingService.SetHoldingPublic:input_type -> trading.SetHoldingPublicRequest
+	41, // 33: trading.TradingService.ExerciseOption:input_type -> trading.ExerciseOptionRequest
+	43, // 34: trading.TradingService.RunCapitalGains:input_type -> trading.RunCapitalGainsRequest
+	46, // 35: trading.TradingService.ListTaxDebts:input_type -> trading.ListTaxDebtsRequest
+	4,  // 36: trading.TradingService.ListExchanges:output_type -> trading.ListExchangesResponse
+	7,  // 37: trading.TradingService.ListListings:output_type -> trading.ListListingsResponse
+	9,  // 38: trading.TradingService.GetListing:output_type -> trading.GetListingResponse
+	12, // 39: trading.TradingService.ListListingHistory:output_type -> trading.ListListingHistoryResponse
+	15, // 40: trading.TradingService.ListForexPairs:output_type -> trading.ListForexPairsResponse
+	18, // 41: trading.TradingService.ListOptionDates:output_type -> trading.ListOptionDatesResponse
+	22, // 42: trading.TradingService.ListOptions:output_type -> trading.ListOptionsResponse
+	24, // 43: trading.TradingService.CreateOrder:output_type -> trading.CreateOrderResponse
+	27, // 44: trading.TradingService.ListOrders:output_type -> trading.ListOrdersResponse
+	29, // 45: trading.TradingService.ApproveOrder:output_type -> trading.ApproveOrderResponse
+	31, // 46: trading.TradingService.DeclineOrder:output_type -> trading.DeclineOrderResponse
+	33, // 47: trading.TradingService.CancelOrder:output_type -> trading.CancelOrderResponse
+	2,  // 48: trading.TradingService.SetExchangeOpenOverride:output_type -> trading.SetExchangeOpenOverrideResponse
+	36, // 49: trading.TradingService.ListHoldings:output_type -> trading.ListHoldingsResponse
+	38, // 50: trading.TradingService.SellHolding:output_type -> trading.SellHoldingResponse
+	40, // 51: trading.TradingService.SetHoldingPublic:output_type -> trading.SetHoldingPublicResponse
+	42, // 52: trading.TradingService.ExerciseOption:output_type -> trading.ExerciseOptionResponse
+	44, // 53: trading.TradingService.RunCapitalGains:output_type -> trading.RunCapitalGainsResponse
+	47, // 54: trading.TradingService.ListTaxDebts:output_type -> trading.ListTaxDebtsResponse
+	36, // [36:55] is the sub-list for method output_type
+	17, // [17:36] is the sub-list for method input_type
+	17, // [17:17] is the sub-list for extension type_name
+	17, // [17:17] is the sub-list for extension extendee
+	0,  // [0:17] is the sub-list for field type_name
 }
 
 func init() { file_trading_trading_proto_init() }
@@ -3505,7 +3876,7 @@ func file_trading_trading_proto_init() {
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
 			RawDescriptor: unsafe.Slice(unsafe.StringData(file_trading_trading_proto_rawDesc), len(file_trading_trading_proto_rawDesc)),
 			NumEnums:      0,
-			NumMessages:   43,
+			NumMessages:   48,
 			NumExtensions: 0,
 			NumServices:   1,
 		},

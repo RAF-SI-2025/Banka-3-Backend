@@ -36,6 +36,8 @@ const (
 	TradingService_SellHolding_FullMethodName             = "/trading.TradingService/SellHolding"
 	TradingService_SetHoldingPublic_FullMethodName        = "/trading.TradingService/SetHoldingPublic"
 	TradingService_ExerciseOption_FullMethodName          = "/trading.TradingService/ExerciseOption"
+	TradingService_RunCapitalGains_FullMethodName         = "/trading.TradingService/RunCapitalGains"
+	TradingService_ListTaxDebts_FullMethodName            = "/trading.TradingService/ListTaxDebts"
 )
 
 // TradingServiceClient is the client API for TradingService service.
@@ -59,6 +61,8 @@ type TradingServiceClient interface {
 	SellHolding(ctx context.Context, in *SellHoldingRequest, opts ...grpc.CallOption) (*SellHoldingResponse, error)
 	SetHoldingPublic(ctx context.Context, in *SetHoldingPublicRequest, opts ...grpc.CallOption) (*SetHoldingPublicResponse, error)
 	ExerciseOption(ctx context.Context, in *ExerciseOptionRequest, opts ...grpc.CallOption) (*ExerciseOptionResponse, error)
+	RunCapitalGains(ctx context.Context, in *RunCapitalGainsRequest, opts ...grpc.CallOption) (*RunCapitalGainsResponse, error)
+	ListTaxDebts(ctx context.Context, in *ListTaxDebtsRequest, opts ...grpc.CallOption) (*ListTaxDebtsResponse, error)
 }
 
 type tradingServiceClient struct {
@@ -239,6 +243,26 @@ func (c *tradingServiceClient) ExerciseOption(ctx context.Context, in *ExerciseO
 	return out, nil
 }
 
+func (c *tradingServiceClient) RunCapitalGains(ctx context.Context, in *RunCapitalGainsRequest, opts ...grpc.CallOption) (*RunCapitalGainsResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(RunCapitalGainsResponse)
+	err := c.cc.Invoke(ctx, TradingService_RunCapitalGains_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *tradingServiceClient) ListTaxDebts(ctx context.Context, in *ListTaxDebtsRequest, opts ...grpc.CallOption) (*ListTaxDebtsResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(ListTaxDebtsResponse)
+	err := c.cc.Invoke(ctx, TradingService_ListTaxDebts_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
 // TradingServiceServer is the server API for TradingService service.
 // All implementations must embed UnimplementedTradingServiceServer
 // for forward compatibility.
@@ -260,6 +284,8 @@ type TradingServiceServer interface {
 	SellHolding(context.Context, *SellHoldingRequest) (*SellHoldingResponse, error)
 	SetHoldingPublic(context.Context, *SetHoldingPublicRequest) (*SetHoldingPublicResponse, error)
 	ExerciseOption(context.Context, *ExerciseOptionRequest) (*ExerciseOptionResponse, error)
+	RunCapitalGains(context.Context, *RunCapitalGainsRequest) (*RunCapitalGainsResponse, error)
+	ListTaxDebts(context.Context, *ListTaxDebtsRequest) (*ListTaxDebtsResponse, error)
 	mustEmbedUnimplementedTradingServiceServer()
 }
 
@@ -320,6 +346,12 @@ func (UnimplementedTradingServiceServer) SetHoldingPublic(context.Context, *SetH
 }
 func (UnimplementedTradingServiceServer) ExerciseOption(context.Context, *ExerciseOptionRequest) (*ExerciseOptionResponse, error) {
 	return nil, status.Error(codes.Unimplemented, "method ExerciseOption not implemented")
+}
+func (UnimplementedTradingServiceServer) RunCapitalGains(context.Context, *RunCapitalGainsRequest) (*RunCapitalGainsResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method RunCapitalGains not implemented")
+}
+func (UnimplementedTradingServiceServer) ListTaxDebts(context.Context, *ListTaxDebtsRequest) (*ListTaxDebtsResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method ListTaxDebts not implemented")
 }
 func (UnimplementedTradingServiceServer) mustEmbedUnimplementedTradingServiceServer() {}
 func (UnimplementedTradingServiceServer) testEmbeddedByValue()                        {}
@@ -648,6 +680,42 @@ func _TradingService_ExerciseOption_Handler(srv interface{}, ctx context.Context
 	return interceptor(ctx, in, info, handler)
 }
 
+func _TradingService_RunCapitalGains_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(RunCapitalGainsRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(TradingServiceServer).RunCapitalGains(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: TradingService_RunCapitalGains_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(TradingServiceServer).RunCapitalGains(ctx, req.(*RunCapitalGainsRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _TradingService_ListTaxDebts_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(ListTaxDebtsRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(TradingServiceServer).ListTaxDebts(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: TradingService_ListTaxDebts_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(TradingServiceServer).ListTaxDebts(ctx, req.(*ListTaxDebtsRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
 // TradingService_ServiceDesc is the grpc.ServiceDesc for TradingService service.
 // It's only intended for direct use with grpc.RegisterService,
 // and not to be introspected or modified (even as a copy)
@@ -722,6 +790,14 @@ var TradingService_ServiceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "ExerciseOption",
 			Handler:    _TradingService_ExerciseOption_Handler,
+		},
+		{
+			MethodName: "RunCapitalGains",
+			Handler:    _TradingService_RunCapitalGains_Handler,
+		},
+		{
+			MethodName: "ListTaxDebts",
+			Handler:    _TradingService_ListTaxDebts_Handler,
 		},
 	},
 	Streams:  []grpc.StreamDesc{},

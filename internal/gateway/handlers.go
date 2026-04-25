@@ -191,6 +191,15 @@ func SetupApi(router *gin.Engine, server *Server) {
 	// market hours (see spec p.40 and issue #194). Admin bypass still applies
 	// through `secured("supervisor")`.
 	api.PATCH("/exchanges/:id/open-override", auth, secured("supervisor"), server.SetExchangeOpenOverride)
+
+	// Supervisor tax portal (spec p.63 / #209). Manual "Pokreni obračun"
+	// button + the per-user dugovanja listing. Supervisor-only at the
+	// gateway; the trading RPC re-checks defense-in-depth.
+	tax := api.Group("/tax", auth, secured("supervisor"))
+	{
+		tax.POST("/run", server.RunCapitalGains)
+		tax.GET("/debts", server.ListTaxDebts)
+	}
 }
 
 func (s *Server) Healthz(c *gin.Context) {
