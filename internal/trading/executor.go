@@ -279,6 +279,7 @@ func (s *Server) executeFill(o *Order, now time.Time) (time.Time, error) {
 		if err != nil {
 			return err
 		}
+		var soldFromSnapshot *Holding
 		if locked.Direction == DirectionBuy {
 			accountID, err := holdingAccountID(tx, locked.AccountNumber)
 			if err != nil {
@@ -289,7 +290,8 @@ func (s *Server) executeFill(o *Order, now time.Time) (time.Time, error) {
 				return err
 			}
 		} else {
-			if err := deductHoldingOnSell(tx, locked.PlacerID, assetCol, assetID, chunk, now); err != nil {
+			soldFromSnapshot, err = deductHoldingOnSell(tx, locked.PlacerID, assetCol, assetID, chunk, now)
+			if err != nil {
 				return err
 			}
 		}
@@ -302,6 +304,24 @@ func (s *Server) executeFill(o *Order, now time.Time) (time.Time, error) {
 		}
 		if err := tx.Create(&fill).Error; err != nil {
 			return status.Errorf(codes.Internal, "%v", err)
+		}
+
+		// Capital-gains tax (#208): stock sell-fills with positive dobit owe
+		// 15% (RSD). recordCapitalGain is a no-op on non-stock snapshots and
+		// loss fills, so it's safe to call unconditionally on the sell path.
+		// RSD accounts skip the rate lookup — the conversion is the identity.
+		if locked.Direction == DirectionSell && soldFromSnapshot != nil {
+			rateAccRSD := 1.0
+			if acc.Currency != "RSD" {
+				r, err := s.bank.GetExchangeRateToRSD(acc.Currency)
+				if err != nil {
+					return status.Errorf(codes.Internal, "%v", err)
+				}
+				rateAccRSD = r
+			}
+			if err := recordCapitalGain(tx, soldFromSnapshot, fill.ID, chunk, settle.accAmount, rateAccRSD, now); err != nil {
+				return err
+			}
 		}
 
 		newVolume, err := upsertDailyVolume(tx, *locked.ListingID, now, chunk, listing)

@@ -107,9 +107,13 @@ func upsertHoldingOnBuy(tx *gorm.DB, placerID int64, accountID int64, assetCol s
 // public_amount tracks the OTC-discoverable share count and must never exceed
 // amount; if a sell drops amount below the current public_amount, the public
 // counter is clamped down so the invariant holds.
-func deductHoldingOnSell(tx *gorm.DB, placerID int64, assetCol string, assetID int64, chunk int64, now time.Time) error {
+//
+// The returned Holding is the pre-deduction snapshot — avg_cost and
+// account_id at the moment of sale, which capital_gains.go needs to compute
+// the tax row (#208). nil is returned only alongside a non-nil error.
+func deductHoldingOnSell(tx *gorm.DB, placerID int64, assetCol string, assetID int64, chunk int64, now time.Time) (*Holding, error) {
 	if chunk <= 0 {
-		return nil
+		return nil, nil
 	}
 
 	var h Holding
@@ -117,13 +121,13 @@ func deductHoldingOnSell(tx *gorm.DB, placerID int64, assetCol string, assetID i
 		Where("placer_id = ? AND "+assetCol+" = ?", placerID, assetID).
 		First(&h).Error
 	if errors.Is(err, gorm.ErrRecordNotFound) {
-		return status.Error(codes.FailedPrecondition, "no holding for sell-side fill")
+		return nil, status.Error(codes.FailedPrecondition, "no holding for sell-side fill")
 	}
 	if err != nil {
-		return status.Errorf(codes.Internal, "%v", err)
+		return nil, status.Errorf(codes.Internal, "%v", err)
 	}
 	if h.Amount < chunk {
-		return status.Error(codes.FailedPrecondition, "insufficient holding for sell-side fill")
+		return nil, status.Error(codes.FailedPrecondition, "insufficient holding for sell-side fill")
 	}
 
 	newAmount := h.Amount - chunk
@@ -135,9 +139,9 @@ func deductHoldingOnSell(tx *gorm.DB, placerID int64, assetCol string, assetID i
 		updates["public_amount"] = newAmount
 	}
 	if err := tx.Model(&Holding{}).Where("id = ?", h.ID).Updates(updates).Error; err != nil {
-		return status.Errorf(codes.Internal, "%v", err)
+		return nil, status.Errorf(codes.Internal, "%v", err)
 	}
-	return nil
+	return &h, nil
 }
 
 // findOrCreatePlacer returns the order_placers.id for the given identity,

@@ -492,6 +492,30 @@ CREATE TABLE IF NOT EXISTS order_fills (
 );
 CREATE INDEX IF NOT EXISTS idx_order_fills_order ON order_fills(order_id);
 
+-- Capital-gains tax tracking (#208, spec pp.63–64). One row per sell-fill that
+-- realizes positive dobit on a stock; loss fills are skipped because there's
+-- nothing to tax (spec p.62 "u slučaju gubitka"). realized_profit is in the
+-- booking account's currency (avg_cost vs sell proceeds both live there);
+-- tax_due is 15% of that, converted to RSD at the sale-day rate because the
+-- state company has only an RSD account (Napomena 2 on p.63). paid_at stays
+-- NULL until the monthly collection cron (#209) debits the placer.
+CREATE TABLE IF NOT EXISTS capital_gains (
+    id                  BIGSERIAL       PRIMARY KEY,
+    seller_placer_id    BIGINT          NOT NULL REFERENCES order_placers(id) ON UPDATE CASCADE ON DELETE RESTRICT,
+    account_id          BIGINT          NOT NULL REFERENCES accounts(id) ON UPDATE CASCADE ON DELETE RESTRICT,
+    order_fill_id       BIGINT          REFERENCES order_fills(id) ON UPDATE CASCADE ON DELETE SET NULL,
+    realized_profit     BIGINT          NOT NULL CHECK (realized_profit > 0),
+    tax_due             BIGINT          NOT NULL CHECK (tax_due >= 0),
+    period              CHAR(7)         NOT NULL,
+    paid_at             TIMESTAMP,
+    created_at          TIMESTAMP       NOT NULL DEFAULT NOW()
+);
+-- The cron scans by (period, unpaid) — partial index keeps it selective as
+-- paid rows accumulate.
+CREATE INDEX IF NOT EXISTS idx_capital_gains_period_unpaid
+    ON capital_gains(period, seller_placer_id)
+    WHERE paid_at IS NULL;
+
 -- Notify Redis when employee permissions change
 CREATE OR REPLACE FUNCTION notify_permission_change() RETURNS trigger AS $$
 DECLARE

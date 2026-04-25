@@ -868,6 +868,56 @@ CROSS JOIN generate_series(1, 30) AS gs(n)
 ON CONFLICT (listing_id, date) DO NOTHING;
 
 -------------------------------------------------------------------------------
+-- State as a company (spec p.38 "naša država = firma", #208). Acts as the
+-- destination for capital-gains tax transfers. tax_code = 1 is the stable
+-- magic value lookups can key off; one RSD current account per the spec
+-- ("država ima samo RSD račun", p.63 Napomena 2).
+-------------------------------------------------------------------------------
+INSERT INTO clients (
+    first_name, last_name, date_of_birth, gender, email,
+    phone_number, address, password, salt_password
+)
+VALUES (
+    'Republika', 'Srbija', '1900-01-01', 'M', 'drzava@republika.rs',
+    '+381600000002', 'Nemanjina 11',
+    '\x0000000000000000000000000000000000000000000000000000000000000000'::BYTEA,
+    '\x00000000000000000000000000000000'::BYTEA
+)
+ON CONFLICT (email) DO NOTHING;
+
+INSERT INTO activity_codes (code, sector, branch)
+VALUES ('84.11', 'Public administration', 'General public administration')
+ON CONFLICT (code) DO NOTHING;
+
+INSERT INTO companies (registered_id, name, tax_code, activity_code_id, address, owner_id)
+SELECT 84110001, 'Republika Srbija', 1, ac.id, 'Nemanjina 11', c.id
+FROM activity_codes ac, clients c
+WHERE ac.code = '84.11' AND c.email = 'drzava@republika.rs'
+ON CONFLICT (registered_id) DO NOTHING;
+
+INSERT INTO accounts (number, name, owner, company_id, balance, created_by, valid_until, currency, active, owner_type, account_type, maintainance_cost, daily_limit, monthly_limit, daily_expenditure, monthly_expenditure)
+SELECT
+    '333000100000099910' AS number,
+    'Republika Srbija - RSD' AS name,
+    c.id AS owner,
+    co.id AS company_id,
+    0 AS balance,
+    e.id AS created_by,
+    '2099-12-31' AS valid_until,
+    'RSD' AS currency,
+    TRUE AS active,
+    'business'::owner_type AS owner_type,
+    'checking'::account_type AS account_type,
+    0 AS maintainance_cost,
+    NULL AS daily_limit,
+    NULL AS monthly_limit,
+    0 AS daily_expenditure,
+    0 AS monthly_expenditure
+FROM clients c, companies co, employees e
+WHERE c.email = 'drzava@republika.rs' AND co.tax_code = 1 AND e.email = :'admin_email'
+ON CONFLICT (number) DO NOTHING;
+
+-------------------------------------------------------------------------------
 -- Options: Black-Scholes fallback (spec p.45) — 11 strikes per stock at 10%
 -- steps around spot, CALL + PUT for each, with 6-day and 30-day expiries.
 -- IV=1 (placeholder until BS pricing is wired up); premium is a simple
