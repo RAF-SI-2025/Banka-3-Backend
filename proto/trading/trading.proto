@@ -24,6 +24,7 @@ service TradingService {
   rpc ExerciseOption(ExerciseOptionRequest) returns (ExerciseOptionResponse);
   rpc RunCapitalGains(RunCapitalGainsRequest) returns (RunCapitalGainsResponse);
   rpc ListTaxDebts(ListTaxDebtsRequest) returns (ListTaxDebtsResponse);
+  rpc GetMyTaxInfo(GetMyTaxInfoRequest) returns (GetMyTaxInfoResponse);
 }
 
 message Exchange {
@@ -455,4 +456,19 @@ message ListTaxDebtsRequest {
 
 message ListTaxDebtsResponse {
   repeated TaxDebtor debtors = 1;
+}
+
+// GetMyTaxInfo backs the Moj Portfolio tax widget (spec p.61). Caller identity
+// is read from the `user-email` gRPC metadata via bank.ResolveCaller; any
+// authenticated client or actuary may call it. paid_this_year_rsd sums tax
+// rows whose paid_at falls in the current calendar year; unpaid_this_month_rsd
+// sums every still-unpaid row (the cron sweeps monthly, so "tekući mesec" and
+// "all unpaid" coincide in practice).
+message GetMyTaxInfoRequest {
+  string caller_email = 1;
+}
+
+message GetMyTaxInfoResponse {
+  int64 paid_this_year_rsd = 1;
+  int64 unpaid_this_month_rsd = 2;
 }

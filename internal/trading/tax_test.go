@@ -115,6 +115,107 @@ func TestListTaxDebts_RejectsBadTeam(t *testing.T) {
 	}
 }
 
+// TestLookupPlacerID_ClientFound covers the simple client path: caller is a
+// client, placer row already exists. lookupPlacerID returns the placer id and
+// does not touch the employees table.
+func TestLookupPlacerID_ClientFound(t *testing.T) {
+	srv, mock, done := newTaxTestServer(t)
+	defer done()
+
+	mock.ExpectQuery(`SELECT id FROM "order_placers" WHERE client_id = \$1 LIMIT \$2`).
+		WithArgs(int64(42), 1).
+		WillReturnRows(sqlmock.NewRows([]string{"id"}).AddRow(int64(7)))
+
+	got, err := lookupPlacerID(srv.db, true, 42, "")
+	if err != nil {
+		t.Fatalf("lookupPlacerID: %v", err)
+	}
+	if got != 7 {
+		t.Errorf("got placer %d, want 7", got)
+	}
+	if err := mock.ExpectationsWereMet(); err != nil {
+		t.Fatalf("unmet expectations: %v", err)
+	}
+}
+
+// TestLookupPlacerID_NoPlacer covers the "user has never traded" case —
+// lookupPlacerID returns 0, nil so the RPC can collapse to an empty response
+// rather than 404. Mirrors the ListHoldings empty-list semantics.
+func TestLookupPlacerID_NoPlacer(t *testing.T) {
+	srv, mock, done := newTaxTestServer(t)
+	defer done()
+
+	mock.ExpectQuery(`SELECT id FROM "order_placers" WHERE client_id = \$1 LIMIT \$2`).
+		WithArgs(int64(42), 1).
+		WillReturnError(gorm.ErrRecordNotFound)
+
+	got, err := lookupPlacerID(srv.db, true, 42, "")
+	if err != nil {
+		t.Fatalf("lookupPlacerID: %v", err)
+	}
+	if got != 0 {
+		t.Errorf("got placer %d, want 0", got)
+	}
+	if err := mock.ExpectationsWereMet(); err != nil {
+		t.Fatalf("unmet expectations: %v", err)
+	}
+}
+
+// TestLookupPlacerID_EmployeeChain pins the two-step employee resolution: look
+// up the employee row by email first, then the placer by employee_id. Each
+// step is a separate query so the supervisor portal's existing
+// employees-by-email join is not duplicated here.
+func TestLookupPlacerID_EmployeeChain(t *testing.T) {
+	srv, mock, done := newTaxTestServer(t)
+	defer done()
+
+	mock.ExpectQuery(`SELECT id FROM "employees" WHERE email = \$1 LIMIT \$2`).
+		WithArgs("agent@banka.raf", 1).
+		WillReturnRows(sqlmock.NewRows([]string{"id"}).AddRow(int64(11)))
+	mock.ExpectQuery(`SELECT id FROM "order_placers" WHERE employee_id = \$1 LIMIT \$2`).
+		WithArgs(int64(11), 1).
+		WillReturnRows(sqlmock.NewRows([]string{"id"}).AddRow(int64(99)))
+
+	got, err := lookupPlacerID(srv.db, false, 0, "agent@banka.raf")
+	if err != nil {
+		t.Fatalf("lookupPlacerID: %v", err)
+	}
+	if got != 99 {
+		t.Errorf("got placer %d, want 99", got)
+	}
+	if err := mock.ExpectationsWereMet(); err != nil {
+		t.Fatalf("unmet expectations: %v", err)
+	}
+}
+
+// TestAggregateMyTaxInfo verifies the year-filtered SUM query: paid rows in
+// the requested year roll into paid_this_year_rsd, every still-unpaid row
+// rolls into unpaid_this_month_rsd. The single-query CASE shape means both
+// totals come back from one round trip.
+func TestAggregateMyTaxInfo(t *testing.T) {
+	srv, mock, done := newTaxTestServer(t)
+	defer done()
+
+	mock.ExpectQuery(`FROM "capital_gains" WHERE seller_placer_id = \$2`).
+		WithArgs(2026, int64(7)).
+		WillReturnRows(sqlmock.NewRows([]string{"paid_this_year_rsd", "unpaid_this_month_rsd"}).
+			AddRow(int64(1500), int64(450)))
+
+	resp, err := aggregateMyTaxInfo(srv.db, 7, 2026)
+	if err != nil {
+		t.Fatalf("aggregateMyTaxInfo: %v", err)
+	}
+	if resp.PaidThisYearRsd != 1500 {
+		t.Errorf("paid_this_year_rsd = %d, want 1500", resp.PaidThisYearRsd)
+	}
+	if resp.UnpaidThisMonthRsd != 450 {
+		t.Errorf("unpaid_this_month_rsd = %d, want 450", resp.UnpaidThisMonthRsd)
+	}
+	if err := mock.ExpectationsWereMet(); err != nil {
+		t.Fatalf("unmet expectations: %v", err)
+	}
+}
+
 // TestMonthRegex pins the YYYY-MM filter so a regex tweak doesn't accidentally
 // admit malformed periods (which would silently match zero rows in the
 // `period = ?` predicate at collection time).

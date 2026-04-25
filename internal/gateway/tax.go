@@ -71,3 +71,23 @@ func (s *Server) ListTaxDebts(c *gin.Context) {
 	}
 	c.JSON(http.StatusOK, out)
 }
+
+// GetMyTaxInfo backs `GET /api/tax/me` — the two aggregates the Moj Portfolio
+// page renders for the logged-in user (spec p.61). Open to any authenticated
+// client or actuary; the trading RPC resolves the caller via bank.ResolveCaller.
+func (s *Server) GetMyTaxInfo(c *gin.Context) {
+	ctx, cancel := context.WithTimeout(c.Request.Context(), 5*time.Second)
+	defer cancel()
+
+	resp, err := s.TradingClient.GetMyTaxInfo(ctx, &tradingpb.GetMyTaxInfoRequest{
+		CallerEmail: c.GetString("email"),
+	})
+	if err != nil {
+		writeGRPCError(c, err)
+		return
+	}
+	c.JSON(http.StatusOK, gin.H{
+		"paid_this_year_rsd":    resp.PaidThisYearRsd,
+		"unpaid_this_month_rsd": resp.UnpaidThisMonthRsd,
+	})
+}

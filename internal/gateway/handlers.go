@@ -200,6 +200,11 @@ func SetupApi(router *gin.Engine, server *Server) {
 		tax.POST("/run", server.RunCapitalGains)
 		tax.GET("/debts", server.ListTaxDebts)
 	}
+
+	// Per-self tax aggregate for the Moj Portfolio page (spec p.61 / #226).
+	// Any authenticated client or actuary; the trading RPC resolves the
+	// caller and returns zeros for users with no trading history.
+	api.GET("/tax/me", auth, server.GetMyTaxInfo)
 }
 
 func (s *Server) Healthz(c *gin.Context) {

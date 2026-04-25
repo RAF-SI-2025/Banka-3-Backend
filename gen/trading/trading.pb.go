@@ -3425,6 +3425,108 @@ func (x *ListTaxDebtsResponse) GetDebtors() []*TaxDebtor {
 	return nil
 }
 
+// GetMyTaxInfo backs the Moj Portfolio tax widget (spec p.61). Caller identity
+// is read from the `user-email` gRPC metadata via bank.ResolveCaller; any
+// authenticated client or actuary may call it. paid_this_year_rsd sums tax
+// rows whose paid_at falls in the current calendar year; unpaid_this_month_rsd
+// sums every still-unpaid row (the cron sweeps monthly, so "tekući mesec" and
+// "all unpaid" coincide in practice).
+type GetMyTaxInfoRequest struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	CallerEmail   string                 `protobuf:"bytes,1,opt,name=caller_email,json=callerEmail,proto3" json:"caller_email,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *GetMyTaxInfoRequest) Reset() {
+	*x = GetMyTaxInfoRequest{}
+	mi := &file_trading_trading_proto_msgTypes[48]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *GetMyTaxInfoRequest) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*GetMyTaxInfoRequest) ProtoMessage() {}
+
+func (x *GetMyTaxInfoRequest) ProtoReflect() protoreflect.Message {
+	mi := &file_trading_trading_proto_msgTypes[48]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use GetMyTaxInfoRequest.ProtoReflect.Descriptor instead.
+func (*GetMyTaxInfoRequest) Descriptor() ([]byte, []int) {
+	return file_trading_trading_proto_rawDescGZIP(), []int{48}
+}
+
+func (x *GetMyTaxInfoRequest) GetCallerEmail() string {
+	if x != nil {
+		return x.CallerEmail
+	}
+	return ""
+}
+
+type GetMyTaxInfoResponse struct {
+	state              protoimpl.MessageState `protogen:"open.v1"`
+	PaidThisYearRsd    int64                  `protobuf:"varint,1,opt,name=paid_this_year_rsd,json=paidThisYearRsd,proto3" json:"paid_this_year_rsd,omitempty"`
+	UnpaidThisMonthRsd int64                  `protobuf:"varint,2,opt,name=unpaid_this_month_rsd,json=unpaidThisMonthRsd,proto3" json:"unpaid_this_month_rsd,omitempty"`
+	unknownFields      protoimpl.UnknownFields
+	sizeCache          protoimpl.SizeCache
+}
+
+func (x *GetMyTaxInfoResponse) Reset() {
+	*x = GetMyTaxInfoResponse{}
+	mi := &file_trading_trading_proto_msgTypes[49]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *GetMyTaxInfoResponse) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*GetMyTaxInfoResponse) ProtoMessage() {}
+
+func (x *GetMyTaxInfoResponse) ProtoReflect() protoreflect.Message {
+	mi := &file_trading_trading_proto_msgTypes[49]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use GetMyTaxInfoResponse.ProtoReflect.Descriptor instead.
+func (*GetMyTaxInfoResponse) Descriptor() ([]byte, []int) {
+	return file_trading_trading_proto_rawDescGZIP(), []int{49}
+}
+
+func (x *GetMyTaxInfoResponse) GetPaidThisYearRsd() int64 {
+	if x != nil {
+		return x.PaidThisYearRsd
+	}
+	return 0
+}
+
+func (x *GetMyTaxInfoResponse) GetUnpaidThisMonthRsd() int64 {
+	if x != nil {
+		return x.UnpaidThisMonthRsd
+	}
+	return 0
+}
+
 var File_trading_trading_proto protoreflect.FileDescriptor
 
 const file_trading_trading_proto_rawDesc = "" +
@@ -3715,7 +3817,12 @@ const file_trading_trading_proto_rawDesc = "" +
 	"\x04team\x18\x02 \x01(\tR\x04team\x12\x12\n" +
 	"\x04name\x18\x03 \x01(\tR\x04name\"D\n" +
 	"\x14ListTaxDebtsResponse\x12,\n" +
-	"\adebtors\x18\x01 \x03(\v2\x12.trading.TaxDebtorR\adebtors2\x8f\f\n" +
+	"\adebtors\x18\x01 \x03(\v2\x12.trading.TaxDebtorR\adebtors\"8\n" +
+	"\x13GetMyTaxInfoRequest\x12!\n" +
+	"\fcaller_email\x18\x01 \x01(\tR\vcallerEmail\"v\n" +
+	"\x14GetMyTaxInfoResponse\x12+\n" +
+	"\x12paid_this_year_rsd\x18\x01 \x01(\x03R\x0fpaidThisYearRsd\x121\n" +
+	"\x15unpaid_this_month_rsd\x18\x02 \x01(\x03R\x12unpaidThisMonthRsd2\xdc\f\n" +
 	"\x0eTradingService\x12N\n" +
 	"\rListExchanges\x12\x1d.trading.ListExchangesRequest\x1a\x1e.trading.ListExchangesResponse\x12K\n" +
 	"\fListListings\x12\x1c.trading.ListListingsRequest\x1a\x1d.trading.ListListingsResponse\x12E\n" +
@@ -3737,7 +3844,8 @@ const file_trading_trading_proto_rawDesc = "" +
 	"\x10SetHoldingPublic\x12 .trading.SetHoldingPublicRequest\x1a!.trading.SetHoldingPublicResponse\x12Q\n" +
 	"\x0eExerciseOption\x12\x1e.trading.ExerciseOptionRequest\x1a\x1f.trading.ExerciseOptionResponse\x12T\n" +
 	"\x0fRunCapitalGains\x12\x1f.trading.RunCapitalGainsRequest\x1a .trading.RunCapitalGainsResponse\x12K\n" +
-	"\fListTaxDebts\x12\x1c.trading.ListTaxDebtsRequest\x1a\x1d.trading.ListTaxDebtsResponseB4Z2github.com/RAF-SI-2025/Banka-3-Backend/gen/tradingb\x06proto3"
+	"\fListTaxDebts\x12\x1c.trading.ListTaxDebtsRequest\x1a\x1d.trading.ListTaxDebtsResponse\x12K\n" +
+	"\fGetMyTaxInfo\x12\x1c.trading.GetMyTaxInfoRequest\x1a\x1d.trading.GetMyTaxInfoResponseB4Z2github.com/RAF-SI-2025/Banka-3-Backend/gen/tradingb\x06proto3"
 
 var (
 	file_trading_trading_proto_rawDescOnce sync.Once
@@ -3751,7 +3859,7 @@ func file_trading_trading_proto_rawDescGZIP() []byte {
 	return file_trading_trading_proto_rawDescData
 }
 
-var file_trading_trading_proto_msgTypes = make([]protoimpl.MessageInfo, 48)
+var file_trading_trading_proto_msgTypes = make([]protoimpl.MessageInfo, 50)
 var file_trading_trading_proto_goTypes = []any{
 	(*Exchange)(nil),                        // 0: trading.Exchange
 	(*SetExchangeOpenOverrideRequest)(nil),  // 1: trading.SetExchangeOpenOverrideRequest
@@ -3801,6 +3909,8 @@ var file_trading_trading_proto_goTypes = []any{
 	(*TaxDebtor)(nil),                       // 45: trading.TaxDebtor
 	(*ListTaxDebtsRequest)(nil),             // 46: trading.ListTaxDebtsRequest
 	(*ListTaxDebtsResponse)(nil),            // 47: trading.ListTaxDebtsResponse
+	(*GetMyTaxInfoRequest)(nil),             // 48: trading.GetMyTaxInfoRequest
+	(*GetMyTaxInfoResponse)(nil),            // 49: trading.GetMyTaxInfoResponse
 }
 var file_trading_trading_proto_depIdxs = []int32{
 	0,  // 0: trading.SetExchangeOpenOverrideResponse.exchange:type_name -> trading.Exchange
@@ -3839,27 +3949,29 @@ var file_trading_trading_proto_depIdxs = []int32{
 	41, // 33: trading.TradingService.ExerciseOption:input_type -> trading.ExerciseOptionRequest
 	43, // 34: trading.TradingService.RunCapitalGains:input_type -> trading.RunCapitalGainsRequest
 	46, // 35: trading.TradingService.ListTaxDebts:input_type -> trading.ListTaxDebtsRequest
-	4,  // 36: trading.TradingService.ListExchanges:output_type -> trading.ListExchangesResponse
-	7,  // 37: trading.TradingService.ListListings:output_type -> trading.ListListingsResponse
-	9,  // 38: trading.TradingService.GetListing:output_type -> trading.GetListingResponse
-	12, // 39: trading.TradingService.ListListingHistory:output_type -> trading.ListListingHistoryResponse
-	15, // 40: trading.TradingService.ListForexPairs:output_type -> trading.ListForexPairsResponse
-	18, // 41: trading.TradingService.ListOptionDates:output_type -> trading.ListOptionDatesResponse
-	22, // 42: trading.TradingService.ListOptions:output_type -> trading.ListOptionsResponse
-	24, // 43: trading.TradingService.CreateOrder:output_type -> trading.CreateOrderResponse
-	27, // 44: trading.TradingService.ListOrders:output_type -> trading.ListOrdersResponse
-	29, // 45: trading.TradingService.ApproveOrder:output_type -> trading.ApproveOrderResponse
-	31, // 46: trading.TradingService.DeclineOrder:output_type -> trading.DeclineOrderResponse
-	33, // 47: trading.TradingService.CancelOrder:output_type -> trading.CancelOrderResponse
-	2,  // 48: trading.TradingService.SetExchangeOpenOverride:output_type -> trading.SetExchangeOpenOverrideResponse
-	36, // 49: trading.TradingService.ListHoldings:output_type -> trading.ListHoldingsResponse
-	38, // 50: trading.TradingService.SellHolding:output_type -> trading.SellHoldingResponse
-	40, // 51: trading.TradingService.SetHoldingPublic:output_type -> trading.SetHoldingPublicResponse
-	42, // 52: trading.TradingService.ExerciseOption:output_type -> trading.ExerciseOptionResponse
-	44, // 53: trading.TradingService.RunCapitalGains:output_type -> trading.RunCapitalGainsResponse
-	47, // 54: trading.TradingService.ListTaxDebts:output_type -> trading.ListTaxDebtsResponse
-	36, // [36:55] is the sub-list for method output_type
-	17, // [17:36] is the sub-list for method input_type
+	48, // 36: trading.TradingService.GetMyTaxInfo:input_type -> trading.GetMyTaxInfoRequest
+	4,  // 37: trading.TradingService.ListExchanges:output_type -> trading.ListExchangesResponse
+	7,  // 38: trading.TradingService.ListListings:output_type -> trading.ListListingsResponse
+	9,  // 39: trading.TradingService.GetListing:output_type -> trading.GetListingResponse
+	12, // 40: trading.TradingService.ListListingHistory:output_type -> trading.ListListingHistoryResponse
+	15, // 41: trading.TradingService.ListForexPairs:output_type -> trading.ListForexPairsResponse
+	18, // 42: trading.TradingService.ListOptionDates:output_type -> trading.ListOptionDatesResponse
+	22, // 43: trading.TradingService.ListOptions:output_type -> trading.ListOptionsResponse
+	24, // 44: trading.TradingService.CreateOrder:output_type -> trading.CreateOrderResponse
+	27, // 45: trading.TradingService.ListOrders:output_type -> trading.ListOrdersResponse
+	29, // 46: trading.TradingService.ApproveOrder:output_type -> trading.ApproveOrderResponse
+	31, // 47: trading.TradingService.DeclineOrder:output_type -> trading.DeclineOrderResponse
+	33, // 48: trading.TradingService.CancelOrder:output_type -> trading.CancelOrderResponse
+	2,  // 49: trading.TradingService.SetExchangeOpenOverride:output_type -> trading.SetExchangeOpenOverrideResponse
+	36, // 50: trading.TradingService.ListHoldings:output_type -> trading.ListHoldingsResponse
+	38, // 51: trading.TradingService.SellHolding:output_type -> trading.SellHoldingResponse
+	40, // 52: trading.TradingService.SetHoldingPublic:output_type -> trading.SetHoldingPublicResponse
+	42, // 53: trading.TradingService.ExerciseOption:output_type -> trading.ExerciseOptionResponse
+	44, // 54: trading.TradingService.RunCapitalGains:output_type -> trading.RunCapitalGainsResponse
+	47, // 55: trading.TradingService.ListTaxDebts:output_type -> trading.ListTaxDebtsResponse
+	49, // 56: trading.TradingService.GetMyTaxInfo:output_type -> trading.GetMyTaxInfoResponse
+	37, // [37:57] is the sub-list for method output_type
+	17, // [17:37] is the sub-list for method input_type
 	17, // [17:17] is the sub-list for extension type_name
 	17, // [17:17] is the sub-list for extension extendee
 	0,  // [0:17] is the sub-list for field type_name
@@ -3876,7 +3988,7 @@ func file_trading_trading_proto_init() {
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
 			RawDescriptor: unsafe.Slice(unsafe.StringData(file_trading_trading_proto_rawDesc), len(file_trading_trading_proto_rawDesc)),
 			NumEnums:      0,
-			NumMessages:   48,
+			NumMessages:   50,
 			NumExtensions: 0,
 			NumServices:   1,
 		},

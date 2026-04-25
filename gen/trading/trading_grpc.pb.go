@@ -38,6 +38,7 @@ const (
 	TradingService_ExerciseOption_FullMethodName          = "/trading.TradingService/ExerciseOption"
 	TradingService_RunCapitalGains_FullMethodName         = "/trading.TradingService/RunCapitalGains"
 	TradingService_ListTaxDebts_FullMethodName            = "/trading.TradingService/ListTaxDebts"
+	TradingService_GetMyTaxInfo_FullMethodName            = "/trading.TradingService/GetMyTaxInfo"
 )
 
 // TradingServiceClient is the client API for TradingService service.
@@ -63,6 +64,7 @@ type TradingServiceClient interface {
 	ExerciseOption(ctx context.Context, in *ExerciseOptionRequest, opts ...grpc.CallOption) (*ExerciseOptionResponse, error)
 	RunCapitalGains(ctx context.Context, in *RunCapitalGainsRequest, opts ...grpc.CallOption) (*RunCapitalGainsResponse, error)
 	ListTaxDebts(ctx context.Context, in *ListTaxDebtsRequest, opts ...grpc.CallOption) (*ListTaxDebtsResponse, error)
+	GetMyTaxInfo(ctx context.Context, in *GetMyTaxInfoRequest, opts ...grpc.CallOption) (*GetMyTaxInfoResponse, error)
 }
 
 type tradingServiceClient struct {
@@ -263,6 +265,16 @@ func (c *tradingServiceClient) ListTaxDebts(ctx context.Context, in *ListTaxDebt
 	return out, nil
 }
 
+func (c *tradingServiceClient) GetMyTaxInfo(ctx context.Context, in *GetMyTaxInfoRequest, opts ...grpc.CallOption) (*GetMyTaxInfoResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(GetMyTaxInfoResponse)
+	err := c.cc.Invoke(ctx, TradingService_GetMyTaxInfo_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
 // TradingServiceServer is the server API for TradingService service.
 // All implementations must embed UnimplementedTradingServiceServer
 // for forward compatibility.
@@ -286,6 +298,7 @@ type TradingServiceServer interface {
 	ExerciseOption(context.Context, *ExerciseOptionRequest) (*ExerciseOptionResponse, error)
 	RunCapitalGains(context.Context, *RunCapitalGainsRequest) (*RunCapitalGainsResponse, error)
 	ListTaxDebts(context.Context, *ListTaxDebtsRequest) (*ListTaxDebtsResponse, error)
+	GetMyTaxInfo(context.Context, *GetMyTaxInfoRequest) (*GetMyTaxInfoResponse, error)
 	mustEmbedUnimplementedTradingServiceServer()
 }
 
@@ -352,6 +365,9 @@ func (UnimplementedTradingServiceServer) RunCapitalGains(context.Context, *RunCa
 }
 func (UnimplementedTradingServiceServer) ListTaxDebts(context.Context, *ListTaxDebtsRequest) (*ListTaxDebtsResponse, error) {
 	return nil, status.Error(codes.Unimplemented, "method ListTaxDebts not implemented")
+}
+func (UnimplementedTradingServiceServer) GetMyTaxInfo(context.Context, *GetMyTaxInfoRequest) (*GetMyTaxInfoResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method GetMyTaxInfo not implemented")
 }
 func (UnimplementedTradingServiceServer) mustEmbedUnimplementedTradingServiceServer() {}
 func (UnimplementedTradingServiceServer) testEmbeddedByValue()                        {}
@@ -716,6 +732,24 @@ func _TradingService_ListTaxDebts_Handler(srv interface{}, ctx context.Context, 
 	return interceptor(ctx, in, info, handler)
 }
 
+func _TradingService_GetMyTaxInfo_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(GetMyTaxInfoRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(TradingServiceServer).GetMyTaxInfo(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: TradingService_GetMyTaxInfo_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(TradingServiceServer).GetMyTaxInfo(ctx, req.(*GetMyTaxInfoRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
 // TradingService_ServiceDesc is the grpc.ServiceDesc for TradingService service.
 // It's only intended for direct use with grpc.RegisterService,
 // and not to be introspected or modified (even as a copy)
@@ -798,6 +832,10 @@ var TradingService_ServiceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "ListTaxDebts",
 			Handler:    _TradingService_ListTaxDebts_Handler,
+		},
+		{
+			MethodName: "GetMyTaxInfo",
+			Handler:    _TradingService_GetMyTaxInfo_Handler,
 		},
 	},
 	Streams:  []grpc.StreamDesc{},
