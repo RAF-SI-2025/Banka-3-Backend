@@ -219,7 +219,7 @@ func (s *Server) authorizeAccountAccess(ctx context.Context, acc *Account) error
 }
 
 func (s *Server) resolveCaller(ctx context.Context) (*callerIdentity, error) {
-	email, err := s.getEmailFromMetadata(ctx)
+	email, err := s.GetEmailFromMetadata(ctx)
 	if err != nil {
 		return nil, err
 	}
@@ -235,6 +235,7 @@ func (s *Server) resolveCaller(ctx context.Context) (*callerIdentity, error) {
 	empResp, err := userClient.GetEmployeeByEmail(ctx, &userpb.GetUserByEmailRequest{
 		Email: email,
 	})
+
 	if err == nil && empResp != nil {
 		return &callerIdentity{
 			Email:      email,
@@ -259,7 +260,7 @@ func (s *Server) resolveCaller(ctx context.Context) (*callerIdentity, error) {
 	}, nil
 }
 
-func (s *Server) getEmailFromMetadata(ctx context.Context) (string, error) {
+func (s *Server) GetEmailFromMetadata(ctx context.Context) (string, error) {
 	md, ok := metadata.FromIncomingContext(ctx)
 	if !ok {
 		return "", status.Error(codes.Unauthenticated, "metadata missing")

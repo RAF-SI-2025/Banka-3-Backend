@@ -623,12 +623,12 @@ ON CONFLICT (code) DO NOTHING;
 -------------------------------------------------------------------------------
 -- Sample payments between client accounts (via bank internal account)
 -------------------------------------------------------------------------------
-INSERT INTO payments (from_account, to_account, start_amount, end_amount, commission, recipient_id, transcaction_code, call_number, reason)
+INSERT INTO payments (from_account, to_account, start_amount, end_amount, commission, recipient_id, transaction_code, call_number, reason)
 SELECT
     '333000112345678910', '333000198765432110', 50000, 50000, 0, c.id, 289, '00112233', 'Vracanje duga za veceru'
 FROM clients c WHERE c.email = 'marko@primer.raf';
 
-INSERT INTO payments (from_account, to_account, start_amount, end_amount, commission, recipient_id, transcaction_code, call_number, reason)
+INSERT INTO payments (from_account, to_account, start_amount, end_amount, commission, recipient_id, transaction_code, call_number, reason)
 SELECT
     '333000198765432110', '333000112345678910', 25000, 25000, 0, c.id, 290, '00445566', 'Kupovina laptopa'
 FROM clients c WHERE c.email = :'client_email';
