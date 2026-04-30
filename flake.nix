@@ -1,49 +1,22 @@
 {
-  description = "banka-raf dev shell";
+  description = "banka-raf";
 
-  inputs.nixpkgs.url = "https://flakehub.com/f/NixOS/nixpkgs/0.1";
-
-  outputs = {self, ...} @ inputs: let
-    goVersion = 25;
-
-    supportedSystems = [
-      "x86_64-linux"
-      "aarch64-linux"
-      "x86_64-darwin"
-      "aarch64-darwin"
-    ];
-    forEachSupportedSystem = f:
-      inputs.nixpkgs.lib.genAttrs supportedSystems (
-        system:
-          f {
-            pkgs = import inputs.nixpkgs {
-              inherit system;
-              overlays = [inputs.self.overlays.default];
-            };
-          }
-      );
-  in {
-    overlays.default = final: prev: {
-      go = final."go_1_${toString goVersion}";
-    };
-
-    devShells = forEachSupportedSystem (
-      {pkgs}: {
-        default = pkgs.mkShell {
-          packages = with pkgs; [
-            go
-            gotools
-            golangci-lint
-            gnumake
-            protobuf
-            protoc-gen-go
-            protoc-gen-go-grpc
-            postgresql
-
-            grpcurl
-          ];
-        };
-      }
-    );
+  inputs = {
+    nixpkgs.url = "https://flakehub.com/f/NixOS/nixpkgs/0.1";
+    flake-parts.url = "github:hercules-ci/flake-parts";
   };
+
+  outputs = inputs @ {flake-parts, ...}:
+    flake-parts.lib.mkFlake {inherit inputs;} {
+      systems = [
+        "x86_64-linux"
+        "aarch64-linux"
+        "x86_64-darwin"
+        "aarch64-darwin"
+      ];
+      imports = [
+        ./nix/devshell.nix
+        ./nix/services.nix
+      ];
+    };
 }
