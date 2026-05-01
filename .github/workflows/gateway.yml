@@ -7,7 +7,7 @@ on:
       - 'pkg/**'
       - 'go.work'
       - 'go.work.sum'
-      - 'docker/Dockerfile'
+      - 'utils/Dockerfile'
       - '.github/workflows/gateway.yml'
       - '.github/workflows/_service.yml'
   push:
@@ -17,7 +17,7 @@ on:
       - 'pkg/**'
       - 'go.work'
       - 'go.work.sum'
-      - 'docker/Dockerfile'
+      - 'utils/Dockerfile'
       - '.github/workflows/gateway.yml'
       - '.github/workflows/_service.yml'
 

@@ -38,10 +38,10 @@ down-v:
 proto:
 	docker build -t banka-proto -f utils/proto/Dockerfile .
 	docker run --rm -v $(PWD):/workspace -u $$(id -u):$$(id -g) banka-proto \
-		--proto_path=/workspace/proto \
+		--proto_path=/workspace/utils/proto \
 		--go_out=/workspace/pkg/proto --go_opt=paths=source_relative \
 		--go-grpc_out=/workspace/pkg/proto --go-grpc_opt=paths=source_relative \
-		$$(cd proto && find . -name '*.proto' | sed 's|^\./||')
+		$$(cd utils/proto && find . -name '*.proto' | sed 's|^\./||')
 
 schema:
 	docker compose exec -T postgres psql -U $(POSTGRES_USER) -d $(POSTGRES_DB) < utils/db/schema.sql
