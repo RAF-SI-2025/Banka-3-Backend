@@ -1,0 +1,131 @@
+syntax = "proto3";
+
+package bank;
+
+option go_package = "github.com/RAF-SI-2025/Banka-3-Backend/pkg/proto/bank";
+
+message Transaction {
+  // Common fields:
+  int64 id = 1;
+  string type = 2; // da li je transfer ili placanje
+  // Note: PK == id + type, jer transfer i placanje mogu imati iste id-jeve
+  string from_account = 3;
+  string to_account = 4;
+  int64 initial_amount = 5;
+  int64 final_amount = 6;
+  int64 fee = 7;
+  string currency = 8;
+  string status = 12;
+  string timestamp = 13;
+
+  // Payment specific;
+  string payment_code = 9;
+  string reference_number = 10;
+  string purpose = 11;
+  int64 recipient_id = 14;
+
+  // Transfer specific;
+  int64 start_currency_id = 15;
+  int64 target_currency_id = 17;
+  double exchange_rate = 16;
+}
+
+message GetTransactionsRequest {
+  string account_number = 1;
+
+  string date_from = 2;
+  string date_to = 3;
+
+  int64 amount_from = 4;
+  int64 amount_to = 5;
+
+  string status = 6;
+
+  int32 page = 7;
+  int32 page_size = 8;
+
+  string sort_by = 9;
+  string sort_order = 10;
+}
+
+message GetTransactionsResponse {
+  repeated Transaction transactions = 1;
+  int32 page = 2;
+  int32 page_size = 3;
+  int64 total = 4;
+  int32 total_pages = 5;
+}
+
+message GetTransactionByIdRequest {
+  int64 id = 1;
+  string type = 2;
+}
+
+message GetTransactionByIdResponse {
+  Transaction transaction = 1;
+}
+
+message GenerateTransactionPdfRequest {
+  int64 id = 1;
+  string type = 2;
+}
+
+message GenerateTransactionPdfResponse {
+  bytes pdf = 1;
+  string file_name = 2;
+}
+
+message PaymentRequest{
+  string sender_account = 1;
+  string recipient_account = 2;
+  string recipient_name = 3;
+  int64  amount = 4;
+  int64 payment_code = 5;
+  string reference_number = 6;
+  string purpose = 7;
+}
+
+message PaymentResponse{
+  string from_account = 1;
+  string to_account = 2;
+  int64 initial_amount = 3;
+  int64 final_amount = 4;
+  int64 fee = 5;
+  string currency = 6;
+  int64 payment_code = 7;
+  string reference_number = 8;
+  string purpose = 9;
+  string status = 10;
+  string timestamp = 11;
+}
+
+message TransferRequest{
+  string from_account = 1;
+  string to_account = 2;
+  int64 amount = 3;
+  string description = 4;
+}
+
+message TransferResponse{
+  string from_account = 1;
+  string to_account = 2;
+  int64 initial_amount = 3;
+  int64 final_amount = 4;
+  int64 fee = 5;
+  string currency = 6;
+  string payment_code = 7;
+  string reference_number = 8;
+  string purpose = 9;
+  string status = 10;
+  string timestamp = 11;
+}
+
+message TransferHistoryRequest{
+  string email = 1;
+  int32  page = 3;
+  int32  page_size = 2;
+}
+
+message TransferHistoryResponse{
+  repeated TransferResponse history = 1;
+}

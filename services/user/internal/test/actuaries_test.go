@@ -1,4 +1,4 @@
-package user
+package test
 
 import (
 	"context"
@@ -16,7 +16,7 @@ import (
 // trading-limit RPC; we cover the same arg-rejection paths so a future refactor
 // of the gate doesn't silently widen who can flip the flag.
 func TestUpdateEmployeeNeedApprovalArgValidation(t *testing.T) {
-	server, _, db := newGormTestServer(t)
+	gormTestServer, _, db := NewGormTestServer(t)
 	defer func() { _ = db.Close() }()
 
 	cases := []struct {
@@ -38,7 +38,7 @@ func TestUpdateEmployeeNeedApprovalArgValidation(t *testing.T) {
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
-			_, err := server.UpdateEmployeeNeedApproval(context.Background(), tc.req)
+			_, err := gormTestServer.UpdateEmployeeNeedApproval(context.Background(), tc.req)
 			if err == nil {
 				t.Fatalf("expected error with code %s, got nil", tc.code)
 			}
@@ -54,7 +54,7 @@ func TestUpdateEmployeeNeedApprovalArgValidation(t *testing.T) {
 // two employees come back from the DB, only the one tagged `agent` survives,
 // and used_limit / need_approval flow through to the response.
 func TestGetActuariesKeepsOnlyAgents(t *testing.T) {
-	server, mock, db := newGormTestServer(t)
+	gormTestServer, mock, db := NewGormTestServer(t)
 	defer func() { _ = db.Close() }()
 
 	birth := time.Date(1990, 1, 1, 0, 0, 0, 0, time.UTC)
@@ -80,7 +80,7 @@ func TestGetActuariesKeepsOnlyAgents(t *testing.T) {
 			AddRow(uint64(10), "agent").
 			AddRow(uint64(11), "supervisor"))
 
-	resp, err := server.GetActuaries(context.Background(), &userpb.GetEmployeesRequest{})
+	resp, err := gormTestServer.GetActuaries(context.Background(), &userpb.GetEmployeesRequest{})
 	if err != nil {
 		t.Fatalf("GetActuaries returned error: %v", err)
 	}

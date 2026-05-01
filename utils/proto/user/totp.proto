@@ -1,0 +1,70 @@
+syntax = "proto3";
+
+package user;
+
+option go_package = "github.com/RAF-SI-2025/Banka-3-Backend/pkg/proto/user";
+
+// Verify
+message VerifyCodeRequest {
+string email = 1;
+string code = 2;
+}
+
+message VerifyCodeResponse {
+bool valid = 1;
+}
+
+// Enroll
+message EnrollBeginRequest {
+string email = 1;
+}
+
+message EnrollBeginResponse {
+string url = 1;
+}
+
+message EnrollConfirmRequest {
+string email = 1;
+string code = 2;
+}
+
+message EnrollConfirmResponse {
+bool success = 1;
+repeated string backup_codes = 2;
+}
+
+// Disable
+message DisableBeginRequest {
+string email = 1;
+}
+
+message DisableBeginResponse {
+bool success = 1;
+}
+
+message DisableConfirmRequest {
+string email = 1;
+string token = 2;
+}
+
+message DisableConfirmResponse {
+bool success = 1;
+}
+
+// Status
+message StatusRequest {
+string email = 1;
+}
+
+message StatusResponse {
+bool active = 1;
+}
+
+message TOTPStatusRequest {
+string email = 1;
+}
+
+message TOTPStatusResponse {
+bool active = 1;
+}
+

@@ -4,6 +4,8 @@ package user;
 
 option go_package = "github.com/RAF-SI-2025/Banka-3-Backend/pkg/proto/user";
 
+import "user/totp.proto";
+
 service TOTPService {
   rpc VerifyCode(VerifyCodeRequest) returns (VerifyCodeResponse);
   rpc EnrollBegin(EnrollBeginRequest) returns (EnrollBeginResponse);
@@ -11,64 +13,4 @@ service TOTPService {
   rpc DisableBegin(DisableBeginRequest) returns (DisableBeginResponse);
   rpc DisableConfirm(DisableConfirmRequest) returns (DisableConfirmResponse);
   rpc Status(StatusRequest) returns (StatusResponse);
-}
-
-message VerifyCodeRequest {
-  string email = 1;
-  string code = 2;
-}
-
-message VerifyCodeResponse {
-  bool valid = 1;
-}
-
-message EnrollBeginRequest {
-  string email = 1;
-}
-
-message EnrollBeginResponse {
-  string url = 1;
-}
-
-message EnrollConfirmRequest {
-  string email = 1;
-  string code = 2;
-}
-
-message EnrollConfirmResponse {
-  bool success = 1;
-  repeated string backup_codes = 2;
-}
-
-message DisableBeginRequest {
-  string email = 1;
-}
-
-message DisableBeginResponse {
-  bool success = 1;
-}
-
-message DisableConfirmRequest {
-  string email = 1;
-  string token = 2;
-}
-
-message DisableConfirmResponse {
-  bool success = 1;
-}
-
-message StatusRequest {
-  string email = 1;
-}
-
-message StatusResponse {
-  bool active = 1;
-}
-
-message TOTPStatusRequest {
-  string email = 1;
-}
-
-message TOTPStatusResponse {
-  bool active = 1;
 }

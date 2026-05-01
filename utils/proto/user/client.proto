@@ -1,0 +1,68 @@
+syntax = "proto3";
+
+package user;
+
+option go_package = "github.com/RAF-SI-2025/Banka-3-Backend/pkg/proto/user";
+
+message Client {
+  int64 Id = 1;
+  string FirstName = 2;
+  string LastName = 3;
+  int64 DateOfBirth = 4;
+  string Gender = 5;
+  string Email = 6;
+  string PhoneNumber = 7;
+  string Address = 8;
+}
+
+message GetClientResponse {
+  int64 id = 1;
+  string first_name = 2;
+  string last_name = 3;
+  int64 birth_date = 4;
+  string gender = 5;
+  string email = 6;
+  string phone_number = 7;
+  string address = 8;
+}
+
+message CreateClientRequest {
+  string first_name = 1;
+  string last_name = 2;
+  int64 birth_date = 3;
+  string gender = 4;
+  string email = 5;
+  string phone_number = 6;
+  string address = 7;
+  string password = 8;
+}
+
+message CreateClientResponse {
+  bool valid = 1;
+}
+
+message GetClientsRequest {
+  string FirstName = 1;
+  string LastName = 2;
+  string Email = 3;
+}
+
+message GetClientsResponse {
+  repeated Client Clients = 1;
+}
+
+message UpdateClientRequest {
+  int64 Id = 1;
+  string FirstName = 2;
+  string LastName = 3;
+  int64 DateOfBirth = 4;
+  string Gender = 5;
+  string Email = 6;
+  string PhoneNumber = 7;
+  string Address = 8;
+}
+
+message UpdateClientResponse {
+  bool Valid = 1;
+  string Response = 2;
+}

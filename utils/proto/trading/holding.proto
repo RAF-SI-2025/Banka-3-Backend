@@ -1,0 +1,77 @@
+syntax = "proto3";
+
+package trading;
+
+option go_package = "github.com/RAF-SI-2025/Banka-3-Backend/pkg/proto/trading";
+
+// Holding is one row in the portfolio portal (spec p.62 / #207). Exactly one
+// of stock_id / future_id / forex_pair_id / option_id is set — the asset_type
+// string ("stock"|"future"|"forex"|"option") gives the UI a single switch.
+// avg_cost is denominated in the booking account's currency; current_price
+// uses the instrument's quote currency (listing price, option premium, or
+// forex_pair.exchange_rate × 100). profit converts the current quote into the
+// account's currency before subtracting avg_cost so the displayed P/L lines
+// up with what would actually settle on a sell. public_amount is meaningful
+// only for stock holdings (OTC counter, fourth celina) and stays 0 elsewhere.
+message Holding {
+  int64 id = 1;
+  int64 placer_id = 2;
+  int64 stock_id = 3;
+  int64 future_id = 4;
+  int64 forex_pair_id = 5;
+  int64 option_id = 6;
+  int64 amount = 7;
+  int64 avg_cost = 8;
+  int64 account_id = 9;
+  string account_number = 10;
+  int64 public_amount = 11;
+  string ticker = 12;
+  int64 current_price = 13;
+  int64 profit = 14;
+  int64 last_modified_unix = 15;
+  string asset_type = 16;
+}
+
+message ListHoldingsRequest {
+  string caller_email = 1;
+}
+
+message ListHoldingsResponse {
+  repeated Holding holdings = 1;
+}
+
+// SellHolding is the spec's `POST /api/portfolio/sell` thin wrapper. The
+// server resolves the holding to its underlying asset and forwards a
+// CreateOrder with direction=sell, so the same execution / approval / margin
+// pipeline applies. The caller must own the holding (placer matches) — the
+// server enforces this rather than the gateway since the holding row carries
+// the authoritative placer link.
+message SellHoldingRequest {
+  int64 holding_id = 1;
+  string account_number = 2;
+  string order_type = 3;
+  int64 quantity = 4;
+  int64 limit_price = 5;
+  int64 stop_price = 6;
+  bool all_or_none = 7;
+}
+
+message SellHoldingResponse {
+  int64 order_id = 1;
+  string status = 2;
+}
+
+// SetHoldingPublic adjusts the public_amount counter on a stock holding. The
+// schema CHECK pins public_amount to 0 for non-stock holdings — the server
+// rejects any attempt to set it on a non-stock row with FailedPrecondition.
+// 0 ≤ public_amount ≤ amount; out-of-range values come back as
+// InvalidArgument so the portal can surface the problem inline.
+message SetHoldingPublicRequest {
+  int64 holding_id = 1;
+  int64 public_amount = 2;
+}
+
+message SetHoldingPublicResponse {
+  Holding holding = 1;
+}
+

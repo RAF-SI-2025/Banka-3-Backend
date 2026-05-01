@@ -1,0 +1,49 @@
+syntax = "proto3";
+
+package bank;
+
+option go_package = "github.com/RAF-SI-2025/Banka-3-Backend/pkg/proto/bank";
+
+message PaymentRecipient {
+  int64 id = 1;
+  string name = 2;
+  string account_number = 3;
+}
+
+message GetPaymentRecipientsRequest {
+  int64 client_id = 1;
+}
+
+message GetPaymentRecipientsResponse {
+  repeated PaymentRecipient recipients = 1;
+}
+
+message CreatePaymentRecipientRequest {
+  int64 client_id = 1;
+  string name = 2;
+  string account_number = 3;
+}
+
+message CreatePaymentRecipientResponse {
+  PaymentRecipient recipient = 1;
+}
+
+message UpdatePaymentRecipientRequest {
+  int64 id = 1;
+  int64 client_id = 2;
+  string name = 3;
+  string account_number = 4;
+}
+
+message UpdatePaymentRecipientResponse {
+  PaymentRecipient recipient = 1;
+}
+
+message DeletePaymentRecipientRequest {
+  int64 id = 1;
+  int64 client_id = 2;
+}
+
+message DeletePaymentRecipientResponse {
+  bool success = 1;
+}

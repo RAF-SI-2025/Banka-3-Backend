@@ -1,4 +1,4 @@
-package user
+package model
 
 import (
 	"time"
@@ -48,10 +48,12 @@ type (
 		Id   uint64 `gorm:"column:id;type:bigint;not null;primaryKey"`
 		Name string `gorm:"column:name;type:varchar(100);not null"`
 	}
+
 	EmployeePermissions struct {
 		EmployeeId   uint64 `gorm:"column:employee_id;not null"`
 		PermissionId uint64 `gorm:"column:permission_id;not null"`
 	}
+
 	VerificationCode struct {
 		Id             int64     `gorm:"column:id;type:bigserial;not null;primaryKey"`
 		Client_id      int64     `gorm:"column:client_id;type:bigint;references clients(id)"`

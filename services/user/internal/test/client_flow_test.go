@@ -1,4 +1,4 @@
-package user
+package test
 
 import (
 	"context"
@@ -15,7 +15,7 @@ import (
 )
 
 func TestGetClientsWithoutFiltersReturnsExpectedRows(t *testing.T) {
-	server, mock, db := newGormTestServer(t)
+	gormTestServer, mock, db := NewGormTestServer(t)
 	defer func() { _ = db.Close() }()
 
 	date1 := time.Date(1990, 5, 20, 0, 0, 0, 0, time.UTC)
@@ -26,7 +26,7 @@ func TestGetClientsWithoutFiltersReturnsExpectedRows(t *testing.T) {
 			AddRow(uint64(1), "Petar", "Petrovic", date1, "M", "petar@primer.raf", "+381645555555", "Njegoseva 25").
 			AddRow(uint64(2), "Jana", "Janic", date2, "F", "jana@primer.raf", "+381645555556", "Bulevar 1"))
 
-	resp, err := server.GetClients(context.Background(), &userpb.GetClientsRequest{})
+	resp, err := gormTestServer.GetClients(context.Background(), &userpb.GetClientsRequest{})
 	if err != nil {
 		t.Fatalf("GetClients returned error: %v", err)
 	}
@@ -43,7 +43,7 @@ func TestGetClientsWithoutFiltersReturnsExpectedRows(t *testing.T) {
 }
 
 func TestGetClientsWithFiltersBuildsExpectedSQL(t *testing.T) {
-	server, mock, db := newGormTestServer(t)
+	gormTestServer, mock, db := NewGormTestServer(t)
 	defer func() { _ = db.Close() }()
 
 	date := time.Date(1990, 5, 20, 0, 0, 0, 0, time.UTC)
@@ -53,7 +53,7 @@ func TestGetClientsWithFiltersBuildsExpectedSQL(t *testing.T) {
 		WillReturnRows(sqlmockClientRows().
 			AddRow(uint64(1), "Petar", "Petrovic", date, "M", "petar@primer.raf", "+381645555555", "Njegoseva 25"))
 
-	resp, err := server.GetClients(context.Background(), &userpb.GetClientsRequest{
+	resp, err := gormTestServer.GetClients(context.Background(), &userpb.GetClientsRequest{
 		FirstName: "Petar",
 		LastName:  "Petrovic",
 		Email:     "petar@primer.raf",
@@ -71,7 +71,7 @@ func TestGetClientsWithFiltersBuildsExpectedSQL(t *testing.T) {
 }
 
 func TestUpdateClientSuccess(t *testing.T) {
-	server, mock, db := newGormTestServer(t)
+	gormTestServer, mock, db := NewGormTestServer(t)
 	defer func() { _ = db.Close() }()
 
 	date := time.Date(1990, 5, 20, 0, 0, 0, 0, time.UTC)
@@ -85,7 +85,7 @@ func TestUpdateClientSuccess(t *testing.T) {
 		WillReturnResult(sqlmock.NewResult(0, 1))
 	mock.ExpectCommit()
 
-	resp, err := server.UpdateClient(context.Background(), &userpb.UpdateClientRequest{
+	resp, err := gormTestServer.UpdateClient(context.Background(), &userpb.UpdateClientRequest{
 		Id:          1,
 		Email:       "petar.novi@primer.raf",
 		PhoneNumber: "+381600000000",
@@ -103,14 +103,14 @@ func TestUpdateClientSuccess(t *testing.T) {
 }
 
 func TestUpdateClientNotFound(t *testing.T) {
-	server, mock, db := newGormTestServer(t)
+	gormTestServer, mock, db := NewGormTestServer(t)
 	defer func() { _ = db.Close() }()
 
 	mock.ExpectQuery(regexp.QuoteMeta(`SELECT * FROM "clients" WHERE "clients"."id" = $1 ORDER BY "clients"."id" LIMIT $2`)).
 		WithArgs(int64(404), int64(1)).
 		WillReturnError(sql.ErrNoRows)
 
-	_, err := server.UpdateClient(context.Background(), &userpb.UpdateClientRequest{
+	_, err := gormTestServer.UpdateClient(context.Background(), &userpb.UpdateClientRequest{
 		Id:    404,
 		Email: "missing@primer.raf",
 	})
@@ -127,7 +127,7 @@ func TestUpdateClientNotFound(t *testing.T) {
 }
 
 func TestUpdateClientDuplicateEmailReturnsAlreadyExists(t *testing.T) {
-	server, mock, db := newGormTestServer(t)
+	gormTestServer, mock, db := NewGormTestServer(t)
 	defer func() { _ = db.Close() }()
 
 	date := time.Date(1990, 5, 20, 0, 0, 0, 0, time.UTC)
@@ -141,7 +141,7 @@ func TestUpdateClientDuplicateEmailReturnsAlreadyExists(t *testing.T) {
 		WillReturnError(&pgconn.PgError{Code: "23505"})
 	mock.ExpectRollback()
 
-	_, err := server.UpdateClient(context.Background(), &userpb.UpdateClientRequest{
+	_, err := gormTestServer.UpdateClient(context.Background(), &userpb.UpdateClientRequest{
 		Id:    1,
 		Email: "admin@banka.raf",
 	})
@@ -158,10 +158,10 @@ func TestUpdateClientDuplicateEmailReturnsAlreadyExists(t *testing.T) {
 }
 
 func TestUpdateClientInvalidGenderReturnsInvalidArgument(t *testing.T) {
-	server, mock, db := newGormTestServer(t)
+	gormTestServer, mock, db := NewGormTestServer(t)
 	defer func() { _ = db.Close() }()
 
-	_, err := server.UpdateClient(context.Background(), &userpb.UpdateClientRequest{
+	_, err := gormTestServer.UpdateClient(context.Background(), &userpb.UpdateClientRequest{
 		Id:     1,
 		Gender: "X",
 	})

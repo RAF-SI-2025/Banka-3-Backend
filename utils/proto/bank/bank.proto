@@ -3,29 +3,23 @@ syntax = "proto3";
 package bank;
 
 option go_package = "github.com/RAF-SI-2025/Banka-3-Backend/pkg/proto/bank";
+
 import "google/protobuf/empty.proto";
+import "bank/account.proto";
+import "bank/card.proto";
+import "bank/company.proto";
+import "bank/loan.proto";
+import "bank/recipient.proto";
+import "bank/transaction.proto";
 
 service BankService {
+  // Company services
   rpc CreateCompany(CreateCompanyRequest) returns (CreateCompanyResponse);
   rpc GetCompanyById(GetCompanyByIdRequest) returns (GetCompanyByIdResponse);
   rpc GetCompanies(GetCompaniesRequest) returns (GetCompaniesResponse);
   rpc UpdateCompany(UpdateCompanyRequest) returns (UpdateCompanyResponse);
 
-  rpc CreateCard(CreateCardRequest) returns (CardResponse);
-  rpc RequestCard(RequestCardRequest) returns (RequestCardResponse);
-  rpc ConfirmCard(ConfirmCardRequest) returns (ConfirmCardResponse);
-  rpc GetCards(GetCardsRequest) returns (GetCardsResponse);
-  rpc BlockCard(BlockCardRequest) returns (BlockCardResponse);
-
-  rpc GetPaymentRecipients(GetPaymentRecipientsRequest) returns (GetPaymentRecipientsResponse);
-  rpc CreatePaymentRecipient(CreatePaymentRecipientRequest) returns (CreatePaymentRecipientResponse);
-  rpc UpdatePaymentRecipient(UpdatePaymentRecipientRequest) returns (UpdatePaymentRecipientResponse);
-  rpc DeletePaymentRecipient(DeletePaymentRecipientRequest) returns (DeletePaymentRecipientResponse);
-
-  rpc GetTransactions(GetTransactionsRequest) returns (GetTransactionsResponse);
-  rpc GetTransactionById(GetTransactionByIdRequest) returns (GetTransactionByIdResponse);
-  rpc GenerateTransactionPdf(GenerateTransactionPdfRequest) returns (GenerateTransactionPdfResponse);
-
+  // Account services
   rpc CreateAccount(CreateAccountRequest) returns (CreateAccountResponse);
   rpc UpdateAccountName(UpdateAccountNameRequest) returns (UpdateAccountNameResponse);
   rpc UpdateAccountLimits(UpdateAccountLimitsRequest) returns (UpdateAccountLimitsResponse);
@@ -33,496 +27,33 @@ service BankService {
   rpc GetAccountDetails(GetAccountDetailsRequest) returns (GetAccountDetailsResponse);
   rpc ListClientTransactions(ListClientTranasctionsRequest) returns (ListClientTransactionsResponse);
 
+  // Card services
+  rpc CreateCard(CreateCardRequest) returns (CardResponse);
+  rpc RequestCard(RequestCardRequest) returns (RequestCardResponse);
+  rpc ConfirmCard(ConfirmCardRequest) returns (ConfirmCardResponse);
+  rpc GetCards(GetCardsRequest) returns (GetCardsResponse);
+  rpc BlockCard(BlockCardRequest) returns (BlockCardResponse);
+
+  // Loan services
   rpc GetLoans(GetLoansRequest) returns (GetLoansResponse);
   rpc GetLoanByNumber(GetLoanByNumberRequest) returns (Loan);
   rpc CreateLoanRequest(CreateLoanRequestRequest) returns (CreateLoanRequestResponse);
-
   rpc GetLoanRequests(GetLoanRequestsRequest) returns (GetLoanRequestsResponse);
   rpc ApproveLoanRequest(ApproveLoanRequestRequest) returns (ApproveLoanRequestResponse);
   rpc RejectLoanRequest(RejectLoanRequestRequest) returns (RejectLoanRequestResponse);
   rpc GetAllLoans(GetAllLoansRequest) returns (GetLoansResponse);
 
+  // Payment Recipient services
+  rpc GetPaymentRecipients(GetPaymentRecipientsRequest) returns (GetPaymentRecipientsResponse);
+  rpc CreatePaymentRecipient(CreatePaymentRecipientRequest) returns (CreatePaymentRecipientResponse);
+  rpc UpdatePaymentRecipient(UpdatePaymentRecipientRequest) returns (UpdatePaymentRecipientResponse);
+  rpc DeletePaymentRecipient(DeletePaymentRecipientRequest) returns (DeletePaymentRecipientResponse);
+
+  // Transaction and Transfer services
+  rpc GetTransactions(GetTransactionsRequest) returns (GetTransactionsResponse);
+  rpc GetTransactionById(GetTransactionByIdRequest) returns (GetTransactionByIdResponse);
+  rpc GenerateTransactionPdf(GenerateTransactionPdfRequest) returns (GenerateTransactionPdfResponse);
   rpc TransferMoneyBetweenAccounts(TransferRequest) returns (TransferResponse);
   rpc PayoutMoneyToOtherAccount(PaymentRequest) returns (PaymentResponse);
   rpc GetTransfersHistoryForUserEmail(TransferHistoryRequest) returns (TransferHistoryResponse);
-
-}
-
-message TransferHistoryResponse{
-  repeated TransferResponse history = 1;
-}
-message TransferHistoryRequest{
-  string email = 1;
-  int32  page = 3;
-  int32  page_size = 2;
-}
-
-message CreateCardRequest {
-  string account_number = 1;
-  string card_type = 2;
-  string card_brand = 3;
-  string email = 4;
-}
-
-message RequestCardRequest {
-  string account_number = 1;
-  string card_type = 2;
-  string card_brand = 3;
-}
-
-message RequestCardResponse {
-  bool accepted = 1;
-}
-
-message ConfirmCardRequest {
-  string token = 1;
-}
-
-message ConfirmCardResponse {}
-
-message GetCardsRequest {}
-
-message GetCardsResponse {
-  repeated CardResponse cards = 1;
-}
-
-message BlockCardRequest {
-  string card_number = 1;
-}
-
-message BlockCardResponse {
-  bool success = 1;
-}
-
-message CardResponse {
-  string card_id = 1;
-  string card_number = 2;
-  string card_type = 3;
-  string card_brand = 4;
-  string creation_date = 5;
-  string expiration_date = 6;
-  string account_number = 7;
-  string cvv = 8;
-  int64 limit = 9;
-  string status = 10;
-}
-
-message Company {
-  int64 id = 1;
-  int64 registered_id = 2;
-  string name = 3;
-  int64 tax_code = 4;
-  int64 activity_code_id = 5;
-  string address = 6;
-  int64 owner_id = 7;
-}
-
-message CreateCompanyRequest {
-  int64 registered_id = 1;
-  string name = 2;
-  int64 tax_code = 3;
-  int64 activity_code_id = 4;
-  string address = 5;
-  int64 owner_id = 6;
-}
-
-message CreateCompanyResponse {
-  Company company = 1;
-}
-
-message GetCompanyByIdRequest {
-  int64 id = 1;
-}
-
-message GetCompanyByIdResponse {
-  Company company = 1;
-}
-
-message GetCompaniesRequest {}
-
-message GetCompaniesResponse {
-  repeated Company companies = 1;
-}
-
-message PaymentRecipient {
-  int64 id = 1;
-  string name = 2;
-  string account_number = 3;
-}
-
-message GetPaymentRecipientsRequest {
-  int64 client_id = 1;
-}
-
-message GetPaymentRecipientsResponse {
-  repeated PaymentRecipient recipients = 1;
-}
-
-message CreatePaymentRecipientRequest {
-  int64 client_id = 1;
-  string name = 2;
-  string account_number = 3;
-}
-
-message CreatePaymentRecipientResponse {
-  PaymentRecipient recipient = 1;
-}
-
-message UpdatePaymentRecipientRequest {
-  int64 id = 1;
-  int64 client_id = 2;
-  string name = 3;
-  string account_number = 4;
-}
-
-message UpdatePaymentRecipientResponse {
-  PaymentRecipient recipient = 1;
-}
-
-message DeletePaymentRecipientRequest {
-  int64 id = 1;
-  int64 client_id = 2;
-}
-
-message DeletePaymentRecipientResponse {
-  bool success = 1;
-}
-
-message UpdateCompanyRequest {
-  int64 id = 1;
-  string name = 3;
-  int64 activity_code_id = 5;
-  string address = 6;
-  int64 owner_id = 7;
-}
-
-message UpdateCompanyResponse {
-  Company company = 1;
-}
-
-message Transaction {
-  // Common fields:
-  int64 id = 1;
-  string type = 2; // da li je transfer ili placanje
-  // Note: PK == id + type, jer transfer i placanje mogu imati iste id-jeve
-  string from_account = 3;
-  string to_account = 4;
-  int64 initial_amount = 5;
-  int64 final_amount = 6;
-  int64 fee = 7;
-  string currency = 8;
-  string status = 12;
-  string timestamp = 13;
-
-  // Payment specific;
-  string payment_code = 9;
-  string reference_number = 10;
-  string purpose = 11;
-  int64 recipient_id = 14;
-
-  // Transfer specific;
-  int64 start_currency_id = 15;
-  int64 target_currency_id = 17;
-  double exchange_rate = 16;
-}
-
-message GetTransactionsRequest {
-  string account_number = 1;
-
-  string date_from = 2;
-  string date_to = 3;
-
-  int64 amount_from = 4;
-  int64 amount_to = 5;
-
-  string status = 6;
-
-  int32 page = 7;
-  int32 page_size = 8;
-
-  string sort_by = 9;
-  string sort_order = 10;
-}
-
-message GetTransactionsResponse {
-  repeated Transaction transactions = 1;
-  int32 page = 2;
-  int32 page_size = 3;
-  int64 total = 4;
-  int32 total_pages = 5;
-}
-
-message GetTransactionByIdRequest {
-  int64 id = 1;
-  string type = 2;
-}
-
-message GetTransactionByIdResponse {
-  Transaction transaction = 1;
-}
-
-message GenerateTransactionPdfRequest {
-  int64 id = 1;
-  string type = 2;
-}
-
-message GenerateTransactionPdfResponse {
-  bytes pdf = 1;
-  string file_name = 2;
-}
-
-message PaymentRequest{
-  string sender_account = 1;
-  string recipient_account = 2;
-  string recipient_name = 3;
-  int64  amount = 4;
-  int64 payment_code = 5;
-  string reference_number = 6;
-  string purpose = 7;
-}
-
-message PaymentResponse{
-  string from_account = 1;
-  string to_account = 2;
-  int64 initial_amount = 3;
-  int64 final_amount = 4;
-  int64 fee = 5;
-  string currency = 6;
-  int64 payment_code = 7;
-  string reference_number = 8;
-  string purpose = 9;
-  string status = 10;
-  string timestamp = 11;
-}
-
-message TransferRequest{
-  string from_account = 1;
-  string to_account = 2;
-  int64 amount = 3;
-  string description = 4;
-}
-
-message TransferResponse{
-  string from_account = 1;
-  string to_account = 2;
-  int64 initial_amount = 3;
-  int64 final_amount = 4;
-  int64 fee = 5;
-  string currency = 6;
-  string payment_code = 7;
-  string reference_number = 8;
-  string purpose = 9;
-  string status = 10;
-  string timestamp = 11;
-}
-
-message Account {
-  string account_number = 1;
-  string account_name = 2;
-  int64 owner_id = 3;
-  double balance = 4;
-  double available_balance = 5;
-  int64 employee_id = 6;
-  int64 creation_date = 7;
-  int64 expiration_date = 8;
-  string currency = 9;
-  string status = 10;
-  string account_type = 11;
-  double daily_limit = 12;
-  double monthly_limit = 13;
-  double daily_spending = 14;
-  double monthly_spending = 15;
-}
-
-message CreateAccountRequest {
-  int64 client_id = 1;
-  string account_type = 2;
-  string subtype = 3;
-  string currency = 4;
-  double initial_balance = 5;
-  double daily_limit = 6;
-  double monthly_limit = 7;
-  bool create_card = 8;
-  string card_type = 9;
-  string card_brand = 10;
-  BusinessInfo business_info = 11;
-  string name = 12;
-}
-
-message BusinessInfo {
-  string company_name = 1;
-  string registration_number = 2;
-  string pib = 3;
-  string activity_code = 4;
-  string address = 5;
-}
-
-message CreateAccountResponse {
-  string account_number = 1;
-  string account_name = 2;
-  int64 owner_id = 3;
-  double balance = 4;
-  double available_balance = 5;
-  int64 employee_id = 6;
-  string creation_date = 7;
-  string expiration_date = 8;
-  string currency = 9;
-  string status = 10;
-  string account_type = 11;
-  double daily_limit = 12;
-  double monthly_limit = 13;
-  double daily_spending = 14;
-  double monthly_spending = 15;
-}
-
-message UpdateAccountNameRequest {
-  string account_number = 1;
-  string name = 2;
-}
-
-message UpdateAccountNameResponse {}
-
-message UpdateAccountLimitsRequest {
-  string account_number = 1;
-  optional int64 daily_limit = 2;
-  optional int64 monthly_limit = 3;
-}
-
-message UpdateAccountLimitsResponse {}
-
-message ListAccountsRequest {
-  string firstName = 1;
-  string lastName = 2;
-  string account_number = 3;
-}
-
-message ListAccountsResponse {
-  repeated Account accounts = 1;
-}
-
-message GetAccountDetailsRequest {
-  string accountNumber = 1;
-}
-
-message GetAccountDetailsResponse {
-  Account account = 1;
-}
-
-message ClientTransaction {
-  string from_account = 1;
-  string to_account = 2;
-  double initial_amount = 3;
-  double final_amount = 4;
-  double fee = 5;
-  string currency = 6;
-  string payment_code = 7;
-  string reference_number = 8;
-  string purpose = 9;
-  string status = 10;
-  int64 timestamp = 11;
-}
-
-message ListClientTranasctionsRequest {
-  string account_number = 1;
-  string date = 2;
-  int64 amount = 3;
-  string status = 4;
-}
-
-message ListClientTransactionsResponse {
-  repeated ClientTransaction transactions = 1;
-}
-
-message Loan {
-  string loan_number = 1;
-  string loan_type = 2;
-  string account_number = 3;
-  int64 loan_amount = 4;
-  int64 repayment_period = 5;
-  double nominal_rate = 6;
-  double effective_rate = 7;
-  string agreement_date = 8;
-  string maturity_date = 9;
-  int64 next_installment_amount = 10;
-  string next_installment_date = 11;
-  int64 remaining_debt = 12;
-  string currency = 13;
-  string status = 14;
-}
-
-message GetLoansRequest {
-  string client_email = 1;
-  string loan_type = 2;
-  string account_number = 3;
-  string status = 4;
-}
-
-message GetLoansResponse {
-  repeated Loan loans = 1;
-}
-
-message GetLoanByNumberRequest {
-  string client_email = 1;
-  string loan_number = 2;
-}
-
-message CreateLoanRequestRequest {
-  string client_email = 1;
-  string account_number = 2;
-  string loan_type = 3;
-  int64 amount = 4;
-  int64 repayment_period = 5;
-  string currency = 6;
-  string purpose = 7;
-  int64 salary = 8;
-  string employment_status = 9;
-  int64 employment_period = 10;
-  string phone_number = 11;
-  string interest_rate_type = 12;
-}
-
-message CreateLoanRequestResponse {} // intentionally empty
-
-message LoanRequestView {
-  int64 id = 1;
-  string loan_type = 2;
-  int64 amount = 3;
-  string currency = 4;
-  string purpose = 5;
-  int64 salary = 6;
-  string employment_status = 7;
-  int64 employment_period = 8;
-  string phone_number = 9;
-  int64 repayment_period = 10;
-  string account_number = 11;
-  string status = 12;
-  string interest_rate_type = 13;
-  string submission_date = 14;
-}
-
-message GetLoanRequestsRequest {
-  string loan_type = 1;
-  string account_number = 2;
-}
-
-message GetLoanRequestsResponse {
-  repeated LoanRequestView loan_requests = 1;
-}
-
-message ApproveLoanRequestRequest {
-  int64 id = 1;
-}
-
-message ApproveLoanRequestResponse {}
-
-message RejectLoanRequestRequest {
-  int64 id = 1;
-}
-
-message RejectLoanRequestResponse {}
-
-message GetAllLoansRequest {
-  string loan_type = 1;
-  string account_number = 2;
-  string status = 3;
 }

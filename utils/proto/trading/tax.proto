@@ -1,0 +1,65 @@
+syntax = "proto3";
+
+package trading;
+
+option go_package = "github.com/RAF-SI-2025/Banka-3-Backend/pkg/proto/trading";
+
+// Supervisor-only manual trigger for the monthly capital-gains tax sweep
+// (spec p.63 "Supervizori mogu ručno pokrenuti ovu operaciju putem portala").
+// month is YYYY-MM; passing an empty string sweeps every still-unpaid row
+// regardless of period — useful for back-fills.
+message RunCapitalGainsRequest {
+  string caller_email = 1;
+  string month = 2;
+}
+
+message RunCapitalGainsResponse {
+  string period = 1;
+  int32 accounts_paid = 2;
+  int32 rows_paid = 3;
+  int32 insufficient = 4;
+  int64 total_debt_rsd = 5;
+  int64 collected_rsd = 6;
+}
+
+// TaxDebtor is one user's current unpaid RSD tax debt summed across all of
+// their accounts (spec p.63: "Dugovanja korisnika prikazana su u RSD"). team
+// is "client" or "actuary". Users without any capital-gains rows are not
+// listed — the portal scopes itself to participants in the trading flow.
+message TaxDebtor {
+  int64 user_id = 1;
+  string first_name = 2;
+  string last_name = 3;
+  string team = 4;
+  int64 unpaid_rsd = 5;
+  int64 paid_rsd = 6;
+}
+
+// Filters mirror the spec's two portal filters: team (klijent/aktuar) and
+// name (case-insensitive substring on first or last name). Empty values
+// disable the corresponding filter.
+message ListTaxDebtsRequest {
+  string caller_email = 1;
+  string team = 2;
+  string name = 3;
+}
+
+message ListTaxDebtsResponse {
+  repeated TaxDebtor debtors = 1;
+}
+
+// GetMyTaxInfo backs the Moj Portfolio tax widget (spec p.61). Caller identity
+// is read from the `user-email` gRPC metadata via bank.ResolveCaller; any
+// authenticated client or actuary may call it. paid_this_year_rsd sums tax
+// rows whose paid_at falls in the current calendar year; unpaid_this_month_rsd
+// sums every still-unpaid row (the cron sweeps monthly, so "tekući mesec" and
+// "all unpaid" coincide in practice).
+message GetMyTaxInfoRequest {
+  string caller_email = 1;
+}
+
+message GetMyTaxInfoResponse {
+  int64 paid_this_year_rsd = 1;
+  int64 unpaid_this_month_rsd = 2;
+}
+

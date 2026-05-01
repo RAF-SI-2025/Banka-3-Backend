@@ -1,4 +1,4 @@
-package user
+package test
 
 import (
 	"context"
@@ -7,12 +7,13 @@ import (
 
 	"github.com/DATA-DOG/go-sqlmock"
 	userpb "github.com/RAF-SI-2025/Banka-3-Backend/pkg/proto/user"
+	"github.com/RAF-SI-2025/Banka-3-Backend/services/user/internal/server"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
 )
 
 func TestLoginNonExistantUser(t *testing.T) {
-	server, mock, db := newTestServer(t)
+	testServer, mock, db := NewTestServer(t)
 	defer func() { _ = db.Close() }()
 
 	email := "missing@banka.raf"
@@ -24,7 +25,7 @@ func TestLoginNonExistantUser(t *testing.T) {
 	`)).
 		WithArgs(email).
 		WillReturnRows(sqlmock.NewRows([]string{"email", "password", "salt_password"}))
-	resp, err := server.Login(context.Background(), &userpb.LoginRequest{Email: email, Password: "password"})
+	resp, err := testServer.Login(context.Background(), &userpb.LoginRequest{Email: email, Password: "password"})
 	if err != nil {
 		if status.Code(err) == codes.Unauthenticated {
 			return
@@ -41,7 +42,7 @@ func TestLoginNonExistantUser(t *testing.T) {
 }
 
 func TestLoginWrongPassword(t *testing.T) {
-	server, mock, db := newTestServer(t)
+	testServer, mock, db := NewTestServer(t)
 	defer func() { _ = db.Close() }()
 
 	email := "admin@banka.raf"
@@ -53,7 +54,7 @@ func TestLoginWrongPassword(t *testing.T) {
 	`)).
 		WithArgs(email).
 		WillReturnRows(sqlmock.NewRows([]string{"email", "password", "salt_password"}))
-	resp, err := server.Login(context.Background(), &userpb.LoginRequest{Email: email, Password: "wrong password"})
+	resp, err := testServer.Login(context.Background(), &userpb.LoginRequest{Email: email, Password: "wrong password"})
 	if err != nil {
 		if status.Code(err) == codes.Unauthenticated {
 			return
@@ -70,10 +71,10 @@ func TestLoginWrongPassword(t *testing.T) {
 }
 
 func TestLoginCorrectCreds(t *testing.T) {
-	server, mock, db := newFullTestServer(t)
+	testServer, mock, db := NewFullTestServer(t)
 	defer func() { _ = db.Close() }()
 
-	mockPassword := HashPassword("password", []byte{3, 2, 1})
+	mockPassword := server.HashPassword("password", []byte{3, 2, 1})
 
 	email := "admin@banka.raf"
 	mock.ExpectQuery(regexp.QuoteMeta(`
@@ -94,7 +95,7 @@ func TestLoginCorrectCreds(t *testing.T) {
 		INSERT INTO refresh_tokens VALUES ($1, $2, $3, FALSE)
 		ON CONFLICT (email) DO UPDATE SET (hashed_token, valid_until, revoked) = (excluded.hashed_token, excluded.valid_until, excluded.revoked)
 	`)).WithArgs(email, sqlmock.AnyArg(), sqlmock.AnyArg()).WillReturnResult(sqlmock.NewResult(0, 1))
-	resp, err := server.Login(context.Background(), &userpb.LoginRequest{Email: email, Password: "password"})
+	resp, err := testServer.Login(context.Background(), &userpb.LoginRequest{Email: email, Password: "password"})
 	if err != nil {
 		t.Fatalf("got error in Login: %v", err)
 	}
@@ -105,12 +106,12 @@ func TestLoginCorrectCreds(t *testing.T) {
 		t.Fatalf("expected to get tokens")
 	}
 
-	_, err = server.ValidateAccessToken(context.Background(), &userpb.ValidateTokenRequest{Token: accessToken})
+	_, err = testServer.ValidateAccessToken(context.Background(), &userpb.ValidateTokenRequest{Token: accessToken})
 	if err != nil {
 		t.Fatalf("couldn't validate access token: %v", err)
 	}
 
-	_, err = server.ValidateRefreshToken(context.Background(), &userpb.ValidateTokenRequest{Token: refreshToken})
+	_, err = testServer.ValidateRefreshToken(context.Background(), &userpb.ValidateTokenRequest{Token: refreshToken})
 	if err != nil {
 		t.Fatalf("couldn't validate refresh token")
 	}

@@ -1,0 +1,104 @@
+syntax = "proto3";
+
+package user;
+
+option go_package = "github.com/RAF-SI-2025/Banka-3-Backend/pkg/proto/user";
+
+message GetEmployeesResponse {
+  message Employee {
+    int64 id = 1;
+    string first_name = 2;
+    string last_name = 3;
+    string email = 4;
+    string position = 5;
+    string phone_number = 6;
+    bool active = 8;
+    int64 limit = 9;
+    int64 used_limit = 10;
+    bool need_approval = 11;
+  }
+  repeated Employee employees = 1;
+}
+
+message GetEmployeeResponse {
+  int64 id = 1;
+  string first_name = 2;
+  string last_name = 3;
+  int64 birth_date = 4;
+  string gender = 5;
+  string email = 6;
+  string phone_number = 7;
+  string address = 8;
+  string username = 9;
+  string position = 10;
+  string department = 11;
+  bool active = 12;
+  repeated string permissions = 13;
+  int64 limit = 14;
+  int64 used_limit = 15;
+  bool need_approval = 16;
+}
+
+message CreateEmployeeRequest {
+  string first_name = 1;
+  string last_name = 2;
+  int64 birth_date = 3;
+  string gender = 4;
+  string email = 5;
+  string phone_number = 6;
+  string address = 7;
+  string username = 8;
+  string position = 9;
+  string department = 10;
+  string password = 11;
+  bool active = 12;
+  repeated string permissions = 13;
+}
+
+message GetEmployeesRequest {
+  string first_name = 1;
+  string last_name = 2;
+  string email = 3;
+  string position = 4;
+}
+
+message UpdateEmployeeRequest {
+  int64 id = 1;
+  string first_name = 2;
+  string last_name = 3;
+  string gender = 4;
+  string phone_number = 5;
+  string address = 6;
+  string position = 7;
+  string department = 8;
+  bool active = 9;
+  repeated string permissions = 10;
+  // email of the caller issuing the update, forwarded by the gateway.
+  // Required so the user service can enforce that only admins may grant
+  // or revoke the `agent` / `supervisor` permissions.
+  string caller_email = 11;
+}
+
+message UpdateEmployeeTradingLimitRequest {
+  int64 id = 1;
+  // new daily limit (in RSD minor units); null/omitted means don't touch.
+  optional int64 limit = 2;
+  // new used_limit value; null/omitted means don't touch. Pass 0 to reset.
+  optional int64 used_limit = 3;
+  // email of the caller; required so the user service can verify the caller is admin/supervisor.
+  string caller_email = 4;
+}
+
+message UpdateEmployeeNeedApprovalRequest {
+  int64 id = 1;
+  bool need_approval = 2;
+  string caller_email = 3;
+}
+
+message DeleteEmployeeRequest {
+  int64 id = 1;
+}
+
+message DeleteEmployeeResponse {
+  bool success = 1;
+}

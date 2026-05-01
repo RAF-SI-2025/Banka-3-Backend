@@ -1,0 +1,29 @@
+syntax = "proto3";
+
+package trading;
+
+option go_package = "github.com/RAF-SI-2025/Banka-3-Backend/pkg/proto/trading";
+
+// Forex is employee-only — clients get PermissionDenied. Spec Idea 1: forex
+// pairs have no listings, we surface them directly.
+message ForexPair {
+  int64 id = 1;
+  string ticker = 2;
+  string name = 3;
+  string base_currency = 4;
+  string quote_currency = 5;
+  double exchange_rate = 6;
+  string liquidity = 7;
+  int64 contract_size = 8;
+  int64 maintenance_margin = 9;
+  int64 nominal_value = 10;
+}
+
+message ListForexPairsRequest {
+  string caller_email = 1;
+}
+
+message ListForexPairsResponse {
+  repeated ForexPair pairs = 1;
+}
+

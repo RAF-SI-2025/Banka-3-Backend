@@ -1,0 +1,99 @@
+syntax = "proto3";
+
+package bank;
+
+option go_package = "github.com/RAF-SI-2025/Banka-3-Backend/pkg/proto/bank";
+
+message Loan {
+  string loan_number = 1;
+  string loan_type = 2;
+  string account_number = 3;
+  int64 loan_amount = 4;
+  int64 repayment_period = 5;
+  double nominal_rate = 6;
+  double effective_rate = 7;
+  string agreement_date = 8;
+  string maturity_date = 9;
+  int64 next_installment_amount = 10;
+  string next_installment_date = 11;
+  int64 remaining_debt = 12;
+  string currency = 13;
+  string status = 14;
+}
+
+message LoanRequestView {
+  int64 id = 1;
+  string loan_type = 2;
+  int64 amount = 3;
+  string currency = 4;
+  string purpose = 5;
+  int64 salary = 6;
+  string employment_status = 7;
+  int64 employment_period = 8;
+  string phone_number = 9;
+  int64 repayment_period = 10;
+  string account_number = 11;
+  string status = 12;
+  string interest_rate_type = 13;
+  string submission_date = 14;
+}
+
+message GetLoansRequest {
+  string client_email = 1;
+  string loan_type = 2;
+  string account_number = 3;
+  string status = 4;
+}
+
+message GetLoansResponse {
+  repeated Loan loans = 1;
+}
+
+message GetLoanByNumberRequest {
+  string client_email = 1;
+  string loan_number = 2;
+}
+
+message CreateLoanRequestRequest {
+  string client_email = 1;
+  string account_number = 2;
+  string loan_type = 3;
+  int64 amount = 4;
+  int64 repayment_period = 5;
+  string currency = 6;
+  string purpose = 7;
+  int64 salary = 8;
+  string employment_status = 9;
+  int64 employment_period = 10;
+  string phone_number = 11;
+  string interest_rate_type = 12;
+}
+
+message CreateLoanRequestResponse {} // intentionally empty
+
+message GetLoanRequestsRequest {
+  string loan_type = 1;
+  string account_number = 2;
+}
+
+message GetLoanRequestsResponse {
+  repeated LoanRequestView loan_requests = 1;
+}
+
+message ApproveLoanRequestRequest {
+  int64 id = 1;
+}
+
+message ApproveLoanRequestResponse {}
+
+message RejectLoanRequestRequest {
+  int64 id = 1;
+}
+
+message RejectLoanRequestResponse {}
+
+message GetAllLoansRequest {
+  string loan_type = 1;
+  string account_number = 2;
+  string status = 3;
+}

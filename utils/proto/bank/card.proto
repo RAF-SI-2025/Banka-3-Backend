@@ -1,0 +1,56 @@
+syntax = "proto3";
+
+package bank;
+
+option go_package = "github.com/RAF-SI-2025/Banka-3-Backend/pkg/proto/bank";
+
+
+message CreateCardRequest {
+  string account_number = 1;
+  string card_type = 2;
+  string card_brand = 3;
+  string email = 4;
+}
+
+message CardResponse {
+  string card_id = 1;
+  string card_number = 2;
+  string card_type = 3;
+  string card_brand = 4;
+  string creation_date = 5;
+  string expiration_date = 6;
+  string account_number = 7;
+  string cvv = 8;
+  int64 limit = 9;
+  string status = 10;
+}
+
+message RequestCardRequest {
+  string account_number = 1;
+  string card_type = 2;
+  string card_brand = 3;
+}
+
+message RequestCardResponse {
+  bool accepted = 1;
+}
+
+message ConfirmCardRequest {
+  string token = 1;
+}
+
+message ConfirmCardResponse {}
+
+message GetCardsRequest {}
+
+message GetCardsResponse {
+  repeated CardResponse cards = 1;
+}
+
+message BlockCardRequest {
+  string card_number = 1;
+}
+
+message BlockCardResponse {
+  bool success = 1;
+}

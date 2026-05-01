@@ -7,6 +7,7 @@ import (
 	"net"
 	"os"
 
+	"github.com/RAF-SI-2025/Banka-3-Backend/services/user/internal/server"
 	_ "github.com/jackc/pgx/v5/stdlib"
 	"github.com/redis/go-redis/v9"
 	"google.golang.org/grpc"
@@ -18,7 +19,6 @@ import (
 	"github.com/RAF-SI-2025/Banka-3-Backend/pkg/logger"
 	"github.com/RAF-SI-2025/Banka-3-Backend/pkg/proto/notification"
 	"github.com/RAF-SI-2025/Banka-3-Backend/pkg/proto/user"
-	internalUser "github.com/RAF-SI-2025/Banka-3-Backend/services/user/internal/user"
 )
 
 func connect_to_db_gorm() *gorm.DB {
@@ -43,7 +43,7 @@ func connectToDB() *sql.DB {
 	return db
 }
 
-func connect() (*internalUser.Connections, error) {
+func connect() (*server.Connections, error) {
 	notificationAddr := os.Getenv("NOTIFICATION_GRPC_ADDR")
 	if notificationAddr == "" {
 		notificationAddr = "notification:50051"
@@ -59,11 +59,11 @@ func connect() (*internalUser.Connections, error) {
 	}
 
 	db := connectToDB()
-	gorm := connect_to_db_gorm()
-	return &internalUser.Connections{
+	dbGorm := connect_to_db_gorm()
+	return &server.Connections{
 		NotificationClient: notification.NewNotificationServiceClient(notificationConn),
 		Sql_db:             db,
-		Gorm:               gorm,
+		Gorm:               dbGorm,
 	}, nil
 }
 
@@ -110,11 +110,11 @@ func main() {
 
 	connections.Rdb = rdb
 
-	userService := internalUser.NewServer(accessJwtSecret, refreshJwtSecret, connections)
-	totpService := internalUser.NewTotpServer(connections)
+	userService := server.NewServer(accessJwtSecret, refreshJwtSecret, connections)
+	totpService := server.NewTotpServer(connections)
 
 	databaseURL := os.Getenv("DATABASE_URL")
-	go internalUser.StartPGListener(context.Background(), databaseURL, userService)
+	go server.StartPGListener(context.Background(), databaseURL, userService)
 
 	srv := grpc.NewServer(
 		grpc.UnaryInterceptor(logger.UnaryServerInterceptor()),

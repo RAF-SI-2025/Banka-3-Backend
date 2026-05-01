@@ -1,0 +1,99 @@
+syntax = "proto3";
+
+package trading;
+
+option go_package = "github.com/RAF-SI-2025/Banka-3-Backend/pkg/proto/trading";
+
+// Exactly one of listing_id / option_id / forex_pair_id must be set — that's
+// the instrument being traded. limit_price / stop_price are required only
+// for LIMIT / STOP / STOP_LIMIT; senders must leave them 0 otherwise.
+message CreateOrderRequest {
+  int64 listing_id = 1;
+  int64 option_id = 2;
+  int64 forex_pair_id = 3;
+  string account_number = 4;
+  string order_type = 5;
+  string direction = 6;
+  int64 quantity = 7;
+  int64 limit_price = 8;
+  int64 stop_price = 9;
+  bool all_or_none = 10;
+  bool margin = 11;
+}
+
+message CreateOrderResponse {
+  int64 order_id = 1;
+  string status = 2;
+}
+
+// OrderDetail is the row shape used by the supervisor orders portal (spec
+// pp.57–58). asset_label is a human-readable instrument identifier: the
+// listing's ticker for stocks/futures, the option or forex-pair ticker
+// otherwise. placer_name is derived from the placer row (employee or client).
+// past_settlement signals "approve blocked, decline only" at the UI layer —
+// the RPC re-checks server-side.
+message OrderDetail {
+  int64 id = 1;
+  string status = 2;
+  string order_type = 3;
+  string direction = 4;
+  int64 quantity = 5;
+  int64 contract_size = 6;
+  int64 price_per_unit = 7;
+  int64 remaining_portions = 8;
+  string asset_label = 9;
+  string placer_name = 10;
+  int64 placer_employee_id = 11;
+  int64 placer_client_id = 12;
+  bool past_settlement = 13;
+  int64 approved_by = 14;
+  int64 created_at_unix = 15;
+  bool margin = 16;
+  bool all_or_none = 17;
+  int64 commission = 18;
+}
+
+// Supervisor-only. status: "" or "all" returns every order, otherwise one of
+// "pending|approved|declined|done|cancelled". agent_id filters by the placer's
+// employee_id (0 = no filter); client-placed orders are excluded when a
+// positive agent_id is passed.
+message ListOrdersRequest {
+  string caller_email = 1;
+  string status = 2;
+  int64 agent_id = 3;
+}
+
+message ListOrdersResponse {
+  repeated OrderDetail orders = 1;
+}
+
+message ApproveOrderRequest {
+  int64 order_id = 1;
+  string caller_email = 2;
+}
+
+message ApproveOrderResponse {
+  OrderDetail order = 1;
+}
+
+message DeclineOrderRequest {
+  int64 order_id = 1;
+  string caller_email = 2;
+}
+
+message DeclineOrderResponse {
+  OrderDetail order = 1;
+}
+
+// CancelOrder accepts either the order's owner or a supervisor. The caller
+// identity comes from the `user-email` gRPC metadata header (same as
+// CreateOrder) so the server can distinguish client owner vs. employee owner
+// vs. supervisor without an extra DB round trip on the gateway.
+message CancelOrderRequest {
+  int64 order_id = 1;
+}
+
+message CancelOrderResponse {
+  OrderDetail order = 1;
+}
+

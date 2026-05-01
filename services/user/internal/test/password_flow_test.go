@@ -1,4 +1,4 @@
-package user
+package test
 
 import (
 	"context"
@@ -9,6 +9,7 @@ import (
 	"testing"
 
 	"github.com/DATA-DOG/go-sqlmock"
+	"github.com/RAF-SI-2025/Banka-3-Backend/services/user/internal/server"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
 
@@ -38,7 +39,7 @@ func (s *testNotificationServer) SendInitialPasswordSetEmail(_ context.Context, 
 }
 
 func TestRequestPasswordResetUnknownEmailReturnsAccepted(t *testing.T) {
-	server, mock, db := newTestServer(t)
+	testServer, mock, db := NewTestServer(t)
 	defer func() { _ = db.Close() }()
 
 	email := "missing@banka.raf"
@@ -51,7 +52,7 @@ func TestRequestPasswordResetUnknownEmailReturnsAccepted(t *testing.T) {
 		WithArgs(email).
 		WillReturnRows(sqlmock.NewRows([]string{"email", "password", "salt_password"}))
 
-	resp, err := server.RequestPasswordReset(context.Background(), &userpb.PasswordActionRequest{Email: email})
+	resp, err := testServer.RequestPasswordReset(context.Background(), &userpb.PasswordActionRequest{Email: email})
 	if err != nil {
 		t.Fatalf("RequestPasswordReset returned error: %v", err)
 	}
@@ -65,11 +66,11 @@ func TestRequestPasswordResetUnknownEmailReturnsAccepted(t *testing.T) {
 }
 
 func TestRequestPasswordResetExistingEmailSendsNotification(t *testing.T) {
-	server, mock, db := newTestServer(t)
+	testServer, mock, db := NewTestServer(t)
 	defer func() { _ = db.Close() }()
 
 	notificationServer := &testNotificationServer{}
-	addr, stop := startNotificationTestServer(t, notificationServer)
+	addr, stop := StartNotificationTestServer(t, notificationServer)
 	defer stop()
 
 	t.Setenv("NOTIFICATION_GRPC_ADDR", addr)
@@ -85,10 +86,10 @@ func TestRequestPasswordResetExistingEmailSendsNotification(t *testing.T) {
 		WithArgs(email).
 		WillReturnRows(sqlmock.NewRows([]string{"email", "password", "salt_password"}).AddRow(email, []byte{1, 2, 3}, []byte{3, 2, 1}))
 	mock.ExpectExec("INSERT INTO password_action_tokens").
-		WithArgs(email, passwordActionReset, sqlmock.AnyArg(), sqlmock.AnyArg()).
+		WithArgs(email, server.PasswordActionReset, sqlmock.AnyArg(), sqlmock.AnyArg()).
 		WillReturnResult(sqlmock.NewResult(0, 1))
 
-	resp, err := server.RequestPasswordReset(context.Background(), &userpb.PasswordActionRequest{Email: email})
+	resp, err := testServer.RequestPasswordReset(context.Background(), &userpb.PasswordActionRequest{Email: email})
 	if err != nil {
 		t.Fatalf("RequestPasswordReset returned error: %v", err)
 	}
@@ -127,11 +128,11 @@ func TestRequestPasswordResetExistingEmailSendsNotification(t *testing.T) {
 }
 
 func TestRequestInitialPasswordSetExistingEmailSendsNotification(t *testing.T) {
-	server, mock, db := newTestServer(t)
+	testServer, mock, db := NewTestServer(t)
 	defer func() { _ = db.Close() }()
 
 	notificationServer := &testNotificationServer{}
-	addr, stop := startNotificationTestServer(t, notificationServer)
+	addr, stop := StartNotificationTestServer(t, notificationServer)
 	defer stop()
 
 	t.Setenv("NOTIFICATION_GRPC_ADDR", addr)
@@ -147,10 +148,10 @@ func TestRequestInitialPasswordSetExistingEmailSendsNotification(t *testing.T) {
 		WithArgs(email).
 		WillReturnRows(sqlmock.NewRows([]string{"email", "password", "salt_password"}).AddRow(email, []byte{9, 9, 9}, []byte{7, 7, 7}))
 	mock.ExpectExec("INSERT INTO password_action_tokens").
-		WithArgs(email, passwordActionInitialSet, sqlmock.AnyArg(), sqlmock.AnyArg()).
+		WithArgs(email, server.PasswordActionInitialSet, sqlmock.AnyArg(), sqlmock.AnyArg()).
 		WillReturnResult(sqlmock.NewResult(0, 1))
 
-	resp, err := server.RequestInitialPasswordSet(context.Background(), &userpb.PasswordActionRequest{Email: email})
+	resp, err := testServer.RequestInitialPasswordSet(context.Background(), &userpb.PasswordActionRequest{Email: email})
 	if err != nil {
 		t.Fatalf("RequestInitialPasswordSet returned error: %v", err)
 	}
@@ -185,10 +186,10 @@ func TestRequestInitialPasswordSetExistingEmailSendsNotification(t *testing.T) {
 }
 
 func TestSetPasswordWithTokenInvalidInput(t *testing.T) {
-	server, mock, db := newTestServer(t)
+	testServer, mock, db := NewTestServer(t)
 	defer func() { _ = db.Close() }()
 
-	_, err := server.SetPasswordWithToken(context.Background(), &userpb.SetPasswordWithTokenRequest{
+	_, err := testServer.SetPasswordWithToken(context.Background(), &userpb.SetPasswordWithTokenRequest{
 		Token:       "",
 		NewPassword: "new-pass",
 	})
@@ -205,7 +206,7 @@ func TestSetPasswordWithTokenInvalidInput(t *testing.T) {
 }
 
 func TestSetPasswordWithTokenSuccess(t *testing.T) {
-	server, mock, db := newTestServer(t)
+	testServer, mock, db := NewTestServer(t)
 	defer func() { _ = db.Close() }()
 
 	email := "admin@banka.raf"
@@ -215,10 +216,10 @@ func TestSetPasswordWithTokenSuccess(t *testing.T) {
 
 	mock.ExpectBegin()
 	mock.ExpectQuery("SELECT email, action_type").
-		WithArgs(hashValue(token)).
-		WillReturnRows(sqlmock.NewRows([]string{"email", "action_type"}).AddRow(email, passwordActionReset))
+		WithArgs(server.HashValue(token)).
+		WillReturnRows(sqlmock.NewRows([]string{"email", "action_type"}).AddRow(email, server.PasswordActionReset))
 	mock.ExpectExec("UPDATE password_action_tokens").
-		WithArgs(email, passwordActionReset).
+		WithArgs(email, server.PasswordActionReset).
 		WillReturnResult(sqlmock.NewResult(0, 1))
 	mock.ExpectQuery(regexp.QuoteMeta(`
 		SELECT email, password, salt_password FROM employees WHERE email = $1
@@ -229,14 +230,14 @@ func TestSetPasswordWithTokenSuccess(t *testing.T) {
 		WithArgs(email).
 		WillReturnRows(sqlmock.NewRows([]string{"email", "password", "salt_password"}).AddRow(email, []byte{1, 2, 3}, salt))
 	mock.ExpectExec("UPDATE employees").
-		WithArgs(HashPassword(newPassword, salt), email).
+		WithArgs(server.HashPassword(newPassword, salt), email).
 		WillReturnResult(sqlmock.NewResult(0, 1))
 	mock.ExpectExec("UPDATE refresh_tokens SET revoked = TRUE WHERE email = \\$1").
 		WithArgs(email).
 		WillReturnResult(sqlmock.NewResult(0, 1))
 	mock.ExpectCommit()
 
-	resp, err := server.SetPasswordWithToken(context.Background(), &userpb.SetPasswordWithTokenRequest{
+	resp, err := testServer.SetPasswordWithToken(context.Background(), &userpb.SetPasswordWithTokenRequest{
 		Token:       token,
 		NewPassword: newPassword,
 	})
@@ -253,16 +254,16 @@ func TestSetPasswordWithTokenSuccess(t *testing.T) {
 }
 
 func TestSetPasswordWithTokenInvalidOrExpiredToken(t *testing.T) {
-	server, mock, db := newTestServer(t)
+	testServer, mock, db := NewTestServer(t)
 	defer func() { _ = db.Close() }()
 
 	mock.ExpectBegin()
 	mock.ExpectQuery("SELECT email, action_type").
-		WithArgs(hashValue("expired-token")).
+		WithArgs(server.HashValue("expired-token")).
 		WillReturnError(sql.ErrNoRows)
 	mock.ExpectRollback()
 
-	_, err := server.SetPasswordWithToken(context.Background(), &userpb.SetPasswordWithTokenRequest{
+	_, err := testServer.SetPasswordWithToken(context.Background(), &userpb.SetPasswordWithTokenRequest{
 		Token:       "expired-token",
 		NewPassword: "new-pass",
 	})
