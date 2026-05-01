@@ -94,7 +94,7 @@ jobs:
           PGUSER: banka
           PGPASSWORD: banka_secret
           PGDATABASE: banka
-        run: psql -v ON_ERROR_STOP=1 -f scripts/db/schema.sql
+        run: psql -v ON_ERROR_STOP=1 -f utils/db/schema.sql
       - name: Apply seed
         env:
           PGHOST: localhost
@@ -102,7 +102,7 @@ jobs:
           PGUSER: banka
           PGPASSWORD: banka_secret
           PGDATABASE: banka
-        run: psql -v ON_ERROR_STOP=1 -v admin_email=admin@banka.raf -v client_email=petar@primer.raf -f scripts/db/seed.sql
+        run: psql -v ON_ERROR_STOP=1 -v admin_email=admin@banka.raf -v client_email=petar@primer.raf -f utils/db/seed.sql
 
   integration:
     name: integration tests
@@ -133,7 +133,7 @@ jobs:
           PGUSER: banka
           PGPASSWORD: banka_secret
           PGDATABASE: banka
-        run: psql -v ON_ERROR_STOP=1 -f scripts/db/schema.sql
+        run: psql -v ON_ERROR_STOP=1 -f utils/db/schema.sql
       - name: Apply seed
         env:
           PGHOST: localhost
@@ -141,7 +141,7 @@ jobs:
           PGUSER: banka
           PGPASSWORD: banka_secret
           PGDATABASE: banka
-        run: psql -v ON_ERROR_STOP=1 -v admin_email=admin@banka.raf -v client_email=petar@primer.raf -f scripts/db/seed.sql
+        run: psql -v ON_ERROR_STOP=1 -v admin_email=admin@banka.raf -v client_email=petar@primer.raf -f utils/db/seed.sql
       - name: Run integration tests
         env:
           DATABASE_URL: postgres://banka:banka_secret@localhost:5432/banka?sslmode=disable
