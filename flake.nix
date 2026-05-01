@@ -4,6 +4,8 @@
   inputs = {
     nixpkgs.url = "https://flakehub.com/f/NixOS/nixpkgs/0.1";
     flake-parts.url = "github:hercules-ci/flake-parts";
+    nix2container.url = "github:nlewo/nix2container";
+    nix2container.inputs.nixpkgs.follows = "nixpkgs";
   };
 
   outputs = inputs @ {flake-parts, ...}:
@@ -15,8 +17,8 @@
         "aarch64-darwin"
       ];
       imports = [
-        ./nix/devshell.nix
-        ./nix/services.nix
+        ./utils/nix/devshell.nix
+        ./utils/nix/services.nix
       ];
     };
 }

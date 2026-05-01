@@ -1,0 +1,45 @@
+name: nix
+
+on:
+  pull_request:
+  push:
+    branches: [main, nix]
+
+jobs:
+  check:
+    name: nix flake check
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+      - uses: DeterminateSystems/nix-installer-action@main
+      - uses: DeterminateSystems/magic-nix-cache-action@main
+      - run: nix flake check --print-build-logs
+
+  image:
+    name: image (${{ matrix.service }})
+    needs: check
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
+    strategy:
+      fail-fast: false
+      matrix:
+        service: [bank, exchange, gateway, notification, user]
+    steps:
+      - uses: actions/checkout@v5
+      - uses: DeterminateSystems/nix-installer-action@main
+      - uses: DeterminateSystems/magic-nix-cache-action@main
+      - run: nix build .#${{ matrix.service }}-image --print-build-logs
+      - name: Push to GHCR
+        if: github.event_name == 'push'
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          echo "$GH_TOKEN" | nix run nixpkgs#skopeo -- login \
+            --username "${{ github.actor }}" --password-stdin ghcr.io
+          IMAGE="ghcr.io/raf-si-2025/banka-3-backend-${{ matrix.service }}"
+          if [ "${{ github.ref }}" = "refs/heads/main" ]; then
+            nix run .#${{ matrix.service }}-image.copyTo -- "docker://${IMAGE}:latest"
+          fi
+          nix run .#${{ matrix.service }}-image.copyTo -- "docker://${IMAGE}:sha-${{ github.sha }}"
