@@ -51,6 +51,7 @@ message OrderDetail {
   bool margin = 16;
   bool all_or_none = 17;
   int64 commission = 18;
+  bool after_hours = 19;
 }
 
 // Supervisor-only. status: "" or "all" returns every order, otherwise one of

@@ -56,7 +56,8 @@ type Exchange struct {
 	// gorm-specific time-of-day type.
 	OpenTime     string `gorm:"column:open_time;type:time;not null"`
 	CloseTime    string `gorm:"column:close_time;type:time;not null"`
-	OpenOverride bool   `gorm:"column:open_override;not null;default:false"`
+	OpenOverride   bool `gorm:"column:open_override;not null;default:false"`
+	ClosedOverride bool `gorm:"column:closed_override;not null;default:false"`
 }
 
 func (Exchange) TableName() string { return "exchanges" }

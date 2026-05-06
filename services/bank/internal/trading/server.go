@@ -52,6 +52,7 @@ func exchangeToProto(r Exchange) *tradingpb.Exchange {
 		OpenTime:       r.OpenTime,
 		CloseTime:      r.CloseTime,
 		OpenOverride:   r.OpenOverride,
+		ClosedOverride: r.ClosedOverride,
 	}
 }
 
@@ -138,16 +139,10 @@ func (s *Server) CreateOrder(ctx context.Context, req *tradingpb.CreateOrderRequ
 
 	now := time.Now()
 	// after_hours is an exchange-clock concept; forex pairs have no exchange
-	// and always leave the flag false.
+	// and always leave the flag false. Closed-exchange market orders queue
+	// here and pick up the executor's 30-min after-hours bonus once IsOpen
+	// flips back (spec #46): the prior hard reject contradicted the spec.
 	afterHours := info.Exchange != nil && IsAfterHours(*info.Exchange, now)
-
-	// Market orders cannot be placed while the exchange is closed (spec p.57
-	// / issue #189): execution has no quote to fill against. Limit/stop
-	// variants are allowed outside hours because they wait for a trigger.
-	// Forex has no exchange and is always tradable.
-	if orderType == OrderMarket && info.Exchange != nil && !IsOpen(*info.Exchange, now) {
-		return nil, status.Error(codes.FailedPrecondition, "exchange is closed; market orders cannot be placed")
-	}
 
 	// Approximate-price inputs (spec p.57). We keep PricePerUnit=0 on market
 	// orders so the execution engine (#189) re-reads the quote at fill time,
@@ -342,6 +337,33 @@ func (s *Server) SetExchangeOpenOverride(_ context.Context, req *tradingpb.SetEx
 	exch.OpenOverride = req.OpenOverride
 
 	return &tradingpb.SetExchangeOpenOverrideResponse{Exchange: exchangeToProto(exch)}, nil
+}
+
+// SetExchangeClosedOverride mirrors SetExchangeOpenOverride for the inverse
+// toggle: closed_override forces IsOpen=false regardless of clock and
+// open_override. Lets cypress drive closed-market flows during NY business
+// hours (#46) without time-control.
+func (s *Server) SetExchangeClosedOverride(_ context.Context, req *tradingpb.SetExchangeClosedOverrideRequest) (*tradingpb.SetExchangeClosedOverrideResponse, error) {
+	if req.ExchangeId <= 0 {
+		return nil, status.Error(codes.InvalidArgument, "exchange_id required")
+	}
+	if !callerIsSupervisor(s.db, req.CallerEmail) {
+		return nil, status.Error(codes.PermissionDenied, "only admins and supervisors may toggle closed_override")
+	}
+
+	var exch Exchange
+	if err := s.db.First(&exch, req.ExchangeId).Error; err != nil {
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			return nil, status.Error(codes.NotFound, "exchange not found")
+		}
+		return nil, status.Errorf(codes.Internal, "%v", err)
+	}
+	if err := s.db.Model(&exch).Update("closed_override", req.ClosedOverride).Error; err != nil {
+		return nil, status.Errorf(codes.Internal, "%v", err)
+	}
+	exch.ClosedOverride = req.ClosedOverride
+
+	return &tradingpb.SetExchangeClosedOverrideResponse{Exchange: exchangeToProto(exch)}, nil
 }
 
 // callerIsSupervisor checks whether the given employee email has `admin` or

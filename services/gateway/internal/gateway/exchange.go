@@ -51,6 +51,10 @@ type setExchangeOpenOverrideBody struct {
 	OpenOverride *bool `json:"open_override" binding:"required"`
 }
 
+type setExchangeClosedOverrideBody struct {
+	ClosedOverride *bool `json:"closed_override" binding:"required"`
+}
+
 // SetExchangeOpenOverride flips the open_override flag on an exchange.
 // Supervisor-only — route is gated at `secured("supervisor")` and the trading
 // RPC re-checks the caller's permissions against employee_permissions.
@@ -81,19 +85,40 @@ func (s *Server) SetExchangeOpenOverride(c *gin.Context) {
 		return
 	}
 
-	ex := resp.Exchange
-	c.JSON(http.StatusOK, gin.H{
-		"id":               ex.Id,
-		"name":             ex.Name,
-		"acronym":          ex.Acronym,
-		"mic_code":         ex.MicCode,
-		"polity":           ex.Polity,
-		"currency":         ex.Currency,
-		"time_zone_offset": ex.TimeZoneOffset,
-		"open_time":        ex.OpenTime,
-		"close_time":       ex.CloseTime,
-		"open_override":    ex.OpenOverride,
+	c.JSON(http.StatusOK, exchangeToJSON(resp.Exchange))
+}
+
+// SetExchangeClosedOverride is the inverse toggle — force-closes an exchange
+// regardless of clock and open_override (spec #46 / cypress closed-market
+// flows). Same supervisor gating as SetExchangeOpenOverride.
+func (s *Server) SetExchangeClosedOverride(c *gin.Context) {
+	idStr := c.Param("id")
+	id, err := strconv.ParseInt(idStr, 10, 64)
+	if err != nil || id <= 0 {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "exchange id must be a positive integer"})
+		return
+	}
+
+	var body setExchangeClosedOverrideBody
+	if err := c.ShouldBindJSON(&body); err != nil {
+		writeBindError(c, err)
+		return
+	}
+
+	ctx, cancel := context.WithTimeout(c.Request.Context(), 5*time.Second)
+	defer cancel()
+
+	resp, err := s.TradingClient.SetExchangeClosedOverride(ctx, &tradingpb.SetExchangeClosedOverrideRequest{
+		ExchangeId:     id,
+		ClosedOverride: *body.ClosedOverride,
+		CallerEmail:    c.GetString("email"),
 	})
+	if err != nil {
+		writeGRPCError(c, err)
+		return
+	}
+
+	c.JSON(http.StatusOK, exchangeToJSON(resp.Exchange))
 }
 
 func (s *Server) ConvertMoney(c *gin.Context) {

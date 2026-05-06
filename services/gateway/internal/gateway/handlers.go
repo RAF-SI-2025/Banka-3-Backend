@@ -208,6 +208,7 @@ func SetupApi(router *gin.Engine, server *Server) {
 	// market hours (see spec p.40 and issue #194). Admin bypass still applies
 	// through `secured("supervisor")`.
 	api.PATCH("/exchanges/:id/open-override", auth, secured("supervisor"), server.SetExchangeOpenOverride)
+	api.PATCH("/exchanges/:id/closed-override", auth, secured("supervisor"), server.SetExchangeClosedOverride)
 
 	// Supervisor tax portal (spec p.63 / #209). Manual "Pokreni obračun"
 	// button + the per-user dugovanja listing. Supervisor-only at the

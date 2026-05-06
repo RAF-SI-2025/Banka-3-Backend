@@ -17,6 +17,10 @@ message Exchange {
   // care about HH:MM can truncate.
   string open_time = 9;
   string close_time = 10;
+  // closed_override is the inverse of open_override — supervisor-toggle that
+  // forces IsOpen=false regardless of the wall clock. Lets cypress exercise
+  // closed-market flows during NY business hours without time-control.
+  bool closed_override = 11;
 }
 
 message ListExchangesRequest {}
@@ -37,6 +41,19 @@ message SetExchangeOpenOverrideRequest {
 }
 
 message SetExchangeOpenOverrideResponse {
+  Exchange exchange = 1;
+}
+
+// Mirror of SetExchangeOpenOverride for the closed-side toggle. When
+// closed_override=true, IsOpen returns false regardless of clock and
+// open_override; useful for exercising closed-market order paths in cypress.
+message SetExchangeClosedOverrideRequest {
+  int64 exchange_id = 1;
+  bool closed_override = 2;
+  string caller_email = 3;
+}
+
+message SetExchangeClosedOverrideResponse {
   Exchange exchange = 1;
 }
 

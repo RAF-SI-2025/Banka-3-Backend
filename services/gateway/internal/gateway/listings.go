@@ -50,6 +50,7 @@ func exchangeToJSON(e *tradingpb.Exchange) gin.H {
 		"open_time":        e.OpenTime,
 		"close_time":       e.CloseTime,
 		"open_override":    e.OpenOverride,
+		"closed_override":  e.ClosedOverride,
 	}
 }
 

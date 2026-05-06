@@ -33,10 +33,14 @@ type Exchange struct {
 	OpenOverride   bool                   `protobuf:"varint,8,opt,name=open_override,json=openOverride,proto3" json:"open_override,omitempty"`
 	// Local-time working hours as "HH:MM:SS" (Postgres TIME). Clients that only
 	// care about HH:MM can truncate.
-	OpenTime      string `protobuf:"bytes,9,opt,name=open_time,json=openTime,proto3" json:"open_time,omitempty"`
-	CloseTime     string `protobuf:"bytes,10,opt,name=close_time,json=closeTime,proto3" json:"close_time,omitempty"`
-	unknownFields protoimpl.UnknownFields
-	sizeCache     protoimpl.SizeCache
+	OpenTime  string `protobuf:"bytes,9,opt,name=open_time,json=openTime,proto3" json:"open_time,omitempty"`
+	CloseTime string `protobuf:"bytes,10,opt,name=close_time,json=closeTime,proto3" json:"close_time,omitempty"`
+	// closed_override is the inverse of open_override — supervisor-toggle that
+	// forces IsOpen=false regardless of the wall clock. Lets cypress exercise
+	// closed-market flows during NY business hours without time-control.
+	ClosedOverride bool `protobuf:"varint,11,opt,name=closed_override,json=closedOverride,proto3" json:"closed_override,omitempty"`
+	unknownFields  protoimpl.UnknownFields
+	sizeCache      protoimpl.SizeCache
 }
 
 func (x *Exchange) Reset() {
@@ -137,6 +141,13 @@ func (x *Exchange) GetCloseTime() string {
 		return x.CloseTime
 	}
 	return ""
+}
+
+func (x *Exchange) GetClosedOverride() bool {
+	if x != nil {
+		return x.ClosedOverride
+	}
+	return false
 }
 
 type ListExchangesRequest struct {
@@ -328,11 +339,118 @@ func (x *SetExchangeOpenOverrideResponse) GetExchange() *Exchange {
 	return nil
 }
 
+// Mirror of SetExchangeOpenOverride for the closed-side toggle. When
+// closed_override=true, IsOpen returns false regardless of clock and
+// open_override; useful for exercising closed-market order paths in cypress.
+type SetExchangeClosedOverrideRequest struct {
+	state          protoimpl.MessageState `protogen:"open.v1"`
+	ExchangeId     int64                  `protobuf:"varint,1,opt,name=exchange_id,json=exchangeId,proto3" json:"exchange_id,omitempty"`
+	ClosedOverride bool                   `protobuf:"varint,2,opt,name=closed_override,json=closedOverride,proto3" json:"closed_override,omitempty"`
+	CallerEmail    string                 `protobuf:"bytes,3,opt,name=caller_email,json=callerEmail,proto3" json:"caller_email,omitempty"`
+	unknownFields  protoimpl.UnknownFields
+	sizeCache      protoimpl.SizeCache
+}
+
+func (x *SetExchangeClosedOverrideRequest) Reset() {
+	*x = SetExchangeClosedOverrideRequest{}
+	mi := &file_trading_exchange_proto_msgTypes[5]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *SetExchangeClosedOverrideRequest) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*SetExchangeClosedOverrideRequest) ProtoMessage() {}
+
+func (x *SetExchangeClosedOverrideRequest) ProtoReflect() protoreflect.Message {
+	mi := &file_trading_exchange_proto_msgTypes[5]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use SetExchangeClosedOverrideRequest.ProtoReflect.Descriptor instead.
+func (*SetExchangeClosedOverrideRequest) Descriptor() ([]byte, []int) {
+	return file_trading_exchange_proto_rawDescGZIP(), []int{5}
+}
+
+func (x *SetExchangeClosedOverrideRequest) GetExchangeId() int64 {
+	if x != nil {
+		return x.ExchangeId
+	}
+	return 0
+}
+
+func (x *SetExchangeClosedOverrideRequest) GetClosedOverride() bool {
+	if x != nil {
+		return x.ClosedOverride
+	}
+	return false
+}
+
+func (x *SetExchangeClosedOverrideRequest) GetCallerEmail() string {
+	if x != nil {
+		return x.CallerEmail
+	}
+	return ""
+}
+
+type SetExchangeClosedOverrideResponse struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	Exchange      *Exchange              `protobuf:"bytes,1,opt,name=exchange,proto3" json:"exchange,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *SetExchangeClosedOverrideResponse) Reset() {
+	*x = SetExchangeClosedOverrideResponse{}
+	mi := &file_trading_exchange_proto_msgTypes[6]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *SetExchangeClosedOverrideResponse) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*SetExchangeClosedOverrideResponse) ProtoMessage() {}
+
+func (x *SetExchangeClosedOverrideResponse) ProtoReflect() protoreflect.Message {
+	mi := &file_trading_exchange_proto_msgTypes[6]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use SetExchangeClosedOverrideResponse.ProtoReflect.Descriptor instead.
+func (*SetExchangeClosedOverrideResponse) Descriptor() ([]byte, []int) {
+	return file_trading_exchange_proto_rawDescGZIP(), []int{6}
+}
+
+func (x *SetExchangeClosedOverrideResponse) GetExchange() *Exchange {
+	if x != nil {
+		return x.Exchange
+	}
+	return nil
+}
+
 var File_trading_exchange_proto protoreflect.FileDescriptor
 
 const file_trading_exchange_proto_rawDesc = "" +
 	"\n" +
-	"\x16trading/exchange.proto\x12\atrading\"\xa2\x02\n" +
+	"\x16trading/exchange.proto\x12\atrading\"\xcb\x02\n" +
 	"\bExchange\x12\x0e\n" +
 	"\x02id\x18\x01 \x01(\x03R\x02id\x12\x12\n" +
 	"\x04name\x18\x02 \x01(\tR\x04name\x12\x18\n" +
@@ -345,7 +463,8 @@ const file_trading_exchange_proto_rawDesc = "" +
 	"\topen_time\x18\t \x01(\tR\bopenTime\x12\x1d\n" +
 	"\n" +
 	"close_time\x18\n" +
-	" \x01(\tR\tcloseTime\"\x16\n" +
+	" \x01(\tR\tcloseTime\x12'\n" +
+	"\x0fclosed_override\x18\v \x01(\bR\x0eclosedOverride\"\x16\n" +
 	"\x14ListExchangesRequest\"H\n" +
 	"\x15ListExchangesResponse\x12/\n" +
 	"\texchanges\x18\x01 \x03(\v2\x11.trading.ExchangeR\texchanges\"\x89\x01\n" +
@@ -355,6 +474,13 @@ const file_trading_exchange_proto_rawDesc = "" +
 	"\ropen_override\x18\x02 \x01(\bR\fopenOverride\x12!\n" +
 	"\fcaller_email\x18\x03 \x01(\tR\vcallerEmail\"P\n" +
 	"\x1fSetExchangeOpenOverrideResponse\x12-\n" +
+	"\bexchange\x18\x01 \x01(\v2\x11.trading.ExchangeR\bexchange\"\x8f\x01\n" +
+	" SetExchangeClosedOverrideRequest\x12\x1f\n" +
+	"\vexchange_id\x18\x01 \x01(\x03R\n" +
+	"exchangeId\x12'\n" +
+	"\x0fclosed_override\x18\x02 \x01(\bR\x0eclosedOverride\x12!\n" +
+	"\fcaller_email\x18\x03 \x01(\tR\vcallerEmail\"R\n" +
+	"!SetExchangeClosedOverrideResponse\x12-\n" +
 	"\bexchange\x18\x01 \x01(\v2\x11.trading.ExchangeR\bexchangeB:Z8github.com/RAF-SI-2025/Banka-3-Backend/pkg/proto/tradingb\x06proto3"
 
 var (
@@ -369,22 +495,25 @@ func file_trading_exchange_proto_rawDescGZIP() []byte {
 	return file_trading_exchange_proto_rawDescData
 }
 
-var file_trading_exchange_proto_msgTypes = make([]protoimpl.MessageInfo, 5)
+var file_trading_exchange_proto_msgTypes = make([]protoimpl.MessageInfo, 7)
 var file_trading_exchange_proto_goTypes = []any{
-	(*Exchange)(nil),                        // 0: trading.Exchange
-	(*ListExchangesRequest)(nil),            // 1: trading.ListExchangesRequest
-	(*ListExchangesResponse)(nil),           // 2: trading.ListExchangesResponse
-	(*SetExchangeOpenOverrideRequest)(nil),  // 3: trading.SetExchangeOpenOverrideRequest
-	(*SetExchangeOpenOverrideResponse)(nil), // 4: trading.SetExchangeOpenOverrideResponse
+	(*Exchange)(nil),                          // 0: trading.Exchange
+	(*ListExchangesRequest)(nil),              // 1: trading.ListExchangesRequest
+	(*ListExchangesResponse)(nil),             // 2: trading.ListExchangesResponse
+	(*SetExchangeOpenOverrideRequest)(nil),    // 3: trading.SetExchangeOpenOverrideRequest
+	(*SetExchangeOpenOverrideResponse)(nil),   // 4: trading.SetExchangeOpenOverrideResponse
+	(*SetExchangeClosedOverrideRequest)(nil),  // 5: trading.SetExchangeClosedOverrideRequest
+	(*SetExchangeClosedOverrideResponse)(nil), // 6: trading.SetExchangeClosedOverrideResponse
 }
 var file_trading_exchange_proto_depIdxs = []int32{
 	0, // 0: trading.ListExchangesResponse.exchanges:type_name -> trading.Exchange
 	0, // 1: trading.SetExchangeOpenOverrideResponse.exchange:type_name -> trading.Exchange
-	2, // [2:2] is the sub-list for method output_type
-	2, // [2:2] is the sub-list for method input_type
-	2, // [2:2] is the sub-list for extension type_name
-	2, // [2:2] is the sub-list for extension extendee
-	0, // [0:2] is the sub-list for field type_name
+	0, // 2: trading.SetExchangeClosedOverrideResponse.exchange:type_name -> trading.Exchange
+	3, // [3:3] is the sub-list for method output_type
+	3, // [3:3] is the sub-list for method input_type
+	3, // [3:3] is the sub-list for extension type_name
+	3, // [3:3] is the sub-list for extension extendee
+	0, // [0:3] is the sub-list for field type_name
 }
 
 func init() { file_trading_exchange_proto_init() }
@@ -398,7 +527,7 @@ func file_trading_exchange_proto_init() {
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
 			RawDescriptor: unsafe.Slice(unsafe.StringData(file_trading_exchange_proto_rawDesc), len(file_trading_exchange_proto_rawDesc)),
 			NumEnums:      0,
-			NumMessages:   5,
+			NumMessages:   7,
 			NumExtensions: 0,
 			NumServices:   0,
 		},

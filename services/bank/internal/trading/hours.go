@@ -117,11 +117,16 @@ func withinClockWindow(ex Exchange, t time.Time) (openMin, closeMin, nowMin int,
 	return openMin, closeMin, nowMin, trading
 }
 
-// IsOpen reports whether the exchange accepts orders at instant t. When
-// open_override is set (supervisor toggle for testing outside market hours)
-// the exchange is always open; otherwise we check TZ, weekends, holidays,
-// and working hours.
+// IsOpen reports whether the exchange accepts orders at instant t.
+// closed_override wins: when set, the exchange is force-closed regardless of
+// open_override or the wall clock (spec #46 / cypress force-closed flow).
+// open_override is the inverse supervisor toggle for testing outside market
+// hours. Without either override, we check TZ, weekends, holidays, and
+// working hours.
 func IsOpen(ex Exchange, t time.Time) bool {
+	if ex.ClosedOverride {
+		return false
+	}
 	if ex.OpenOverride {
 		return true
 	}
@@ -130,21 +135,31 @@ func IsOpen(ex Exchange, t time.Time) bool {
 }
 
 // IsAfterHours reports whether an order placed at t should be flagged as
-// after-hours per spec p.50: it must land *during* the open window AND within
-// the last 4h before close. open_override suppresses after-hours: the
-// override is the supervisor's "treat as a fresh open day" toggle, and the
-// after-hours penalty (30-min fill delay in the executor) presumes a real
-// close is approaching, which is precisely what the override negates. Without
-// this, suite runs are wall-clock-dependent — a 13:00 NY run flags every
-// freshly-placed order as after-hours and times out the executor specs even
-// when the supervisor has explicitly opened the exchange.
+// after-hours — i.e. fills should carry the 30-min executor delay bonus.
+// Three triggers:
+//  1. closed_override set — force-closed; the order will queue until the
+//     supervisor reopens the exchange and should fill slowly when it does
+//     (spec #46).
+//  2. exchange is naturally closed (weekend, holiday, outside working hours)
+//     and no override is in play. Same reasoning as #1.
+//  3. order placed during open hours within the last 4h before close
+//     (spec p.50 strict definition).
+//
+// open_override suppresses after-hours: it's the "treat as a fresh open day"
+// toggle, and the 30-min penalty presumes a real close is approaching, which
+// is precisely what the override negates. Without this, suite runs become
+// wall-clock-dependent — a 13:00 NY run with override-on would flag every
+// fresh order as after-hours and time out the executor specs.
 func IsAfterHours(ex Exchange, t time.Time) bool {
+	if ex.ClosedOverride {
+		return true
+	}
 	if ex.OpenOverride {
 		return false
 	}
 	_, closeMin, nowMin, trading := withinClockWindow(ex, t)
 	if !trading {
-		return false
+		return true
 	}
 	return closeMin-nowMin < 4*60
 }

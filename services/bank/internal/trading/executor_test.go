@@ -106,6 +106,48 @@ func TestNextDelayOverrideSuppressesBonus(t *testing.T) {
 	}
 }
 
+// TestNextDelayClosedOverrideAppliesBonus is the inverse of
+// TestNextDelayOverrideSuppressesBonus: a market order placed while
+// closed_override=true must pick up the 30-min bonus so fills are slow when
+// the supervisor reopens the exchange (spec #46). Locks in the IsAfterHours
+// → nextDelay chain so a future refactor that drops ClosedOverride from the
+// after-hours decision fails here instead of silently in cypress.
+func TestNextDelayClosedOverrideAppliesBonus(t *testing.T) {
+	ex := nyse()
+	ex.ClosedOverride = true
+	// Wall-clock at NY 14:00 (naturally open) — closed_override must still
+	// force after-hours regardless.
+	nyMidday := time.Date(2026, 4, 22, 19, 0, 0, 0, time.UTC)
+	if !IsAfterHours(ex, nyMidday) {
+		t.Fatalf("closed_override during open hours must flag after-hours")
+	}
+	for i := 0; i < 200; i++ {
+		d := nextDelay(8, 509977, IsAfterHours(ex, nyMidday))
+		if d < afterHoursDelayBonus {
+			t.Fatalf("closed_override delay %s below bonus floor %s", d, afterHoursDelayBonus)
+		}
+	}
+}
+
+// TestNextDelayNaturallyClosedAppliesBonus pins the second half of the #46
+// IsAfterHours change: even without closed_override, an exchange that's
+// naturally closed (weekend, holiday, or off-hours) flags after-hours so the
+// queued fill carries the 30-min bonus when trading resumes.
+func TestNextDelayNaturallyClosedAppliesBonus(t *testing.T) {
+	ex := nyse()
+	// Saturday — naturally closed, no overrides.
+	sat := time.Date(2026, 4, 25, 19, 0, 0, 0, time.UTC)
+	if !IsAfterHours(ex, sat) {
+		t.Fatalf("naturally-closed exchange must flag after-hours")
+	}
+	for i := 0; i < 200; i++ {
+		d := nextDelay(8, 509977, IsAfterHours(ex, sat))
+		if d < afterHoursDelayBonus {
+			t.Fatalf("weekend delay %s below bonus floor %s", d, afterHoursDelayBonus)
+		}
+	}
+}
+
 func TestNextDelayHighVolumeClampsToOneSecond(t *testing.T) {
 	// Volume >> remaining * 1440 → integer division yields 0. The helper
 	// bumps the max to 1s so rand.Int63n doesn't panic on zero.
