@@ -46,9 +46,14 @@ services:
     restart: on-failure
     ports:
       - "${BANK_GRPC_PORT:-50053}:50051"
+      - "${BANK_DEBUG_HTTP_PORT:-50090}:50090"
     environment:
       DATABASE_URL: "postgres://${POSTGRES_USER}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB}?sslmode=disable"
       GRPC_PORT: "50051"
+      # Cypress on-demand cron trigger (cron_debug.go). Set to empty to
+      # disable. Bound only on the docker-internal port; the host mapping
+      # is what cypress hits at localhost:${BANK_DEBUG_HTTP_PORT}.
+      BANK_DEBUG_HTTP_PORT: "50090"
       NOTIFICATION_GRPC_ADDR: ${NOTIFICATION_GRPC_ADDR:-notification:50051}
       LOG_LEVEL: ${LOG_LEVEL:-info}
       LOG_FORMAT: ${LOG_FORMAT:-text}
