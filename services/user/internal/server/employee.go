@@ -137,8 +137,8 @@ func (s *Server) UpdateEmployeeTradingLimit(ctx context.Context, req *userpb.Upd
 	if req.Limit == nil && req.UsedLimit == nil {
 		return nil, status.Error(codes.InvalidArgument, "limit or used_limit must be provided")
 	}
-	if req.Limit != nil && *req.Limit < 0 {
-		return nil, status.Error(codes.InvalidArgument, "limit must be non-negative")
+	if req.Limit != nil && *req.Limit <= 0 {
+		return nil, status.Error(codes.InvalidArgument, "limit must be greater than zero")
 	}
 	if req.UsedLimit != nil && *req.UsedLimit < 0 {
 		return nil, status.Error(codes.InvalidArgument, "used_limit must be non-negative")
@@ -154,6 +154,17 @@ func (s *Server) UpdateEmployeeTradingLimit(ctx context.Context, req *userpb.Upd
 			return nil, status.Error(codes.NotFound, "employee not found")
 		}
 		return nil, status.Error(codes.Internal, "failed to load employee")
+	}
+
+	// Block lowering the limit beneath what the agent has already spent today
+	// (TestoviCelina3 §S3): the supervisor must reset usedLimit first, or wait
+	// for the 23:59 cron. The check uses the freshly-loaded row so concurrent
+	// fills get a consistent comparison even if usedLimit moved since the
+	// supervisor opened the form.
+	if req.Limit != nil && *req.Limit < target.Used_limit {
+		return nil, status.Errorf(codes.InvalidArgument,
+			"limit %d cannot be below already-used %d; reset usedLimit first",
+			*req.Limit, target.Used_limit)
 	}
 
 	updates := map[string]any{"updated_at": time.Now()}

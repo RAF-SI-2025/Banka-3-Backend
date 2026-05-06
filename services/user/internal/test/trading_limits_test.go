@@ -64,6 +64,11 @@ func TestUpdateEmployeeTradingLimitArgValidation(t *testing.T) {
 			code: codes.InvalidArgument,
 		},
 		{
+			name: "zero limit",
+			req:  &userpb.UpdateEmployeeTradingLimitRequest{Id: 1, Limit: ptr64(0)},
+			code: codes.InvalidArgument,
+		},
+		{
 			name: "negative used_limit",
 			req:  &userpb.UpdateEmployeeTradingLimitRequest{Id: 1, UsedLimit: ptr64(-5)},
 			code: codes.InvalidArgument,
