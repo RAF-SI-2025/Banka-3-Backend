@@ -123,9 +123,15 @@ func (s *Server) CreateOrder(ctx context.Context, req *tradingpb.CreateOrderRequ
 	var rateAccRSD, rateInstrRSD float64 = 1, 1
 	if acc.Currency != info.Currency {
 		if rateAccRSD, err = s.bank.GetExchangeRateToRSD(acc.Currency); err != nil {
+			if errors.Is(err, gorm.ErrRecordNotFound) {
+				return nil, status.Errorf(codes.FailedPrecondition, "valuta računa (%s) nije podržana za trgovanje", acc.Currency)
+			}
 			return nil, status.Errorf(codes.Internal, "failed to load exchange rate for %s: %v", acc.Currency, err)
 		}
 		if rateInstrRSD, err = s.bank.GetExchangeRateToRSD(info.Currency); err != nil {
+			if errors.Is(err, gorm.ErrRecordNotFound) {
+				return nil, status.Errorf(codes.FailedPrecondition, "valuta hartije (%s) nije podržana za trgovanje", info.Currency)
+			}
 			return nil, status.Errorf(codes.Internal, "failed to load exchange rate for %s: %v", info.Currency, err)
 		}
 	}
