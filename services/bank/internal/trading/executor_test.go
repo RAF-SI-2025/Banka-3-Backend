@@ -81,6 +81,31 @@ func TestNextDelayAfterHoursBonus(t *testing.T) {
 	}
 }
 
+// TestNextDelayOverrideSuppressesBonus locks in the 2026-05-06 regression:
+// an order placed during the XNAS last-4h window with open_override=true was
+// getting after_hours=true via the wall-clock-only IsAfterHours, and the
+// executor's 30-min bonus was pushing every fill past cypress's 60s budget.
+// This test exercises the full chain — IsAfterHours under override → nextDelay
+// — so a future refactor that re-introduces clock-only behavior fails here
+// rather than silently in the suite.
+func TestNextDelayOverrideSuppressesBonus(t *testing.T) {
+	ex := nyse()
+	ex.OpenOverride = true
+	// Wed 13:00 NY → 3h to close, would be after-hours without the override.
+	nyAfternoon := time.Date(2026, 4, 22, 18, 0, 0, 0, time.UTC)
+	if IsAfterHours(ex, nyAfternoon) {
+		t.Fatalf("regression: override + last-4h window flagged after-hours")
+	}
+	// And the resulting delay must stay inside the volume-formula ceiling
+	// (no bonus): remaining=8, volume≈seeded daily volume → maxSec clamps to 1.
+	for i := 0; i < 200; i++ {
+		d := nextDelay(8, 509977, IsAfterHours(ex, nyAfternoon))
+		if d > time.Second {
+			t.Fatalf("override-on delay %s exceeded volume ceiling — after-hours bonus leaked in", d)
+		}
+	}
+}
+
 func TestNextDelayHighVolumeClampsToOneSecond(t *testing.T) {
 	// Volume >> remaining * 1440 → integer division yields 0. The helper
 	// bumps the max to 1s so rand.Int63n doesn't panic on zero.

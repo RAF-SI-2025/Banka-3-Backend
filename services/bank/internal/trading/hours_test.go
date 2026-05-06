@@ -140,14 +140,28 @@ func TestIsAfterHours_BoundaryExactlyFourHours(t *testing.T) {
 	}
 }
 
-func TestIsAfterHours_OverrideDoesNotApply(t *testing.T) {
+func TestIsAfterHours_OverrideSuppresses(t *testing.T) {
 	ex := nyse()
 	ex.OpenOverride = true
-	// Sat 3am NY, override is on — IsOpen=true but IsAfterHours=false because
-	// we're not in the clock window at all.
-	now := time.Date(2026, 4, 25, 8, 0, 0, 0, time.UTC)
+	// Wed 13:00 NY (3h to close) — without override this would be after-hours,
+	// but the override is the supervisor's "treat as fresh open day" toggle and
+	// suppresses the 30-min executor penalty. Otherwise suite runs become
+	// wall-clock-dependent: cypress with override-on at 13:00 NY would still
+	// time out market-fill specs because the executor would gate every fill on
+	// the after-hours bonus.
+	now := time.Date(2026, 4, 22, 18, 0, 0, 0, time.UTC)
 	if IsAfterHours(ex, now) {
-		t.Fatalf("after_hours is clock-based, not override-based")
+		t.Fatalf("open_override must suppress after-hours")
+	}
+
+	// And the closed-clock case still returns false (would have anyway via
+	// withinClockWindow, but this asserts the override path doesn't accidentally
+	// flip the result).
+	ex2 := nyse()
+	ex2.OpenOverride = true
+	sat3am := time.Date(2026, 4, 25, 8, 0, 0, 0, time.UTC)
+	if IsAfterHours(ex2, sat3am) {
+		t.Fatalf("override + outside clock window: after_hours must stay false")
 	}
 }
 
