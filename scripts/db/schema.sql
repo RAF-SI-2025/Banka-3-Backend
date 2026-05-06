@@ -305,6 +305,7 @@ CREATE TABLE IF NOT EXISTS exchanges (
     open_time           TIME            NOT NULL DEFAULT '09:30',
     close_time          TIME            NOT NULL DEFAULT '16:00',
     open_override       BOOLEAN         NOT NULL DEFAULT FALSE,
+    closed_override     BOOLEAN         NOT NULL DEFAULT FALSE,
     UNIQUE(mic_code)
 );
 

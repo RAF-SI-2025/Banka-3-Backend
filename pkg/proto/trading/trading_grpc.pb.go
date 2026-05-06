@@ -19,26 +19,27 @@ import (
 const _ = grpc.SupportPackageIsVersion9
 
 const (
-	TradingService_ListExchanges_FullMethodName           = "/trading.TradingService/ListExchanges"
-	TradingService_SetExchangeOpenOverride_FullMethodName = "/trading.TradingService/SetExchangeOpenOverride"
-	TradingService_ListListings_FullMethodName            = "/trading.TradingService/ListListings"
-	TradingService_GetListing_FullMethodName              = "/trading.TradingService/GetListing"
-	TradingService_ListListingHistory_FullMethodName      = "/trading.TradingService/ListListingHistory"
-	TradingService_ListForexPairs_FullMethodName          = "/trading.TradingService/ListForexPairs"
-	TradingService_ListOptionDates_FullMethodName         = "/trading.TradingService/ListOptionDates"
-	TradingService_ListOptions_FullMethodName             = "/trading.TradingService/ListOptions"
-	TradingService_ExerciseOption_FullMethodName          = "/trading.TradingService/ExerciseOption"
-	TradingService_CreateOrder_FullMethodName             = "/trading.TradingService/CreateOrder"
-	TradingService_ListOrders_FullMethodName              = "/trading.TradingService/ListOrders"
-	TradingService_ApproveOrder_FullMethodName            = "/trading.TradingService/ApproveOrder"
-	TradingService_DeclineOrder_FullMethodName            = "/trading.TradingService/DeclineOrder"
-	TradingService_CancelOrder_FullMethodName             = "/trading.TradingService/CancelOrder"
-	TradingService_ListHoldings_FullMethodName            = "/trading.TradingService/ListHoldings"
-	TradingService_SellHolding_FullMethodName             = "/trading.TradingService/SellHolding"
-	TradingService_SetHoldingPublic_FullMethodName        = "/trading.TradingService/SetHoldingPublic"
-	TradingService_RunCapitalGains_FullMethodName         = "/trading.TradingService/RunCapitalGains"
-	TradingService_ListTaxDebts_FullMethodName            = "/trading.TradingService/ListTaxDebts"
-	TradingService_GetMyTaxInfo_FullMethodName            = "/trading.TradingService/GetMyTaxInfo"
+	TradingService_ListExchanges_FullMethodName             = "/trading.TradingService/ListExchanges"
+	TradingService_SetExchangeOpenOverride_FullMethodName   = "/trading.TradingService/SetExchangeOpenOverride"
+	TradingService_SetExchangeClosedOverride_FullMethodName = "/trading.TradingService/SetExchangeClosedOverride"
+	TradingService_ListListings_FullMethodName              = "/trading.TradingService/ListListings"
+	TradingService_GetListing_FullMethodName                = "/trading.TradingService/GetListing"
+	TradingService_ListListingHistory_FullMethodName        = "/trading.TradingService/ListListingHistory"
+	TradingService_ListForexPairs_FullMethodName            = "/trading.TradingService/ListForexPairs"
+	TradingService_ListOptionDates_FullMethodName           = "/trading.TradingService/ListOptionDates"
+	TradingService_ListOptions_FullMethodName               = "/trading.TradingService/ListOptions"
+	TradingService_ExerciseOption_FullMethodName            = "/trading.TradingService/ExerciseOption"
+	TradingService_CreateOrder_FullMethodName               = "/trading.TradingService/CreateOrder"
+	TradingService_ListOrders_FullMethodName                = "/trading.TradingService/ListOrders"
+	TradingService_ApproveOrder_FullMethodName              = "/trading.TradingService/ApproveOrder"
+	TradingService_DeclineOrder_FullMethodName              = "/trading.TradingService/DeclineOrder"
+	TradingService_CancelOrder_FullMethodName               = "/trading.TradingService/CancelOrder"
+	TradingService_ListHoldings_FullMethodName              = "/trading.TradingService/ListHoldings"
+	TradingService_SellHolding_FullMethodName               = "/trading.TradingService/SellHolding"
+	TradingService_SetHoldingPublic_FullMethodName          = "/trading.TradingService/SetHoldingPublic"
+	TradingService_RunCapitalGains_FullMethodName           = "/trading.TradingService/RunCapitalGains"
+	TradingService_ListTaxDebts_FullMethodName              = "/trading.TradingService/ListTaxDebts"
+	TradingService_GetMyTaxInfo_FullMethodName              = "/trading.TradingService/GetMyTaxInfo"
 )
 
 // TradingServiceClient is the client API for TradingService service.
@@ -48,6 +49,7 @@ type TradingServiceClient interface {
 	// Exchanges
 	ListExchanges(ctx context.Context, in *ListExchangesRequest, opts ...grpc.CallOption) (*ListExchangesResponse, error)
 	SetExchangeOpenOverride(ctx context.Context, in *SetExchangeOpenOverrideRequest, opts ...grpc.CallOption) (*SetExchangeOpenOverrideResponse, error)
+	SetExchangeClosedOverride(ctx context.Context, in *SetExchangeClosedOverrideRequest, opts ...grpc.CallOption) (*SetExchangeClosedOverrideResponse, error)
 	// Listings
 	ListListings(ctx context.Context, in *ListListingsRequest, opts ...grpc.CallOption) (*ListListingsResponse, error)
 	GetListing(ctx context.Context, in *GetListingRequest, opts ...grpc.CallOption) (*GetListingResponse, error)
@@ -96,6 +98,16 @@ func (c *tradingServiceClient) SetExchangeOpenOverride(ctx context.Context, in *
 	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
 	out := new(SetExchangeOpenOverrideResponse)
 	err := c.cc.Invoke(ctx, TradingService_SetExchangeOpenOverride_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *tradingServiceClient) SetExchangeClosedOverride(ctx context.Context, in *SetExchangeClosedOverrideRequest, opts ...grpc.CallOption) (*SetExchangeClosedOverrideResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(SetExchangeClosedOverrideResponse)
+	err := c.cc.Invoke(ctx, TradingService_SetExchangeClosedOverride_FullMethodName, in, out, cOpts...)
 	if err != nil {
 		return nil, err
 	}
@@ -289,6 +301,7 @@ type TradingServiceServer interface {
 	// Exchanges
 	ListExchanges(context.Context, *ListExchangesRequest) (*ListExchangesResponse, error)
 	SetExchangeOpenOverride(context.Context, *SetExchangeOpenOverrideRequest) (*SetExchangeOpenOverrideResponse, error)
+	SetExchangeClosedOverride(context.Context, *SetExchangeClosedOverrideRequest) (*SetExchangeClosedOverrideResponse, error)
 	// Listings
 	ListListings(context.Context, *ListListingsRequest) (*ListListingsResponse, error)
 	GetListing(context.Context, *GetListingRequest) (*GetListingResponse, error)
@@ -328,6 +341,9 @@ func (UnimplementedTradingServiceServer) ListExchanges(context.Context, *ListExc
 }
 func (UnimplementedTradingServiceServer) SetExchangeOpenOverride(context.Context, *SetExchangeOpenOverrideRequest) (*SetExchangeOpenOverrideResponse, error) {
 	return nil, status.Error(codes.Unimplemented, "method SetExchangeOpenOverride not implemented")
+}
+func (UnimplementedTradingServiceServer) SetExchangeClosedOverride(context.Context, *SetExchangeClosedOverrideRequest) (*SetExchangeClosedOverrideResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method SetExchangeClosedOverride not implemented")
 }
 func (UnimplementedTradingServiceServer) ListListings(context.Context, *ListListingsRequest) (*ListListingsResponse, error) {
 	return nil, status.Error(codes.Unimplemented, "method ListListings not implemented")
@@ -436,6 +452,24 @@ func _TradingService_SetExchangeOpenOverride_Handler(srv interface{}, ctx contex
 	}
 	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
 		return srv.(TradingServiceServer).SetExchangeOpenOverride(ctx, req.(*SetExchangeOpenOverrideRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _TradingService_SetExchangeClosedOverride_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(SetExchangeClosedOverrideRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(TradingServiceServer).SetExchangeClosedOverride(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: TradingService_SetExchangeClosedOverride_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(TradingServiceServer).SetExchangeClosedOverride(ctx, req.(*SetExchangeClosedOverrideRequest))
 	}
 	return interceptor(ctx, in, info, handler)
 }
@@ -778,6 +812,10 @@ var TradingService_ServiceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "SetExchangeOpenOverride",
 			Handler:    _TradingService_SetExchangeOpenOverride_Handler,
+		},
+		{
+			MethodName: "SetExchangeClosedOverride",
+			Handler:    _TradingService_SetExchangeClosedOverride_Handler,
 		},
 		{
 			MethodName: "ListListings",

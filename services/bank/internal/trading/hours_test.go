@@ -118,10 +118,45 @@ func TestIsAfterHours_NotYetInWindow(t *testing.T) {
 
 func TestIsAfterHours_OutsideOpen(t *testing.T) {
 	ex := nyse()
-	// NY 17:00 — market closed
+	// NY 17:00 — market closed. Naturally-closed windows count as after-hours
+	// so closed-market orders pick up the executor's 30-min delay bonus when
+	// the market reopens (spec #46).
 	now := time.Date(2026, 4, 22, 22, 0, 0, 0, time.UTC)
-	if IsAfterHours(ex, now) {
-		t.Fatalf("after_hours only applies during the open window")
+	if !IsAfterHours(ex, now) {
+		t.Fatalf("naturally-closed exchange must flag after-hours")
+	}
+}
+
+func TestIsOpen_ClosedOverride(t *testing.T) {
+	ex := nyse()
+	ex.ClosedOverride = true
+	// Wed 14:00 NY — naturally open, but force-closed must win.
+	now := time.Date(2026, 4, 22, 19, 0, 0, 0, time.UTC)
+	if IsOpen(ex, now) {
+		t.Fatalf("closed_override must force IsOpen=false even during open hours")
+	}
+}
+
+func TestIsOpen_ClosedOverrideBeatsOpenOverride(t *testing.T) {
+	ex := nyse()
+	ex.ClosedOverride = true
+	ex.OpenOverride = true
+	// closed_override is checked first; the two should never both be true in
+	// practice, but if they are, force-closed wins.
+	now := time.Date(2026, 4, 25, 8, 0, 0, 0, time.UTC) // Saturday
+	if IsOpen(ex, now) {
+		t.Fatalf("closed_override must beat open_override")
+	}
+}
+
+func TestIsAfterHours_ClosedOverride(t *testing.T) {
+	ex := nyse()
+	ex.ClosedOverride = true
+	// Even mid-session-clock, force-closed flags as after-hours so the
+	// executor applies the 30-min bonus when the supervisor reopens.
+	now := time.Date(2026, 4, 22, 19, 0, 0, 0, time.UTC)
+	if !IsAfterHours(ex, now) {
+		t.Fatalf("closed_override must flag after-hours")
 	}
 }
 

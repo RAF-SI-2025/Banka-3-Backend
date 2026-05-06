@@ -238,6 +238,7 @@ func (s *Server) buildOrderDetail(tx *gorm.DB, o *Order, now time.Time) (*tradin
 		Margin:            o.Margin,
 		AllOrNone:         o.AllOrNone,
 		Commission:        o.Commission,
+		AfterHours:        o.AfterHours,
 	}
 	if o.ApprovedBy != nil {
 		detail.ApprovedBy = *o.ApprovedBy

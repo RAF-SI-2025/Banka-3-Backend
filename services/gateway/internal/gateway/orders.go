@@ -84,6 +84,7 @@ func orderDetailToJSON(o *tradingpb.OrderDetail) gin.H {
 		"margin":             o.Margin,
 		"all_or_none":        o.AllOrNone,
 		"commission":         o.Commission,
+		"after_hours":        o.AfterHours,
 	}
 }
 

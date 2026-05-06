@@ -16,6 +16,7 @@ service TradingService {
   // Exchanges
   rpc ListExchanges(ListExchangesRequest) returns (ListExchangesResponse);
   rpc SetExchangeOpenOverride(SetExchangeOpenOverrideRequest) returns (SetExchangeOpenOverrideResponse);
+  rpc SetExchangeClosedOverride(SetExchangeClosedOverrideRequest) returns (SetExchangeClosedOverrideResponse);
 
   // Listings
   rpc ListListings(ListListingsRequest) returns (ListListingsResponse);
