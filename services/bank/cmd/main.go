@@ -145,6 +145,11 @@ func main() {
 	stopScheduler := bankService.StartScheduler()
 	defer stopScheduler()
 
+	// Debug-only cron trigger HTTP (cypress consumer). No-op when
+	// BANK_DEBUG_HTTP_PORT is unset — never bound in production.
+	stopDebugHTTP := bankService.StartDebugHTTP(os.Getenv("BANK_DEBUG_HTTP_PORT"))
+	defer stopDebugHTTP()
+
 	tradingService := internalTrading.NewServer(gorm_db, bankService)
 	stopExecutor := tradingService.StartExecutor()
 	defer stopExecutor()
