@@ -166,7 +166,8 @@ func (s *Server) GetMyTaxInfo(ctx context.Context, _ *tradingpb.GetMyTaxInfoRequ
 	if placerID == 0 {
 		return &tradingpb.GetMyTaxInfoResponse{}, nil
 	}
-	return aggregateMyTaxInfo(s.db, placerID, time.Now().Year())
+	now := time.Now()
+	return aggregateMyTaxInfo(s.db, placerID, now.Year(), now.Format("2006-01"))
 }
 
 // lookupPlacerID resolves the caller's order_placers.id without creating the
@@ -202,7 +203,10 @@ func lookupPlacerID(db *gorm.DB, isClient bool, clientID int64, email string) (i
 // query. Year filtering uses paid_at (not period) so a row created in
 // December but settled in January counts toward the year it actually moved
 // money, which is what the user expects to see in the "this year" total.
-func aggregateMyTaxInfo(db *gorm.DB, placerID int64, year int) (*tradingpb.GetMyTaxInfoResponse, error) {
+// The "unpaid this month" total scopes to period = currentMonth (YYYY-MM)
+// so prior months' unpaid debt doesn't bleed into the current-month figure
+// the portfolio surfaces.
+func aggregateMyTaxInfo(db *gorm.DB, placerID int64, year int, currentMonth string) (*tradingpb.GetMyTaxInfoResponse, error) {
 	var row struct {
 		PaidThisYearRsd    int64
 		UnpaidThisMonthRsd int64
@@ -210,8 +214,8 @@ func aggregateMyTaxInfo(db *gorm.DB, placerID int64, year int) (*tradingpb.GetMy
 	err := db.Table("capital_gains").
 		Select(`
 			COALESCE(SUM(CASE WHEN paid_at IS NOT NULL AND EXTRACT(YEAR FROM paid_at) = ? THEN tax_due ELSE 0 END), 0) AS paid_this_year_rsd,
-			COALESCE(SUM(CASE WHEN paid_at IS NULL THEN tax_due ELSE 0 END), 0) AS unpaid_this_month_rsd
-		`, year).
+			COALESCE(SUM(CASE WHEN paid_at IS NULL AND period = ? THEN tax_due ELSE 0 END), 0) AS unpaid_this_month_rsd
+		`, year, currentMonth).
 		Where("seller_placer_id = ?", placerID).
 		Scan(&row).Error
 	if err != nil {

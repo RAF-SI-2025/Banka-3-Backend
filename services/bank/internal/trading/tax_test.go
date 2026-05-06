@@ -196,12 +196,12 @@ func TestAggregateMyTaxInfo(t *testing.T) {
 	srv, mock, done := newTaxTestServer(t)
 	defer done()
 
-	mock.ExpectQuery(`FROM "capital_gains" WHERE seller_placer_id = \$2`).
-		WithArgs(2026, int64(7)).
+	mock.ExpectQuery(`FROM "capital_gains" WHERE seller_placer_id = \$3`).
+		WithArgs(2026, "2026-05", int64(7)).
 		WillReturnRows(sqlmock.NewRows([]string{"paid_this_year_rsd", "unpaid_this_month_rsd"}).
 			AddRow(int64(1500), int64(450)))
 
-	resp, err := aggregateMyTaxInfo(srv.db, 7, 2026)
+	resp, err := aggregateMyTaxInfo(srv.db, 7, 2026, "2026-05")
 	if err != nil {
 		t.Fatalf("aggregateMyTaxInfo: %v", err)
 	}
