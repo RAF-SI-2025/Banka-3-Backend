@@ -230,6 +230,13 @@ VALUES
     ('AUD', 'Australian Dollar', 'A$',
      'Australia, Christmas Island, Cocos Islands, Norfolk Island',
      'The Australian dollar (symbol: A$; code: AUD) is the official currency and legal tender of Australia, including all of its external territories.',
+     TRUE),
+    -- NOK exists as a currency but intentionally has NO exchange_rates row,
+    -- so trading orders against a NOK account exercise the unsupported-currency
+    -- rejection path (Scenario 42 in TestoviCelina3.txt).
+    ('NOK', 'Norwegian Krone', 'kr',
+     'Norway, Svalbard, Jan Mayen, Bouvet Island, Queen Maud Land, Peter I Island',
+     'The Norwegian krone (symbol: kr; code: NOK) is the official currency of Norway and its dependent territories. It is subdivided into 100 øre.',
      TRUE)
 ON CONFLICT (label) DO NOTHING;
 
@@ -420,6 +427,30 @@ SELECT
     e.id AS created_by,
     '2099-12-31' AS valid_until,
     'AUD' AS currency,
+    TRUE AS active,
+    'business'::owner_type AS owner_type,
+    'foreign'::account_type AS account_type,
+    0 AS maintainance_cost,
+    0 AS daily_limit,
+    0 AS monthly_limit,
+    0 AS daily_expenditure,
+    0 AS monthly_expenditure
+FROM clients c, employees e
+WHERE c.email = 'system@banka3.rs' AND e.email = :'admin_email'
+ON CONFLICT (number) DO NOTHING;
+
+-- Bank NOK account paired with the rate-less NOK currency above. Used by
+-- Scenario 42 to drive the "unsupported currency" rejection path through the
+-- order-creation flow.
+INSERT INTO accounts (number, name, owner, balance, created_by, valid_until, currency, active, owner_type, account_type, maintainance_cost, daily_limit, monthly_limit, daily_expenditure, monthly_expenditure)
+SELECT
+    '333000100000000920' AS number,
+    'Banka 3 - NOK' AS name,
+    c.id AS owner,
+    1000000 AS balance,
+    e.id AS created_by,
+    '2099-12-31' AS valid_until,
+    'NOK' AS currency,
     TRUE AS active,
     'business'::owner_type AS owner_type,
     'foreign'::account_type AS account_type,
