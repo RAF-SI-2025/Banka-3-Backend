@@ -22,15 +22,17 @@ const (
 )
 
 type Client struct {
-	state         protoimpl.MessageState `protogen:"open.v1"`
-	Id            int64                  `protobuf:"varint,1,opt,name=Id,proto3" json:"Id,omitempty"`
-	FirstName     string                 `protobuf:"bytes,2,opt,name=FirstName,proto3" json:"FirstName,omitempty"`
-	LastName      string                 `protobuf:"bytes,3,opt,name=LastName,proto3" json:"LastName,omitempty"`
-	DateOfBirth   int64                  `protobuf:"varint,4,opt,name=DateOfBirth,proto3" json:"DateOfBirth,omitempty"`
-	Gender        string                 `protobuf:"bytes,5,opt,name=Gender,proto3" json:"Gender,omitempty"`
-	Email         string                 `protobuf:"bytes,6,opt,name=Email,proto3" json:"Email,omitempty"`
-	PhoneNumber   string                 `protobuf:"bytes,7,opt,name=PhoneNumber,proto3" json:"PhoneNumber,omitempty"`
-	Address       string                 `protobuf:"bytes,8,opt,name=Address,proto3" json:"Address,omitempty"`
+	state       protoimpl.MessageState `protogen:"open.v1"`
+	Id          int64                  `protobuf:"varint,1,opt,name=Id,proto3" json:"Id,omitempty"`
+	FirstName   string                 `protobuf:"bytes,2,opt,name=FirstName,proto3" json:"FirstName,omitempty"`
+	LastName    string                 `protobuf:"bytes,3,opt,name=LastName,proto3" json:"LastName,omitempty"`
+	DateOfBirth int64                  `protobuf:"varint,4,opt,name=DateOfBirth,proto3" json:"DateOfBirth,omitempty"`
+	Gender      string                 `protobuf:"bytes,5,opt,name=Gender,proto3" json:"Gender,omitempty"`
+	Email       string                 `protobuf:"bytes,6,opt,name=Email,proto3" json:"Email,omitempty"`
+	PhoneNumber string                 `protobuf:"bytes,7,opt,name=PhoneNumber,proto3" json:"PhoneNumber,omitempty"`
+	Address     string                 `protobuf:"bytes,8,opt,name=Address,proto3" json:"Address,omitempty"`
+	// review §S64/§S65: per-client margin trading flag. Admin-only toggle.
+	MarginEnabled bool `protobuf:"varint,9,opt,name=MarginEnabled,proto3" json:"MarginEnabled,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -121,6 +123,13 @@ func (x *Client) GetAddress() string {
 	return ""
 }
 
+func (x *Client) GetMarginEnabled() bool {
+	if x != nil {
+		return x.MarginEnabled
+	}
+	return false
+}
+
 type GetClientResponse struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
 	Id            int64                  `protobuf:"varint,1,opt,name=id,proto3" json:"id,omitempty"`
@@ -131,6 +140,7 @@ type GetClientResponse struct {
 	Email         string                 `protobuf:"bytes,6,opt,name=email,proto3" json:"email,omitempty"`
 	PhoneNumber   string                 `protobuf:"bytes,7,opt,name=phone_number,json=phoneNumber,proto3" json:"phone_number,omitempty"`
 	Address       string                 `protobuf:"bytes,8,opt,name=address,proto3" json:"address,omitempty"`
+	MarginEnabled bool                   `protobuf:"varint,9,opt,name=margin_enabled,json=marginEnabled,proto3" json:"margin_enabled,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -219,6 +229,13 @@ func (x *GetClientResponse) GetAddress() string {
 		return x.Address
 	}
 	return ""
+}
+
+func (x *GetClientResponse) GetMarginEnabled() bool {
+	if x != nil {
+		return x.MarginEnabled
+	}
+	return false
 }
 
 type CreateClientRequest struct {
@@ -470,15 +487,17 @@ func (x *GetClientsResponse) GetClients() []*Client {
 }
 
 type UpdateClientRequest struct {
-	state         protoimpl.MessageState `protogen:"open.v1"`
-	Id            int64                  `protobuf:"varint,1,opt,name=Id,proto3" json:"Id,omitempty"`
-	FirstName     string                 `protobuf:"bytes,2,opt,name=FirstName,proto3" json:"FirstName,omitempty"`
-	LastName      string                 `protobuf:"bytes,3,opt,name=LastName,proto3" json:"LastName,omitempty"`
-	DateOfBirth   int64                  `protobuf:"varint,4,opt,name=DateOfBirth,proto3" json:"DateOfBirth,omitempty"`
-	Gender        string                 `protobuf:"bytes,5,opt,name=Gender,proto3" json:"Gender,omitempty"`
-	Email         string                 `protobuf:"bytes,6,opt,name=Email,proto3" json:"Email,omitempty"`
-	PhoneNumber   string                 `protobuf:"bytes,7,opt,name=PhoneNumber,proto3" json:"PhoneNumber,omitempty"`
-	Address       string                 `protobuf:"bytes,8,opt,name=Address,proto3" json:"Address,omitempty"`
+	state       protoimpl.MessageState `protogen:"open.v1"`
+	Id          int64                  `protobuf:"varint,1,opt,name=Id,proto3" json:"Id,omitempty"`
+	FirstName   string                 `protobuf:"bytes,2,opt,name=FirstName,proto3" json:"FirstName,omitempty"`
+	LastName    string                 `protobuf:"bytes,3,opt,name=LastName,proto3" json:"LastName,omitempty"`
+	DateOfBirth int64                  `protobuf:"varint,4,opt,name=DateOfBirth,proto3" json:"DateOfBirth,omitempty"`
+	Gender      string                 `protobuf:"bytes,5,opt,name=Gender,proto3" json:"Gender,omitempty"`
+	Email       string                 `protobuf:"bytes,6,opt,name=Email,proto3" json:"Email,omitempty"`
+	PhoneNumber string                 `protobuf:"bytes,7,opt,name=PhoneNumber,proto3" json:"PhoneNumber,omitempty"`
+	Address     string                 `protobuf:"bytes,8,opt,name=Address,proto3" json:"Address,omitempty"`
+	// Admin-only — flips clients.margin_enabled. Send false to revoke.
+	MarginEnabled bool `protobuf:"varint,9,opt,name=MarginEnabled,proto3" json:"MarginEnabled,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -569,6 +588,13 @@ func (x *UpdateClientRequest) GetAddress() string {
 	return ""
 }
 
+func (x *UpdateClientRequest) GetMarginEnabled() bool {
+	if x != nil {
+		return x.MarginEnabled
+	}
+	return false
+}
+
 type UpdateClientResponse struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
 	Valid         bool                   `protobuf:"varint,1,opt,name=Valid,proto3" json:"Valid,omitempty"`
@@ -625,7 +651,7 @@ var File_user_client_proto protoreflect.FileDescriptor
 
 const file_user_client_proto_rawDesc = "" +
 	"\n" +
-	"\x11user/client.proto\x12\x04user\"\xde\x01\n" +
+	"\x11user/client.proto\x12\x04user\"\x84\x02\n" +
 	"\x06Client\x12\x0e\n" +
 	"\x02Id\x18\x01 \x01(\x03R\x02Id\x12\x1c\n" +
 	"\tFirstName\x18\x02 \x01(\tR\tFirstName\x12\x1a\n" +
@@ -634,7 +660,8 @@ const file_user_client_proto_rawDesc = "" +
 	"\x06Gender\x18\x05 \x01(\tR\x06Gender\x12\x14\n" +
 	"\x05Email\x18\x06 \x01(\tR\x05Email\x12 \n" +
 	"\vPhoneNumber\x18\a \x01(\tR\vPhoneNumber\x12\x18\n" +
-	"\aAddress\x18\b \x01(\tR\aAddress\"\xe9\x01\n" +
+	"\aAddress\x18\b \x01(\tR\aAddress\x12$\n" +
+	"\rMarginEnabled\x18\t \x01(\bR\rMarginEnabled\"\x90\x02\n" +
 	"\x11GetClientResponse\x12\x0e\n" +
 	"\x02id\x18\x01 \x01(\x03R\x02id\x12\x1d\n" +
 	"\n" +
@@ -645,7 +672,8 @@ const file_user_client_proto_rawDesc = "" +
 	"\x06gender\x18\x05 \x01(\tR\x06gender\x12\x14\n" +
 	"\x05email\x18\x06 \x01(\tR\x05email\x12!\n" +
 	"\fphone_number\x18\a \x01(\tR\vphoneNumber\x12\x18\n" +
-	"\aaddress\x18\b \x01(\tR\aaddress\"\xf7\x01\n" +
+	"\aaddress\x18\b \x01(\tR\aaddress\x12%\n" +
+	"\x0emargin_enabled\x18\t \x01(\bR\rmarginEnabled\"\xf7\x01\n" +
 	"\x13CreateClientRequest\x12\x1d\n" +
 	"\n" +
 	"first_name\x18\x01 \x01(\tR\tfirstName\x12\x1b\n" +
@@ -664,7 +692,7 @@ const file_user_client_proto_rawDesc = "" +
 	"\bLastName\x18\x02 \x01(\tR\bLastName\x12\x14\n" +
 	"\x05Email\x18\x03 \x01(\tR\x05Email\"<\n" +
 	"\x12GetClientsResponse\x12&\n" +
-	"\aClients\x18\x01 \x03(\v2\f.user.ClientR\aClients\"\xeb\x01\n" +
+	"\aClients\x18\x01 \x03(\v2\f.user.ClientR\aClients\"\x91\x02\n" +
 	"\x13UpdateClientRequest\x12\x0e\n" +
 	"\x02Id\x18\x01 \x01(\x03R\x02Id\x12\x1c\n" +
 	"\tFirstName\x18\x02 \x01(\tR\tFirstName\x12\x1a\n" +
@@ -673,7 +701,8 @@ const file_user_client_proto_rawDesc = "" +
 	"\x06Gender\x18\x05 \x01(\tR\x06Gender\x12\x14\n" +
 	"\x05Email\x18\x06 \x01(\tR\x05Email\x12 \n" +
 	"\vPhoneNumber\x18\a \x01(\tR\vPhoneNumber\x12\x18\n" +
-	"\aAddress\x18\b \x01(\tR\aAddress\"H\n" +
+	"\aAddress\x18\b \x01(\tR\aAddress\x12$\n" +
+	"\rMarginEnabled\x18\t \x01(\bR\rMarginEnabled\"H\n" +
 	"\x14UpdateClientResponse\x12\x14\n" +
 	"\x05Valid\x18\x01 \x01(\bR\x05Valid\x12\x1a\n" +
 	"\bResponse\x18\x02 \x01(\tR\bResponseB7Z5github.com/RAF-SI-2025/Banka-3-Backend/pkg/proto/userb\x06proto3"

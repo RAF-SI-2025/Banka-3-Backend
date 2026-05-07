@@ -81,6 +81,32 @@ func (s *Server) CreateOrder(ctx context.Context, req *tradingpb.CreateOrderRequ
 		return nil, err
 	}
 
+	// Idempotency dedup (review §S34). Caller passes a UUID generated once per
+	// "Pošalji nalog" button press; a repeat call with the same (key, email)
+	// returns the originally-created order id and short-circuits the rest of
+	// the placement logic. Empty key disables dedup so internal callers and
+	// cypress fixtures can opt out without changing behaviour.
+	idemKey := strings.TrimSpace(req.IdempotencyKey)
+	idemEmail := strings.TrimSpace(caller.Email)
+	if idemKey != "" && idemEmail != "" {
+		var existing struct {
+			OrderID int64
+			Status  string
+		}
+		err := s.db.Raw(`
+			SELECT k.order_id, o.status
+			FROM order_idempotency_keys k
+			JOIN orders o ON o.id = k.order_id
+			WHERE k.key = ? AND k.email = ?
+		`, idemKey, idemEmail).Scan(&existing).Error
+		if err == nil && existing.OrderID > 0 {
+			return &tradingpb.CreateOrderResponse{
+				OrderId: existing.OrderID,
+				Status:  existing.Status,
+			}, nil
+		}
+	}
+
 	// Spec pp.50, 59: clients may only trade stocks and futures. Options and
 	// forex are actuary-only. Block at placement so a client who guesses an
 	// option_id/forex_pair_id off another endpoint can't slip a trade through.
@@ -95,10 +121,26 @@ func (s *Server) CreateOrder(ctx context.Context, req *tradingpb.CreateOrderRequ
 
 	// Margin orders require the `margin_trading` permission for employee
 	// placers (spec p.56). Checked up front so clients skip the DB round-trip
-	// and the denial surfaces before we touch the DB.
-	if req.Margin && caller.IsEmployee {
-		if !callerHasMarginPermission(s.db, caller.Email) {
-			return nil, status.Error(codes.PermissionDenied, "margin_trading permission required")
+	// and the denial surfaces before we touch the DB. Clients carry the
+	// equivalent capability as a per-row flag (clients.margin_enabled —
+	// review §S64/§S65) so we look that up here instead.
+	if req.Margin {
+		if caller.IsEmployee {
+			if !callerHasMarginPermission(s.db, caller.Email) {
+				return nil, status.Error(codes.PermissionDenied, "margin_trading permission required")
+			}
+		}
+		if caller.IsClient {
+			var enabled bool
+			if err := s.db.Table("clients").
+				Select("margin_enabled").
+				Where("id = ?", caller.ClientID).
+				Take(&enabled).Error; err != nil {
+				return nil, status.Errorf(codes.Internal, "%v", err)
+			}
+			if !enabled {
+				return nil, status.Error(codes.PermissionDenied, "margin trading nije omogućen za vaš nalog")
+			}
 		}
 	}
 
@@ -116,6 +158,30 @@ func (s *Server) CreateOrder(ctx context.Context, req *tradingpb.CreateOrderRequ
 	info, err := s.resolveInstrument(req)
 	if err != nil {
 		return nil, err
+	}
+
+	// Per-listing minimum tradable quantity (review §S27). Forex pairs and
+	// options inherit min=1 (no listing row), so this guard is effectively a
+	// no-op for them.
+	if req.ListingId != 0 {
+		var minQty int64
+		if err := s.db.Table("listings").
+			Select("min_quantity").
+			Where("id = ?", req.ListingId).
+			Take(&minQty).Error; err == nil && minQty > 1 && req.Quantity < minQty {
+			return nil, status.Errorf(codes.InvalidArgument,
+				"minimalna količina za ovaj listing je %d", minQty)
+		}
+	}
+
+	// Sell preflight (review §S37): reject at placement when the placer
+	// doesn't already own enough holdings, instead of waiting for the
+	// executor to fail at fill time. Skipped on margin sells (short selling
+	// is allowed in that mode) and on forex (no holding model).
+	if direction == DirectionSell && !req.Margin && req.ForexPairId == 0 {
+		if err := s.assertHoldingCovers(caller, req); err != nil {
+			return nil, err
+		}
 	}
 
 	// Cross-currency orders go through Menjačnica (spec pp.27, 57). Rates are
@@ -298,6 +364,19 @@ func (s *Server) CreateOrder(ctx context.Context, req *tradingpb.CreateOrderRequ
 				return err
 			}
 		}
+
+		// Persist the idempotency key inside the same transaction so a
+		// retry that races the original lands on the unique-constraint
+		// violation and re-reads the originally-placed order on next call.
+		if idemKey != "" && idemEmail != "" {
+			if err := tx.Exec(
+				`INSERT INTO order_idempotency_keys (key, email, order_id) VALUES (?, ?, ?)
+				 ON CONFLICT (key, email) DO NOTHING`,
+				idemKey, idemEmail, order.ID,
+			).Error; err != nil {
+				return status.Errorf(codes.Internal, "%v", err)
+			}
+		}
 		return nil
 	}); err != nil {
 		if _, ok := status.FromError(err); ok {
@@ -364,6 +443,60 @@ func (s *Server) SetExchangeClosedOverride(_ context.Context, req *tradingpb.Set
 	exch.ClosedOverride = req.ClosedOverride
 
 	return &tradingpb.SetExchangeClosedOverrideResponse{Exchange: exchangeToProto(exch)}, nil
+}
+
+// assertHoldingCovers enforces review §S37: a SELL order must not exceed
+// what the placer already owns. Walks the same listing → (stock_id |
+// future_id) → holding lookup the executor uses, so the rejection criterion
+// matches what would have failed at fill time. Returns nil for option-side
+// sells (covered by the existing exercise flow) and for the no-placer case
+// (a fresh user with zero holdings — InvalidArgument fires before we even
+// hit this branch via the qty check, but we still guard).
+func (s *Server) assertHoldingCovers(caller *bank.CallerIdentity, req *tradingpb.CreateOrderRequest) error {
+	placerID, err := lookupPlacerID(s.db, caller.IsClient, caller.ClientID, caller.Email)
+	if err != nil {
+		return err
+	}
+	if placerID == 0 {
+		return status.Error(codes.FailedPrecondition, "nemate hartije za prodaju")
+	}
+
+	var (
+		assetCol string
+		assetID  int64
+	)
+	switch {
+	case req.OptionId != 0:
+		assetCol, assetID = "option_id", req.OptionId
+	case req.ListingId != 0:
+		var l Listing
+		if err := s.db.Select("stock_id, future_id").First(&l, req.ListingId).Error; err != nil {
+			return status.Errorf(codes.Internal, "%v", err)
+		}
+		if l.StockID != nil {
+			assetCol, assetID = "stock_id", *l.StockID
+		} else if l.FutureID != nil {
+			assetCol, assetID = "future_id", *l.FutureID
+		} else {
+			return status.Error(codes.Internal, "listing has no underlying")
+		}
+	default:
+		return nil
+	}
+
+	var owned int64
+	err = s.db.Table("holdings").
+		Select("COALESCE(amount, 0)").
+		Where("placer_id = ? AND "+assetCol+" = ?", placerID, assetID).
+		Take(&owned).Error
+	if err != nil && !errors.Is(err, gorm.ErrRecordNotFound) {
+		return status.Errorf(codes.Internal, "%v", err)
+	}
+	if owned < req.Quantity {
+		return status.Errorf(codes.InvalidArgument,
+			"posedujete samo %d jedinica — ne možete prodati %d", owned, req.Quantity)
+	}
+	return nil
 }
 
 // callerIsSupervisor checks whether the given employee email has `admin` or

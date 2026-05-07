@@ -30,6 +30,8 @@ message Listing {
   int64 market_cap = 18;
   int64 nominal_value = 19;
   string exchange_acronym = 20;
+  // Per-listing minimum tradable quantity (review §S27). Default 1.
+  int64 min_quantity = 21;
 }
 
 // Filters applied server-side. Zero-valued numeric bounds mean "unbounded"

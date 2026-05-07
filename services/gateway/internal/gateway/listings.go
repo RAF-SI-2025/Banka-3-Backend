@@ -164,6 +164,7 @@ func listingToJSON(l *tradingpb.Listing) gin.H {
 		"initial_margin_cost": l.InitialMarginCost,
 		"market_cap":          l.MarketCap,
 		"nominal_value":       l.NominalValue,
+		"min_quantity":        l.MinQuantity,
 	}
 }
 

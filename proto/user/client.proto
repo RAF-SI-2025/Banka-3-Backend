@@ -13,6 +13,8 @@ message Client {
   string Email = 6;
   string PhoneNumber = 7;
   string Address = 8;
+  // review §S64/§S65: per-client margin trading flag. Admin-only toggle.
+  bool MarginEnabled = 9;
 }
 
 message GetClientResponse {
@@ -24,6 +26,7 @@ message GetClientResponse {
   string email = 6;
   string phone_number = 7;
   string address = 8;
+  bool margin_enabled = 9;
 }
 
 message CreateClientRequest {
@@ -60,6 +63,8 @@ message UpdateClientRequest {
   string Email = 6;
   string PhoneNumber = 7;
   string Address = 8;
+  // Admin-only — flips clients.margin_enabled. Send false to revoke.
+  bool MarginEnabled = 9;
 }
 
 message UpdateClientResponse {

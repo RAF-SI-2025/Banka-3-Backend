@@ -81,13 +81,14 @@ type createClientAccountRequest struct {
 }
 
 type updateClientRequest struct {
-	FirstName   string `json:"first_name"`
-	LastName    string `json:"last_name"`
-	DateOfBirth int64  `json:"date_of_birth"`
-	Gender      string `json:"gender"`
-	Email       string `json:"email"`
-	PhoneNumber string `json:"phone_number"`
-	Address     string `json:"address"`
+	FirstName     string `json:"first_name"`
+	LastName      string `json:"last_name"`
+	DateOfBirth   int64  `json:"date_of_birth"`
+	Gender        string `json:"gender"`
+	Email         string `json:"email"`
+	PhoneNumber   string `json:"phone_number"`
+	Address       string `json:"address"`
+	MarginEnabled bool   `json:"margin_enabled"`
 }
 
 type createEmployeeAccountRequest struct {

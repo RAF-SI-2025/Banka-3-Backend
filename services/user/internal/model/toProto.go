@@ -4,14 +4,15 @@ import userpb "github.com/RAF-SI-2025/Banka-3-Backend/pkg/proto/user"
 
 func (client Client) ToProtobuf() *userpb.GetClientResponse {
 	return &userpb.GetClientResponse{
-		Id:          int64(client.Id),
-		FirstName:   client.First_name,
-		LastName:    client.Last_name,
-		BirthDate:   client.Date_of_birth.Unix(),
-		Gender:      client.Gender,
-		Email:       client.Email,
-		PhoneNumber: client.Phone_number,
-		Address:     client.Address,
+		Id:             int64(client.Id),
+		FirstName:      client.First_name,
+		LastName:       client.Last_name,
+		BirthDate:      client.Date_of_birth.Unix(),
+		Gender:         client.Gender,
+		Email:          client.Email,
+		PhoneNumber:    client.Phone_number,
+		Address:        client.Address,
+		MarginEnabled:  client.Margin_enabled,
 	}
 }
 
@@ -42,13 +43,14 @@ func (emp Employee) ToProtobuf() *userpb.GetEmployeeResponse {
 
 func (client Client) ToProtobuff() *userpb.Client {
 	return &userpb.Client{
-		Id:          int64(client.Id),
-		FirstName:   client.First_name,
-		LastName:    client.Last_name,
-		DateOfBirth: client.Date_of_birth.Unix(),
-		Gender:      client.Gender,
-		Email:       client.Email,
-		PhoneNumber: client.Phone_number,
-		Address:     client.Address,
+		Id:            int64(client.Id),
+		FirstName:     client.First_name,
+		LastName:      client.Last_name,
+		DateOfBirth:   client.Date_of_birth.Unix(),
+		Gender:        client.Gender,
+		Email:         client.Email,
+		PhoneNumber:   client.Phone_number,
+		Address:       client.Address,
+		MarginEnabled: client.Margin_enabled,
 	}
 }

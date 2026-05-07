@@ -48,8 +48,10 @@ type Listing struct {
 	MarketCap          int64                  `protobuf:"varint,18,opt,name=market_cap,json=marketCap,proto3" json:"market_cap,omitempty"`
 	NominalValue       int64                  `protobuf:"varint,19,opt,name=nominal_value,json=nominalValue,proto3" json:"nominal_value,omitempty"`
 	ExchangeAcronym    string                 `protobuf:"bytes,20,opt,name=exchange_acronym,json=exchangeAcronym,proto3" json:"exchange_acronym,omitempty"`
-	unknownFields      protoimpl.UnknownFields
-	sizeCache          protoimpl.SizeCache
+	// Per-listing minimum tradable quantity (review §S27). Default 1.
+	MinQuantity   int64 `protobuf:"varint,21,opt,name=min_quantity,json=minQuantity,proto3" json:"min_quantity,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
 }
 
 func (x *Listing) Reset() {
@@ -220,6 +222,13 @@ func (x *Listing) GetExchangeAcronym() string {
 		return x.ExchangeAcronym
 	}
 	return ""
+}
+
+func (x *Listing) GetMinQuantity() int64 {
+	if x != nil {
+		return x.MinQuantity
+	}
+	return 0
 }
 
 // Filters applied server-side. Zero-valued numeric bounds mean "unbounded"
@@ -718,7 +727,7 @@ var File_trading_listing_proto protoreflect.FileDescriptor
 
 const file_trading_listing_proto_rawDesc = "" +
 	"\n" +
-	"\x15trading/listing.proto\x12\atrading\"\x94\x05\n" +
+	"\x15trading/listing.proto\x12\atrading\"\xb7\x05\n" +
 	"\aListing\x12\x0e\n" +
 	"\x02id\x18\x01 \x01(\x03R\x02id\x12\x1f\n" +
 	"\vexchange_id\x18\x02 \x01(\x03R\n" +
@@ -742,7 +751,8 @@ const file_trading_listing_proto_rawDesc = "" +
 	"\n" +
 	"market_cap\x18\x12 \x01(\x03R\tmarketCap\x12#\n" +
 	"\rnominal_value\x18\x13 \x01(\x03R\fnominalValue\x12)\n" +
-	"\x10exchange_acronym\x18\x14 \x01(\tR\x0fexchangeAcronym\"\xed\x03\n" +
+	"\x10exchange_acronym\x18\x14 \x01(\tR\x0fexchangeAcronym\x12!\n" +
+	"\fmin_quantity\x18\x15 \x01(\x03R\vminQuantity\"\xed\x03\n" +
 	"\x13ListListingsRequest\x12!\n" +
 	"\fcaller_email\x18\x01 \x01(\tR\vcallerEmail\x12'\n" +
 	"\x0fexchange_prefix\x18\x02 \x01(\tR\x0eexchangePrefix\x12\x16\n" +

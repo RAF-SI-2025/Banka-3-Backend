@@ -37,8 +37,12 @@ type CreateOrderRequest struct {
 	StopPrice     int64                  `protobuf:"varint,9,opt,name=stop_price,json=stopPrice,proto3" json:"stop_price,omitempty"`
 	AllOrNone     bool                   `protobuf:"varint,10,opt,name=all_or_none,json=allOrNone,proto3" json:"all_or_none,omitempty"`
 	Margin        bool                   `protobuf:"varint,11,opt,name=margin,proto3" json:"margin,omitempty"`
-	unknownFields protoimpl.UnknownFields
-	sizeCache     protoimpl.SizeCache
+	// Caller-supplied dedup token (review §S34). When set, a repeat call with
+	// the same (key, caller-email) returns the originally-created order id
+	// instead of placing a second one. Empty string disables dedup.
+	IdempotencyKey string `protobuf:"bytes,12,opt,name=idempotency_key,json=idempotencyKey,proto3" json:"idempotency_key,omitempty"`
+	unknownFields  protoimpl.UnknownFields
+	sizeCache      protoimpl.SizeCache
 }
 
 func (x *CreateOrderRequest) Reset() {
@@ -146,6 +150,13 @@ func (x *CreateOrderRequest) GetMargin() bool {
 		return x.Margin
 	}
 	return false
+}
+
+func (x *CreateOrderRequest) GetIdempotencyKey() string {
+	if x != nil {
+		return x.IdempotencyKey
+	}
+	return ""
 }
 
 type CreateOrderResponse struct {
@@ -806,7 +817,7 @@ var File_trading_order_proto protoreflect.FileDescriptor
 
 const file_trading_order_proto_rawDesc = "" +
 	"\n" +
-	"\x13trading/order.proto\x12\atrading\"\xec\x02\n" +
+	"\x13trading/order.proto\x12\atrading\"\x95\x03\n" +
 	"\x12CreateOrderRequest\x12\x1d\n" +
 	"\n" +
 	"listing_id\x18\x01 \x01(\x03R\tlistingId\x12\x1b\n" +
@@ -823,7 +834,8 @@ const file_trading_order_proto_rawDesc = "" +
 	"stop_price\x18\t \x01(\x03R\tstopPrice\x12\x1e\n" +
 	"\vall_or_none\x18\n" +
 	" \x01(\bR\tallOrNone\x12\x16\n" +
-	"\x06margin\x18\v \x01(\bR\x06margin\"H\n" +
+	"\x06margin\x18\v \x01(\bR\x06margin\x12'\n" +
+	"\x0fidempotency_key\x18\f \x01(\tR\x0eidempotencyKey\"H\n" +
 	"\x13CreateOrderResponse\x12\x19\n" +
 	"\border_id\x18\x01 \x01(\x03R\aorderId\x12\x16\n" +
 	"\x06status\x18\x02 \x01(\tR\x06status\"\xb4\x05\n" +

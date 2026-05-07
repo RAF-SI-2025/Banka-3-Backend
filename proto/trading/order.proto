@@ -19,6 +19,10 @@ message CreateOrderRequest {
   int64 stop_price = 9;
   bool all_or_none = 10;
   bool margin = 11;
+  // Caller-supplied dedup token (review §S34). When set, a repeat call with
+  // the same (key, caller-email) returns the originally-created order id
+  // instead of placing a second one. Empty string disables dedup.
+  string idempotency_key = 12;
 }
 
 message CreateOrderResponse {

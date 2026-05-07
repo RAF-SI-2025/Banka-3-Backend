@@ -111,6 +111,14 @@ func (r *Repository) UpdateClient(client model.Client) (*model.Client, error) {
 		}
 		return nil, fmt.Errorf("updating client: %w", result.Error)
 	}
+	// gorm.Updates skips zero-valued boolean fields, so margin_enabled=false
+	// would otherwise be a no-op. Force the column explicitly so the admin
+	// can revoke margin trading by toggling the flag back off.
+	if err := r.Gorm.Model(&model.Client{}).
+		Where("id = ?", client.Id).
+		Update("margin_enabled", client.Margin_enabled).Error; err != nil {
+		return nil, fmt.Errorf("updating client.margin_enabled: %w", err)
+	}
 	if result.RowsAffected == 0 {
 		return nil, ErrClientNotFound
 	}

@@ -119,6 +119,8 @@ type Listing struct {
 	Price       int64     `gorm:"column:price;not null;default:0"`
 	AskPrice    int64     `gorm:"column:ask_price;not null;default:0"`
 	BidPrice    int64     `gorm:"column:bid_price;not null;default:0"`
+	// Per-listing minimum tradable quantity (review §S27). Default 1.
+	MinQuantity int64 `gorm:"column:min_quantity;not null;default:1"`
 }
 
 func (Listing) TableName() string { return "listings" }

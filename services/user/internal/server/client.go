@@ -42,13 +42,14 @@ func (s *Server) UpdateClient(ctx context.Context, req *userpb.UpdateClientReque
 		return nil, status.Error(codes.InvalidArgument, "Gender must be one of M or F")
 	}
 	client := model.Client{
-		Id:           uint64(req.Id),
-		First_name:   req.FirstName,
-		Last_name:    req.LastName,
-		Gender:       req.Gender,
-		Email:        req.Email,
-		Phone_number: req.PhoneNumber,
-		Address:      req.Address,
+		Id:             uint64(req.Id),
+		First_name:     req.FirstName,
+		Last_name:      req.LastName,
+		Gender:         req.Gender,
+		Email:          req.Email,
+		Phone_number:   req.PhoneNumber,
+		Address:        req.Address,
+		Margin_enabled: req.MarginEnabled,
 	}
 
 	// I hope any potential reader of this has as much fun reading it as I had Implementing it.

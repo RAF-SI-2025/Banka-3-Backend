@@ -121,6 +121,10 @@ func (s *Server) latestDailyInfo(ids []int64) (map[int64]ListingDailyPriceInfo, 
 // the formulas become plain integer math (we lose sub-unit precision on the
 // 10%/50% splits but that matches the current money model).
 func buildListingProto(r listingRow, today ListingDailyPriceInfo) *tradingpb.Listing {
+	minQty := r.MinQuantity
+	if minQty < 1 {
+		minQty = 1
+	}
 	out := &tradingpb.Listing{
 		Id:              r.ID,
 		ExchangeId:      r.ExchangeID,
@@ -131,6 +135,7 @@ func buildListingProto(r listingRow, today ListingDailyPriceInfo) *tradingpb.Lis
 		Volume:          today.Volume,
 		Change:          today.Change,
 		ExchangeAcronym: r.ExchangeAcronym,
+		MinQuantity:     minQty,
 	}
 	if r.StockID != nil {
 		out.StockId = *r.StockID

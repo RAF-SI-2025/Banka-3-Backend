@@ -44,6 +44,10 @@ CREATE TABLE IF NOT EXISTS clients (
     address       VARCHAR(255) NOT NULL,
     password      BYTEA        NOT NULL,
     salt_password BYTEA        NOT NULL,
+    -- review §S64/§S65: clients don't carry a permission set, so we keep
+    -- the margin-trading capability as a per-row flag. False by default;
+    -- only admin can flip it. Server-side gate lives in trading/server.go.
+    margin_enabled BOOLEAN     NOT NULL DEFAULT false,
     created_at    TIMESTAMP    NOT NULL DEFAULT NOW(),
     updated_at    TIMESTAMP    NOT NULL DEFAULT NOW()
 );
@@ -371,6 +375,10 @@ CREATE TABLE IF NOT EXISTS listings (
     price               BIGINT          NOT NULL DEFAULT 0,
     ask_price           BIGINT          NOT NULL DEFAULT 0,
     bid_price           BIGINT          NOT NULL DEFAULT 0,
+    -- Per-listing minimum tradable quantity (review §S27). Default 1 keeps
+    -- existing seed data trading as before; the order-create form now
+    -- surfaces it as the input's `min` and the backend re-validates.
+    min_quantity        BIGINT          NOT NULL DEFAULT 1 CHECK (min_quantity >= 1),
     CHECK ((stock_id IS NOT NULL)::int + (future_id IS NOT NULL)::int = 1)
 );
 
@@ -549,3 +557,18 @@ $$ LANGUAGE plpgsql;
 CREATE TRIGGER trg_employee_status_change
     AFTER UPDATE ON employees
     FOR EACH ROW EXECUTE FUNCTION notify_employee_status_change();
+
+-- Idempotency keys for POST /orders (review §S34). Same (key, email)
+-- pair always returns the originally-created order id, so a curl loop
+-- (or a refreshed browser tab) can't double-place. Caller chooses the
+-- key; we don't trust uniqueness of the order's payload because two
+-- legitimately distinct buys can share the same shape.
+CREATE TABLE IF NOT EXISTS order_idempotency_keys (
+    key         TEXT        NOT NULL,
+    email       TEXT        NOT NULL,
+    order_id    BIGINT      NOT NULL REFERENCES orders(id) ON DELETE CASCADE,
+    created_at  TIMESTAMP   NOT NULL DEFAULT NOW(),
+    PRIMARY KEY (key, email)
+);
+CREATE INDEX IF NOT EXISTS order_idempotency_keys_created_at_idx
+    ON order_idempotency_keys (created_at);

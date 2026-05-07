@@ -11,14 +11,15 @@ import (
 
 func clientResponse(client *userpb.Client) gin.H {
 	return gin.H{
-		"id":            client.Id,
-		"first_name":    client.FirstName,
-		"last_name":     client.LastName,
-		"date_of_birth": client.DateOfBirth,
-		"gender":        client.Gender,
-		"email":         client.Email,
-		"phone_number":  client.PhoneNumber,
-		"address":       client.Address,
+		"id":             client.Id,
+		"first_name":     client.FirstName,
+		"last_name":      client.LastName,
+		"date_of_birth":  client.DateOfBirth,
+		"gender":         client.Gender,
+		"email":          client.Email,
+		"phone_number":   client.PhoneNumber,
+		"address":        client.Address,
+		"margin_enabled": client.MarginEnabled,
 	}
 }
 
@@ -98,14 +99,15 @@ func (s *Server) UpdateClient(c *gin.Context) {
 	defer cancel()
 
 	resp, err := s.UserClient.UpdateClient(ctx, &userpb.UpdateClientRequest{
-		Id:          uri.ClientID,
-		FirstName:   req.FirstName,
-		LastName:    req.LastName,
-		DateOfBirth: req.DateOfBirth,
-		Gender:      req.Gender,
-		Email:       req.Email,
-		PhoneNumber: req.PhoneNumber,
-		Address:     req.Address,
+		Id:            uri.ClientID,
+		FirstName:     req.FirstName,
+		LastName:      req.LastName,
+		DateOfBirth:   req.DateOfBirth,
+		Gender:        req.Gender,
+		Email:         req.Email,
+		PhoneNumber:   req.PhoneNumber,
+		Address:       req.Address,
+		MarginEnabled: req.MarginEnabled,
 	})
 	if err != nil {
 		writeGRPCError(c, err)
@@ -118,14 +120,15 @@ func (s *Server) UpdateClient(c *gin.Context) {
 	}
 
 	c.JSON(http.StatusOK, gin.H{
-		"id":            uri.ClientID,
-		"first_name":    req.FirstName,
-		"last_name":     req.LastName,
-		"date_of_birth": req.DateOfBirth,
-		"gender":        req.Gender,
-		"email":         req.Email,
-		"phone_number":  req.PhoneNumber,
-		"address":       req.Address,
+		"id":             uri.ClientID,
+		"first_name":     req.FirstName,
+		"last_name":      req.LastName,
+		"date_of_birth":  req.DateOfBirth,
+		"gender":         req.Gender,
+		"email":          req.Email,
+		"phone_number":   req.PhoneNumber,
+		"address":        req.Address,
+		"margin_enabled": req.MarginEnabled,
 	})
 }
 

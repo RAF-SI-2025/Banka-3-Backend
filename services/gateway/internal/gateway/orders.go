@@ -38,18 +38,25 @@ func (s *Server) CreateOrder(c *gin.Context) {
 		"user-email", c.GetString("email"),
 	))
 
+	// Idempotency-Key header (review §S34). Forwarded into the trading
+	// request so a retry of the same UUID lands on the dedup short-circuit.
+	// Empty header = no dedup, which keeps internal callers and cypress
+	// fixtures working unchanged.
+	idemKey := c.GetHeader("Idempotency-Key")
+
 	resp, err := s.TradingClient.CreateOrder(ctx, &tradingpb.CreateOrderRequest{
-		ListingId:     body.ListingID,
-		OptionId:      body.OptionID,
-		ForexPairId:   body.ForexPairID,
-		AccountNumber: body.AccountNumber,
-		OrderType:     body.OrderType,
-		Direction:     body.Direction,
-		Quantity:      body.Quantity,
-		LimitPrice:    body.LimitPrice,
-		StopPrice:     body.StopPrice,
-		AllOrNone:     body.AllOrNone,
-		Margin:        body.Margin,
+		ListingId:      body.ListingID,
+		OptionId:       body.OptionID,
+		ForexPairId:    body.ForexPairID,
+		AccountNumber:  body.AccountNumber,
+		OrderType:      body.OrderType,
+		Direction:      body.Direction,
+		Quantity:       body.Quantity,
+		LimitPrice:     body.LimitPrice,
+		StopPrice:      body.StopPrice,
+		AllOrNone:      body.AllOrNone,
+		Margin:         body.Margin,
+		IdempotencyKey: idemKey,
 	})
 	if err != nil {
 		writeGRPCError(c, err)
