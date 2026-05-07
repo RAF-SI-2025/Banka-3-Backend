@@ -30,7 +30,7 @@ func setupCors(router *gin.Engine) {
 	router.Use(cors.New(cors.Config{
 		AllowOrigins:     origins,
 		AllowMethods:     []string{"GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"},
-		AllowHeaders:     []string{"Content-Type", "Authorization", "TOTP", "X-Requested-With"},
+		AllowHeaders:     []string{"Content-Type", "Authorization", "TOTP", "X-Requested-With", "Idempotency-Key"},
 		ExposeHeaders:    []string{"Content-Length", "X-Custom-Header"},
 		AllowCredentials: true,
 		MaxAge:           12 * time.Hour,
