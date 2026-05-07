@@ -79,6 +79,26 @@ func (s *Server) GetActiveAccountsByOwnerID(ownerID int64) ([]Account, error) {
 	return accounts, result.Error
 }
 
+// GetTradingAccounts returns the bank's internal trading-ledger accounts —
+// those owned by the system client (system@banka3.rs) that back commissions
+// and act as the counter-party stub for employee fills. Surfaced through
+// ListAccounts(trading_only=true) so the order-create form can restrict
+// employees to bankin trading račun (spec p.55).
+//
+// The owner email is duplicated rather than imported from the trading
+// package to avoid a circular dependency: bank doesn't depend on trading,
+// trading depends on bank.
+func (s *Server) GetTradingAccounts() ([]Account, error) {
+	const systemOwnerEmail = "system@banka3.rs"
+	var accounts []Account
+	err := s.db_gorm.Model(&Account{}).
+		Joins("JOIN clients ON clients.id = accounts.owner").
+		Where("clients.email = ?", systemOwnerEmail).
+		Where("accounts.active = ?", true).
+		Find(&accounts).Error
+	return accounts, err
+}
+
 func (s *Server) GetAccountsForEmployee(firstName, lastName, accountNumber string) ([]Account, error) {
 	var accounts []Account
 	query := s.db_gorm.Model(&Account{})

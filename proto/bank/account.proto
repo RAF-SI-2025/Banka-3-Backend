@@ -82,6 +82,10 @@ message ListAccountsRequest {
   string firstName = 1;
   string lastName = 2;
   string account_number = 3;
+  // When true, return only the bank's internal trading accounts (owned by
+  // the system@banka3.rs ledger client). Used by the order-create form for
+  // employees so they can't accidentally trade off a real client's account.
+  bool trading_only = 4;
 }
 
 message ListAccountsResponse {

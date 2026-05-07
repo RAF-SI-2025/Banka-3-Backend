@@ -241,7 +241,17 @@ func (s *Server) buildOrderDetail(tx *gorm.DB, o *Order, now time.Time) (*tradin
 		AfterHours:        o.AfterHours,
 	}
 	if o.ApprovedBy != nil {
-		detail.ApprovedBy = *o.ApprovedBy
+		// Resolve the supervisor's display name once on read so the portal
+		// shows "First Last" instead of the raw employee id (§S52). Falls back
+		// to an empty string when the row was orphaned by a deleted user —
+		// the UI then renders "Automatsko odobrenje" for that case.
+		var name string
+		if err := tx.Table("employees").
+			Select("first_name || ' ' || last_name").
+			Where("id = ?", *o.ApprovedBy).
+			Take(&name).Error; err == nil {
+			detail.ApprovedBy = strings.TrimSpace(name)
+		}
 	}
 	return detail, nil
 }

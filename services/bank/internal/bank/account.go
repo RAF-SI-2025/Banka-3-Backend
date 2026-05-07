@@ -56,6 +56,21 @@ func (s *Server) ListAccounts(ctx context.Context, req *bankpb.ListAccountsReque
 	}
 
 	if caller.IsEmployee {
+		// Spec p.55: when an employee opens the order-create form we restrict
+		// the account dropdown to the bank's internal trading ledger; this
+		// prevents an agent from accidentally trading off a real client's
+		// account (Takeaway 7). Other employee surfaces (admin accounts list,
+		// transfers) keep the full filter set.
+		if req.TradingOnly {
+			accounts, err := s.GetTradingAccounts()
+			if err != nil {
+				return nil, status.Error(codes.Internal, "failed to fetch trading accounts")
+			}
+			return &bankpb.ListAccountsResponse{
+				Accounts: s.mapSliceToProto(accounts),
+			}, nil
+		}
+
 		accounts, err := s.GetAccountsForEmployee(req.FirstName, req.LastName, req.AccountNumber)
 		if err != nil {
 			return nil, status.Error(codes.Internal, "failed to fetch accounts")

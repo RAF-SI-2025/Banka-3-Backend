@@ -221,14 +221,18 @@ type OrderDetail struct {
 	PlacerEmployeeId  int64                  `protobuf:"varint,11,opt,name=placer_employee_id,json=placerEmployeeId,proto3" json:"placer_employee_id,omitempty"`
 	PlacerClientId    int64                  `protobuf:"varint,12,opt,name=placer_client_id,json=placerClientId,proto3" json:"placer_client_id,omitempty"`
 	PastSettlement    bool                   `protobuf:"varint,13,opt,name=past_settlement,json=pastSettlement,proto3" json:"past_settlement,omitempty"`
-	ApprovedBy        int64                  `protobuf:"varint,14,opt,name=approved_by,json=approvedBy,proto3" json:"approved_by,omitempty"`
-	CreatedAtUnix     int64                  `protobuf:"varint,15,opt,name=created_at_unix,json=createdAtUnix,proto3" json:"created_at_unix,omitempty"`
-	Margin            bool                   `protobuf:"varint,16,opt,name=margin,proto3" json:"margin,omitempty"`
-	AllOrNone         bool                   `protobuf:"varint,17,opt,name=all_or_none,json=allOrNone,proto3" json:"all_or_none,omitempty"`
-	Commission        int64                  `protobuf:"varint,18,opt,name=commission,proto3" json:"commission,omitempty"`
-	AfterHours        bool                   `protobuf:"varint,19,opt,name=after_hours,json=afterHours,proto3" json:"after_hours,omitempty"`
-	unknownFields     protoimpl.UnknownFields
-	sizeCache         protoimpl.SizeCache
+	// Display name ("First Last") of the supervisor who approved this order.
+	// Empty for orders that auto-approved (client placer or below limit).
+	// Was int64 employee id pre-§S52; the UI surfaces this verbatim so the
+	// supervisor's name appears under "Odobrio" in the portal.
+	ApprovedBy    string `protobuf:"bytes,14,opt,name=approved_by,json=approvedBy,proto3" json:"approved_by,omitempty"`
+	CreatedAtUnix int64  `protobuf:"varint,15,opt,name=created_at_unix,json=createdAtUnix,proto3" json:"created_at_unix,omitempty"`
+	Margin        bool   `protobuf:"varint,16,opt,name=margin,proto3" json:"margin,omitempty"`
+	AllOrNone     bool   `protobuf:"varint,17,opt,name=all_or_none,json=allOrNone,proto3" json:"all_or_none,omitempty"`
+	Commission    int64  `protobuf:"varint,18,opt,name=commission,proto3" json:"commission,omitempty"`
+	AfterHours    bool   `protobuf:"varint,19,opt,name=after_hours,json=afterHours,proto3" json:"after_hours,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
 }
 
 func (x *OrderDetail) Reset() {
@@ -352,11 +356,11 @@ func (x *OrderDetail) GetPastSettlement() bool {
 	return false
 }
 
-func (x *OrderDetail) GetApprovedBy() int64 {
+func (x *OrderDetail) GetApprovedBy() string {
 	if x != nil {
 		return x.ApprovedBy
 	}
-	return 0
+	return ""
 }
 
 func (x *OrderDetail) GetCreatedAtUnix() int64 {
@@ -829,7 +833,7 @@ const file_trading_order_proto_rawDesc = "" +
 	"\x12placer_employee_id\x18\v \x01(\x03R\x10placerEmployeeId\x12(\n" +
 	"\x10placer_client_id\x18\f \x01(\x03R\x0eplacerClientId\x12'\n" +
 	"\x0fpast_settlement\x18\r \x01(\bR\x0epastSettlement\x12\x1f\n" +
-	"\vapproved_by\x18\x0e \x01(\x03R\n" +
+	"\vapproved_by\x18\x0e \x01(\tR\n" +
 	"approvedBy\x12&\n" +
 	"\x0fcreated_at_unix\x18\x0f \x01(\x03R\rcreatedAtUnix\x12\x16\n" +
 	"\x06margin\x18\x10 \x01(\bR\x06margin\x12\x1e\n" +

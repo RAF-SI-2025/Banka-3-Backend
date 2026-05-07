@@ -119,6 +119,7 @@ func (s *Server) GetAccounts(c *gin.Context) {
 		FirstName:     query.FirstName,
 		LastName:      query.LastName,
 		AccountNumber: query.AccountNumber,
+		TradingOnly:   query.Trading,
 	})
 	if err != nil {
 		writeGRPCError(c, err)

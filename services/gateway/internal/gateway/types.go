@@ -181,6 +181,9 @@ type getAccountsQuery struct {
 	FirstName     string `form:"first_name"`
 	LastName      string `form:"last_name"`
 	AccountNumber string `form:"account_number"`
+	// Trading scopes the response to the bank's internal trading ledger
+	// (spec p.55) — used by the order-create form for employees.
+	Trading bool `form:"trading"`
 }
 
 type accountNumberURI struct {

@@ -730,6 +730,10 @@ type ListAccountsRequest struct {
 	FirstName     string                 `protobuf:"bytes,1,opt,name=firstName,proto3" json:"firstName,omitempty"`
 	LastName      string                 `protobuf:"bytes,2,opt,name=lastName,proto3" json:"lastName,omitempty"`
 	AccountNumber string                 `protobuf:"bytes,3,opt,name=account_number,json=accountNumber,proto3" json:"account_number,omitempty"`
+	// When true, return only the bank's internal trading accounts (owned by
+	// the system@banka3.rs ledger client). Used by the order-create form for
+	// employees so they can't accidentally trade off a real client's account.
+	TradingOnly   bool `protobuf:"varint,4,opt,name=trading_only,json=tradingOnly,proto3" json:"trading_only,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -783,6 +787,13 @@ func (x *ListAccountsRequest) GetAccountNumber() string {
 		return x.AccountNumber
 	}
 	return ""
+}
+
+func (x *ListAccountsRequest) GetTradingOnly() bool {
+	if x != nil {
+		return x.TradingOnly
+	}
+	return false
 }
 
 type ListAccountsResponse struct {
@@ -1230,11 +1241,12 @@ const file_bank_account_proto_rawDesc = "" +
 	"\rmonthly_limit\x18\x03 \x01(\x03H\x01R\fmonthlyLimit\x88\x01\x01B\x0e\n" +
 	"\f_daily_limitB\x10\n" +
 	"\x0e_monthly_limit\"\x1d\n" +
-	"\x1bUpdateAccountLimitsResponse\"v\n" +
+	"\x1bUpdateAccountLimitsResponse\"\x99\x01\n" +
 	"\x13ListAccountsRequest\x12\x1c\n" +
 	"\tfirstName\x18\x01 \x01(\tR\tfirstName\x12\x1a\n" +
 	"\blastName\x18\x02 \x01(\tR\blastName\x12%\n" +
-	"\x0eaccount_number\x18\x03 \x01(\tR\raccountNumber\"A\n" +
+	"\x0eaccount_number\x18\x03 \x01(\tR\raccountNumber\x12!\n" +
+	"\ftrading_only\x18\x04 \x01(\bR\vtradingOnly\"A\n" +
 	"\x14ListAccountsResponse\x12)\n" +
 	"\baccounts\x18\x01 \x03(\v2\r.bank.AccountR\baccounts\"@\n" +
 	"\x18GetAccountDetailsRequest\x12$\n" +
