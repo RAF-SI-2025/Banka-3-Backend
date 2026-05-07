@@ -1037,3 +1037,40 @@ CROSS JOIN (VALUES
 ) AS sd(settle)
 CROSS JOIN generate_series(-5, 5) AS step
 ON CONFLICT (ticker) DO NOTHING;
+
+-------------------------------------------------------------------------------
+-- Cypress portfolio #71 (TestoviCelina3 scenario 71): seed an ITM put on
+-- MSFT held by the agent, so the test can verify the exercise flow end to
+-- end. Strike 63000 vs MSFT spot 42000 makes this comfortably in-the-money
+-- regardless of small spot drift; +30d settlement keeps it pre-expiry.
+-- Dedicated ticker so the cypress row selector stays trivial.
+-- Agent placer is upserted here too — the runtime CreateOrder path also
+-- lazily creates one, but this lets the holding seed run before any order
+-- has been placed.
+-------------------------------------------------------------------------------
+INSERT INTO order_placers (employee_id)
+SELECT e.id FROM employees e WHERE e.email = 'agent@banka.raf'
+ON CONFLICT (employee_id) WHERE employee_id IS NOT NULL DO NOTHING;
+
+INSERT INTO options (ticker, name, stock_id, option_type, strike_price, premium, implied_volatility, open_interest, settlement_date)
+SELECT
+    'MSFT_CY71_PUT_ITM',
+    'MSFT cypress #71 put @ 63000',
+    s.id,
+    'put'::option_type,
+    63000,
+    1000,
+    1.0,
+    0,
+    (CURRENT_DATE + 30)::date
+FROM stocks s WHERE s.ticker = 'MSFT'
+ON CONFLICT (ticker) DO NOTHING;
+
+INSERT INTO holdings (placer_id, option_id, account_id, amount, avg_cost)
+SELECT p.id, o.id, a.id, 5, 1000
+FROM order_placers p
+JOIN employees e ON e.id = p.employee_id
+JOIN options o ON o.ticker = 'MSFT_CY71_PUT_ITM'
+JOIN accounts a ON a.number = '333000100000000420'
+WHERE e.email = 'agent@banka.raf'
+ON CONFLICT (placer_id, option_id) WHERE option_id IS NOT NULL DO NOTHING;
