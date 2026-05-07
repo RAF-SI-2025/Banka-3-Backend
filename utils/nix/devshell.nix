@@ -5,7 +5,7 @@
         go_1_25
         gotools
         golangci-lint
-        gnumake
+        go-task
         protobuf
         protoc-gen-go
         protoc-gen-go-grpc

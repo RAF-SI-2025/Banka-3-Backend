@@ -10,43 +10,70 @@ Api specifikacija se nalazi
 ## Potrebno
 
 - [Docker](https://docs.docker.com/get-docker/)
-- [Make](https://www.gnu.org/software/make/) (`brew install make` - macos /
-  `choco install make` - windows)
-- [Go](https://go.dev/dl/) — samo ako koristite `-l` komande za lokalno
-  pokretanje
+- [Task](https://taskfile.dev) — `brew install go-task` / `nix develop` /
+  [download](https://github.com/go-task/task/releases)
+- [Go](https://go.dev/dl/) — za sve sto nije `task up`/`task down`/`task proto`
+- [golangci-lint](https://golangci-lint.run/) — za `task lint`
 
 ## Pokretanje
 
-Koristimo docker-compose, sa make-om. (Potrebno je da prvo napravite '.env' file
-ili kopirate example.)
+Napravite `.env` (ili kopirajte example), pa pokrenite bootstrap:
 
 ```bash
 cp .env.example .env
+task setup     # proto + up + schema + seed
 ```
+
+`task` bez argumenata izlistava sve dostupne komande.
 
 ## Komande
 
-Sve komande koriste Docker po defaultu. Dodajte `-l` suffix za lokalno
-pokretanje (potreban Go na sistemu).
+| Komanda                    | Opis                                                  |
+| -------------------------- | ----------------------------------------------------- |
+| `task setup`               | Bootstrap (proto + up + db:apply)                     |
+| `task up`                  | Pokreni stack                                         |
+| `task down`                | Ugasi stack (`task down -- -v` brise volume)          |
+| `task reset`               | Cist start: down -v + up + db:apply                   |
+| `task logs -- bank`        | Prati logove jednog servisa                           |
+| `task db:apply`            | Schema + seed                                         |
+| `task db:schema`           | Samo schema                                           |
+| `task db:seed`             | Samo seed                                             |
+| `task db:wipe`             | Drop + recreate public schema                         |
+| `task db:psql`             | Otvori psql shell u kontejneru                        |
+| `task proto`               | Regenerisi pkg/proto                                  |
+| `task fmt`                 | gofmt -w                                              |
+| `task fmt:check`           | gofmt -l (read-only, exit nonzero ako nesto fali)     |
+| `task tidy`                | go mod tidy po modulima                               |
+| `task tidy:check`          | tidy + git diff (CI)                                  |
+| `task lint`                | golangci-lint po modulima                             |
+| `task build`               | go build po modulima                                  |
+| `task test`                | unit + integration                                    |
+| `task test:unit`           | samo unit                                             |
+| `task test:integration`    | samo integration                                      |
+| `task workspace:check`     | provera da go.work pokriva sve module                 |
+| `task nix:hashes`          | regenerisi vendorHashes u utils/nix/services.nix      |
 
-| Komanda        | Opis                                         |
-| -------------- | -------------------------------------------- |
-| `make all`     | Pokreni sve (proto, up, schema, seed)        |
-| `make up`      | Pokreni servise/containere                   |
-| `make down`    | Ugasi servise/containere                     |
-| `make down-v`  | Ugasi i obrisi volume (cist start)           |
-| `make proto`   | Regenerisi .pb.go fajlove u /gen             |
-| `make schema`  | Load db schema                               |
-| `make seed`    | Ucitaj test podatke                          |
-| `make nuke`    | Obrisi sve i ucitaj schema i seed            |
-| `make build`   | Builduj sve servise (Docker)                 |
-| `make build-l` | Builduj sve servise (lokalno)                |
-| `make test`    | Pokreni testove sa race detektorom (Docker)  |
-| `make test-l`  | Pokreni testove sa race detektorom (lokalno) |
-| `make fmt`     | Formatiraj kod sa gofmt (Docker)             |
-| `make fmt-l`   | Formatiraj kod sa gofmt (lokalno)            |
-| `make lint`    | Pokreni linter (Docker)                      |
-| `make lint-l`  | Pokreni linter (lokalno)                     |
+Komande nad modulima (`fmt:check`, `tidy`, `tidy:check`, `lint`, `build`,
+`test`, `test:unit`, `test:integration`) primaju imena modula posle `--`:
+
+```bash
+task lint -- bank             # samo bank
+task test:unit -- bank user   # bank i user
+task lint                     # svi moduli (pkg + svi servisi)
+```
+
+### Integration testovi — konvencija
+
+Integration testovi treba da:
+
+1. budu u fajlovima sa `//go:build integration` na vrhu, i
+2. imaju funkcije sa prefiksom `TestIntegration_`.
+
+Tako:
+
+- `task test:unit` — kompajlira samo netagovane fajlove → samo unit testovi
+- `task test:integration` — kompajlira sve, ali pokrece samo `TestIntegration_*`
+- `task test` — pokrece sve sa `-tags=integration`
 
 ## CI
 

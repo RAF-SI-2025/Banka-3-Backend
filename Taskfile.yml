@@ -1,0 +1,209 @@
+version: '3'
+
+dotenv: ['.env']
+
+vars:
+  ADMIN_EMAIL: '{{.ADMIN_EMAIL | default "admin@banka.raf"}}'
+  CLIENT_EMAIL: '{{.CLIENT_EMAIL | default "petar@primer.raf"}}'
+  ALL_MODULES: pkg services/bank services/exchange services/gateway services/notification services/user
+  RESOLVE_MODULES: |
+    raw="{{.CLI_ARGS}}"
+    if [ -z "$raw" ]; then
+      modules="{{.ALL_MODULES}}"
+    else
+      modules=""
+      for m in $raw; do
+        case "$m" in
+          bank|exchange|gateway|notification|user) modules="$modules services/$m" ;;
+          pkg) modules="$modules pkg" ;;
+          *) modules="$modules $m" ;;
+        esac
+      done
+    fi
+
+tasks:
+  default:
+    cmds:
+      - cmd: task --list-all
+        silent: true
+
+  # ─── Stack ────────────────────────────────────────────────────────────
+  setup:
+    desc: first-time bootstrap (proto + up + db:apply)
+    cmds:
+      - task: proto
+      - task: up
+      - task: db:apply
+
+  up:
+    desc: docker compose up -d --build
+    cmds:
+      - docker compose up -d --build
+
+  down:
+    desc: 'docker compose down (pass `-- -v` to wipe volumes)'
+    cmds:
+      - docker compose down {{.CLI_ARGS}}
+
+  reset:
+    desc: clean slate — wipe volumes, bring stack up, reapply schema + seed
+    cmds:
+      - docker compose down -v
+      - task: up
+      - task: db:apply
+
+  logs:
+    desc: 'follow compose logs (pass `-- <svc>` for one service)'
+    cmds:
+      - docker compose logs -f {{.CLI_ARGS}}
+
+  # ─── Database ─────────────────────────────────────────────────────────
+  db:apply:
+    desc: schema + seed against running compose postgres
+    cmds:
+      - task: db:schema
+      - task: db:seed
+
+  db:schema:
+    desc: apply utils/db/schema.sql
+    cmds:
+      - docker compose exec -T postgres psql -U "$POSTGRES_USER" -d "$POSTGRES_DB" < utils/db/schema.sql
+
+  db:seed:
+    desc: apply utils/db/seed.sql
+    cmds:
+      - |
+        docker compose exec -T postgres psql -U "$POSTGRES_USER" -d "$POSTGRES_DB" \
+          -v admin_email={{.ADMIN_EMAIL}} -v client_email={{.CLIENT_EMAIL}} \
+          < utils/db/seed.sql
+
+  db:wipe:
+    desc: drop and recreate the public schema
+    cmds:
+      - docker compose exec -T postgres psql -U "$POSTGRES_USER" -d "$POSTGRES_DB" -c "DROP SCHEMA public CASCADE; CREATE SCHEMA public;"
+
+  db:psql:
+    desc: open an interactive psql shell into the running compose postgres
+    interactive: true
+    cmds:
+      - docker compose exec postgres psql -U "$POSTGRES_USER" -d "$POSTGRES_DB"
+
+  # ─── Codegen ──────────────────────────────────────────────────────────
+  proto:
+    desc: regenerate pkg/proto via docker
+    cmds:
+      - docker build -t banka-proto -f utils/proto/Dockerfile .
+      - |
+        docker run --rm -v "$PWD:/workspace" -u "$(id -u):$(id -g)" banka-proto \
+          --proto_path=/workspace/utils/proto \
+          --go_out=/workspace/pkg/proto --go_opt=paths=source_relative \
+          --go-grpc_out=/workspace/pkg/proto --go-grpc_opt=paths=source_relative \
+          $(cd utils/proto && find . -name '*.proto' | sed 's|^\./||')
+
+  # ─── Workspace ────────────────────────────────────────────────────────
+  workspace:check:
+    desc: verify go.work covers every module
+    cmds:
+      - go work use -r .
+      - git diff --exit-code go.work
+
+  # ─── Format ───────────────────────────────────────────────────────────
+  fmt:
+    desc: gofmt -s -w services/ pkg/
+    cmds:
+      - gofmt -s -w services/ pkg/
+
+  fmt:check:
+    desc: 'gofmt -l (read-only, exits nonzero if any). Args: `-- <module>...`'
+    cmds:
+      - |
+        {{.RESOLVE_MODULES}}
+        bad=""
+        for m in $modules; do
+          out=$(gofmt -s -l "$m" 2>&1 || true)
+          if [ -n "$out" ]; then
+            echo "::error::gofmt issues in $m:"
+            echo "$out"
+            bad=1
+          fi
+        done
+        [ -z "$bad" ]
+
+  # ─── Tidy ─────────────────────────────────────────────────────────────
+  tidy:
+    desc: 'go mod tidy across modules. Args: `-- <module>...`'
+    cmds:
+      - |
+        {{.RESOLVE_MODULES}}
+        for m in $modules; do
+          echo ">>> tidy $m"
+          (cd "$m" && go mod tidy) || exit 1
+        done
+
+  tidy:check:
+    desc: 'tidy + git diff --exit-code on go.mod/go.sum (CI). Args: `-- <module>...`'
+    cmds:
+      - |
+        {{.RESOLVE_MODULES}}
+        for m in $modules; do
+          echo ">>> tidy:check $m"
+          (cd "$m" && go mod tidy) || exit 1
+          git diff --exit-code -- "$m/go.mod" "$m/go.sum" || exit 1
+        done
+
+  # ─── Lint / Build / Test ──────────────────────────────────────────────
+  lint:
+    desc: 'golangci-lint. Args: `-- <module>...`'
+    cmds:
+      - |
+        {{.RESOLVE_MODULES}}
+        for m in $modules; do
+          echo ">>> lint $m"
+          (cd "$m" && golangci-lint run ./...) || exit 1
+        done
+
+  build:
+    desc: 'go build ./... per module. Args: `-- <module>...`'
+    cmds:
+      - |
+        {{.RESOLVE_MODULES}}
+        for m in $modules; do
+          echo ">>> build $m"
+          (cd "$m" && go build ./...) || exit 1
+        done
+
+  test:
+    desc: 'unit + integration (build tag set). Args: `-- <module>...`'
+    cmds:
+      - |
+        {{.RESOLVE_MODULES}}
+        for m in $modules; do
+          echo ">>> test $m"
+          (cd "$m" && go test -race -count=1 -tags=integration ./...) || exit 1
+        done
+
+  test:unit:
+    desc: 'unit tests only (no build tag). Args: `-- <module>...`'
+    cmds:
+      - |
+        {{.RESOLVE_MODULES}}
+        for m in $modules; do
+          echo ">>> test:unit $m"
+          (cd "$m" && go test -race -count=1 ./...) || exit 1
+        done
+
+  test:integration:
+    desc: 'integration only (TestIntegration_* + integration tag). Args: `-- <module>...`'
+    cmds:
+      - |
+        {{.RESOLVE_MODULES}}
+        for m in $modules; do
+          echo ">>> test:integration $m"
+          (cd "$m" && go test -race -count=1 -tags=integration -run "^TestIntegration_" ./...) || exit 1
+        done
+
+  # ─── Nix ──────────────────────────────────────────────────────────────
+  nix:hashes:
+    desc: regenerate vendorHashes in utils/nix/services.nix (slow — runs nix build per service)
+    cmds:
+      - utils/nix/update-hashes.sh

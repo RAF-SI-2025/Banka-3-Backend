@@ -16,7 +16,11 @@ jobs:
       - uses: actions/setup-go@v6
         with:
           go-version-file: services/${{ inputs.service }}/go.mod
-      - run: test -z "$(gofmt -s -l services/${{ inputs.service }})"
+      - uses: arduino/setup-task@v2
+        with:
+          version: 3.x
+          repo-token: ${{ secrets.GITHUB_TOKEN }}
+      - run: task fmt:check -- ${{ inputs.service }}
 
   tidy:
     name: go mod tidy
@@ -26,10 +30,11 @@ jobs:
       - uses: actions/setup-go@v6
         with:
           go-version-file: services/${{ inputs.service }}/go.mod
-      - working-directory: services/${{ inputs.service }}
-        run: |
-          go mod tidy
-          git diff --exit-code -- go.mod go.sum
+      - uses: arduino/setup-task@v2
+        with:
+          version: 3.x
+          repo-token: ${{ secrets.GITHUB_TOKEN }}
+      - run: task tidy:check -- ${{ inputs.service }}
 
   lint:
     name: golangci-lint
@@ -39,10 +44,15 @@ jobs:
       - uses: actions/setup-go@v6
         with:
           go-version-file: services/${{ inputs.service }}/go.mod
-      - uses: golangci/golangci-lint-action@v9
+      - uses: arduino/setup-task@v2
         with:
-          version: v2.4
-          working-directory: services/${{ inputs.service }}
+          version: 3.x
+          repo-token: ${{ secrets.GITHUB_TOKEN }}
+      - name: Install golangci-lint
+        run: |
+          curl -sSfL https://raw.githubusercontent.com/golangci/golangci-lint/master/install.sh \
+            | sh -s -- -b "$(go env GOPATH)/bin" v2.4.0
+      - run: task lint -- ${{ inputs.service }}
 
   build:
     name: build
@@ -52,8 +62,11 @@ jobs:
       - uses: actions/setup-go@v6
         with:
           go-version-file: services/${{ inputs.service }}/go.mod
-      - working-directory: services/${{ inputs.service }}
-        run: go build ./...
+      - uses: arduino/setup-task@v2
+        with:
+          version: 3.x
+          repo-token: ${{ secrets.GITHUB_TOKEN }}
+      - run: task build -- ${{ inputs.service }}
 
   test:
     name: unit tests
@@ -63,8 +76,11 @@ jobs:
       - uses: actions/setup-go@v6
         with:
           go-version-file: services/${{ inputs.service }}/go.mod
-      - working-directory: services/${{ inputs.service }}
-        run: go test -race -count=1 ./...
+      - uses: arduino/setup-task@v2
+        with:
+          version: 3.x
+          repo-token: ${{ secrets.GITHUB_TOKEN }}
+      - run: task test:unit -- ${{ inputs.service }}
 
   docker:
     name: docker
