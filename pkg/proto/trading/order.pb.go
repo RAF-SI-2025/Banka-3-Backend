@@ -231,6 +231,11 @@ type OrderDetail struct {
 	AllOrNone     bool   `protobuf:"varint,17,opt,name=all_or_none,json=allOrNone,proto3" json:"all_or_none,omitempty"`
 	Commission    int64  `protobuf:"varint,18,opt,name=commission,proto3" json:"commission,omitempty"`
 	AfterHours    bool   `protobuf:"varint,19,opt,name=after_hours,json=afterHours,proto3" json:"after_hours,omitempty"`
+	// Human-readable reason this order is sitting in pending. Empty for
+	// non-pending statuses. Surfaced as a tooltip on the status cell so an
+	// agent can tell at a glance whether the row is waiting on supervisor
+	// review, an exhausted limit, or a bygone settlement (review.md §S36).
+	PendingReason string `protobuf:"bytes,20,opt,name=pending_reason,json=pendingReason,proto3" json:"pending_reason,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -396,6 +401,13 @@ func (x *OrderDetail) GetAfterHours() bool {
 		return x.AfterHours
 	}
 	return false
+}
+
+func (x *OrderDetail) GetPendingReason() string {
+	if x != nil {
+		return x.PendingReason
+	}
+	return ""
 }
 
 // Supervisor-only. status: "" or "all" returns every order, otherwise one of
@@ -814,7 +826,7 @@ const file_trading_order_proto_rawDesc = "" +
 	"\x06margin\x18\v \x01(\bR\x06margin\"H\n" +
 	"\x13CreateOrderResponse\x12\x19\n" +
 	"\border_id\x18\x01 \x01(\x03R\aorderId\x12\x16\n" +
-	"\x06status\x18\x02 \x01(\tR\x06status\"\x8d\x05\n" +
+	"\x06status\x18\x02 \x01(\tR\x06status\"\xb4\x05\n" +
 	"\vOrderDetail\x12\x0e\n" +
 	"\x02id\x18\x01 \x01(\x03R\x02id\x12\x16\n" +
 	"\x06status\x18\x02 \x01(\tR\x06status\x12\x1d\n" +
@@ -842,7 +854,8 @@ const file_trading_order_proto_rawDesc = "" +
 	"commission\x18\x12 \x01(\x03R\n" +
 	"commission\x12\x1f\n" +
 	"\vafter_hours\x18\x13 \x01(\bR\n" +
-	"afterHours\"i\n" +
+	"afterHours\x12%\n" +
+	"\x0epending_reason\x18\x14 \x01(\tR\rpendingReason\"i\n" +
 	"\x11ListOrdersRequest\x12!\n" +
 	"\fcaller_email\x18\x01 \x01(\tR\vcallerEmail\x12\x16\n" +
 	"\x06status\x18\x02 \x01(\tR\x06status\x12\x19\n" +

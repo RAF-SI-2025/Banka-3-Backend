@@ -253,7 +253,53 @@ func (s *Server) buildOrderDetail(tx *gorm.DB, o *Order, now time.Time) (*tradin
 			detail.ApprovedBy = strings.TrimSpace(name)
 		}
 	}
+	if o.Status == StatusPending {
+		detail.PendingReason = pendingReasonFor(tx, o, sd, now)
+	}
 	return detail, nil
+}
+
+// pendingReasonFor produces the tooltip shown next to a Pending status cell
+// (review.md §S36). Order matters: settlement is checked first because it
+// short-circuits supervisor review, then the agent-limit branches mirror
+// decideOrderStatus so the message is the same condition that put the order
+// here. A best-effort look-up — if any join fails we just fall back to the
+// generic "waiting on supervisor" message rather than blocking the response.
+func pendingReasonFor(tx *gorm.DB, o *Order, sd *time.Time, now time.Time) string {
+	if isPastSettlement(sd, now) {
+		return "Underlying je istekao — nalog mora biti odbijen."
+	}
+	var placer OrderPlacer
+	if err := tx.First(&placer, o.PlacerID).Error; err != nil {
+		return "Čeka odobrenje supervizora."
+	}
+	if placer.EmployeeID == nil {
+		return "Čeka odobrenje supervizora."
+	}
+	var emp struct {
+		Limit        int64 `gorm:"column:limit"`
+		UsedLimit    int64 `gorm:"column:used_limit"`
+		NeedApproval bool  `gorm:"column:need_approval"`
+	}
+	err := tx.Table("employees").
+		Select(`"limit", used_limit, need_approval`).
+		Where("id = ?", *placer.EmployeeID).
+		Take(&emp).Error
+	if err != nil {
+		return "Čeka odobrenje supervizora."
+	}
+	if emp.NeedApproval {
+		return "Agent ima uključenu need_approval zastavicu."
+	}
+	if emp.Limit > 0 && emp.UsedLimit >= emp.Limit {
+		return "Iskorišćen je dnevni limit agenta."
+	}
+	// We don't recompute the order's RSD notional here — the row already
+	// holds price_per_unit (or 0 for market, in which case the limit hit
+	// path above is the most likely cause). A non-zero limit with headroom
+	// means the supervisor manually flagged the row; surface that case
+	// explicitly rather than guessing.
+	return "Čeka odobrenje supervizora."
 }
 
 // ListOrders serves two portals through one RPC:

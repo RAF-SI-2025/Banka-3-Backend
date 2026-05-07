@@ -56,6 +56,11 @@ message OrderDetail {
   bool all_or_none = 17;
   int64 commission = 18;
   bool after_hours = 19;
+  // Human-readable reason this order is sitting in pending. Empty for
+  // non-pending statuses. Surfaced as a tooltip on the status cell so an
+  // agent can tell at a glance whether the row is waiting on supervisor
+  // review, an exhausted limit, or a bygone settlement (review.md §S36).
+  string pending_reason = 20;
 }
 
 // Supervisor-only. status: "" or "all" returns every order, otherwise one of
