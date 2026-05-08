@@ -8,10 +8,12 @@ See `CLAUDE.md` for architecture, conventions, and roadmap. Quick start:
 
 ```bash
 cp .env.example .env
-make proto
-make up
-make migrate
+task proto
+task up
+task migrate
 ```
+
+`task --list` shows everything available.
 
 The gateway listens on `GATEWAY_HTTP_PORT` (default `8080`); each service
 exposes its gRPC port plus an HTTP probe port (`/healthz`, `/readyz`).

@@ -15,8 +15,8 @@ memory.
 .
 ├── go.work                    # workspace declaration
 ├── docker-compose.yml         # local dev: postgres + redis + all services
-├── Makefile                   # canonical commands
-├── flake.nix                  # nix dev shell (go, protoc, buf, …)
+├── Taskfile.yml               # canonical commands (go-task)
+├── flake.nix                  # nix dev shell (go, protoc, buf, go-task, …)
 ├── .env.example
 ├── docker/Dockerfile          # one image, $SERVICE arg picks the binary
 ├── buf.yaml / buf.gen.yaml    # proto codegen via buf
@@ -45,7 +45,7 @@ memory.
 ```
 
 Generated proto stubs go into `gen/proto/<svc>v1/`. Don't commit them —
-`make proto` regenerates them and CI verifies they're up-to-date.
+`task proto` regenerates them and CI verifies they're up-to-date.
 
 ## Services
 
@@ -94,7 +94,7 @@ One Postgres instance, one schema per service:
 | `notification` | notification | `notification.outbox` |
 
 Migrations are owned per-service in `services/<svc>/migrations/` using
-golang-migrate's `NNNN_name.up.sql` / `.down.sql` convention. `make migrate`
+golang-migrate's `NNNN_name.up.sql` / `.down.sql` convention. `task migrate`
 runs all pending migrations across all services in dependency order.
 
 Cross-schema joins are forbidden by convention — services own their data.
@@ -185,21 +185,24 @@ Use `pkg/probes`, `pkg/shutdown`, `pkg/grpcserver` — don't reinvent.
 - **No god packages**. `internal/util/` is a smell — name the package
   by what it does (`internal/luhn`, `internal/iban`).
 
-## Make targets
+## Task targets
+
+`task --list` shows everything; common ones:
 
 ```
-make proto           # buf generate → gen/proto/
-make build           # compile all services
-make up              # docker compose up -d
-make down            # docker compose down
-make migrate         # apply migrations across all services
-make migrate-create  # NEW=name SVC=bank → new migration pair
-make seed            # load dev fixtures
-make nuke            # down -v + up + migrate + seed
-make test            # unit tests with race detector
-make test-integration
-make lint            # golangci-lint
-make fmt             # gofumpt
+task proto              # buf generate → gen/proto/
+task build              # compile all services to bin/
+task up                 # docker compose up -d
+task down               # docker compose down
+task migrate            # apply migrations across all services
+task migrate:create SVC=user NAME=add_index
+task seed               # load dev fixtures
+task nuke               # down -v + up + migrate + seed
+task test               # unit tests with race detector
+task test:integration
+task lint               # golangci-lint
+task fmt                # gofumpt
+task tidy               # go mod tidy across every module
 ```
 
 ## What's not done yet
@@ -212,6 +215,28 @@ This branch is a scaffold. Working out from here, in order:
 3. Migrate frontend onto generated OpenAPI client; smoke-test the
    login flow end-to-end.
 4. `bank` service for accounts + payments (celina 2 starts).
+
+## Locked decisions for c1
+
+- **Password hashing**: argon2id (OWASP default), parameters in
+  `pkg/passwords`.
+- **Email in dev**: notification service uses real SMTP if `SMTP_HOST`
+  is set; otherwise it logs full email content to stdout. One code
+  path, env-driven.
+- **Session revocation**: JWT carries a `sv` (session_version) claim.
+  Each user has a `session_version` int column. Gateway middleware
+  reads `usv:{kind}:{id}` from Redis on every request and rejects
+  tokens with stale `sv`. On deactivation: increment user's
+  `session_version`, write to Redis, revoke refresh tokens.
+- **Permissions** are dot-namespaced strings, frozen in
+  `pkg/permissions/permissions.go`. C1 set:
+  `admin`, `employee.read`, `employee.write`, `client.read`,
+  `client.write`, `permission.grant`. Subsequent celine append, never
+  rename.
+- **Activation token TTL**: 24h.
+- **Reset token TTL**: 15min (per spec).
+- **Lockout policy**: out of scope for c1 (spec marks it
+  "za nadogradnju"). Track failed attempts in Redis if added later.
 
 Each celina's spec edge cases are documented in the top-level
 `/home/user/si/CLAUDE.md`. Re-read before starting work in that area.

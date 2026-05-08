@@ -1,0 +1,121 @@
+version: '3'
+
+dotenv: ['.env']
+
+vars:
+  SERVICES: bank exchange gateway notification trading user
+  MIGRATING_SERVICES: user exchange bank trading notification
+  COMPOSE: docker compose
+  DB_URL: postgres://{{.POSTGRES_USER}}:{{.POSTGRES_PASSWORD}}@localhost:{{.POSTGRES_PORT | default "5432"}}/{{.POSTGRES_DB}}?sslmode=disable
+
+tasks:
+  default:
+    desc: List available tasks
+    cmd: task --list
+
+  proto:
+    desc: Regenerate proto stubs into gen/
+    cmd: buf generate
+
+  build:
+    desc: Build all service binaries into bin/
+    cmds:
+      - for: { var: SERVICES }
+        cmd: |
+          echo "==> building {{.ITEM}}"
+          cd services/{{.ITEM}} && go build -trimpath -o ../../bin/{{.ITEM}} ./cmd/{{.ITEM}}
+
+  up:
+    desc: Bring up the local stack
+    cmd: '{{.COMPOSE}} up -d --build'
+
+  down:
+    desc: Tear down the local stack
+    cmd: '{{.COMPOSE}} down'
+
+  down-v:
+    desc: Tear down and wipe volumes (destructive)
+    cmd: '{{.COMPOSE}} down -v'
+
+  restart:
+    desc: down then up
+    cmds:
+      - task: down
+      - task: up
+
+  logs:
+    desc: Tail compose logs
+    cmd: '{{.COMPOSE}} logs -f'
+
+  ps:
+    desc: List running containers
+    cmd: '{{.COMPOSE}} ps'
+
+  migrate:
+    desc: Apply migrations across all services
+    cmds:
+      - for: { var: MIGRATING_SERVICES }
+        cmd: |
+          echo "==> migrating {{.ITEM}}"
+          migrate -path services/{{.ITEM}}/migrations -database "{{.DB_URL}}" up
+
+  migrate:down:
+    desc: Roll back N migrations across all services (default 1)
+    vars:
+      N: '{{.N | default "1"}}'
+    cmds:
+      - for: { var: MIGRATING_SERVICES }
+        cmd: |
+          echo "==> rolling back {{.ITEM}} by {{.N}}"
+          migrate -path services/{{.ITEM}}/migrations -database "{{.DB_URL}}" down {{.N}}
+
+  migrate:create:
+    desc: 'Create a new migration pair: task migrate:create SVC=user NAME=add_index'
+    requires:
+      vars: [SVC, NAME]
+    cmd: migrate create -ext sql -dir services/{{.SVC}}/migrations -seq {{.NAME}}
+
+  seed:
+    desc: Load development fixtures
+    cmd: ./scripts/db/seed.sh
+
+  nuke:
+    desc: Wipe everything and bootstrap (down-v + up + migrate + seed)
+    cmds:
+      - task: down-v
+      - task: up
+      - sleep 3
+      - task: migrate
+      - task: seed
+
+  test:
+    desc: Unit tests with race detector
+    cmd: go test -race ./...
+
+  test:integration:
+    desc: Integration tests (build tag integration)
+    cmd: go test -race -tags=integration ./...
+
+  lint:
+    desc: golangci-lint
+    cmd: golangci-lint run
+
+  fmt:
+    desc: Format Go source
+    cmd: gofumpt -w .
+
+  fmt:check:
+    desc: Fail if any file would be reformatted
+    cmd: '[ -z "$(gofumpt -l .)" ] || (gofumpt -d .; exit 1)'
+
+  tidy:
+    desc: go mod tidy across every module
+    cmds:
+      - for: ['pkg', 'services/bank', 'services/exchange', 'services/gateway', 'services/notification', 'services/trading', 'services/user']
+        cmd: |
+          echo "==> tidy {{.ITEM}}"
+          cd {{.ITEM}} && go mod tidy
+
+  clean:
+    desc: Remove build outputs and generated stubs
+    cmd: rm -rf bin gen
