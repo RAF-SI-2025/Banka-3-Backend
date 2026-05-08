@@ -79,14 +79,14 @@ func recoveryInterceptor(log *slog.Logger) grpc.UnaryServerInterceptor {
 				err = status.Errorf(codes.Internal, "internal error")
 			}
 		}()
-		return handler(ctx, req, info)
+		return handler(ctx, req)
 	}
 }
 
 func loggingInterceptor(log *slog.Logger) grpc.UnaryServerInterceptor {
 	return func(ctx context.Context, req any, info *grpc.UnaryServerInfo, handler grpc.UnaryHandler) (any, error) {
 		start := time.Now()
-		resp, err := handler(ctx, req, info)
+		resp, err := handler(ctx, req)
 		log.LogAttrs(ctx, levelFor(err), "grpc",
 			slog.String("method", info.FullMethod),
 			slog.Duration("dur", time.Since(start)),
@@ -101,7 +101,7 @@ func loggingInterceptor(log *slog.Logger) grpc.UnaryServerInterceptor {
 // observes the result.
 func errorMapInterceptor() grpc.UnaryServerInterceptor {
 	return func(ctx context.Context, req any, info *grpc.UnaryServerInfo, handler grpc.UnaryHandler) (any, error) {
-		resp, err := handler(ctx, req, info)
+		resp, err := handler(ctx, req)
 		return resp, apperr.ToGRPC(err)
 	}
 }

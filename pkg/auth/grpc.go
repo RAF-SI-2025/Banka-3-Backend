@@ -38,11 +38,11 @@ func MetadataInterceptor() grpc.UnaryServerInterceptor {
 	return func(ctx context.Context, req any, info *grpc.UnaryServerInfo, handler grpc.UnaryHandler) (any, error) {
 		md, ok := metadata.FromIncomingContext(ctx)
 		if !ok {
-			return handler(ctx, req, info)
+			return handler(ctx, req)
 		}
 		userID := first(md, MDUserID)
 		if userID == "" {
-			return handler(ctx, req, info)
+			return handler(ctx, req)
 		}
 		var perms []string
 		if raw := first(md, MDPermissions); raw != "" {
@@ -58,7 +58,7 @@ func MetadataInterceptor() grpc.UnaryServerInterceptor {
 			Permissions:    perms,
 			SessionVersion: sv,
 		}
-		return handler(WithPrincipal(ctx, p), req, info)
+		return handler(WithPrincipal(ctx, p), req)
 	}
 }
 
