@@ -131,7 +131,7 @@ func (s *Server) CreateEmployee(ctx context.Context, in *userpb.CreateEmployeeRe
 		Address:     in.GetAddress(),
 		Position:    in.GetPosition(),
 		Department:  in.GetDepartment(),
-		Active:      in.GetActive(),
+		Active:      in.Active == nil || *in.Active, // spec default: active when unset
 		Role:        in.GetRole(),
 	})
 	if err != nil {

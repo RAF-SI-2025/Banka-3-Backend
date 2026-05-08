@@ -25,18 +25,21 @@ type LoginResult struct {
 }
 
 // Login authenticates by email + password against employees first, then
-// clients. Returns Unauthenticated on either no-user-found or
-// wrong-password — but the spec asks for two distinct messages. We
-// surface them via apperr.Validation for "user not found" so the gateway
-// can produce the right Serbian copy.
+// clients. Wrong-password attempts are counted; after loginMaxFailures
+// in loginFailureWindow, the account is locked for loginLockDuration.
 //
-// Spec scenarios:
+// Spec scenarios (PDF + E2E):
 //   - "Korisnik ne postoji" when the email isn't in the system.
-//   - "Neispravni unos" when the email exists but the password is wrong.
+//   - "Neispravni kredencijali" when the email exists but the password is wrong.
+//   - Lock message after 3 strikes; subsequent attempts return it directly.
 func (s *Service) Login(ctx context.Context, email, password string) (*LoginResult, error) {
 	email = strings.TrimSpace(email)
 	if email == "" || password == "" {
 		return nil, apperr.Validation("email and password are required")
+	}
+
+	if locked, retry, err := s.isLoginLocked(ctx, email); err == nil && locked {
+		return nil, apperr.PermissionDenied(formatLockMessage(retry))
 	}
 
 	emp, err := s.Store.GetEmployeeByEmail(ctx, email)
@@ -57,7 +60,8 @@ func (s *Service) Login(ctx context.Context, email, password string) (*LoginResu
 
 	// Spec wants this exact message — leak that the user doesn't exist.
 	// In a real bank we'd avoid email enumeration, but the test scenario
-	// is explicit about "Korisnik ne postoji".
+	// is explicit about "Korisnik ne postoji". Unknown emails don't count
+	// toward the lockout: they have no password to be wrong against.
 	return nil, apperr.NotFound("Korisnik ne postoji")
 }
 
@@ -79,8 +83,13 @@ func (s *Service) completeLogin(
 	}
 	ok, err := passwords.Verify(password, passwordHash)
 	if err != nil || !ok {
-		return nil, apperr.Unauthenticated("Neispravni unos")
+		s.recordLoginFailure(ctx, email)
+		if locked, retry, lerr := s.isLoginLocked(ctx, email); lerr == nil && locked {
+			return nil, apperr.PermissionDenied(formatLockMessage(retry))
+		}
+		return nil, apperr.Unauthenticated("Neispravni kredencijali")
 	}
+	s.clearLoginFailures(ctx, email)
 	return s.issueTokens(ctx, kind, userID, perms, sessionVersion)
 }
 

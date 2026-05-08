@@ -1,6 +1,24 @@
 #!/usr/bin/env bash
 # Load development fixtures into the local Postgres.
-# Real fixtures land here as celina 1 work begins.
+#
+# Currently plants a bootstrap admin so the system can be brought up
+# from zero (the spec says only an admin can create employees). Override
+# credentials via SEED_ADMIN_{EMAIL,USERNAME,PASSWORD} env vars.
+#
+# Idempotent: a second run no-ops if any admin already exists.
 set -euo pipefail
 
-echo "no fixtures yet; come back after celina 1 lands"
+# Resolve repo root from this script's location so it works regardless
+# of the caller's cwd.
+ROOT="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")/../.." && pwd)"
+
+if [[ -z "${DATABASE_URL:-}" ]]; then
+    : "${POSTGRES_USER:=banka}"
+    : "${POSTGRES_PASSWORD:=banka}"
+    : "${POSTGRES_DB:=banka}"
+    : "${POSTGRES_PORT:=5432}"
+    export DATABASE_URL="postgres://${POSTGRES_USER}:${POSTGRES_PASSWORD}@localhost:${POSTGRES_PORT}/${POSTGRES_DB}?sslmode=disable"
+fi
+
+cd "${ROOT}/services/user"
+exec go run ./cmd/seed

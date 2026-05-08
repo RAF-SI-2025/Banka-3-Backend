@@ -13,6 +13,7 @@ import (
 // ActivateAccount consumes an activation token and sets the employee's
 // password. Token-not-found / expired / used surface as distinct
 // FailedPrecondition messages so the gateway can show the right copy.
+// Spec p.10: "Nakon toga dobija confirmation mail."
 func (s *Service) ActivateAccount(ctx context.Context, token, newPassword string) error {
 	if token == "" {
 		return apperr.Validation("token is required")
@@ -37,7 +38,28 @@ func (s *Service) ActivateAccount(ctx context.Context, token, newPassword string
 	if err := s.Store.MarkActivationTokenUsed(ctx, hash); err != nil {
 		return err
 	}
+
+	emp, err := s.Store.GetEmployeeByID(ctx, employeeID)
+	if err != nil {
+		// Activation already succeeded; failing the confirmation email
+		// shouldn't roll it back. Log and move on.
+		s.Log.Warn("activation confirmation: load employee", "employee_id", employeeID, "error", err)
+		return nil
+	}
+	if err := s.sendActivationConfirmation(ctx, emp); err != nil {
+		s.Log.Warn("activation confirmation email failed", "employee_id", employeeID, "error", err)
+	}
 	return nil
+}
+
+func (s *Service) sendActivationConfirmation(ctx context.Context, e *domain.Employee) error {
+	subject := "Nalog je aktiviran – Banka 3"
+	body := "Poštovani " + e.FirstName + ",\n\n" +
+		"vaš nalog u sistemu Banke 3 je uspešno aktiviran. Od sada se možete " +
+		"prijaviti na " + s.Cfg.WebBaseURL + "/login svojom email adresom i novom lozinkom.\n\n" +
+		"Ako niste vi izvršili aktivaciju, odmah kontaktirajte podršku.\n\n" +
+		"– Banka 3"
+	return s.Notifier.Send(ctx, e.Email, subject, body, false)
 }
 
 // ResendActivation generates a fresh activation token and emails it,
@@ -133,7 +155,7 @@ func (s *Service) sendResetEmail(ctx context.Context, kind domain.UserKind, user
 	if err := s.Store.CreatePasswordResetToken(ctx, kind, userID, hash, s.Clock.Now().Add(s.Cfg.ResetTTL)); err != nil {
 		return err
 	}
-	link := s.Cfg.WebBaseURL + "/reset-lozinke?token=" + plaintext
+	link := s.Cfg.WebBaseURL + "/password-reset/confirm?token=" + plaintext
 	subject := "Reset lozinke – Banka 3"
 	body := "Poštovani " + firstName + ",\n\n" +
 		"primili smo zahtev za reset lozinke. Otvorite sledeći link u narednih 15 minuta " +

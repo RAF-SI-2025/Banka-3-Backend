@@ -95,12 +95,20 @@ tasks:
       - task: seed
 
   test:
-    desc: Unit tests with race detector
-    cmd: go test -race ./...
+    desc: Unit tests across every module (race detector on)
+    cmds:
+      - for: ['pkg', 'services/bank', 'services/exchange', 'services/gateway', 'services/notification', 'services/trading', 'services/user']
+        cmd: |
+          echo "==> test {{.ITEM}}"
+          cd {{.ITEM}} && go test -race ./...
 
   test:integration:
-    desc: Integration tests (build tag integration)
-    cmd: go test -race -tags=integration ./...
+    desc: 'Integration tests (assumes `task up` running; INTEGRATION_DATABASE_URL / INTEGRATION_REDIS_ADDR override)'
+    cmds:
+      - for: ['services/user']
+        cmd: |
+          echo "==> integration {{.ITEM}}"
+          cd {{.ITEM}} && go test -race -tags=integration ./...
 
   lint:
     desc: golangci-lint

@@ -47,7 +47,7 @@ func Run() error {
 	st := store.New(pool)
 	notifier := buildNotifier(log)
 
-	svc := service.New(st, notifier, service.Config{
+	svc := service.New(st, notifier, rdb, service.Config{
 		JWTSigningKey: []byte(config.MustString("JWT_SIGNING_KEY")),
 		AccessTTL:     config.Duration("JWT_ACCESS_TTL", 0),
 		RefreshTTL:    config.Duration("JWT_REFRESH_TTL", 0),

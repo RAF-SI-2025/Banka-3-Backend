@@ -8,6 +8,8 @@ import (
 	"log/slog"
 	"time"
 
+	"github.com/redis/go-redis/v9"
+
 	"github.com/RAF-SI-2025/Banka-3-Backend/pkg/clock"
 	"github.com/RAF-SI-2025/Banka-3-Backend/services/user/internal/store"
 )
@@ -35,13 +37,14 @@ type Config struct {
 type Service struct {
 	Store    *store.Store
 	Notifier Notifier
+	Redis    *redis.Client
 	Cfg      Config
 	Log      *slog.Logger
 	Clock    clock.Clock
 }
 
 // New returns a Service with sensible defaults applied to cfg.
-func New(s *store.Store, n Notifier, cfg Config, log *slog.Logger) *Service {
+func New(s *store.Store, n Notifier, r *redis.Client, cfg Config, log *slog.Logger) *Service {
 	if cfg.AccessTTL == 0 {
 		cfg.AccessTTL = 15 * time.Minute
 	}
@@ -57,6 +60,7 @@ func New(s *store.Store, n Notifier, cfg Config, log *slog.Logger) *Service {
 	return &Service{
 		Store:    s,
 		Notifier: n,
+		Redis:    r,
 		Cfg:      cfg,
 		Log:      log,
 		Clock:    clock.Real{},

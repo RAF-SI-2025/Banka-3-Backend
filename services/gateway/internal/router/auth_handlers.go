@@ -6,7 +6,6 @@ package router
 import (
 	"encoding/json"
 	"net/http"
-	"time"
 
 	userpb "github.com/RAF-SI-2025/Banka-3-Backend/gen/proto/user/v1"
 )
@@ -29,8 +28,10 @@ type loginResponseBody struct {
 }
 
 // LoginHandler takes JSON {email, password}, calls user.Login, sets the
-// refresh token as an httpOnly cookie, and returns the access token +
-// metadata in the body.
+// refresh token as an httpOnly session cookie (no Expires — dies with
+// the browser per spec p.10: "ukoliko korisnik zatvori svoj web
+// pretraživač potrebno je tražiti da se korisnik ponovno uloguje"), and
+// returns the access token + metadata in the body.
 func (r *Router) LoginHandler() http.HandlerFunc {
 	return func(w http.ResponseWriter, req *http.Request) {
 		var body loginRequestBody
@@ -46,7 +47,7 @@ func (r *Router) LoginHandler() http.HandlerFunc {
 			writeGRPCError(w, err)
 			return
 		}
-		setRefreshCookie(w, resp.GetRefreshToken(), time.Duration(resp.GetRefreshExpiresIn())*time.Second, r.SecureCookies)
+		setRefreshCookie(w, resp.GetRefreshToken(), r.SecureCookies)
 		writeJSON(w, http.StatusOK, loginResponseBody{
 			AccessToken:     resp.GetAccessToken(),
 			AccessExpiresIn: resp.GetAccessExpiresIn(),
@@ -79,7 +80,7 @@ func (r *Router) RefreshHandler() http.HandlerFunc {
 			writeGRPCError(w, err)
 			return
 		}
-		setRefreshCookie(w, resp.GetRefreshToken(), time.Duration(resp.GetRefreshExpiresIn())*time.Second, r.SecureCookies)
+		setRefreshCookie(w, resp.GetRefreshToken(), r.SecureCookies)
 		writeJSON(w, http.StatusOK, refreshResponseBody{
 			AccessToken:     resp.GetAccessToken(),
 			AccessExpiresIn: resp.GetAccessExpiresIn(),
@@ -98,7 +99,10 @@ func (r *Router) LogoutHandler() http.HandlerFunc {
 	}
 }
 
-func setRefreshCookie(w http.ResponseWriter, value string, ttl time.Duration, secure bool) {
+// setRefreshCookie writes a *session* cookie (no Expires/Max-Age) so it
+// dies with the browser. The refresh token's server-side expiry still
+// caps lifetime — this just enforces re-login on browser close.
+func setRefreshCookie(w http.ResponseWriter, value string, secure bool) {
 	http.SetCookie(w, &http.Cookie{
 		Name:     refreshCookieName,
 		Value:    value,
@@ -106,7 +110,6 @@ func setRefreshCookie(w http.ResponseWriter, value string, ttl time.Duration, se
 		HttpOnly: true,
 		Secure:   secure,
 		SameSite: http.SameSiteStrictMode,
-		Expires:  time.Now().Add(ttl),
 	})
 }
 

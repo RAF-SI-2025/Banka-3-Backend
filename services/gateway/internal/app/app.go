@@ -7,8 +7,11 @@ import (
 	"errors"
 	"fmt"
 	"net/http"
+	"strconv"
+	"strings"
 	"time"
 
+	pkgauth "github.com/RAF-SI-2025/Banka-3-Backend/pkg/auth"
 	"github.com/RAF-SI-2025/Banka-3-Backend/pkg/config"
 	"github.com/RAF-SI-2025/Banka-3-Backend/pkg/logger"
 	"github.com/RAF-SI-2025/Banka-3-Backend/pkg/probes"
@@ -25,6 +28,7 @@ import (
 	"golang.org/x/sync/errgroup"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials/insecure"
+	"google.golang.org/grpc/metadata"
 )
 
 // Run blocks until shutdown.
@@ -70,7 +74,24 @@ func Run() error {
 		SecureCookies: config.Bool("SECURE_COOKIES", false),
 	}
 
-	gwMux := runtime.NewServeMux()
+	// Annotator forwards the authenticated principal (set on the request
+	// context by the auth middleware) to gRPC services as outgoing
+	// metadata. Without this, grpc-gateway's runtime builds metadata only
+	// from HTTP headers and our principal never reaches the service.
+	gwMux := runtime.NewServeMux(
+		runtime.WithMetadata(func(ctx context.Context, _ *http.Request) metadata.MD {
+			p, ok := pkgauth.PrincipalFrom(ctx)
+			if !ok {
+				return nil
+			}
+			return metadata.Pairs(
+				pkgauth.MDUserID, p.UserID,
+				pkgauth.MDUserKind, string(p.UserKind),
+				pkgauth.MDPermissions, strings.Join(p.Permissions, ","),
+				pkgauth.MDSessionVersion, strconv.FormatInt(p.SessionVersion, 10),
+			)
+		}),
+	)
 	registerGW := func(ctx context.Context, mux *runtime.ServeMux) error {
 		return userpb.RegisterUserServiceHandler(ctx, mux, mustGRPCConn(cs.User))
 	}

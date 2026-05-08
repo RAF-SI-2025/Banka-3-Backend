@@ -189,29 +189,23 @@ func (s *Store) ListEmployees(ctx context.Context, f domain.EmployeeFilter, page
 		pageSize = 50
 	}
 
-	var (
-		conds []string
-		args  []any
-	)
-	add := func(cond string, val any) {
-		args = append(args, val)
-		conds = append(conds, fmt.Sprintf(cond, len(args)))
-	}
+	var conds []string
+	var args []any
 	if f.Email != "" {
-		add("lower(email) like '%%' || lower($%d) || '%%'", f.Email)
+		args = append(args, f.Email)
+		conds = append(conds, fmt.Sprintf("lower(email) like '%%' || lower($%d) || '%%'", len(args)))
 	}
 	if f.Name != "" {
-		add("(lower(first_name) like '%%' || lower($%d) || '%%' or lower(last_name) like '%%' || lower($%d) || '%%')", f.Name)
-		// We only added one arg; reference it twice. Fix by repeating $N.
-		// Trick: replace the placeholder we just emitted.
+		args = append(args, f.Name)
 		idx := len(args)
-		conds[len(conds)-1] = fmt.Sprintf(
+		conds = append(conds, fmt.Sprintf(
 			"(lower(first_name) like '%%' || lower($%d) || '%%' or lower(last_name) like '%%' || lower($%d) || '%%')",
 			idx, idx,
-		)
+		))
 	}
 	if f.Position != "" {
-		add("lower(position) like '%%' || lower($%d) || '%%'", f.Position)
+		args = append(args, f.Position)
+		conds = append(conds, fmt.Sprintf("lower(position) like '%%' || lower($%d) || '%%'", len(args)))
 	}
 
 	where := ""

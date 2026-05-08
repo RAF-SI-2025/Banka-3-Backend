@@ -2,6 +2,7 @@ package service
 
 import (
 	"context"
+	"regexp"
 	"strings"
 	"time"
 
@@ -10,6 +11,14 @@ import (
 	"github.com/RAF-SI-2025/Banka-3-Backend/pkg/permissions"
 	"github.com/RAF-SI-2025/Banka-3-Backend/pkg/tokens"
 	"github.com/RAF-SI-2025/Banka-3-Backend/services/user/internal/domain"
+)
+
+// emailRe and phoneRe enforce minimal create-time format checks. The DB
+// has the unique constraint on email; these are user-facing filters so
+// the activation email and lockout key don't end up holding garbage.
+var (
+	emailRe = regexp.MustCompile(`^[^\s@]+@[^\s@]+\.[^\s@]+$`)
+	phoneRe = regexp.MustCompile(`^\+?[0-9]{6,20}$`)
 )
 
 // CreateEmployeeInput is the validated payload for CreateEmployee. The
@@ -30,7 +39,10 @@ type CreateEmployeeInput struct {
 }
 
 // CreateEmployee inserts the employee, applies the role's permission
-// bundle, and emails an activation link.
+// bundle, and emails an activation link. Granting the admin role
+// requires the caller to *be* an admin (spec p.9: "može i da dodeli
+// admin permisiju") — EmployeeWrite alone is not enough, otherwise a
+// future role with EmployeeWrite could mint admins.
 func (s *Service) CreateEmployee(ctx context.Context, in CreateEmployeeInput) (*domain.Employee, error) {
 	if err := s.requirePermission(ctx, permissions.EmployeeWrite); err != nil {
 		return nil, err
@@ -40,6 +52,11 @@ func (s *Service) CreateEmployee(ctx context.Context, in CreateEmployeeInput) (*
 	}
 
 	perms := permissionsForRole(in.Role)
+	if permissions.Has(perms, permissions.Admin) {
+		if err := s.requirePermission(ctx, permissions.Admin); err != nil {
+			return nil, apperr.PermissionDenied("samo administrator može dodeliti admin permisiju")
+		}
+	}
 
 	emp, err := s.Store.CreateEmployee(ctx, &domain.Employee{
 		Email:       strings.ToLower(strings.TrimSpace(in.Email)),
@@ -100,7 +117,8 @@ type UpdateEmployeeInput struct {
 }
 
 // UpdateEmployee enforces "admin cannot edit another admin" (spec
-// scenario 15).
+// scenario 15) and emails the employee a summary of what changed
+// (E2E: "Zaposleni dobija email obaveštenje o promenama").
 func (s *Service) UpdateEmployee(ctx context.Context, in UpdateEmployeeInput) (*domain.Employee, error) {
 	if err := s.requirePermission(ctx, permissions.EmployeeWrite); err != nil {
 		return nil, err
@@ -112,13 +130,33 @@ func (s *Service) UpdateEmployee(ctx context.Context, in UpdateEmployeeInput) (*
 	if err := s.guardAdminOnAdmin(ctx, target); err != nil {
 		return nil, err
 	}
+	before := *target
 	applyEmployeePatch(target, in)
-	return s.Store.UpdateEmployeeProfile(ctx, target)
+	updated, err := s.Store.UpdateEmployeeProfile(ctx, target)
+	if err != nil {
+		return nil, err
+	}
+	if changes := diffEmployee(&before, updated); len(changes) > 0 {
+		// Send to whichever email is reachable: if email itself changed,
+		// notify the new address — that's where future correspondence
+		// goes — and the old one too so the previous account holder sees
+		// the swap.
+		if err := s.sendProfileChangeEmail(ctx, updated, changes); err != nil {
+			s.Log.Warn("profile change email failed", "employee_id", updated.ID, "error", err)
+		}
+		if before.Email != updated.Email {
+			if err := s.sendProfileChangeEmailTo(ctx, before.Email, updated.FirstName, changes); err != nil {
+				s.Log.Warn("profile change email (old address) failed", "employee_id", updated.ID, "error", err)
+			}
+		}
+	}
+	return updated, nil
 }
 
 // SetEmployeeActive toggles active. On deactivation, all refresh tokens
 // are revoked and session_version is bumped so existing access tokens
-// are rejected on next request.
+// are rejected on next request — including invalidating the gateway's
+// Redis cache so revocation is immediate, not bounded by the cache TTL.
 func (s *Service) SetEmployeeActive(ctx context.Context, id string, active bool) (*domain.Employee, error) {
 	if err := s.requirePermission(ctx, permissions.EmployeeWrite); err != nil {
 		return nil, err
@@ -142,16 +180,23 @@ func (s *Service) SetEmployeeActive(ctx context.Context, id string, active bool)
 		if err := s.Store.RevokeAllRefreshTokens(ctx, domain.KindEmployee, id); err != nil {
 			s.Log.Error("revoke refresh tokens failed", "employee_id", id, "error", err)
 		}
+		s.invalidateSessionCache(ctx, domain.KindEmployee, id)
 	}
 	return updated, nil
 }
 
 // SetEmployeePermissions replaces the permission set. Bumps
-// session_version (handled by store) so existing tokens revalidate.
-// Requires PermissionGrant.
+// session_version (handled by store) so existing tokens revalidate;
+// invalidates the gateway's session cache for immediate effect.
+// Requires PermissionGrant; granting admin additionally requires Admin.
 func (s *Service) SetEmployeePermissions(ctx context.Context, id string, perms []string) (*domain.Employee, error) {
 	if err := s.requirePermission(ctx, permissions.PermissionGrant); err != nil {
 		return nil, err
+	}
+	if permissions.Has(perms, permissions.Admin) {
+		if err := s.requirePermission(ctx, permissions.Admin); err != nil {
+			return nil, apperr.PermissionDenied("samo administrator može dodeliti admin permisiju")
+		}
 	}
 	target, err := s.Store.GetEmployeeByID(ctx, id)
 	if err != nil {
@@ -160,7 +205,25 @@ func (s *Service) SetEmployeePermissions(ctx context.Context, id string, perms [
 	if err := s.guardAdminOnAdmin(ctx, target); err != nil {
 		return nil, err
 	}
-	return s.Store.SetEmployeePermissions(ctx, id, perms)
+	updated, err := s.Store.SetEmployeePermissions(ctx, id, perms)
+	if err != nil {
+		return nil, err
+	}
+	s.invalidateSessionCache(ctx, domain.KindEmployee, id)
+	return updated, nil
+}
+
+// invalidateSessionCache removes the gateway's cached session_version
+// entry for the user. Best-effort: failures are logged but not surfaced
+// — the cache will fall back to the user service on next lookup, so the
+// worst case is one stale read inside the cache TTL.
+func (s *Service) invalidateSessionCache(ctx context.Context, kind domain.UserKind, id string) {
+	if s.Redis == nil {
+		return
+	}
+	if err := s.Redis.Del(ctx, "usv:"+string(kind)+":"+id).Err(); err != nil {
+		s.Log.Warn("invalidate session cache", "user_id", id, "error", err)
+	}
 }
 
 // guardAdminOnAdmin rejects edits to another admin (spec scenario 15).
@@ -213,24 +276,31 @@ func validateCreateEmployee(in CreateEmployeeInput) error {
 	case in.Department == "":
 		return apperr.Validation("department is required")
 	}
+	if !emailRe.MatchString(strings.TrimSpace(in.Email)) {
+		return apperr.Validation("email format is invalid")
+	}
+	if !phoneRe.MatchString(strings.TrimSpace(in.Phone)) {
+		return apperr.Validation("phone format is invalid (expected +<digits> or <digits>)")
+	}
+	if !in.DateOfBirth.Before(time.Now()) {
+		return apperr.Validation("date of birth must be in the past")
+	}
 	return nil
 }
 
+// applyEmployeePatch copies the editable fields from in onto e. Spec p.8
+// marks Username and Datum rođenja as "Ne menja se" — those fields are
+// silently ignored even if the proto carries them, so a stale or
+// malicious client cannot rewrite them post-create.
 func applyEmployeePatch(e *domain.Employee, in UpdateEmployeeInput) {
 	if in.Email != "" {
 		e.Email = strings.ToLower(strings.TrimSpace(in.Email))
-	}
-	if in.Username != "" {
-		e.Username = strings.TrimSpace(in.Username)
 	}
 	if in.FirstName != "" {
 		e.FirstName = strings.TrimSpace(in.FirstName)
 	}
 	if in.LastName != "" {
 		e.LastName = strings.TrimSpace(in.LastName)
-	}
-	if !in.DateOfBirth.IsZero() {
-		e.DateOfBirth = in.DateOfBirth
 	}
 	if in.Gender != domain.GenderUnspecified {
 		e.Gender = in.Gender
@@ -262,6 +332,45 @@ func permissionsForRole(role string) []string {
 	}
 }
 
+// diffEmployee returns a list of "Polje: stara → nova" lines for fields
+// that changed. Only fields the admin can edit are compared.
+func diffEmployee(before, after *domain.Employee) []string {
+	var changes []string
+	add := func(label, oldV, newV string) {
+		if oldV != newV {
+			changes = append(changes, label+": "+oldV+" → "+newV)
+		}
+	}
+	add("Email", before.Email, after.Email)
+	add("Korisničko ime", before.Username, after.Username)
+	add("Ime", before.FirstName, after.FirstName)
+	add("Prezime", before.LastName, after.LastName)
+	if !before.DateOfBirth.Equal(after.DateOfBirth) {
+		changes = append(changes,
+			"Datum rođenja: "+before.DateOfBirth.Format("2006-01-02")+" → "+after.DateOfBirth.Format("2006-01-02"))
+	}
+	add("Pol", string(before.Gender), string(after.Gender))
+	add("Telefon", before.Phone, after.Phone)
+	add("Adresa", before.Address, after.Address)
+	add("Pozicija", before.Position, after.Position)
+	add("Departman", before.Department, after.Department)
+	return changes
+}
+
+func (s *Service) sendProfileChangeEmail(ctx context.Context, e *domain.Employee, changes []string) error {
+	return s.sendProfileChangeEmailTo(ctx, e.Email, e.FirstName, changes)
+}
+
+func (s *Service) sendProfileChangeEmailTo(ctx context.Context, to, firstName string, changes []string) error {
+	subject := "Izmena podataka naloga – Banka 3"
+	body := "Poštovani " + firstName + ",\n\n" +
+		"administrator je ažurirao podatke vašeg naloga. Promenjeno je:\n\n" +
+		"  - " + strings.Join(changes, "\n  - ") + "\n\n" +
+		"Ako ove izmene nisu očekivane, molimo kontaktirajte podršku.\n\n" +
+		"– Banka 3"
+	return s.Notifier.Send(ctx, to, subject, body, false)
+}
+
 func (s *Service) sendActivationEmail(ctx context.Context, e *domain.Employee) error {
 	plaintext, hash, err := tokens.Generate(32)
 	if err != nil {
@@ -270,7 +379,7 @@ func (s *Service) sendActivationEmail(ctx context.Context, e *domain.Employee) e
 	if err := s.Store.CreateActivationToken(ctx, e.ID, hash, s.Clock.Now().Add(s.Cfg.ActivationTTL)); err != nil {
 		return err
 	}
-	link := s.Cfg.WebBaseURL + "/aktivacija?token=" + plaintext
+	link := s.Cfg.WebBaseURL + "/activate?token=" + plaintext
 	subject := "Aktivacija naloga – Banka 3"
 	body := "Poštovani " + e.FirstName + ",\n\n" +
 		"vaš nalog u sistemu Banke 3 je kreiran. Da biste ga aktivirali i postavili lozinku, " +

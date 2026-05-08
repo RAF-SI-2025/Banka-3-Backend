@@ -286,7 +286,10 @@ message CreateEmployeeRequest {
   string address       = 8;
   string position      = 9;
   string department    = 10;
-  bool   active        = 11;  // default true if unset
+  // Optional so the server can distinguish "absent" (→ default true per
+  // spec p.10: "Po default-u se podrazumeva da je korisnik aktivan")
+  // from an explicit false. Generated as `*bool` in Go.
+  optional bool active = 11;
   // Initial role bundle, applied as a permission set; later admin
   // actions can amend via SetEmployeePermissions.
   string role          = 12;  // "admin" | "supervisor" | "agent" | "basic"
