@@ -14,14 +14,19 @@ import (
 // Config carries the bank service knobs that aren't covered by the
 // generic infra config.
 type Config struct {
-	BankCode string // 3 digits — this bank's prefix in the 18-digit number
-	Branch   string // 4 digits — default branch for new accounts
+	BankCode     string // 3 digits — this bank's prefix in the 18-digit number
+	Branch       string // 4 digits — default branch for new accounts
+	FXCommission string // "0.005" → 0.5% (default). Empty → default.
 }
 
 type Service struct {
 	Store *store.Store
 	Cfg   Config
 	Log   *slog.Logger
+	// Rates is wired by the app layer (gRPC client to exchange). Nil
+	// during slice-1-only tests, in which case FX paths surface
+	// "exchange rate provider not configured".
+	Rates RateProvider
 }
 
 func New(st *store.Store, cfg Config, log *slog.Logger) *Service {

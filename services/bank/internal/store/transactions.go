@@ -1,0 +1,221 @@
+package store
+
+import (
+	"context"
+	"fmt"
+	"strings"
+
+	"github.com/RAF-SI-2025/Banka-3-Backend/pkg/apperr"
+	"github.com/RAF-SI-2025/Banka-3-Backend/services/bank/internal/domain"
+	"github.com/jackc/pgx/v5"
+)
+
+const transactionColumns = `
+    id, op_id, op_kind, leg_index,
+    from_account_id, to_account_id,
+    from_amount::text, to_amount::text,
+    coalesce(rate::text, '') as rate,
+    coalesce(recipient_name, ''),
+    coalesce(payment_code, ''),
+    coalesce(reference_number, ''),
+    coalesce(purpose, ''),
+    coalesce(initiator_client_id::text, ''),
+    status, created_at
+`
+
+func scanTransaction(row interface{ Scan(...any) error }) (*domain.Transaction, error) {
+	var t domain.Transaction
+	var kind, status string
+	if err := row.Scan(
+		&t.ID, &t.OpID, &kind, &t.LegIndex,
+		&t.FromAccountID, &t.ToAccountID,
+		&t.FromAmount, &t.ToAmount, &t.Rate,
+		&t.RecipientName, &t.PaymentCode, &t.ReferenceNumber, &t.Purpose,
+		&t.InitiatorClientID,
+		&status, &t.CreatedAt,
+	); err != nil {
+		return nil, err
+	}
+	t.Kind = domain.TransactionKind(kind)
+	t.Status = domain.TransactionStatus(status)
+	return &t, nil
+}
+
+// ExecuteAtomic runs fn inside a serialized transaction. Used to guard
+// the multi-step "debit source, credit destination, write ledger row"
+// invariant of every payment/transfer.
+func (s *Store) ExecuteAtomic(ctx context.Context, fn func(tx pgx.Tx) error) error {
+	return pgx.BeginFunc(ctx, s.Pool, func(tx pgx.Tx) error {
+		return fn(tx)
+	})
+}
+
+// AdjustBalance increments balance + available_balance by delta (which
+// may be negative for a debit). Rejects when the result would underflow
+// available_balance below zero. Caller supplies the *pgx.Tx so the
+// debit + credit + ledger row are atomic.
+//
+// daily_spent / monthly_spent are bumped only when delta < 0 (a debit
+// from the account); FX-leg incoming credits don't count toward limits.
+func (s *Store) AdjustBalance(ctx context.Context, tx pgx.Tx, accountID, delta string) error {
+	const q = `
+        update "bank".accounts set
+            balance           = balance + $2::numeric,
+            available_balance = available_balance + $2::numeric,
+            daily_spent       = case when $2::numeric < 0 then daily_spent   + (-$2::numeric) else daily_spent end,
+            monthly_spent     = case when $2::numeric < 0 then monthly_spent + (-$2::numeric) else monthly_spent end,
+            updated_at        = now()
+        where id = $1
+          and (available_balance + $2::numeric) >= 0
+        returning id`
+	var got string
+	err := tx.QueryRow(ctx, q, accountID, delta).Scan(&got)
+	if err != nil {
+		if noRows(err) {
+			return apperr.FailedPrecondition("nedovoljno sredstava na računu")
+		}
+		return apperr.Internal("adjust balance", err)
+	}
+	return nil
+}
+
+// CheckLimits reports whether `amount` would push the account over its
+// daily or monthly limit. Spec p.12: limits are RSD-equivalent and
+// the FE shows "preostalo limita". For now we treat the amount as
+// already in account-currency since the daily/monthly_spent counters
+// are also in account-currency.
+//
+// A zero limit means "unlimited" — treat as "no constraint".
+func (s *Store) CheckLimits(ctx context.Context, tx pgx.Tx, accountID, amount string) error {
+	const q = `
+        select daily_limit::text, monthly_limit::text,
+               daily_spent::text, monthly_spent::text
+        from "bank".accounts where id = $1 for update`
+	var dl, ml, ds, ms string
+	if err := tx.QueryRow(ctx, q, accountID).Scan(&dl, &ml, &ds, &ms); err != nil {
+		return apperr.Internal("read limits", err)
+	}
+
+	type cmp struct {
+		spent, limit, label string
+	}
+	for _, c := range []cmp{{ds, dl, "dnevni"}, {ms, ml, "mesečni"}} {
+		// Limit == 0 means unlimited.
+		if c.limit == "0" || c.limit == "0.0000" || c.limit == "0.00" {
+			continue
+		}
+		// new_spent = spent + amount
+		// reject if new_spent > limit
+		var ok bool
+		err := tx.QueryRow(ctx, "select ($1::numeric + $2::numeric) <= $3::numeric", c.spent, amount, c.limit).Scan(&ok)
+		if err != nil {
+			return apperr.Internal("limit math", err)
+		}
+		if !ok {
+			return apperr.FailedPrecondition(fmt.Sprintf("prekoračen %s limit", c.label))
+		}
+	}
+	return nil
+}
+
+// InsertTransaction writes a single ledger leg.
+func (s *Store) InsertTransaction(ctx context.Context, tx pgx.Tx, t *domain.Transaction) (*domain.Transaction, error) {
+	const q = `
+        insert into "bank".transactions (
+            op_id, op_kind, leg_index,
+            from_account_id, to_account_id,
+            from_amount, to_amount, rate,
+            recipient_name, payment_code, reference_number, purpose,
+            initiator_client_id, status
+        ) values (
+            $1, $2, $3,
+            $4, $5,
+            $6::numeric, $7::numeric, nullif($8, '')::numeric,
+            nullif($9, ''), nullif($10, ''), nullif($11, ''), nullif($12, ''),
+            nullif($13, '')::uuid, $14
+        )
+        returning ` + transactionColumns
+
+	row := tx.QueryRow(ctx, q,
+		t.OpID, string(t.Kind), t.LegIndex,
+		t.FromAccountID, t.ToAccountID,
+		t.FromAmount, t.ToAmount, t.Rate,
+		t.RecipientName, t.PaymentCode, t.ReferenceNumber, t.Purpose,
+		t.InitiatorClientID, string(t.Status),
+	)
+	out, err := scanTransaction(row)
+	if err != nil {
+		return nil, apperr.Internal("insert transaction", err)
+	}
+	return out, nil
+}
+
+func (s *Store) ListTransactions(ctx context.Context, f domain.TransactionFilter, page, pageSize int) ([]*domain.Transaction, int64, error) {
+	if page < 1 {
+		page = 1
+	}
+	if pageSize < 1 || pageSize > 200 {
+		pageSize = 50
+	}
+	var conds []string
+	var args []any
+	if f.AccountID != "" {
+		args = append(args, f.AccountID)
+		conds = append(conds, fmt.Sprintf("(from_account_id = $%d or to_account_id = $%d)", len(args), len(args)))
+	}
+	if f.OpKind != "" {
+		args = append(args, f.OpKind)
+		conds = append(conds, fmt.Sprintf("op_kind = $%d", len(args)))
+	}
+	if f.Status != "" {
+		args = append(args, f.Status)
+		conds = append(conds, fmt.Sprintf("status = $%d", len(args)))
+	}
+	if f.InitiatorClientID != "" {
+		args = append(args, f.InitiatorClientID)
+		conds = append(conds, fmt.Sprintf("initiator_client_id = $%d", len(args)))
+	}
+	where := ""
+	if len(conds) > 0 {
+		where = " where " + strings.Join(conds, " and ")
+	}
+
+	var total int64
+	if err := s.Pool.QueryRow(ctx, `select count(*) from "bank".transactions`+where, args...).Scan(&total); err != nil {
+		return nil, 0, apperr.Internal("count transactions", err)
+	}
+
+	listArgs := append([]any{}, args...)
+	listArgs = append(listArgs, pageSize, (page-1)*pageSize)
+	listQ := `select ` + transactionColumns + ` from "bank".transactions` + where +
+		fmt.Sprintf(" order by created_at desc, leg_index limit $%d offset $%d", len(args)+1, len(args)+2)
+
+	rows, err := s.Pool.Query(ctx, listQ, listArgs...)
+	if err != nil {
+		return nil, 0, apperr.Internal("list transactions", err)
+	}
+	defer rows.Close()
+	var out []*domain.Transaction
+	for rows.Next() {
+		t, err := scanTransaction(rows)
+		if err != nil {
+			return nil, 0, apperr.Internal("scan transaction", err)
+		}
+		out = append(out, t)
+	}
+	return out, total, rows.Err()
+}
+
+// GetAccountByNumber returns the account row for an 18-digit number,
+// or NotFound. Used by payment flow to resolve the recipient.
+func (s *Store) GetAccountByNumber(ctx context.Context, number string) (*domain.Account, error) {
+	const q = `select ` + accountColumns + ` from "bank".accounts where number = $1`
+	out, err := scanAccount(s.Pool.QueryRow(ctx, q, number))
+	if err != nil {
+		if noRows(err) {
+			return nil, apperr.NotFound("primalac (račun) ne postoji")
+		}
+		return nil, apperr.Internal("get account by number", err)
+	}
+	return out, nil
+}

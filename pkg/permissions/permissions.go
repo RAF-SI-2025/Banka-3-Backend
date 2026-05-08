@@ -34,29 +34,45 @@ const (
 	// ExchangeWrite gates upserting FX rates. Reads are open to any
 	// authenticated user (clients see the menjačnica board).
 	ExchangeWrite = "exchange.write"
+
+	// PaymentWrite lets a holder initiate a payment/transfer from an
+	// account they own (clients) or — for employees — on behalf of an
+	// account they have AccountWrite over. Read of own transactions is
+	// implicit (no separate payment.read perm).
+	PaymentWrite = "payment.write"
+
+	// CardRead/CardWrite gate card management. Clients have read+write
+	// on their own cards (block at least); employees with CardWrite
+	// can manage any card (the spec p.29 unblock-only-by-employee
+	// behaviour is enforced in the service layer, not by perm split).
+	CardRead  = "card.read"
+	CardWrite = "card.write"
 )
 
 // Role bundles. The spec frames users in terms of roles; the system
 // stores and checks permissions. These bundles are applied at user
 // creation; later admin actions can add or remove individual permissions.
 var (
-	// Clients see their own accounts and read FX rates. They don't have
-	// account.write — opening a new account is an employee action per
-	// spec p.11 ("Račun kreira Zaposleni").
-	RoleClientBasic   = []string{ClientRead, AccountRead}
+	// Clients see their own accounts and read FX rates, manage their
+	// own cards, and initiate payments. They don't have account.write
+	// — opening a new account is an employee action per spec p.11
+	// ("Račun kreira Zaposleni").
+	RoleClientBasic   = []string{ClientRead, AccountRead, CardRead, CardWrite, PaymentWrite}
 	RoleClientTrading = append([]string{}, RoleClientBasic...) // c3 will append trading perms
 
 	// Employees:
 	//   basic — read-only on people and accounts; legacy from c1.
 	//   agent — c2 day-to-day: opens accounts, creates clients, manages
-	//     companies. Cannot manage employees or grant permissions.
+	//     companies, blocks/unblocks cards. Cannot manage employees or
+	//     grant permissions.
 	//   supervisor — agent + employee.read so they can see staff.
 	//   admin — everything.
-	RoleEmployeeBasic = []string{EmployeeRead, ClientRead, AccountRead, CompanyRead}
+	RoleEmployeeBasic = []string{EmployeeRead, ClientRead, AccountRead, CompanyRead, CardRead}
 	RoleEmployeeAgent = []string{
 		ClientRead, ClientWrite,
 		AccountRead, AccountWrite,
 		CompanyRead, CompanyWrite,
+		CardRead, CardWrite,
 	}
 	RoleEmployeeSupervisor = append([]string{EmployeeRead}, RoleEmployeeAgent...)
 	RoleEmployeeAdmin      = []string{
@@ -65,6 +81,8 @@ var (
 		ClientRead, ClientWrite,
 		CompanyRead, CompanyWrite,
 		AccountRead, AccountWrite,
+		CardRead, CardWrite,
+		PaymentWrite,
 		ExchangeWrite,
 		PermissionGrant,
 	}

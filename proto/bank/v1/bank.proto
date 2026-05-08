@@ -96,6 +96,117 @@ service BankService {
   // through bank-owned accounts (spec edge case: every FX conversion
   // hops through the bank in RSD twice).
   rpc GetSystemAccount(GetSystemAccountRequest) returns (Account);
+
+  // -----------------------------------------------------------------
+  // Payments — Klijent → another Klijent (different owner). Spec
+  // p.21 "Novo plaćanje". Same-currency intra-bank: 1 transaction
+  // leg. FX: 2-3 legs through bank house accounts (menjačnica).
+  // -----------------------------------------------------------------
+
+  rpc CreatePayment(CreatePaymentRequest) returns (PaymentResult) {
+    option (google.api.http) = {
+      post: "/api/v1/payments"
+      body: "*"
+    };
+  }
+
+  // -----------------------------------------------------------------
+  // Transfers — Klijent → own account. Spec p.23 "Prenos". Same
+  // currency = direct. Different currencies = menjačnica logic.
+  // -----------------------------------------------------------------
+
+  rpc CreateTransfer(CreateTransferRequest) returns (PaymentResult) {
+    option (google.api.http) = {
+      post: "/api/v1/transfers"
+      body: "*"
+    };
+  }
+
+  // QuoteExchange returns the converted-amount preview for a
+  // menjačnica or FX payment, including commission. The FE uses this
+  // to render the transfer-confirmation screen before the user clicks
+  // Potvrdi.
+  rpc QuoteExchange(QuoteExchangeRequest) returns (QuoteExchangeResponse) {
+    option (google.api.http) = {
+      post: "/api/v1/menjacnica/quote"
+      body: "*"
+    };
+  }
+
+  // -----------------------------------------------------------------
+  // Transactions ledger — pregled plaćanja
+  // -----------------------------------------------------------------
+
+  rpc ListTransactions(ListTransactionsRequest) returns (ListTransactionsResponse) {
+    option (google.api.http) = {
+      get: "/api/v1/transactions"
+    };
+  }
+
+  // -----------------------------------------------------------------
+  // Payment recipient templates ("Primaoci plaćanja", spec p.23)
+  // -----------------------------------------------------------------
+
+  rpc CreatePaymentRecipient(CreatePaymentRecipientRequest) returns (PaymentRecipient) {
+    option (google.api.http) = {
+      post: "/api/v1/payment-recipients"
+      body: "*"
+    };
+  }
+  rpc ListPaymentRecipients(ListPaymentRecipientsRequest) returns (ListPaymentRecipientsResponse) {
+    option (google.api.http) = {
+      get: "/api/v1/payment-recipients"
+    };
+  }
+  rpc UpdatePaymentRecipient(UpdatePaymentRecipientRequest) returns (PaymentRecipient) {
+    option (google.api.http) = {
+      patch: "/api/v1/payment-recipients/{id}"
+      body: "*"
+    };
+  }
+  rpc DeletePaymentRecipient(DeletePaymentRecipientRequest) returns (google.protobuf.Empty) {
+    option (google.api.http) = {
+      delete: "/api/v1/payment-recipients/{id}"
+    };
+  }
+
+  // -----------------------------------------------------------------
+  // Cards
+  // -----------------------------------------------------------------
+
+  rpc CreateCard(CreateCardRequest) returns (Card) {
+    option (google.api.http) = {
+      post: "/api/v1/cards"
+      body: "*"
+    };
+  }
+  rpc ListCards(ListCardsRequest) returns (ListCardsResponse) {
+    option (google.api.http) = {
+      get: "/api/v1/cards"
+    };
+  }
+  rpc SetCardStatus(SetCardStatusRequest) returns (Card) {
+    option (google.api.http) = {
+      post: "/api/v1/cards/{id}/status"
+      body: "*"
+    };
+  }
+
+  // -----------------------------------------------------------------
+  // OvlascenoLice (authorized persons on a poslovni account)
+  // -----------------------------------------------------------------
+
+  rpc CreateAuthorizedPerson(CreateAuthorizedPersonRequest) returns (AuthorizedPerson) {
+    option (google.api.http) = {
+      post: "/api/v1/authorized-persons"
+      body: "*"
+    };
+  }
+  rpc ListAuthorizedPersons(ListAuthorizedPersonsRequest) returns (ListAuthorizedPersonsResponse) {
+    option (google.api.http) = {
+      get: "/api/v1/authorized-persons"
+    };
+  }
 }
 
 // =====================================================================
@@ -286,4 +397,240 @@ message SetAccountStatusRequest {
 
 message GetSystemAccountRequest {
   Currency currency = 1;
+}
+
+// =====================================================================
+// Payments / transfers / transactions
+// =====================================================================
+
+enum TransactionStatus {
+  TRANSACTION_STATUS_UNSPECIFIED = 0;
+  TRANSACTION_STATUS_REALIZED    = 1;
+  TRANSACTION_STATUS_REJECTED    = 2;
+  TRANSACTION_STATUS_PROCESSING  = 3;
+}
+
+enum TransactionKind {
+  TRANSACTION_KIND_UNSPECIFIED = 0;
+  TRANSACTION_KIND_PAYMENT     = 1;
+  TRANSACTION_KIND_TRANSFER    = 2;
+  TRANSACTION_KIND_EXCHANGE    = 3; // intermediate leg in a menjačnica path
+  TRANSACTION_KIND_FEE         = 4;
+}
+
+// Transaction is one ledger leg. UX-level operations (a payment, a
+// transfer) are reconstructed by grouping on op_id.
+message Transaction {
+  string            id                  = 1;
+  string            op_id               = 2;
+  TransactionKind   kind                = 3;
+  int32             leg_index           = 4;
+  string            from_account_id     = 5;
+  string            to_account_id       = 6;
+  string            from_amount         = 7;   // decimal string
+  string            to_amount           = 8;
+  string            rate                = 9;   // decimal string; "" when same currency
+  string            recipient_name      = 10;
+  string            payment_code        = 11;
+  string            reference_number    = 12;
+  string            purpose             = 13;
+  string            initiator_client_id = 14;
+  TransactionStatus status              = 15;
+  google.protobuf.Timestamp created_at  = 16;
+}
+
+message CreatePaymentRequest {
+  string from_account_id   = 1;
+  // The recipient account is supplied as a full 18-digit number, not a
+  // UUID — the FE form uses the spec's "Račun primaoca" field.
+  string to_account_number = 2;
+  string amount            = 3;   // decimal string in from-account currency
+  string recipient_name    = 4;
+  string payment_code      = 5;   // default "289" applied server-side if empty
+  string reference_number  = 6;   // optional ("Poziv na broj")
+  string purpose           = 7;   // "Svrha plaćanja"
+  // save_recipient: when true, also create/update a PaymentRecipient
+  // template for the caller. Spec p.21 "Dodaj primaoca" UX shortcut.
+  bool   save_recipient    = 8;
+}
+
+message CreateTransferRequest {
+  string from_account_id = 1;
+  string to_account_id   = 2;
+  string amount          = 3;
+  string purpose         = 4;
+}
+
+message PaymentResult {
+  // op_id groups the transactions; ListTransactions can filter on it
+  // to render a single grouped row in pregled plaćanja.
+  string                op_id        = 1;
+  repeated Transaction  transactions = 2;
+  TransactionStatus     status       = 3;
+}
+
+message QuoteExchangeRequest {
+  Currency from     = 1;
+  Currency to       = 2;
+  string   amount   = 3;   // amount in `from` currency
+  // include_commission: when true the response factors the bank's
+  // 0.5% menjačnica commission. Set to false for the rates calculator
+  // page where we just want the raw equivalent.
+  bool include_commission = 4;
+}
+
+message QuoteExchangeResponse {
+  string from_amount = 1;   // echoes the request, normalized
+  string to_amount   = 2;   // what the destination account receives
+  string rate        = 3;   // composite rate (one-leg or two-leg)
+  string commission  = 4;   // RSD commission, "0" when same currency
+}
+
+message ListTransactionsRequest {
+  // account_id filters to legs that touch this account on either side.
+  // Empty + employee → see-everything; empty + client → all of caller's
+  // accounts.
+  string account_id      = 1;
+  string op_kind         = 2;   // 'payment' | 'transfer' | 'exchange' (filter)
+  string status          = 3;
+  int32  page            = 4;
+  int32  page_size       = 5;
+}
+
+message ListTransactionsResponse {
+  repeated Transaction transactions = 1;
+  int32 page      = 2;
+  int32 page_size = 3;
+  int64 total     = 4;
+}
+
+// =====================================================================
+// Payment recipient templates
+// =====================================================================
+
+message PaymentRecipient {
+  string id             = 1;
+  string client_id      = 2;
+  string name           = 3;
+  string account_number = 4;
+  google.protobuf.Timestamp created_at = 5;
+}
+
+message CreatePaymentRecipientRequest {
+  string name           = 1;
+  string account_number = 2;
+}
+
+message ListPaymentRecipientsRequest {}
+
+message ListPaymentRecipientsResponse {
+  repeated PaymentRecipient recipients = 1;
+}
+
+message UpdatePaymentRecipientRequest {
+  string id             = 1;
+  string name           = 2;
+  string account_number = 3;
+}
+
+message DeletePaymentRecipientRequest { string id = 1; }
+
+// =====================================================================
+// Cards
+// =====================================================================
+
+enum CardBrand {
+  CARD_BRAND_UNSPECIFIED = 0;
+  CARD_BRAND_VISA        = 1;
+  CARD_BRAND_MASTERCARD  = 2;
+  CARD_BRAND_DINACARD    = 3;
+  CARD_BRAND_AMEX        = 4;
+}
+
+enum CardStatus {
+  CARD_STATUS_UNSPECIFIED = 0;
+  CARD_STATUS_ACTIVE      = 1;
+  CARD_STATUS_BLOCKED     = 2;
+  CARD_STATUS_DEACTIVATED = 3;
+}
+
+message Card {
+  string     id                   = 1;
+  // Number is returned masked ("4111********1111") when the caller is
+  // a client; employees with card.write see the full number.
+  string     number               = 2;
+  CardBrand  brand                = 3;
+  string     name                 = 4;
+  string     account_id           = 5;
+  string     authorized_person_id = 6;   // empty for personal cards
+  string     card_limit           = 7;
+  CardStatus status               = 8;
+  google.protobuf.Timestamp expires_at = 9;
+  google.protobuf.Timestamp created_at = 10;
+  google.protobuf.Timestamp updated_at = 11;
+}
+
+message CreateCardRequest {
+  string    account_id           = 1;
+  string    authorized_person_id = 2;   // required for poslovni-with-OvlascenoLice
+  CardBrand brand                = 3;
+  string    name                 = 4;   // e.g. "Debit"
+  string    card_limit           = 5;   // decimal string; "" → "0"
+}
+
+message ListCardsRequest {
+  string account_id = 1;   // optional filter
+}
+
+message ListCardsResponse {
+  repeated Card cards = 1;
+}
+
+message SetCardStatusRequest {
+  string     id     = 1;
+  CardStatus status = 2;
+}
+
+// =====================================================================
+// Authorized persons (OvlascenoLice)
+// =====================================================================
+
+message AuthorizedPerson {
+  string id            = 1;
+  string company_id    = 2;
+  string first_name    = 3;
+  string last_name     = 4;
+  string date_of_birth = 5;   // YYYY-MM-DD
+  Gender gender        = 6;
+  string email         = 7;
+  string phone         = 8;
+  string address       = 9;
+  google.protobuf.Timestamp created_at = 10;
+  google.protobuf.Timestamp updated_at = 11;
+}
+
+enum Gender {
+  GENDER_UNSPECIFIED = 0;
+  GENDER_MALE        = 1;
+  GENDER_FEMALE      = 2;
+  GENDER_OTHER       = 3;
+}
+
+message CreateAuthorizedPersonRequest {
+  string company_id    = 1;
+  string first_name    = 2;
+  string last_name     = 3;
+  string date_of_birth = 4;
+  Gender gender        = 5;
+  string email         = 6;
+  string phone         = 7;
+  string address       = 8;
+}
+
+message ListAuthorizedPersonsRequest {
+  string company_id = 1;
+}
+
+message ListAuthorizedPersonsResponse {
+  repeated AuthorizedPerson authorized_persons = 1;
 }

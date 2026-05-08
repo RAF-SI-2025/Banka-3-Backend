@@ -149,7 +149,14 @@ func (s *Service) GetSystemAccount(ctx context.Context, currency domain.Currency
 // EnsureSystemAccounts is called once at boot. For each supported
 // currency it creates a bank-owned account if one doesn't exist yet.
 // Idempotent.
+//
+// The bank's house accounts are pre-funded with a large notional
+// balance so the menjačnica path's intermediate legs never underflow
+// — in a real bank these accounts are nostro/vostro positions backed
+// by external reserves; for the dev model we just stamp 10^9 of each
+// currency so the >= 0 invariant holds across normal traffic.
 func (s *Service) EnsureSystemAccounts(ctx context.Context) error {
+	const houseFloat = "1000000000.0000" // 1 billion units per currency
 	for _, c := range domain.SupportedCurrencies() {
 		if _, err := s.Store.GetSystemAccount(ctx, c); err == nil {
 			continue
@@ -169,8 +176,8 @@ func (s *Service) EnsureSystemAccounts(ctx context.Context) error {
 			Subtype:             domain.SubtypeUnspecified,
 			Currency:            c,
 			Status:              domain.AccountActive,
-			Balance:             "0",
-			AvailableBalance:    "0",
+			Balance:             houseFloat,
+			AvailableBalance:    houseFloat,
 			MaintenanceFee:      "0",
 			DailyLimit:          "0",
 			MonthlyLimit:        "0",

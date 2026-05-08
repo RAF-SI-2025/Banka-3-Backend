@@ -7,6 +7,7 @@ import (
 	"fmt"
 
 	bankpb "github.com/RAF-SI-2025/Banka-3-Backend/gen/proto/bank/v1"
+	exchangepb "github.com/RAF-SI-2025/Banka-3-Backend/gen/proto/exchange/v1"
 	"github.com/RAF-SI-2025/Banka-3-Backend/pkg/config"
 	"github.com/RAF-SI-2025/Banka-3-Backend/pkg/grpcserver"
 	"github.com/RAF-SI-2025/Banka-3-Backend/pkg/logger"
@@ -18,6 +19,7 @@ import (
 	"github.com/RAF-SI-2025/Banka-3-Backend/services/bank/internal/service"
 	"github.com/RAF-SI-2025/Banka-3-Backend/services/bank/internal/store"
 	"google.golang.org/grpc"
+	"google.golang.org/grpc/credentials/insecure"
 
 	"golang.org/x/sync/errgroup"
 )
@@ -44,9 +46,21 @@ func Run() error {
 
 	st := store.New(pool)
 	svc := service.New(st, service.Config{
-		BankCode: config.String("BANK_CODE", "265"),
-		Branch:   config.String("BANK_BRANCH", "0001"),
+		BankCode:     config.String("BANK_CODE", "265"),
+		Branch:       config.String("BANK_BRANCH", "0001"),
+		FXCommission: config.String("BANK_FX_COMMISSION", "0.005"),
 	}, log)
+
+	if exAddr := config.String("EXCHANGE_GRPC_ADDR", ""); exAddr != "" {
+		conn, err := grpc.NewClient(exAddr, grpc.WithTransportCredentials(insecure.NewCredentials()))
+		if err != nil {
+			return fmt.Errorf("dial exchange: %w", err)
+		}
+		defer conn.Close()
+		svc.Rates = &exchangeAdapter{c: exchangepb.NewExchangeServiceClient(conn)}
+	} else {
+		log.Warn("EXCHANGE_GRPC_ADDR not set; FX/menjačnica paths will return error")
+	}
 
 	// Bring up the bank-owned house accounts before serving traffic so
 	// the FX flow can always look them up. Idempotent — only inserts
