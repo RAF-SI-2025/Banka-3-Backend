@@ -9,8 +9,10 @@
 *.out
 coverage.*
 
-# Generated proto stubs
-/gen/
+# Generated proto stubs (keep gen/go.mod, ignore generated code)
+/gen/proto/
+/gen/openapi/
+/gen/go.sum
 
 # Editor / OS
 .DS_Store

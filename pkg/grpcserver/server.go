@@ -12,6 +12,7 @@ import (
 	"time"
 
 	"github.com/RAF-SI-2025/Banka-3-Backend/pkg/apperr"
+	authmw "github.com/RAF-SI-2025/Banka-3-Backend/pkg/auth"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
@@ -31,6 +32,7 @@ func Run(ctx context.Context, log *slog.Logger, addr string, register func(*grpc
 		grpc.ChainUnaryInterceptor(
 			recoveryInterceptor(log),
 			loggingInterceptor(log),
+			authmw.MetadataInterceptor(),
 			errorMapInterceptor(),
 		),
 	)
