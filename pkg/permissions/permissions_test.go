@@ -55,9 +55,11 @@ func TestRoleBundlesContent(t *testing.T) {
 		bundle []string
 		want   []string
 	}{
-		{"client-basic", RoleClientBasic, []string{ClientRead}},
-		{"employee-basic", RoleEmployeeBasic, []string{EmployeeRead, ClientRead, ClientWrite}},
-		{"employee-admin", RoleEmployeeAdmin, []string{Admin, EmployeeRead, EmployeeWrite, ClientRead, ClientWrite, PermissionGrant}},
+		{"client-basic", RoleClientBasic, []string{ClientRead, AccountRead}},
+		{"employee-basic", RoleEmployeeBasic, []string{EmployeeRead, ClientRead, AccountRead, CompanyRead}},
+		{"employee-agent", RoleEmployeeAgent, []string{ClientRead, ClientWrite, AccountRead, AccountWrite, CompanyRead, CompanyWrite}},
+		{"employee-supervisor", RoleEmployeeSupervisor, []string{EmployeeRead, ClientRead, ClientWrite, AccountRead, AccountWrite, CompanyRead, CompanyWrite}},
+		{"employee-admin", RoleEmployeeAdmin, []string{Admin, EmployeeRead, EmployeeWrite, ClientRead, ClientWrite, CompanyRead, CompanyWrite, AccountRead, AccountWrite, ExchangeWrite, PermissionGrant}},
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {

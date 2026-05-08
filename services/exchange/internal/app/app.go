@@ -6,6 +6,7 @@ import (
 	"errors"
 	"fmt"
 
+	exchangepb "github.com/RAF-SI-2025/Banka-3-Backend/gen/proto/exchange/v1"
 	"github.com/RAF-SI-2025/Banka-3-Backend/pkg/config"
 	"github.com/RAF-SI-2025/Banka-3-Backend/pkg/grpcserver"
 	"github.com/RAF-SI-2025/Banka-3-Backend/pkg/logger"
@@ -13,6 +14,9 @@ import (
 	"github.com/RAF-SI-2025/Banka-3-Backend/pkg/probes"
 	pkgredis "github.com/RAF-SI-2025/Banka-3-Backend/pkg/redis"
 	"github.com/RAF-SI-2025/Banka-3-Backend/pkg/shutdown"
+	"github.com/RAF-SI-2025/Banka-3-Backend/services/exchange/internal/server"
+	"github.com/RAF-SI-2025/Banka-3-Backend/services/exchange/internal/service"
+	"github.com/RAF-SI-2025/Banka-3-Backend/services/exchange/internal/store"
 	"google.golang.org/grpc"
 
 	"golang.org/x/sync/errgroup"
@@ -38,6 +42,9 @@ func Run() error {
 	}
 	defer rdb.Close()
 
+	st := store.New(pool)
+	svc := service.New(st, log)
+
 	probeSrv := probes.New(fmt.Sprintf(":%d", config.Int("PROBE_PORT", 8081)))
 	probeSrv.Register("postgres", func(ctx context.Context) error { return postgres.Ping(ctx, pool) })
 	probeSrv.Register("redis", func(ctx context.Context) error { return pkgredis.Ping(ctx, rdb) })
@@ -50,7 +57,7 @@ func Run() error {
 	})
 	g.Go(func() error {
 		return grpcserver.Run(gctx, log, grpcAddr, func(s *grpc.Server) {
-			// TODO: register UserService once celina 1 work begins
+			exchangepb.RegisterExchangeServiceServer(s, server.New(svc))
 		})
 	})
 

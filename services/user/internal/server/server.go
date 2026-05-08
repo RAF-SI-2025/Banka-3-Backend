@@ -220,6 +220,26 @@ func (s *Server) SetEmployeePermissions(ctx context.Context, in *userpb.SetEmplo
 // Clients
 // =====================================================================
 
+func (s *Server) CreateClient(ctx context.Context, in *userpb.CreateClientRequest) (*userpb.Client, error) {
+	dob, err := parseDate(in.GetDateOfBirth())
+	if err != nil {
+		return nil, err
+	}
+	c, err := s.Svc.CreateClient(ctx, service.CreateClientInput{
+		Email:       in.GetEmail(),
+		FirstName:   in.GetFirstName(),
+		LastName:    in.GetLastName(),
+		DateOfBirth: dob,
+		Gender:      genderFromProto(in.GetGender()),
+		Phone:       in.GetPhone(),
+		Address:     in.GetAddress(),
+	})
+	if err != nil {
+		return nil, err
+	}
+	return clientToProto(c), nil
+}
+
 func (s *Server) ListClients(ctx context.Context, in *userpb.ListClientsRequest) (*userpb.ListClientsResponse, error) {
 	page, pageSize := int(in.GetPage()), int(in.GetPageSize())
 	cs, total, err := s.Svc.ListClients(ctx, domain.ClientFilter{

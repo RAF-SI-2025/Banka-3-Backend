@@ -29,6 +29,31 @@ func scanClient(row interface{ Scan(...any) error }) (*domain.Client, error) {
 	return &c, nil
 }
 
+// CreateClient inserts a new client with no password hash. The caller
+// (service layer) emails an initial-password link via the password
+// reset machinery — clients use the same path employees use for forgot
+// password, but with welcome wording.
+func (s *Store) CreateClient(ctx context.Context, c *domain.Client) (*domain.Client, error) {
+	const q = `
+        insert into "user".clients
+            (email, first_name, last_name, date_of_birth, gender,
+             phone, address, active, permissions)
+        values ($1,$2,$3,$4,$5,$6,$7,$8,$9)
+        returning ` + clientColumns
+
+	out, err := scanClient(s.Pool.QueryRow(ctx, q,
+		c.Email, c.FirstName, c.LastName, c.DateOfBirth, string(c.Gender),
+		c.Phone, c.Address, c.Active, c.Permissions,
+	))
+	if err != nil {
+		if isUniqueViolation(err) {
+			return nil, apperr.Conflict("an account with this email already exists")
+		}
+		return nil, apperr.Internal("create client", err)
+	}
+	return out, nil
+}
+
 // GetClientByID returns the client or NotFound.
 func (s *Store) GetClientByID(ctx context.Context, id string) (*domain.Client, error) {
 	const q = `select ` + clientColumns + ` from "user".clients where id = $1`

@@ -19,6 +19,8 @@ import (
 	"github.com/RAF-SI-2025/Banka-3-Backend/pkg/sessionversion"
 	"github.com/RAF-SI-2025/Banka-3-Backend/pkg/shutdown"
 
+	bankpb "github.com/RAF-SI-2025/Banka-3-Backend/gen/proto/bank/v1"
+	exchangepb "github.com/RAF-SI-2025/Banka-3-Backend/gen/proto/exchange/v1"
 	userpb "github.com/RAF-SI-2025/Banka-3-Backend/gen/proto/user/v1"
 	"github.com/RAF-SI-2025/Banka-3-Backend/services/gateway/internal/auth"
 	"github.com/RAF-SI-2025/Banka-3-Backend/services/gateway/internal/clients"
@@ -26,8 +28,6 @@ import (
 
 	"github.com/grpc-ecosystem/grpc-gateway/v2/runtime"
 	"golang.org/x/sync/errgroup"
-	"google.golang.org/grpc"
-	"google.golang.org/grpc/credentials/insecure"
 	"google.golang.org/grpc/metadata"
 )
 
@@ -93,7 +93,20 @@ func Run() error {
 		}),
 	)
 	registerGW := func(ctx context.Context, mux *runtime.ServeMux) error {
-		return userpb.RegisterUserServiceHandler(ctx, mux, mustGRPCConn(cs.User))
+		if err := userpb.RegisterUserServiceHandler(ctx, mux, cs.UserConn); err != nil {
+			return err
+		}
+		if cs.BankConn != nil {
+			if err := bankpb.RegisterBankServiceHandler(ctx, mux, cs.BankConn); err != nil {
+				return err
+			}
+		}
+		if cs.ExchangeConn != nil {
+			if err := exchangepb.RegisterExchangeServiceHandler(ctx, mux, cs.ExchangeConn); err != nil {
+				return err
+			}
+		}
+		return nil
 	}
 	httpHandler, err := r.Mount(ctx, gwMux, registerGW)
 	if err != nil {
@@ -144,17 +157,3 @@ func Run() error {
 	return nil
 }
 
-// mustGRPCConn re-dials the user service for grpc-gateway. The runtime
-// expects a *grpc.ClientConn rather than the typed client interface.
-// Returning a fresh conn keeps the scoping clean (the typed client and
-// the gateway runtime each own their own connection).
-func mustGRPCConn(_ userpb.UserServiceClient) *grpc.ClientConn {
-	conn, err := grpc.NewClient(
-		config.MustString("USER_GRPC_ADDR"),
-		grpc.WithTransportCredentials(insecure.NewCredentials()),
-	)
-	if err != nil {
-		panic(fmt.Sprintf("redial user: %v", err))
-	}
-	return conn
-}

@@ -6,6 +6,7 @@ import (
 	"errors"
 	"fmt"
 
+	bankpb "github.com/RAF-SI-2025/Banka-3-Backend/gen/proto/bank/v1"
 	"github.com/RAF-SI-2025/Banka-3-Backend/pkg/config"
 	"github.com/RAF-SI-2025/Banka-3-Backend/pkg/grpcserver"
 	"github.com/RAF-SI-2025/Banka-3-Backend/pkg/logger"
@@ -13,6 +14,9 @@ import (
 	"github.com/RAF-SI-2025/Banka-3-Backend/pkg/probes"
 	pkgredis "github.com/RAF-SI-2025/Banka-3-Backend/pkg/redis"
 	"github.com/RAF-SI-2025/Banka-3-Backend/pkg/shutdown"
+	"github.com/RAF-SI-2025/Banka-3-Backend/services/bank/internal/server"
+	"github.com/RAF-SI-2025/Banka-3-Backend/services/bank/internal/service"
+	"github.com/RAF-SI-2025/Banka-3-Backend/services/bank/internal/store"
 	"google.golang.org/grpc"
 
 	"golang.org/x/sync/errgroup"
@@ -38,6 +42,19 @@ func Run() error {
 	}
 	defer rdb.Close()
 
+	st := store.New(pool)
+	svc := service.New(st, service.Config{
+		BankCode: config.String("BANK_CODE", "265"),
+		Branch:   config.String("BANK_BRANCH", "0001"),
+	}, log)
+
+	// Bring up the bank-owned house accounts before serving traffic so
+	// the FX flow can always look them up. Idempotent — only inserts
+	// missing currencies.
+	if err := svc.EnsureSystemAccounts(ctx); err != nil {
+		return fmt.Errorf("seed system accounts: %w", err)
+	}
+
 	probeSrv := probes.New(fmt.Sprintf(":%d", config.Int("PROBE_PORT", 8081)))
 	probeSrv.Register("postgres", func(ctx context.Context) error { return postgres.Ping(ctx, pool) })
 	probeSrv.Register("redis", func(ctx context.Context) error { return pkgredis.Ping(ctx, rdb) })
@@ -50,7 +67,7 @@ func Run() error {
 	})
 	g.Go(func() error {
 		return grpcserver.Run(gctx, log, grpcAddr, func(s *grpc.Server) {
-			// TODO: register UserService once celina 1 work begins
+			bankpb.RegisterBankServiceServer(s, server.New(svc))
 		})
 	})
 

@@ -147,6 +147,31 @@ func (s *Service) ConfirmPasswordReset(ctx context.Context, token, newPassword s
 	return nil
 }
 
+// sendInitialPasswordEmail mints a reset token and emails a welcome
+// link. Used when an employee creates a new Klijent (spec p.9): the
+// client doesn't get a "forgot password" message but a "set your
+// password" one. Mechanically identical to the reset flow — the token
+// goes through password_reset_tokens and the same /password-reset/confirm
+// page consumes it.
+func (s *Service) sendInitialPasswordEmail(ctx context.Context, kind domain.UserKind, userID, email, firstName string) error {
+	plaintext, hash, err := tokens.Generate(32)
+	if err != nil {
+		return err
+	}
+	if err := s.Store.CreatePasswordResetToken(ctx, kind, userID, hash, s.Clock.Now().Add(s.Cfg.ResetTTL)); err != nil {
+		return err
+	}
+	link := s.Cfg.WebBaseURL + "/password-reset/confirm?token=" + plaintext
+	subject := "Dobrodošli u Banku 3 – postavite lozinku"
+	body := "Poštovani " + firstName + ",\n\n" +
+		"vaš nalog u sistemu Banke 3 je kreiran. Da biste postavili lozinku i " +
+		"prvi put se prijavili, otvorite sledeći link u narednih 15 minuta:\n\n" +
+		link + "\n\n" +
+		"Ako niste očekivali ovu poruku, molimo kontaktirajte podršku.\n\n" +
+		"– Banka 3"
+	return s.Notifier.Send(ctx, email, subject, body, false)
+}
+
 func (s *Service) sendResetEmail(ctx context.Context, kind domain.UserKind, userID, email, firstName string) error {
 	plaintext, hash, err := tokens.Generate(32)
 	if err != nil {

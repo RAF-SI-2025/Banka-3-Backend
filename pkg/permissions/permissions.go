@@ -22,17 +22,52 @@ const (
 	PermissionGrant = "permission.grant"
 )
 
+// Celina 2 — basic banking. Companies, accounts, FX rates, payments.
+// (Card/payment/loan permissions append in subsequent slices.)
+const (
+	CompanyRead  = "company.read"
+	CompanyWrite = "company.write"
+
+	AccountRead  = "account.read"
+	AccountWrite = "account.write"
+
+	// ExchangeWrite gates upserting FX rates. Reads are open to any
+	// authenticated user (clients see the menjačnica board).
+	ExchangeWrite = "exchange.write"
+)
+
 // Role bundles. The spec frames users in terms of roles; the system
 // stores and checks permissions. These bundles are applied at user
 // creation; later admin actions can add or remove individual permissions.
 var (
-	RoleClientBasic    = []string{ClientRead}
-	RoleClientTrading  = append([]string{}, RoleClientBasic...) // c3 will append trading perms
+	// Clients see their own accounts and read FX rates. They don't have
+	// account.write — opening a new account is an employee action per
+	// spec p.11 ("Račun kreira Zaposleni").
+	RoleClientBasic   = []string{ClientRead, AccountRead}
+	RoleClientTrading = append([]string{}, RoleClientBasic...) // c3 will append trading perms
 
-	RoleEmployeeBasic      = []string{EmployeeRead, ClientRead, ClientWrite}
-	RoleEmployeeAgent      = append([]string{}, RoleEmployeeBasic...) // c3 appends actuary perms
-	RoleEmployeeSupervisor = append([]string{}, RoleEmployeeBasic...) // c3 appends actuary + supervisor perms
-	RoleEmployeeAdmin      = []string{Admin, EmployeeRead, EmployeeWrite, ClientRead, ClientWrite, PermissionGrant}
+	// Employees:
+	//   basic — read-only on people and accounts; legacy from c1.
+	//   agent — c2 day-to-day: opens accounts, creates clients, manages
+	//     companies. Cannot manage employees or grant permissions.
+	//   supervisor — agent + employee.read so they can see staff.
+	//   admin — everything.
+	RoleEmployeeBasic = []string{EmployeeRead, ClientRead, AccountRead, CompanyRead}
+	RoleEmployeeAgent = []string{
+		ClientRead, ClientWrite,
+		AccountRead, AccountWrite,
+		CompanyRead, CompanyWrite,
+	}
+	RoleEmployeeSupervisor = append([]string{EmployeeRead}, RoleEmployeeAgent...)
+	RoleEmployeeAdmin      = []string{
+		Admin,
+		EmployeeRead, EmployeeWrite,
+		ClientRead, ClientWrite,
+		CompanyRead, CompanyWrite,
+		AccountRead, AccountWrite,
+		ExchangeWrite,
+		PermissionGrant,
+	}
 )
 
 // Has reports whether the holder set contains target.

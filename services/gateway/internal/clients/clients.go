@@ -5,29 +5,61 @@ package clients
 import (
 	"fmt"
 
+	bankpb "github.com/RAF-SI-2025/Banka-3-Backend/gen/proto/bank/v1"
+	exchangepb "github.com/RAF-SI-2025/Banka-3-Backend/gen/proto/exchange/v1"
 	userpb "github.com/RAF-SI-2025/Banka-3-Backend/gen/proto/user/v1"
 
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials/insecure"
 )
 
-// Set bundles every upstream client. Add new fields as services come
-// online.
+// Set bundles every upstream client. Address-less services stay nil
+// so a single-celina dev stack doesn't need every backend running.
 type Set struct {
-	User userpb.UserServiceClient
+	User     userpb.UserServiceClient
+	Bank     bankpb.BankServiceClient
+	Exchange exchangepb.ExchangeServiceClient
+
+	UserConn     *grpc.ClientConn
+	BankConn     *grpc.ClientConn
+	ExchangeConn *grpc.ClientConn
 
 	conns []*grpc.ClientConn
 }
 
-// Dial connects to all upstream services. Caller defers Close().
+// Dial connects to every upstream service that has a non-empty
+// address. Caller defers Close().
 func Dial(addrs Addrs) (*Set, error) {
 	s := &Set{}
+
 	userConn, err := dial(addrs.User)
 	if err != nil {
 		return nil, fmt.Errorf("dial user: %w", err)
 	}
-	s.conns = append(s.conns, userConn)
+	s.UserConn = userConn
 	s.User = userpb.NewUserServiceClient(userConn)
+	s.conns = append(s.conns, userConn)
+
+	if addrs.Bank != "" {
+		c, err := dial(addrs.Bank)
+		if err != nil {
+			return nil, fmt.Errorf("dial bank: %w", err)
+		}
+		s.BankConn = c
+		s.Bank = bankpb.NewBankServiceClient(c)
+		s.conns = append(s.conns, c)
+	}
+
+	if addrs.Exchange != "" {
+		c, err := dial(addrs.Exchange)
+		if err != nil {
+			return nil, fmt.Errorf("dial exchange: %w", err)
+		}
+		s.ExchangeConn = c
+		s.Exchange = exchangepb.NewExchangeServiceClient(c)
+		s.conns = append(s.conns, c)
+	}
+
 	return s, nil
 }
 
