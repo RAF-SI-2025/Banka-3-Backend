@@ -3,22 +3,81 @@ syntax = "proto3";
 package banka.exchange.v1;
 
 import "google/api/annotations.proto";
+import "google/protobuf/timestamp.proto";
 
-// Skeleton service contract for the exchange service.
+// ExchangeService owns the FX rate feed (and later the stock-exchange
+// catalog + trading hours toggle in c3+).
 //
-// Owns the exchange catalog (NYSE, NASDAQ, ...), trading hours toggle,
-// FX rates feed. Used by bank for currency conversions and by trading
-// for listing context.
+// Slice 1 surface: ingest FX rates (admin), list current rates,
+// internal Quote RPC for the bank service.
+//
+// Spec edge case: every client-facing FX conversion goes RSD ↔ X using
+// the menjačnica formula with the *sell* side rate, twice through the
+// bank for cross-currency hops (EUR→USD = EUR→RSD→USD). Quote returns
+// both sides of the rate so the bank service can pick the right one.
 service ExchangeService {
-  rpc Health(HealthRequest) returns (HealthResponse) {
+  rpc UpsertRate(UpsertRateRequest) returns (Rate) {
     option (google.api.http) = {
-      get: "/api/v1/exchange/health"
+      put: "/api/v1/exchange/rates"
+      body: "*"
     };
   }
+
+  rpc ListRates(ListRatesRequest) returns (ListRatesResponse) {
+    option (google.api.http) = {
+      get: "/api/v1/exchange/rates"
+    };
+  }
+
+  // Quote returns the most recent rate for from→to. Internal: callers
+  // are expected to be other services, not end users. (External quotes
+  // come from ListRates so the FE can render the menjačnica board.)
+  rpc Quote(QuoteRequest) returns (Rate);
 }
 
-message HealthRequest {}
+enum Currency {
+  CURRENCY_UNSPECIFIED = 0;
+  CURRENCY_RSD         = 1;
+  CURRENCY_EUR         = 2;
+  CURRENCY_CHF         = 3;
+  CURRENCY_USD         = 4;
+  CURRENCY_GBP         = 5;
+  CURRENCY_JPY         = 6;
+  CURRENCY_CAD         = 7;
+  CURRENCY_AUD         = 8;
+}
 
-message HealthResponse {
-  string status = 1;
+// Rate is one row of the FX table. base/quote are decimal strings to
+// preserve precision. The pair is directional: from RSD to EUR is a
+// different row than from EUR to RSD. The menjačnica formula uses
+// (1 ± margin) on the mid; we store the resolved bid/ask so the bank
+// service doesn't need to know the spread policy.
+message Rate {
+  Currency from        = 1;
+  Currency to          = 2;
+  string   bid         = 3;  // bank buys X at this rate (sell-side for client)
+  string   ask         = 4;  // bank sells X at this rate (buy-side for client)
+  google.protobuf.Timestamp updated_at = 5;
+}
+
+message UpsertRateRequest {
+  Currency from = 1;
+  Currency to   = 2;
+  string   bid  = 3;
+  string   ask  = 4;
+}
+
+message ListRatesRequest {
+  // When set, only the rows for that base currency are returned (e.g.
+  // RSD → * for the menjačnica board).
+  Currency from = 1;
+}
+
+message ListRatesResponse {
+  repeated Rate rates = 1;
+}
+
+message QuoteRequest {
+  Currency from = 1;
+  Currency to   = 2;
 }

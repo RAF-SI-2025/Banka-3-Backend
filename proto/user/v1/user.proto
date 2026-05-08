@@ -129,6 +129,17 @@ service UserService {
   // Client management — employee-gated
   // -----------------------------------------------------------------
 
+  // CreateClient is the entry point used by the bank's account-creation
+  // flow (spec p.9 footnote: "Zaposleni kreira Klijenta prilikom
+  // kreiranja računa"). The activation email reuses the employee path:
+  // the new client gets a link to set their initial password.
+  rpc CreateClient(CreateClientRequest) returns (Client) {
+    option (google.api.http) = {
+      post: "/api/v1/clients"
+      body: "*"
+    };
+  }
+
   rpc ListClients(ListClientsRequest) returns (ListClientsResponse) {
     option (google.api.http) = {
       get: "/api/v1/clients"
@@ -341,6 +352,16 @@ message SetEmployeePermissionsRequest {
 // =====================================================================
 // Client messages
 // =====================================================================
+
+message CreateClientRequest {
+  string email         = 1;
+  string first_name    = 2;
+  string last_name     = 3;
+  string date_of_birth = 4;  // YYYY-MM-DD
+  Gender gender        = 5;
+  string phone         = 6;
+  string address       = 7;
+}
 
 message ListClientsRequest {
   string email_query = 1;

@@ -3,21 +3,287 @@ syntax = "proto3";
 package banka.bank.v1;
 
 import "google/api/annotations.proto";
+import "google/protobuf/empty.proto";
+import "google/protobuf/timestamp.proto";
 
-// Skeleton service contract for the bank service.
+// BankService owns the c2 banking entities: companies, accounts (and
+// later cards, payments, transfers, exchange, loans). The slice 1
+// surface here is companies + accounts (incl. system house accounts);
+// payment/card/loan RPCs land in subsequent slices.
 //
-// Owns accounts, companies, cards, payments, transfers, exchange, loans,
-// and the bank's own per-currency accounts. Celina 2 fills this in.
+// Public REST surface: every RPC with a google.api.http annotation is
+// exposed on the gateway at /api/v1/...
 service BankService {
-  rpc Health(HealthRequest) returns (HealthResponse) {
+  // -----------------------------------------------------------------
+  // Companies (Firma) — needed for poslovni accounts (spec p.14)
+  // -----------------------------------------------------------------
+
+  rpc CreateCompany(CreateCompanyRequest) returns (Company) {
     option (google.api.http) = {
-      get: "/api/v1/bank/health"
+      post: "/api/v1/companies"
+      body: "*"
     };
   }
+
+  rpc ListCompanies(ListCompaniesRequest) returns (ListCompaniesResponse) {
+    option (google.api.http) = {
+      get: "/api/v1/companies"
+    };
+  }
+
+  rpc GetCompany(GetCompanyRequest) returns (Company) {
+    option (google.api.http) = {
+      get: "/api/v1/companies/{id}"
+    };
+  }
+
+  rpc UpdateCompany(UpdateCompanyRequest) returns (Company) {
+    option (google.api.http) = {
+      patch: "/api/v1/companies/{id}"
+      body: "*"
+    };
+  }
+
+  // -----------------------------------------------------------------
+  // Accounts
+  // -----------------------------------------------------------------
+  //
+  // Spec p.11 "Kreiranje računa klijenta": the employee creates the
+  // account on behalf of a client, picking Tekući (RSD only) or Devizni
+  // (one of EUR/CHF/USD/GBP/JPY/CAD/AUD), Lični (with subtype) or
+  // Poslovni (linked to a Company). Optional opening balance and an
+  // "auto-create card" flag (handled by caller in slice 2+).
+
+  rpc CreateAccount(CreateAccountRequest) returns (Account) {
+    option (google.api.http) = {
+      post: "/api/v1/accounts"
+      body: "*"
+    };
+  }
+
+  rpc ListAccounts(ListAccountsRequest) returns (ListAccountsResponse) {
+    option (google.api.http) = {
+      get: "/api/v1/accounts"
+    };
+  }
+
+  rpc GetAccount(GetAccountRequest) returns (Account) {
+    option (google.api.http) = {
+      get: "/api/v1/accounts/{id}"
+    };
+  }
+
+  rpc UpdateAccountLimits(UpdateAccountLimitsRequest) returns (Account) {
+    option (google.api.http) = {
+      patch: "/api/v1/accounts/{id}/limits"
+      body: "*"
+    };
+  }
+
+  rpc SetAccountStatus(SetAccountStatusRequest) returns (Account) {
+    option (google.api.http) = {
+      post: "/api/v1/accounts/{id}/status"
+      body: "*"
+    };
+  }
+
+  // -----------------------------------------------------------------
+  // Internal RPCs (no HTTP annotation)
+  // -----------------------------------------------------------------
+
+  // GetSystemAccount returns the bank's own house account for a given
+  // currency. Used by exchange/payment code paths so all FX flows
+  // through bank-owned accounts (spec edge case: every FX conversion
+  // hops through the bank in RSD twice).
+  rpc GetSystemAccount(GetSystemAccountRequest) returns (Account);
 }
 
-message HealthRequest {}
+// =====================================================================
+// Enums
+// =====================================================================
 
-message HealthResponse {
-  string status = 1;
+enum Currency {
+  CURRENCY_UNSPECIFIED = 0;
+  CURRENCY_RSD         = 1;
+  CURRENCY_EUR         = 2;
+  CURRENCY_CHF         = 3;
+  CURRENCY_USD         = 4;
+  CURRENCY_GBP         = 5;
+  CURRENCY_JPY         = 6;
+  CURRENCY_CAD         = 7;
+  CURRENCY_AUD         = 8;
+}
+
+// AccountKind matches the trailing TT in the 18-digit account number.
+// See pkg/account.Type — values are kept in sync.
+enum AccountKind {
+  ACCOUNT_KIND_UNSPECIFIED            = 0;
+  ACCOUNT_KIND_PERSONAL_CHECKING_RSD  = 1; // lični tekući RSD (TT=10)
+  ACCOUNT_KIND_PERSONAL_FX            = 2; // lični devizni    (TT=20)
+  ACCOUNT_KIND_BUSINESS_CHECKING_RSD  = 3; // poslovni tekući  (TT=11)
+  ACCOUNT_KIND_BUSINESS_FX            = 4; // poslovni devizni (TT=21)
+  ACCOUNT_KIND_SYSTEM                 = 5; // bank-owned house (TT=99)
+}
+
+// AccountSubtype only applies to Lični Tekući RSD per spec p.12; the
+// other kinds leave it UNSPECIFIED. New subtypes append.
+enum AccountSubtype {
+  ACCOUNT_SUBTYPE_UNSPECIFIED  = 0;
+  ACCOUNT_SUBTYPE_STANDARD     = 1;
+  ACCOUNT_SUBTYPE_SAVINGS      = 2; // štedni
+  ACCOUNT_SUBTYPE_PENSIONER    = 3; // penzionerski
+  ACCOUNT_SUBTYPE_YOUTH        = 4; // za mlade
+  ACCOUNT_SUBTYPE_STUDENT      = 5; // za studente
+  ACCOUNT_SUBTYPE_UNEMPLOYED   = 6; // za nezaposlene
+
+  // Business subtypes (apply to Poslovni Tekući RSD).
+  ACCOUNT_SUBTYPE_DOO          = 10;
+  ACCOUNT_SUBTYPE_AD           = 11;
+  ACCOUNT_SUBTYPE_FOUNDATION   = 12; // fondacija
+}
+
+enum AccountStatus {
+  ACCOUNT_STATUS_UNSPECIFIED = 0;
+  ACCOUNT_STATUS_ACTIVE      = 1;
+  ACCOUNT_STATUS_INACTIVE    = 2;
+}
+
+// =====================================================================
+// Entities
+// =====================================================================
+
+message Company {
+  string id           = 1;
+  string name         = 2;  // Naziv firme
+  string registry_id  = 3;  // Matični broj firme
+  string tax_id       = 4;  // Poreski broj firme (PIB)
+  string activity_code = 5; // Šifra delatnosti (xx.xx)
+  string address      = 6;
+  string owner_client_id = 7; // Vlasnik (Klijent)
+
+  google.protobuf.Timestamp created_at = 8;
+  google.protobuf.Timestamp updated_at = 9;
+}
+
+// Account mirrors spec p.12-13 fields. Money is encoded as a decimal
+// string (e.g. "180.00") so we don't lose precision over JSON; the
+// bank service stores it as numeric(20,4).
+message Account {
+  string id                = 1;
+  string number            = 2;   // 18-digit account number
+  string name              = 3;   // Naziv računa
+  string owner_client_id   = 4;   // Klijent (always present)
+  string company_id        = 5;   // set when poslovni
+  string created_by_employee_id = 6;
+
+  AccountKind    kind     = 7;
+  AccountSubtype subtype  = 8;
+  Currency       currency = 9;
+  AccountStatus  status   = 10;
+
+  string balance           = 11;  // Stanje
+  string available_balance = 12;  // Raspoloživo stanje
+  string maintenance_fee   = 13;  // Održavanje računa (monthly)
+  string daily_limit       = 14;
+  string monthly_limit     = 15;
+  string daily_spent       = 16;
+  string monthly_spent     = 17;
+
+  google.protobuf.Timestamp created_at = 18;
+  google.protobuf.Timestamp expires_at = 19;
+  google.protobuf.Timestamp updated_at = 20;
+}
+
+// =====================================================================
+// Company messages
+// =====================================================================
+
+message CreateCompanyRequest {
+  string name           = 1;
+  string registry_id    = 2;
+  string tax_id         = 3;
+  string activity_code  = 4;
+  string address        = 5;
+  string owner_client_id = 6;
+}
+
+message ListCompaniesRequest {
+  string name_query        = 1;
+  string registry_id_query = 2;
+  int32  page              = 3;
+  int32  page_size         = 4;
+}
+
+message ListCompaniesResponse {
+  repeated Company companies = 1;
+  int32  page                = 2;
+  int32  page_size           = 3;
+  int64  total               = 4;
+}
+
+message GetCompanyRequest { string id = 1; }
+
+message UpdateCompanyRequest {
+  string id            = 1;
+  string name          = 2;  // empty = no change
+  string activity_code = 3;
+  string address       = 4;
+  string owner_client_id = 5;
+}
+
+// =====================================================================
+// Account messages
+// =====================================================================
+
+message CreateAccountRequest {
+  string         owner_client_id = 1;
+  string         company_id      = 2;  // required for ACCOUNT_KIND_BUSINESS_*
+  AccountKind    kind            = 3;
+  AccountSubtype subtype         = 4;  // required for personal RSD checking
+  Currency       currency        = 5;
+  string         name            = 6;  // optional friendly name
+  string         opening_balance = 7;  // decimal string; "0" if absent
+  // create_card: when true the bank service emits a CardCreated event
+  // for the cards module to act on. Slice 1 stores the flag and ignores
+  // it (cards land in slice 2).
+  bool           create_card     = 8;
+}
+
+message ListAccountsRequest {
+  // owner_client_id filters to accounts owned by a specific client.
+  // Clients see only their own; employees can pass any.
+  string         owner_client_id = 1;
+  AccountKind    kind            = 2;
+  Currency       currency        = 3;
+  AccountStatus  status          = 4;
+  int32          page            = 5;
+  int32          page_size       = 6;
+}
+
+message ListAccountsResponse {
+  repeated Account accounts = 1;
+  int32  page               = 2;
+  int32  page_size          = 3;
+  int64  total              = 4;
+}
+
+message GetAccountRequest { string id = 1; }
+
+message UpdateAccountLimitsRequest {
+  string id            = 1;
+  string daily_limit   = 2;  // decimal string; empty = no change
+  string monthly_limit = 3;
+}
+
+message SetAccountStatusRequest {
+  string        id     = 1;
+  AccountStatus status = 2;
+}
+
+// =====================================================================
+// Internal messages
+// =====================================================================
+
+message GetSystemAccountRequest {
+  Currency currency = 1;
 }
