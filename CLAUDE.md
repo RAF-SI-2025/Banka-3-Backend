@@ -237,6 +237,13 @@ This branch is a scaffold. Working out from here, in order:
 - **Reset token TTL**: 15min (per spec).
 - **Lockout policy**: out of scope for c1 (spec marks it
   "za nadogradnju"). Track failed attempts in Redis if added later.
+- **Notification service in c1**: deferred. The user service uses
+  `pkg/email` directly so activation/reset emails work end-to-end. The
+  standalone notification service stays a stub until c2, when it gains
+  blocked-card / failed-installment / OTC counter-offer events worth
+  centralizing. When wired, the swap is local to `services/user/internal/app`
+  (replace `notifierAdapter` with a notification gRPC client; service
+  layer doesn't change).
 
 Each celina's spec edge cases are documented in the top-level
 `/home/user/si/CLAUDE.md`. Re-read before starting work in that area.
