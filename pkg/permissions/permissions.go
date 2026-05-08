@@ -47,6 +47,13 @@ const (
 	// behaviour is enforced in the service layer, not by perm split).
 	CardRead  = "card.read"
 	CardWrite = "card.write"
+
+	// LoanRead/LoanWrite gate loan operations. Clients can submit
+	// requests and read their own loans (LoanRead+LoanWrite for their
+	// own row); employees with LoanWrite approve/reject and run the
+	// installment / variable-rate jobs.
+	LoanRead  = "loan.read"
+	LoanWrite = "loan.write"
 )
 
 // Role bundles. The spec frames users in terms of roles; the system
@@ -57,7 +64,7 @@ var (
 	// own cards, and initiate payments. They don't have account.write
 	// — opening a new account is an employee action per spec p.11
 	// ("Račun kreira Zaposleni").
-	RoleClientBasic   = []string{ClientRead, AccountRead, CardRead, CardWrite, PaymentWrite}
+	RoleClientBasic   = []string{ClientRead, AccountRead, CardRead, CardWrite, PaymentWrite, LoanRead, LoanWrite}
 	RoleClientTrading = append([]string{}, RoleClientBasic...) // c3 will append trading perms
 
 	// Employees:
@@ -67,12 +74,13 @@ var (
 	//     grant permissions.
 	//   supervisor — agent + employee.read so they can see staff.
 	//   admin — everything.
-	RoleEmployeeBasic = []string{EmployeeRead, ClientRead, AccountRead, CompanyRead, CardRead}
+	RoleEmployeeBasic = []string{EmployeeRead, ClientRead, AccountRead, CompanyRead, CardRead, LoanRead}
 	RoleEmployeeAgent = []string{
 		ClientRead, ClientWrite,
 		AccountRead, AccountWrite,
 		CompanyRead, CompanyWrite,
 		CardRead, CardWrite,
+		LoanRead, LoanWrite,
 	}
 	RoleEmployeeSupervisor = append([]string{EmployeeRead}, RoleEmployeeAgent...)
 	RoleEmployeeAdmin      = []string{
@@ -82,6 +90,7 @@ var (
 		CompanyRead, CompanyWrite,
 		AccountRead, AccountWrite,
 		CardRead, CardWrite,
+		LoanRead, LoanWrite,
 		PaymentWrite,
 		ExchangeWrite,
 		PermissionGrant,

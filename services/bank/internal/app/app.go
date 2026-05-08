@@ -5,6 +5,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"time"
 
 	bankpb "github.com/RAF-SI-2025/Banka-3-Backend/gen/proto/bank/v1"
 	exchangepb "github.com/RAF-SI-2025/Banka-3-Backend/gen/proto/exchange/v1"
@@ -69,6 +70,9 @@ func Run() error {
 		return fmt.Errorf("seed system accounts: %w", err)
 	}
 
+	installmentInterval := config.Duration("INSTALLMENT_JOB_INTERVAL", 24*time.Hour)
+	variableRateInterval := config.Duration("VARIABLE_RATE_JOB_INTERVAL", 30*24*time.Hour)
+
 	probeSrv := probes.New(fmt.Sprintf(":%d", config.Int("PROBE_PORT", 8081)))
 	probeSrv.Register("postgres", func(ctx context.Context) error { return postgres.Ping(ctx, pool) })
 	probeSrv.Register("redis", func(ctx context.Context) error { return pkgredis.Ping(ctx, rdb) })
@@ -84,6 +88,16 @@ func Run() error {
 			bankpb.RegisterBankServiceServer(s, server.New(svc))
 		})
 	})
+
+	// Background jobs: daily installment collection + monthly variable-
+	// rate refresh. Both are bypassed (interval == 0) by default in
+	// tests; configure via INSTALLMENT_JOB_INTERVAL / VARIABLE_RATE_JOB_INTERVAL.
+	if installmentInterval > 0 {
+		g.Go(func() error { return runJobLoop(gctx, log, "installments", installmentInterval, svc.RunInstallmentJobAuto) })
+	}
+	if variableRateInterval > 0 {
+		g.Go(func() error { return runJobLoop(gctx, log, "variable-rate", variableRateInterval, svc.RunVariableRateJobAuto) })
+	}
 
 	probeSrv.MarkReady()
 	log.Info("bank service ready", "grpc", grpcAddr)

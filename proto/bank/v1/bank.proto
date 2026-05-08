@@ -207,6 +207,58 @@ service BankService {
       get: "/api/v1/authorized-persons"
     };
   }
+
+  // -----------------------------------------------------------------
+  // Krediti — loan requests and active loans
+  // -----------------------------------------------------------------
+
+  rpc SubmitLoanRequest(SubmitLoanRequestRequest) returns (LoanRequest) {
+    option (google.api.http) = {
+      post: "/api/v1/loan-requests"
+      body: "*"
+    };
+  }
+  rpc ListLoanRequests(ListLoanRequestsRequest) returns (ListLoanRequestsResponse) {
+    option (google.api.http) = {
+      get: "/api/v1/loan-requests"
+    };
+  }
+  rpc DecideLoanRequest(DecideLoanRequestRequest) returns (LoanRequest) {
+    option (google.api.http) = {
+      post: "/api/v1/loan-requests/{id}/decide"
+      body: "*"
+    };
+  }
+
+  rpc ListLoans(ListLoansRequest) returns (ListLoansResponse) {
+    option (google.api.http) = {
+      get: "/api/v1/loans"
+    };
+  }
+  rpc GetLoan(GetLoanRequest) returns (LoanWithInstallments) {
+    option (google.api.http) = {
+      get: "/api/v1/loans/{id}"
+    };
+  }
+
+  // RunInstallmentJob debits any installments that are due today.
+  // Normally driven by the daily cron; exposed as an RPC so tests and
+  // ops can fire it on demand. Admin-only.
+  rpc RunInstallmentJob(RunInstallmentJobRequest) returns (RunInstallmentJobResponse) {
+    option (google.api.http) = {
+      post: "/api/v1/loans/run-installment-job"
+      body: "*"
+    };
+  }
+
+  // RunVariableRateJob refreshes the random pomeraj for every active
+  // variable-rate loan and recomputes its installment amount. Admin-only.
+  rpc RunVariableRateJob(RunVariableRateJobRequest) returns (RunVariableRateJobResponse) {
+    option (google.api.http) = {
+      post: "/api/v1/loans/run-variable-rate-job"
+      body: "*"
+    };
+  }
 }
 
 // =====================================================================
@@ -633,4 +685,186 @@ message ListAuthorizedPersonsRequest {
 
 message ListAuthorizedPersonsResponse {
   repeated AuthorizedPerson authorized_persons = 1;
+}
+
+// =====================================================================
+// Loans (krediti)
+// =====================================================================
+
+enum LoanType {
+  LOAN_TYPE_UNSPECIFIED = 0;
+  LOAN_TYPE_CASH        = 1; // gotovinski / keš
+  LOAN_TYPE_HOUSING     = 2; // stambeni
+  LOAN_TYPE_AUTO        = 3; // auto
+  LOAN_TYPE_REFINANCE   = 4; // refinansirajući
+  LOAN_TYPE_STUDENT     = 5; // studentski
+}
+
+enum InterestType {
+  INTEREST_TYPE_UNSPECIFIED = 0;
+  INTEREST_TYPE_FIXED       = 1;
+  INTEREST_TYPE_VARIABLE    = 2;
+}
+
+enum EmploymentStatus {
+  EMPLOYMENT_STATUS_UNSPECIFIED = 0;
+  EMPLOYMENT_STATUS_PERMANENT   = 1;
+  EMPLOYMENT_STATUS_TEMPORARY   = 2;
+  EMPLOYMENT_STATUS_UNEMPLOYED  = 3;
+}
+
+enum LoanRequestStatus {
+  LOAN_REQUEST_STATUS_UNSPECIFIED = 0;
+  LOAN_REQUEST_STATUS_PENDING     = 1;
+  LOAN_REQUEST_STATUS_APPROVED    = 2;
+  LOAN_REQUEST_STATUS_REJECTED    = 3;
+}
+
+enum LoanStatus {
+  LOAN_STATUS_UNSPECIFIED = 0;
+  LOAN_STATUS_APPROVED    = 1;
+  LOAN_STATUS_REJECTED    = 2;
+  LOAN_STATUS_PAID_OFF    = 3;
+  LOAN_STATUS_OVERDUE     = 4;
+}
+
+enum InstallmentStatus {
+  INSTALLMENT_STATUS_UNSPECIFIED = 0;
+  INSTALLMENT_STATUS_PAID        = 1;
+  INSTALLMENT_STATUS_UNPAID      = 2;
+  INSTALLMENT_STATUS_OVERDUE     = 3;
+}
+
+message LoanRequest {
+  string            id                       = 1;
+  string            client_id                = 2;
+  string            account_id               = 3;
+  LoanType          loan_type                = 4;
+  InterestType      interest_type            = 5;
+  string            amount                   = 6;
+  Currency          currency                 = 7;
+  string            purpose                  = 8;
+  string            monthly_salary           = 9;
+  EmploymentStatus  employment_status        = 10;
+  int32             employment_duration_months = 11;
+  int32             installments_total       = 12;
+  string            contact_phone            = 13;
+  LoanRequestStatus status                   = 14;
+  string            rejection_reason         = 15;
+  google.protobuf.Timestamp decided_at       = 16;
+  string            decided_by_employee_id   = 17;
+  google.protobuf.Timestamp created_at       = 18;
+}
+
+message Loan {
+  string       id                       = 1;
+  string       loan_number              = 2;
+  string       request_id               = 3;
+  string       client_id                = 4;
+  string       account_id               = 5;
+  LoanType     loan_type                = 6;
+  InterestType interest_type            = 7;
+  string       principal                = 8;
+  Currency     currency                 = 9;
+  string       base_rate                = 10; // annual %, decimal string
+  string       margin                   = 11;
+  string       current_offset           = 12;
+  // effective_rate is base + offset + margin (annual %).
+  string       effective_rate           = 13;
+  int32        installments_total       = 14;
+  string       installment_amount       = 15;
+  string       remaining_principal      = 16;
+  string       next_installment_date    = 17; // YYYY-MM-DD
+  string       next_installment_amount  = 18;
+  LoanStatus   status                   = 19;
+  google.protobuf.Timestamp contracted_at = 20;
+  string       matures_at               = 21; // YYYY-MM-DD
+}
+
+message LoanInstallment {
+  string             id                   = 1;
+  string             loan_id              = 2;
+  int32              sequence_number      = 3;
+  string             amount               = 4;
+  string             interest_rate_at_due = 5; // annual %
+  Currency           currency             = 6;
+  string             expected_due_date    = 7; // YYYY-MM-DD
+  google.protobuf.Timestamp actual_paid_at = 8;
+  InstallmentStatus  status               = 9;
+}
+
+message LoanWithInstallments {
+  Loan                       loan         = 1;
+  repeated LoanInstallment   installments = 2;
+}
+
+message SubmitLoanRequestRequest {
+  string            account_id               = 1;
+  LoanType          loan_type                = 2;
+  InterestType      interest_type            = 3;
+  string            amount                   = 4;
+  Currency          currency                 = 5;
+  string            purpose                  = 6;
+  string            monthly_salary           = 7;
+  EmploymentStatus  employment_status        = 8;
+  int32             employment_duration_months = 9;
+  int32             installments_total       = 10;
+  string            contact_phone            = 11;
+}
+
+message ListLoanRequestsRequest {
+  LoanRequestStatus status     = 1;
+  LoanType          loan_type  = 2;
+  string            account_id = 3;
+  int32             page       = 4;
+  int32             page_size  = 5;
+}
+
+message ListLoanRequestsResponse {
+  repeated LoanRequest requests = 1;
+  int32 page      = 2;
+  int32 page_size = 3;
+  int64 total     = 4;
+}
+
+message DecideLoanRequestRequest {
+  string id       = 1;
+  bool   approve  = 2;
+  string reason   = 3; // when approve=false
+}
+
+message ListLoansRequest {
+  string     client_id  = 1;
+  string     account_id = 2;
+  LoanType   loan_type  = 3;
+  LoanStatus status     = 4;
+  int32      page       = 5;
+  int32      page_size  = 6;
+}
+
+message ListLoansResponse {
+  repeated Loan loans = 1;
+  int32 page      = 2;
+  int32 page_size = 3;
+  int64 total     = 4;
+}
+
+message GetLoanRequest { string id = 1; }
+
+message RunInstallmentJobRequest {
+  // due_on lets the caller process a specific date (YYYY-MM-DD) for
+  // testing. Empty → today.
+  string due_on = 1;
+}
+
+message RunInstallmentJobResponse {
+  int32 processed = 1;
+  int32 paid      = 2;
+  int32 overdue   = 3;
+}
+
+message RunVariableRateJobRequest {}
+
+message RunVariableRateJobResponse {
+  int32 updated = 1;
 }

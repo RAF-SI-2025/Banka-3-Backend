@@ -55,11 +55,11 @@ func TestRoleBundlesContent(t *testing.T) {
 		bundle []string
 		want   []string
 	}{
-		{"client-basic", RoleClientBasic, []string{ClientRead, AccountRead, CardRead, CardWrite, PaymentWrite}},
-		{"employee-basic", RoleEmployeeBasic, []string{EmployeeRead, ClientRead, AccountRead, CompanyRead, CardRead}},
-		{"employee-agent", RoleEmployeeAgent, []string{ClientRead, ClientWrite, AccountRead, AccountWrite, CompanyRead, CompanyWrite, CardRead, CardWrite}},
-		{"employee-supervisor", RoleEmployeeSupervisor, []string{EmployeeRead, ClientRead, ClientWrite, AccountRead, AccountWrite, CompanyRead, CompanyWrite, CardRead, CardWrite}},
-		{"employee-admin", RoleEmployeeAdmin, []string{Admin, EmployeeRead, EmployeeWrite, ClientRead, ClientWrite, CompanyRead, CompanyWrite, AccountRead, AccountWrite, CardRead, CardWrite, PaymentWrite, ExchangeWrite, PermissionGrant}},
+		{"client-basic", RoleClientBasic, []string{ClientRead, AccountRead, CardRead, CardWrite, PaymentWrite, LoanRead, LoanWrite}},
+		{"employee-basic", RoleEmployeeBasic, []string{EmployeeRead, ClientRead, AccountRead, CompanyRead, CardRead, LoanRead}},
+		{"employee-agent", RoleEmployeeAgent, []string{ClientRead, ClientWrite, AccountRead, AccountWrite, CompanyRead, CompanyWrite, CardRead, CardWrite, LoanRead, LoanWrite}},
+		{"employee-supervisor", RoleEmployeeSupervisor, []string{EmployeeRead, ClientRead, ClientWrite, AccountRead, AccountWrite, CompanyRead, CompanyWrite, CardRead, CardWrite, LoanRead, LoanWrite}},
+		{"employee-admin", RoleEmployeeAdmin, []string{Admin, EmployeeRead, EmployeeWrite, ClientRead, ClientWrite, CompanyRead, CompanyWrite, AccountRead, AccountWrite, CardRead, CardWrite, LoanRead, LoanWrite, PaymentWrite, ExchangeWrite, PermissionGrant}},
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
