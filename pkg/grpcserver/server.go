@@ -1,5 +1,6 @@
-// Package grpcserver wraps grpc.Server with sensible defaults: stderr
-// recovery, slog request logging, and graceful shutdown on context cancel.
+// Package grpcserver wraps grpc.Server with sensible defaults: panic
+// recovery, slog request logging, apperr → gRPC status mapping, and
+// graceful shutdown on context cancel.
 package grpcserver
 
 import (
@@ -10,6 +11,7 @@ import (
 	"runtime/debug"
 	"time"
 
+	"github.com/RAF-SI-2025/Banka-3-Backend/pkg/apperr"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
@@ -29,6 +31,7 @@ func Run(ctx context.Context, log *slog.Logger, addr string, register func(*grpc
 		grpc.ChainUnaryInterceptor(
 			recoveryInterceptor(log),
 			loggingInterceptor(log),
+			errorMapInterceptor(),
 		),
 	)
 	register(srv)
@@ -88,6 +91,16 @@ func loggingInterceptor(log *slog.Logger) grpc.UnaryServerInterceptor {
 			slog.String("code", status.Code(err).String()),
 		)
 		return resp, err
+	}
+}
+
+// errorMapInterceptor sits closest to the handler so apperr values are
+// translated to gRPC status before any outer interceptor (logging, etc.)
+// observes the result.
+func errorMapInterceptor() grpc.UnaryServerInterceptor {
+	return func(ctx context.Context, req any, info *grpc.UnaryServerInfo, handler grpc.UnaryHandler) (any, error) {
+		resp, err := handler(ctx, req, info)
+		return resp, apperr.ToGRPC(err)
 	}
 }
 
