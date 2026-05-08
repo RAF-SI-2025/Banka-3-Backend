@@ -1,0 +1,23 @@
+.env
+.envrc.local
+*.local
+
+# Go build artifacts
+/bin/
+/dist/
+*.test
+*.out
+coverage.*
+
+# Generated proto stubs
+/gen/
+
+# Editor / OS
+.DS_Store
+.idea/
+.vscode/
+*.swp
+
+# Nix
+/result
+/.direnv/

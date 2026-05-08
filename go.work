@@ -1,0 +1,11 @@
+go 1.25
+
+use (
+	./pkg
+	./services/bank
+	./services/exchange
+	./services/gateway
+	./services/notification
+	./services/trading
+	./services/user
+)

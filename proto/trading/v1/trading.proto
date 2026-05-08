@@ -1,0 +1,23 @@
+syntax = "proto3";
+
+package banka.trading.v1;
+
+import "google/api/annotations.proto";
+
+// Skeleton service contract for the trading service.
+//
+// Owns listings, orders, portfolio, OTC, investment funds, capital-gains
+// tax, and the SAGA orchestrator. Celine 3-5 fill this in.
+service TradingService {
+  rpc Health(HealthRequest) returns (HealthResponse) {
+    option (google.api.http) = {
+      get: "/api/v1/trading/health"
+    };
+  }
+}
+
+message HealthRequest {}
+
+message HealthResponse {
+  string status = 1;
+}

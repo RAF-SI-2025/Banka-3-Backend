@@ -1,0 +1,23 @@
+syntax = "proto3";
+
+package banka.bank.v1;
+
+import "google/api/annotations.proto";
+
+// Skeleton service contract for the bank service.
+//
+// Owns accounts, companies, cards, payments, transfers, exchange, loans,
+// and the bank's own per-currency accounts. Celina 2 fills this in.
+service BankService {
+  rpc Health(HealthRequest) returns (HealthResponse) {
+    option (google.api.http) = {
+      get: "/api/v1/bank/health"
+    };
+  }
+}
+
+message HealthRequest {}
+
+message HealthResponse {
+  string status = 1;
+}

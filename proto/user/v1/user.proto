@@ -1,0 +1,28 @@
+syntax = "proto3";
+
+package banka.user.v1;
+
+import "google/api/annotations.proto";
+import "buf/validate/validate.proto";
+
+// Skeleton service contract for the user service.
+//
+// Real RPCs land here as celina 1 work begins:
+//   - Authentication (Login, Refresh, Logout)
+//   - Account activation + password reset
+//   - Employee CRUD (admin-gated)
+//   - Client CRUD (employee-gated)
+//   - Permission management
+service UserService {
+  rpc Health(HealthRequest) returns (HealthResponse) {
+    option (google.api.http) = {
+      get: "/api/v1/user/health"
+    };
+  }
+}
+
+message HealthRequest {}
+
+message HealthResponse {
+  string status = 1;
+}

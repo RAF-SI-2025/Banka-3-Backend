@@ -1,0 +1,18 @@
+syntax = "proto3";
+
+package banka.notification.v1;
+
+// Skeleton service contract for the notification service.
+//
+// Sends emails (account activation, blocked card, late installment,
+// OTC counter-offer, transaction confirmation). Internal-only — not
+// exposed via the gateway.
+service NotificationService {
+  rpc Health(HealthRequest) returns (HealthResponse);
+}
+
+message HealthRequest {}
+
+message HealthResponse {
+  string status = 1;
+}

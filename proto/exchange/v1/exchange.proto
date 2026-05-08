@@ -1,0 +1,24 @@
+syntax = "proto3";
+
+package banka.exchange.v1;
+
+import "google/api/annotations.proto";
+
+// Skeleton service contract for the exchange service.
+//
+// Owns the exchange catalog (NYSE, NASDAQ, ...), trading hours toggle,
+// FX rates feed. Used by bank for currency conversions and by trading
+// for listing context.
+service ExchangeService {
+  rpc Health(HealthRequest) returns (HealthResponse) {
+    option (google.api.http) = {
+      get: "/api/v1/exchange/health"
+    };
+  }
+}
+
+message HealthRequest {}
+
+message HealthResponse {
+  string status = 1;
+}
