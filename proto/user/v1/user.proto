@@ -3,26 +3,380 @@ syntax = "proto3";
 package banka.user.v1;
 
 import "google/api/annotations.proto";
-import "buf/validate/validate.proto";
+import "google/protobuf/timestamp.proto";
+import "google/protobuf/empty.proto";
 
-// Skeleton service contract for the user service.
+// UserService owns authentication, employees, clients, and permissions.
 //
-// Real RPCs land here as celina 1 work begins:
-//   - Authentication (Login, Refresh, Logout)
-//   - Account activation + password reset
-//   - Employee CRUD (admin-gated)
-//   - Client CRUD (employee-gated)
-//   - Permission management
+// Public REST surface: every RPC with a google.api.http annotation is
+// exposed on the gateway at /api/v1/...
+//
+// Internal RPCs (no annotation) are reachable only inside the cluster
+// from other services or the gateway middleware.
 service UserService {
-  rpc Health(HealthRequest) returns (HealthResponse) {
+  // -----------------------------------------------------------------
+  // Authentication
+  // -----------------------------------------------------------------
+
+  rpc Login(LoginRequest) returns (LoginResponse) {
     option (google.api.http) = {
-      get: "/api/v1/user/health"
+      post: "/api/v1/auth/login"
+      body: "*"
     };
+  }
+
+  rpc Refresh(RefreshRequest) returns (RefreshResponse) {
+    option (google.api.http) = {
+      post: "/api/v1/auth/refresh"
+      body: "*"
+    };
+  }
+
+  rpc Logout(LogoutRequest) returns (google.protobuf.Empty) {
+    option (google.api.http) = {
+      post: "/api/v1/auth/logout"
+      body: "*"
+    };
+  }
+
+  rpc Me(google.protobuf.Empty) returns (MeResponse) {
+    option (google.api.http) = {
+      get: "/api/v1/auth/me"
+    };
+  }
+
+  // -----------------------------------------------------------------
+  // Account activation (after admin creates the employee)
+  // -----------------------------------------------------------------
+
+  rpc ActivateAccount(ActivateAccountRequest) returns (google.protobuf.Empty) {
+    option (google.api.http) = {
+      post: "/api/v1/auth/activate"
+      body: "*"
+    };
+  }
+
+  rpc ResendActivation(ResendActivationRequest) returns (google.protobuf.Empty) {
+    option (google.api.http) = {
+      post: "/api/v1/auth/activate/resend"
+      body: "*"
+    };
+  }
+
+  // -----------------------------------------------------------------
+  // Password reset
+  // -----------------------------------------------------------------
+
+  rpc RequestPasswordReset(RequestPasswordResetRequest) returns (google.protobuf.Empty) {
+    option (google.api.http) = {
+      post: "/api/v1/auth/password-reset/request"
+      body: "*"
+    };
+  }
+
+  rpc ConfirmPasswordReset(ConfirmPasswordResetRequest) returns (google.protobuf.Empty) {
+    option (google.api.http) = {
+      post: "/api/v1/auth/password-reset/confirm"
+      body: "*"
+    };
+  }
+
+  // -----------------------------------------------------------------
+  // Employee portal — admin only
+  // -----------------------------------------------------------------
+
+  rpc CreateEmployee(CreateEmployeeRequest) returns (Employee) {
+    option (google.api.http) = {
+      post: "/api/v1/employees"
+      body: "*"
+    };
+  }
+
+  rpc ListEmployees(ListEmployeesRequest) returns (ListEmployeesResponse) {
+    option (google.api.http) = {
+      get: "/api/v1/employees"
+    };
+  }
+
+  rpc GetEmployee(GetEmployeeRequest) returns (Employee) {
+    option (google.api.http) = {
+      get: "/api/v1/employees/{id}"
+    };
+  }
+
+  rpc UpdateEmployee(UpdateEmployeeRequest) returns (Employee) {
+    option (google.api.http) = {
+      patch: "/api/v1/employees/{id}"
+      body: "*"
+    };
+  }
+
+  rpc SetEmployeeActive(SetEmployeeActiveRequest) returns (Employee) {
+    option (google.api.http) = {
+      post: "/api/v1/employees/{id}/active"
+      body: "*"
+    };
+  }
+
+  rpc SetEmployeePermissions(SetEmployeePermissionsRequest) returns (Employee) {
+    option (google.api.http) = {
+      put: "/api/v1/employees/{id}/permissions"
+      body: "*"
+    };
+  }
+
+  // -----------------------------------------------------------------
+  // Client management — employee-gated
+  // -----------------------------------------------------------------
+
+  rpc ListClients(ListClientsRequest) returns (ListClientsResponse) {
+    option (google.api.http) = {
+      get: "/api/v1/clients"
+    };
+  }
+
+  rpc GetClient(GetClientRequest) returns (Client) {
+    option (google.api.http) = {
+      get: "/api/v1/clients/{id}"
+    };
+  }
+
+  rpc UpdateClient(UpdateClientRequest) returns (Client) {
+    option (google.api.http) = {
+      patch: "/api/v1/clients/{id}"
+      body: "*"
+    };
+  }
+
+  // -----------------------------------------------------------------
+  // Internal RPCs (no HTTP annotation, gateway-only)
+  // -----------------------------------------------------------------
+
+  // GetSessionVersion is called by the gateway on JWT verification when
+  // the cached session_version for a user is missing.
+  rpc GetSessionVersion(GetSessionVersionRequest) returns (GetSessionVersionResponse);
+}
+
+// =====================================================================
+// Entities
+// =====================================================================
+
+enum UserKind {
+  USER_KIND_UNSPECIFIED = 0;
+  USER_KIND_EMPLOYEE    = 1;
+  USER_KIND_CLIENT      = 2;
+}
+
+enum Gender {
+  GENDER_UNSPECIFIED = 0;
+  GENDER_MALE        = 1;
+  GENDER_FEMALE      = 2;
+  GENDER_OTHER       = 3;
+}
+
+message Employee {
+  string id            = 1;
+  string email         = 2;
+  string username      = 3;
+  string first_name    = 4;
+  string last_name     = 5;
+  string date_of_birth = 6;  // YYYY-MM-DD
+  Gender gender        = 7;
+  string phone         = 8;
+  string address       = 9;
+  string position      = 10;
+  string department    = 11;
+  bool   active        = 12;
+  bool   activated     = 13;  // false until employee sets initial password
+  repeated string permissions = 14;
+  google.protobuf.Timestamp created_at = 15;
+  google.protobuf.Timestamp updated_at = 16;
+}
+
+message Client {
+  string id            = 1;
+  string email         = 2;
+  string first_name    = 3;
+  string last_name     = 4;
+  string date_of_birth = 5;
+  Gender gender        = 6;
+  string phone         = 7;
+  string address       = 8;
+  bool   active        = 9;
+  repeated string permissions = 10;
+  google.protobuf.Timestamp created_at = 11;
+  google.protobuf.Timestamp updated_at = 12;
+}
+
+// =====================================================================
+// Auth messages
+// =====================================================================
+
+message LoginRequest {
+  string email    = 1;
+  string password = 2;
+}
+
+message LoginResponse {
+  string   access_token       = 1;
+  string   refresh_token      = 2;
+  int64    access_expires_in  = 3;  // seconds
+  int64    refresh_expires_in = 4;
+  UserKind user_kind          = 5;
+  string   user_id            = 6;
+  repeated string permissions = 7;
+}
+
+message RefreshRequest {
+  string refresh_token = 1;
+}
+
+message RefreshResponse {
+  string access_token       = 1;
+  string refresh_token      = 2;
+  int64  access_expires_in  = 3;
+  int64  refresh_expires_in = 4;
+}
+
+message LogoutRequest {
+  string refresh_token = 1;
+}
+
+message MeResponse {
+  oneof user {
+    Employee employee = 1;
+    Client   client   = 2;
   }
 }
 
-message HealthRequest {}
+// =====================================================================
+// Activation / reset messages
+// =====================================================================
 
-message HealthResponse {
-  string status = 1;
+message ActivateAccountRequest {
+  string token        = 1;
+  string new_password = 2;
+}
+
+message ResendActivationRequest {
+  string employee_id = 1;
+}
+
+message RequestPasswordResetRequest {
+  string email = 1;
+}
+
+message ConfirmPasswordResetRequest {
+  string token        = 1;
+  string new_password = 2;
+}
+
+// =====================================================================
+// Employee management messages
+// =====================================================================
+
+message CreateEmployeeRequest {
+  string email         = 1;
+  string username      = 2;
+  string first_name    = 3;
+  string last_name     = 4;
+  string date_of_birth = 5;
+  Gender gender        = 6;
+  string phone         = 7;
+  string address       = 8;
+  string position      = 9;
+  string department    = 10;
+  bool   active        = 11;  // default true if unset
+  // Initial role bundle, applied as a permission set; later admin
+  // actions can amend via SetEmployeePermissions.
+  string role          = 12;  // "admin" | "supervisor" | "agent" | "basic"
+}
+
+message ListEmployeesRequest {
+  string email_query    = 1;
+  string name_query     = 2;
+  string position_query = 3;
+  int32  page           = 4;  // 1-indexed; 0 → 1
+  int32  page_size      = 5;  // default 50, max 200
+}
+
+message ListEmployeesResponse {
+  repeated Employee employees = 1;
+  int32  page                 = 2;
+  int32  page_size            = 3;
+  int64  total                = 4;
+}
+
+message GetEmployeeRequest {
+  string id = 1;
+}
+
+message UpdateEmployeeRequest {
+  string id            = 1;
+  string email         = 2;  // empty = no change
+  string username      = 3;
+  string first_name    = 4;
+  string last_name     = 5;
+  string date_of_birth = 6;
+  Gender gender        = 7;
+  string phone         = 8;
+  string address       = 9;
+  string position      = 10;
+  string department    = 11;
+}
+
+message SetEmployeeActiveRequest {
+  string id     = 1;
+  bool   active = 2;
+}
+
+message SetEmployeePermissionsRequest {
+  string id                  = 1;
+  repeated string permissions = 2;
+}
+
+// =====================================================================
+// Client messages
+// =====================================================================
+
+message ListClientsRequest {
+  string email_query = 1;
+  string name_query  = 2;
+  int32  page        = 3;
+  int32  page_size   = 4;
+}
+
+message ListClientsResponse {
+  repeated Client clients = 1;
+  int32  page             = 2;
+  int32  page_size        = 3;
+  int64  total            = 4;
+}
+
+message GetClientRequest {
+  string id = 1;
+}
+
+message UpdateClientRequest {
+  string id            = 1;
+  string email         = 2;
+  string first_name    = 3;
+  string last_name     = 4;
+  string date_of_birth = 5;
+  Gender gender        = 6;
+  string phone         = 7;
+  string address       = 8;
+}
+
+// =====================================================================
+// Internal RPC messages
+// =====================================================================
+
+message GetSessionVersionRequest {
+  UserKind user_kind = 1;
+  string   user_id   = 2;
+}
+
+message GetSessionVersionResponse {
+  int64 session_version = 1;
 }
