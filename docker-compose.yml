@@ -45,14 +45,15 @@ services:
       retries: 10
     networks: [banka]
 
+  # ===== celina 1 =====
   user:
     <<: *service-defaults
+    profiles: [c1, c2, c3, c4, all]
     build:
       context: .
       dockerfile: docker/Dockerfile
       args:
         SERVICE: user
-    container_name: user
     environment:
       <<: *service-env
       JWT_SIGNING_KEY: "${JWT_SIGNING_KEY}"
@@ -65,14 +66,37 @@ services:
       redis:    { condition: service_healthy }
     networks: [banka]
 
+  gateway:
+    <<: *service-defaults
+    profiles: [c1, c2, c3, c4, all]
+    build:
+      context: .
+      dockerfile: docker/Dockerfile
+      args:
+        SERVICE: gateway
+    environment:
+      <<: *service-env
+      HTTP_PORT: "8080"
+      JWT_SIGNING_KEY: "${JWT_SIGNING_KEY}"
+      USER_GRPC_ADDR: "${USER_GRPC_ADDR:-user:50051}"
+      BANK_GRPC_ADDR: "${BANK_GRPC_ADDR:-bank:50051}"
+      TRADING_GRPC_ADDR: "${TRADING_GRPC_ADDR:-trading:50051}"
+      EXCHANGE_GRPC_ADDR: "${EXCHANGE_GRPC_ADDR:-exchange:50051}"
+      NOTIFICATION_GRPC_ADDR: "${NOTIFICATION_GRPC_ADDR:-notification:50051}"
+    ports:
+      - "${GATEWAY_HTTP_PORT:-8080}:8080"
+      - "${GATEWAY_PROBE_PORT:-8086}:8081"
+    networks: [banka]
+
+  # ===== celina 2 — bank, exchange, notification =====
   bank:
     <<: *service-defaults
+    profiles: [c2, c3, c4, all]
     build:
       context: .
       dockerfile: docker/Dockerfile
       args:
         SERVICE: bank
-    container_name: bank
     environment:
       <<: *service-env
       EXCHANGE_GRPC_ADDR: "${EXCHANGE_GRPC_ADDR:-exchange:50051}"
@@ -85,35 +109,14 @@ services:
       redis:    { condition: service_healthy }
     networks: [banka]
 
-  trading:
-    <<: *service-defaults
-    build:
-      context: .
-      dockerfile: docker/Dockerfile
-      args:
-        SERVICE: trading
-    container_name: trading
-    environment:
-      <<: *service-env
-      BANK_GRPC_ADDR: "${BANK_GRPC_ADDR:-bank:50051}"
-      EXCHANGE_GRPC_ADDR: "${EXCHANGE_GRPC_ADDR:-exchange:50051}"
-      NOTIFICATION_GRPC_ADDR: "${NOTIFICATION_GRPC_ADDR:-notification:50051}"
-    ports:
-      - "${TRADING_GRPC_PORT:-50053}:50051"
-      - "${TRADING_PROBE_PORT:-8083}:8081"
-    depends_on:
-      postgres: { condition: service_healthy }
-      redis:    { condition: service_healthy }
-    networks: [banka]
-
   exchange:
     <<: *service-defaults
+    profiles: [c2, c3, c4, all]
     build:
       context: .
       dockerfile: docker/Dockerfile
       args:
         SERVICE: exchange
-    container_name: exchange
     environment:
       <<: *service-env
       EXCHANGE_RATE_API_KEY: "${EXCHANGE_RATE_API_KEY}"
@@ -128,12 +131,12 @@ services:
 
   notification:
     <<: *service-defaults
+    profiles: [c2, c3, c4, all]
     build:
       context: .
       dockerfile: docker/Dockerfile
       args:
         SERVICE: notification
-    container_name: notification
     ports:
       - "${NOTIFICATION_GRPC_PORT:-50055}:50051"
       - "${NOTIFICATION_PROBE_PORT:-8085}:8081"
@@ -142,26 +145,26 @@ services:
       redis:    { condition: service_healthy }
     networks: [banka]
 
-  gateway:
+  # ===== celina 3+ =====
+  trading:
     <<: *service-defaults
+    profiles: [c3, c4, all]
     build:
       context: .
       dockerfile: docker/Dockerfile
       args:
-        SERVICE: gateway
-    container_name: gateway
+        SERVICE: trading
     environment:
       <<: *service-env
-      HTTP_PORT: "8080"
-      JWT_SIGNING_KEY: "${JWT_SIGNING_KEY}"
-      USER_GRPC_ADDR: "${USER_GRPC_ADDR:-user:50051}"
       BANK_GRPC_ADDR: "${BANK_GRPC_ADDR:-bank:50051}"
-      TRADING_GRPC_ADDR: "${TRADING_GRPC_ADDR:-trading:50051}"
       EXCHANGE_GRPC_ADDR: "${EXCHANGE_GRPC_ADDR:-exchange:50051}"
       NOTIFICATION_GRPC_ADDR: "${NOTIFICATION_GRPC_ADDR:-notification:50051}"
     ports:
-      - "${GATEWAY_HTTP_PORT:-8080}:8080"
-      - "${GATEWAY_PROBE_PORT:-8086}:8081"
+      - "${TRADING_GRPC_PORT:-50053}:50051"
+      - "${TRADING_PROBE_PORT:-8083}:8081"
+    depends_on:
+      postgres: { condition: service_healthy }
+      redis:    { condition: service_healthy }
     networks: [banka]
 
 volumes:

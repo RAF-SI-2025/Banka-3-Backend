@@ -190,31 +190,53 @@ Use `pkg/probes`, `pkg/shutdown`, `pkg/grpcserver` — don't reinvent.
 `task --list` shows everything; common ones:
 
 ```
-task proto              # buf generate → gen/proto/
-task build              # compile all services to bin/
-task up                 # docker compose up -d
-task down               # docker compose down
-task migrate            # apply migrations across all services
+task proto                  # buf generate → gen/proto/
+task tidy                   # go mod tidy each module (populates go.sum)
+task build                  # compile all services to bin/
+task up CELINA=c1           # only postgres + redis + user + gateway
+task up CELINA=c2           # adds bank, exchange, notification
+task up:all                 # everything
+task down                   # tear down (any profile)
+task migrate                # apply migrations across all services
 task migrate:create SVC=user NAME=add_index
-task seed               # load dev fixtures
-task nuke               # down -v + up + migrate + seed
-task test               # unit tests with race detector
+task seed                   # load dev fixtures (pending — c1 has no seed yet)
+task nuke                   # down -v + up + migrate + seed
+task test                   # unit tests with race detector
 task test:integration
-task lint               # golangci-lint
-task fmt                # gofumpt
-task tidy               # go mod tidy across every module
+task lint                   # golangci-lint
+task fmt                    # gofumpt
 ```
 
-## What's not done yet
+## Service profiles
 
-This branch is a scaffold. Working out from here, in order:
+`docker-compose.yml` gates each service behind a celina profile:
 
-1. Wire `pkg/postgres`, `pkg/redis`, `pkg/probes`, `pkg/shutdown`,
-   `pkg/grpcserver` so a service main is ~50 lines.
-2. Bring up `user` service with auth (celina 1).
-3. Migrate frontend onto generated OpenAPI client; smoke-test the
-   login flow end-to-end.
-4. `bank` service for accounts + payments (celina 2 starts).
+| Service        | Profiles            |
+|----------------|---------------------|
+| `user`         | c1, c2, c3, c4, all |
+| `gateway`      | c1, c2, c3, c4, all |
+| `bank`         | c2, c3, c4, all     |
+| `exchange`     | c2, c3, c4, all     |
+| `notification` | c2, c3, c4, all     |
+| `trading`      | c3, c4, all         |
+| `postgres`     | always              |
+| `redis`        | always              |
+
+Working on c1 only needs four containers running; the stubs for
+later celine stay dormant until you bump `CELINA=`.
+
+## C1 status
+
+User service is implemented and verified running in docker-compose:
+auth (login/refresh/logout), employee CRUD, activation flow, password
+reset, session_version revocation, JWT middleware in the gateway.
+See top-level `/home/user/si/CLAUDE.md` "Verification status" section
+for what's verified vs. what isn't.
+
+Next steps:
+- Seed a bootstrap admin (see "Open issues" in top-level CLAUDE.md)
+- Browser-test the FE↔BE integration end-to-end
+- Begin celina 2 (`bank` service: accounts, payments, cards, loans)
 
 ## Locked decisions for c1
 
