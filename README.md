@@ -18,14 +18,17 @@ task seed
 
 ## Seeded credentials
 
-`task seed` is idempotent and writes a bootstrap admin. Pass
-`SEED_CLIENT=true` to also plant a demo client (used by the live
-Cypress suite).
+`task seed` is idempotent and unconditionally plants the bootstrap
+admin, the demo client, and (when the bank schema is migrated) a
+small c2 dataset hung off the client: one company, three accounts
+(RSD personal / EUR personal / RSD business), an active card, and an
+approved cash loan with one paid + one upcoming installment. On a
+c1-only stack the c2 layer is skipped silently.
 
-| Kind   | Email                | Password     | Created when             |
-|--------|----------------------|--------------|--------------------------|
-| Admin  | `admin@banka.local`  | `Admin123!`  | always                   |
-| Client | `klijent@banka.local`| `Klijent123!`| `SEED_CLIENT=true` only  |
+| Kind   | Email                | Password     |
+|--------|----------------------|--------------|
+| Admin  | `admin@banka.local`  | `Admin123!`  |
+| Client | `klijent@banka.local`| `Klijent123!`|
 
 Override via `SEED_ADMIN_EMAIL` / `SEED_ADMIN_PASSWORD` /
 `SEED_CLIENT_EMAIL` / `SEED_CLIENT_PASSWORD`. Passwords must satisfy

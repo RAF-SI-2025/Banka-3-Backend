@@ -1,30 +1,29 @@
 // Command seed plants development fixtures into the user service's
-// database. Today this means: a bootstrap admin so the system can be
-// brought up from zero (the spec says only an admin can create
-// employees, so without this nobody could log in).
+// database. Three layers, all idempotent and unconditional:
 //
-// Idempotent: if any employee already has the `admin` permission, the
-// program does nothing. Re-run after a `task migrate` and you'll either
-// create the admin (first run) or no-op (subsequent runs).
+//	1. bootstrap admin (so the system has someone who can create
+//	   employees — the spec gates that on admin)
+//	2. test client klijent@banka.local
+//	3. c2 fixtures hung off the test client: one company, three
+//	   accounts (RSD personal / EUR personal / RSD business), one
+//	   active Visa card, one approved cash loan with a paid + an
+//	   upcoming installment
+//
+// Layer 3 is skipped silently when the bank schema hasn't been
+// migrated yet (c1-only stack) so this binary is safe to run as a
+// fixed step in `task seed` regardless of which CELINA is up.
 //
 // Configuration:
 //
-//	DATABASE_URL    — required; standard pgx DSN
-//	SEED_ADMIN_EMAIL    (default admin@banka.local)
-//	SEED_ADMIN_PASSWORD (default Admin123!) — must satisfy spec policy
-//	SEED_ADMIN_USERNAME (default admin)
-//	SEED_CLIENT         (set to "true" to also plant a test client)
+//	DATABASE_URL         — required; standard pgx DSN
+//	SEED_ADMIN_EMAIL     (default admin@banka.local)
+//	SEED_ADMIN_PASSWORD  (default Admin123!) — must satisfy spec policy
+//	SEED_ADMIN_USERNAME  (default admin)
 //	SEED_CLIENT_EMAIL    (default klijent@banka.local)
 //	SEED_CLIENT_PASSWORD (default Klijent123!)
-//	SEED_C2             (set to "true" to also plant a c2 fixture set:
-//	                     company, accounts, card, loan — for the seeded
-//	                     client. Skipped silently if the bank schema
-//	                     hasn't been migrated yet, so the same flag is
-//	                     safe to leave on across c1-only and c2 runs.
-//	                     Implies SEED_CLIENT=true.)
-//	BANK_CODE           (default 333)  — used to mint account numbers
-//	BANK_BRANCH         (default 0001) — see pkg/account
-//	BANK_CVV_PEPPER     (default "dev-pepper") — see pkg/cvv
+//	BANK_CODE            (default 333)  — used to mint account numbers
+//	BANK_BRANCH          (default 0001) — see pkg/account
+//	BANK_CVV_PEPPER      (default "dev-pepper") — see pkg/cvv
 //
 // The default password meets the spec's complexity rules (8–32 chars,
 // ≥2 digits, ≥1 upper, ≥1 lower) but should be changed in any shared
@@ -110,35 +109,21 @@ func run() error {
 		fmt.Println("seed: change SEED_ADMIN_PASSWORD before any shared environment.")
 	}
 
-	// Optional c2 fixture: a known client account for cypress / manual
-	// browser testing. Off by default to avoid surprising someone who
-	// only wants the admin; turn on with SEED_CLIENT=true. Runs whether
-	// or not the admin was just created — re-running with SEED_CLIENT=true
-	// after the admin already exists must still plant the client.
-	wantClient := envOr("SEED_CLIENT", "") == "true"
-	wantC2 := envOr("SEED_C2", "") == "true"
-	if wantC2 {
-		// SEED_C2 implies SEED_CLIENT — the c2 fixtures are tied to a
-		// concrete client, and minting them against a non-seeded
-		// client would surprise whoever runs `task seed`.
-		wantClient = true
+	clientID, err := seedClient(ctx, pool)
+	if err != nil {
+		return fmt.Errorf("seed client: %w", err)
 	}
 
-	var clientID string
-	if wantClient {
-		id, err := seedClient(ctx, pool)
-		if err != nil {
-			return fmt.Errorf("seed client: %w", err)
-		}
-		clientID = id
+	// c2 fixtures (company / accounts / card / loan) require the bank
+	// schema. On a c1-only stack it's missing; skip with a friendly
+	// note rather than crashing, so this seed is a fixed step in
+	// `task seed` regardless of which CELINA is up.
+	if !bankSchemaReady(ctx, pool) {
+		fmt.Println("seed: bank schema not migrated; skipping c2 fixtures")
+		return nil
 	}
-
-	if wantC2 {
-		if !bankSchemaReady(ctx, pool) {
-			fmt.Println("seed: SEED_C2 requested but bank schema not migrated; skipping c2 fixtures")
-		} else if err := seedC2(ctx, pool, clientID, adminID); err != nil {
-			return fmt.Errorf("seed c2: %w", err)
-		}
+	if err := seedC2(ctx, pool, clientID, adminID); err != nil {
+		return fmt.Errorf("seed c2: %w", err)
 	}
 	return nil
 }
@@ -187,9 +172,9 @@ func seedClient(ctx context.Context, pool *pgxpool.Pool) (string, error) {
 }
 
 // bankSchemaReady reports whether the c2 migrations have been applied.
-// We sniff for bank.accounts; if it's missing we skip the c2 fixtures
-// rather than crashing, so SEED_C2=true is safe to leave on across c1
-// and c2 stack runs.
+// We sniff for bank.accounts; if it's missing the seed skips the c2
+// fixtures rather than crashing, so this binary is safe to run on a
+// c1-only stack as well.
 func bankSchemaReady(ctx context.Context, pool *pgxpool.Pool) bool {
 	var n int
 	err := pool.QueryRow(ctx,
@@ -210,11 +195,8 @@ func bankSchemaReady(ctx context.Context, pool *pgxpool.Pool) bool {
 // can be down when seed runs (we do this after `task migrate` but
 // before the service is necessarily up).
 func seedC2(ctx context.Context, pool *pgxpool.Pool, clientID, adminID string) error {
-	if clientID == "" {
-		return fmt.Errorf("seedC2 requires a client id (set SEED_CLIENT=true)")
-	}
-	if adminID == "" {
-		return fmt.Errorf("seedC2 requires an admin id (admin seed must run first)")
+	if clientID == "" || adminID == "" {
+		return fmt.Errorf("seedC2: clientID and adminID are required")
 	}
 	// Idempotency: if this client already has an account, presume the
 	// fixtures are in place. Cheaper than checking each table.
