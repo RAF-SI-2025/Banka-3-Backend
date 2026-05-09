@@ -73,6 +73,36 @@ func (s *Service) notifyLoanDecision(ctx context.Context, req *domain.LoanReques
 	}
 }
 
+// notifyAccountCreated emits the spec-E2E "klijent dobija email
+// obaveštenje" notice fired right after a new account is opened.
+// Business accounts route through the company's owner client; system
+// accounts (no owner) are skipped.
+func (s *Service) notifyAccountCreated(ctx context.Context, a *domain.Account) {
+	if a == nil || a.OwnerClientID == "" || a.OwnerClientID == domain.SystemOwnerID {
+		return
+	}
+	body := fmt.Sprintf(
+		"Poštovani,\n\nVaš novi račun %s (%s) je otvoren. Početno stanje: %s %s.\n\nBanka 3",
+		a.Number, a.Name, a.Balance, a.Currency,
+	)
+	s.notify(ctx, a.OwnerClientID, "Vaš novi račun je otvoren", body)
+}
+
+// notifyPaymentSucceeded emits the spec-E2E "Klijent dobija email
+// potvrdu" notice fired after a successful payment. Sender side only
+// — the recipient of an inter-client payment is *not* notified by
+// the bank (no spec scenario for it).
+func (s *Service) notifyPaymentSucceeded(ctx context.Context, fromClientID string, fromAccountNumber, toAccountNumber, amount string, currency domain.Currency) {
+	if fromClientID == "" || fromClientID == domain.SystemOwnerID {
+		return
+	}
+	body := fmt.Sprintf(
+		"Poštovani,\n\nUspešno je realizovano plaćanje sa računa %s na račun %s u iznosu %s %s.\n\nBanka 3",
+		fromAccountNumber, toAccountNumber, amount, currency,
+	)
+	s.notify(ctx, fromClientID, "Potvrda plaćanja", body)
+}
+
 // notifyInstallmentMissed runs from the cron when a loan can't pay an
 // installment because the account is short.
 func (s *Service) notifyInstallmentMissed(ctx context.Context, loan *domain.Loan, inst *domain.LoanInstallment) {

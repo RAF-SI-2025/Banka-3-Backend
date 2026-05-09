@@ -80,6 +80,9 @@ func (s *Service) CreatePayment(ctx context.Context, in CreatePaymentInput) (*do
 		})
 	}
 
+	// Spec E2E "Klijent dobija email potvrdu" — sender side only.
+	s.notifyPaymentSucceeded(ctx, from.OwnerClientID, from.Number, to.Number, money.FormatAmount(amt), from.Currency)
+
 	return result, nil
 }
 

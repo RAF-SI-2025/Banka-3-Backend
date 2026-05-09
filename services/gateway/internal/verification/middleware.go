@@ -45,6 +45,7 @@ func DefaultRules() []Rule {
 		{http.MethodPost, regexp.MustCompile(`^/api/v1/transfers$`), verification.ActionTransfer},
 		{http.MethodPost, regexp.MustCompile(`^/api/v1/cards$`), verification.ActionCardIssue},
 		{http.MethodPatch, regexp.MustCompile(`^/api/v1/accounts/[^/]+/limits$`), verification.ActionLimitChange},
+		{http.MethodPatch, regexp.MustCompile(`^/api/v1/cards/[^/]+/limit$`), verification.ActionLimitChange},
 	}
 }
 

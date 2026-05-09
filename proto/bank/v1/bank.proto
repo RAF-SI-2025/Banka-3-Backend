@@ -205,6 +205,15 @@ service BankService {
       body: "*"
     };
   }
+  // UpdateCardLimit changes a card's per-card spending limit (flow.pdf
+  // P6 "Klijent menja limit kartice"). Verification-gated by the
+  // gateway middleware — same policy as account-limit changes.
+  rpc UpdateCardLimit(UpdateCardLimitRequest) returns (Card) {
+    option (google.api.http) = {
+      patch: "/api/v1/cards/{id}/limit"
+      body: "*"
+    };
+  }
 
   // -----------------------------------------------------------------
   // OvlascenoLice (authorized persons on a poslovni account)
@@ -675,6 +684,12 @@ message ListCardsResponse {
 message SetCardStatusRequest {
   string     id     = 1 [(buf.validate.field).string.uuid = true];
   CardStatus status = 2 [(buf.validate.field).enum = {defined_only: true, not_in: [0]}];
+}
+
+message UpdateCardLimitRequest {
+  string id         = 1 [(buf.validate.field).string.uuid = true];
+  // card_limit must be a positive decimal up to 4 fractional digits.
+  string card_limit = 2 [(buf.validate.field).string.pattern = "^[0-9]+(\\.[0-9]{1,4})?$"];
 }
 
 // =====================================================================

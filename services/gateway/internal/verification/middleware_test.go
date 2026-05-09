@@ -149,6 +149,7 @@ func TestMatchRule(t *testing.T) {
 		{http.MethodPost, "/api/v1/transfers", verification.ActionTransfer, true},
 		{http.MethodPost, "/api/v1/cards", verification.ActionCardIssue, true},
 		{http.MethodPatch, "/api/v1/accounts/123/limits", verification.ActionLimitChange, true},
+		{http.MethodPatch, "/api/v1/cards/123/limit", verification.ActionLimitChange, true},
 		{http.MethodPost, "/api/v1/menjacnica/quote", "", false},
 		{http.MethodGet, "/api/v1/payments", "", false},
 		{http.MethodPost, "/api/v1/payment-recipients", "", false},

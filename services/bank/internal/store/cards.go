@@ -114,3 +114,18 @@ func (s *Store) SetCardStatus(ctx context.Context, id string, status domain.Card
 	}
 	return out, nil
 }
+
+func (s *Store) UpdateCardLimit(ctx context.Context, id, cardLimit string) (*domain.Card, error) {
+	const q = `
+        update "bank".cards set card_limit = $2::numeric, updated_at = now()
+        where id = $1
+        returning ` + cardColumns
+	out, err := scanCard(s.Pool.QueryRow(ctx, q, id, cardLimit))
+	if err != nil {
+		if noRows(err) {
+			return nil, apperr.NotFound("kartica ne postoji")
+		}
+		return nil, apperr.Internal("update card limit", err)
+	}
+	return out, nil
+}

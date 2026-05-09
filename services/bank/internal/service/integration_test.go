@@ -322,6 +322,118 @@ func TestIntegration_CreateAccount_RSDChecking(t *testing.T) {
 	}
 }
 
+// TestIntegration_CreateAccount_FX exercises spec E2E "Kreiranje
+// deviznog računa sa početnim stanjem" — flow.pdf P1 also relies on
+// an employee being able to mint two FX accounts in a row for the
+// same client.
+func TestIntegration_CreateAccount_FX(t *testing.T) {
+	svc := setup(t)
+	clientID := uuid.NewString()
+	ctx := employeeAdminCtx()
+
+	for _, currency := range []domain.Currency{domain.CurrencyEUR, domain.CurrencyUSD} {
+		a, err := svc.CreateAccount(ctx, CreateAccountInput{
+			OwnerClientID:  clientID,
+			Kind:           domain.KindPersonalFX,
+			Subtype:        domain.SubtypeUnspecified,
+			Currency:       currency,
+			OpeningBalance: "500",
+		})
+		if err != nil {
+			t.Fatalf("create %s FX: %v", currency, err)
+		}
+		if a.Currency != currency {
+			t.Errorf("currency: got %s, want %s", a.Currency, currency)
+		}
+		if a.Balance != "500.0000" {
+			t.Errorf("balance: got %s, want 500.0000", a.Balance)
+		}
+		if a.MaintenanceFee != "0.0000" {
+			t.Errorf("FX accounts should be fee-free, got %s", a.MaintenanceFee)
+		}
+		// Spec p.16 type code: 21 lični devizni.
+		if !strings.HasSuffix(a.Number, "21") {
+			t.Errorf("type suffix: got %s, want 21 (personal FX)", a.Number[16:])
+		}
+	}
+
+	// flow.pdf P1: two FX accounts coexist for the same client.
+	accs, _, err := svc.ListAccounts(ctx, domain.AccountFilter{OwnerClientID: clientID}, 1, 50)
+	if err != nil {
+		t.Fatalf("list: %v", err)
+	}
+	if len(accs) != 2 {
+		t.Errorf("client should own 2 FX accounts, got %d", len(accs))
+	}
+}
+
+// TestIntegration_CreateAccount_WithCard wires spec p.12's "opcija da
+// se kreira kartica". flow.pdf P2 verifies the card is visible in the
+// cards list right after opening — assert it's there and active.
+func TestIntegration_CreateAccount_WithCard(t *testing.T) {
+	svc := setup(t)
+	clientID := uuid.NewString()
+	ctx := employeeAdminCtx()
+
+	a, err := svc.CreateAccount(ctx, CreateAccountInput{
+		OwnerClientID:  clientID,
+		Kind:           domain.KindPersonalCheckingRSD,
+		Subtype:        domain.SubtypeStandard,
+		Currency:       domain.CurrencyRSD,
+		OpeningBalance: "10000",
+		CreateCard:     true,
+	})
+	if err != nil {
+		t.Fatalf("create+card: %v", err)
+	}
+	cards, err := svc.ListCards(clientCtx(clientID), a.ID)
+	if err != nil {
+		t.Fatalf("list cards: %v", err)
+	}
+	if len(cards) != 1 {
+		t.Fatalf("auto-card should appear in cards list, got %d", len(cards))
+	}
+	if cards[0].Status != domain.CardActive {
+		t.Errorf("auto-card status: %s, want active", cards[0].Status)
+	}
+	// Default companion card name; not exhaustive but pins the
+	// "Lična kartica" branch chosen for personal accounts.
+	if cards[0].Name != "Lična kartica" {
+		t.Errorf("default name: %q", cards[0].Name)
+	}
+	if cards[0].CardLimit != a.DailyLimit {
+		t.Errorf("auto-card limit: %s, want %s (daily limit)", cards[0].CardLimit, a.DailyLimit)
+	}
+}
+
+// TestIntegration_Notify_AccountCreated: spec E2E "klijent dobija
+// email obaveštenje" after account opening.
+func TestIntegration_Notify_AccountCreated(t *testing.T) {
+	svc := setup(t)
+	currentNotifier.reset()
+	clientID := uuid.NewString()
+	_, err := svc.CreateAccount(employeeAdminCtx(), CreateAccountInput{
+		OwnerClientID:  clientID,
+		Kind:           domain.KindPersonalCheckingRSD,
+		Subtype:        domain.SubtypeStandard,
+		Currency:       domain.CurrencyRSD,
+		OpeningBalance: "10000",
+	})
+	if err != nil {
+		t.Fatalf("create: %v", err)
+	}
+	emails := currentNotifier.snapshot()
+	if len(emails) != 1 {
+		t.Fatalf("expected 1 email on account open, got %d", len(emails))
+	}
+	if !strings.Contains(emails[0].Subject, "otvoren") {
+		t.Errorf("subject: %q", emails[0].Subject)
+	}
+	if emails[0].To != clientID+"@example.com" {
+		t.Errorf("recipient: %q", emails[0].To)
+	}
+}
+
 // TestIntegration_CreateAccount_PermissionRequired locks down spec p.11
 // "Račun kreira Zaposleni": clients cannot mint accounts, even their
 // own.
@@ -585,6 +697,81 @@ func TestIntegration_CreateTransfer_OwnAccountsOnly(t *testing.T) {
 	}
 }
 
+// TestIntegration_CreateTransfer_SameCurrency_NoCommission: flow.pdf P3
+// distinguishes same-currency prenos from FX. Same-currency must move
+// the full amount with a single ledger leg and no bank-house diff —
+// commission only applies on FX legs.
+func TestIntegration_CreateTransfer_SameCurrency_NoCommission(t *testing.T) {
+	svc := setup(t)
+	ctx := context.Background()
+	clientID := uuid.NewString()
+	src := mintAccount(t, svc, clientID, domain.KindPersonalCheckingRSD, domain.CurrencyRSD, "1000")
+	dst := mintAccount(t, svc, clientID, domain.KindPersonalCheckingRSD, domain.CurrencyRSD, "0")
+
+	houseBefore, _ := svc.Store.GetSystemAccount(ctx, domain.CurrencyRSD)
+
+	res, err := svc.CreateTransfer(clientCtx(clientID), CreateTransferInput{
+		FromAccountID: src.ID,
+		ToAccountID:   dst.ID,
+		Amount:        "250",
+	})
+	if err != nil {
+		t.Fatalf("transfer: %v", err)
+	}
+	if len(res.Transactions) != 1 {
+		t.Errorf("same-currency transfer should write 1 leg, got %d", len(res.Transactions))
+	}
+
+	srcAfter, _ := svc.Store.GetAccountByID(ctx, src.ID)
+	dstAfter, _ := svc.Store.GetAccountByID(ctx, dst.ID)
+	if srcAfter.AvailableBalance != "750.0000" {
+		t.Errorf("src balance: %s, want 750.0000", srcAfter.AvailableBalance)
+	}
+	if dstAfter.AvailableBalance != "250.0000" {
+		t.Errorf("dst balance: %s (commission must NOT apply same-currency)", dstAfter.AvailableBalance)
+	}
+
+	houseAfter, _ := svc.Store.GetSystemAccount(ctx, domain.CurrencyRSD)
+	if delta := mustSub(t, houseAfter.AvailableBalance, houseBefore.AvailableBalance); delta != "0.0000" {
+		t.Errorf("RSD house touched on same-currency transfer: delta=%s", delta)
+	}
+}
+
+// TestIntegration_Notify_PaymentSucceeded covers spec E2E "Klijent
+// dobija email potvrdu" after a successful payment. Sender side only.
+func TestIntegration_Notify_PaymentSucceeded(t *testing.T) {
+	svc := setup(t)
+	srcOwner := uuid.NewString()
+	dstOwner := uuid.NewString()
+	src := mintAccount(t, svc, srcOwner, domain.KindPersonalCheckingRSD, domain.CurrencyRSD, "5000")
+	dst := mintAccount(t, svc, dstOwner, domain.KindPersonalCheckingRSD, domain.CurrencyRSD, "0")
+	currentNotifier.reset() // discard the two account-opened mails from mintAccount
+
+	if _, err := svc.CreatePayment(clientCtx(srcOwner), CreatePaymentInput{
+		FromAccountID:   src.ID,
+		ToAccountNumber: dst.Number,
+		Amount:          "1500",
+		RecipientName:   "EPS",
+		PaymentCode:     "221",
+		Purpose:         "struja",
+	}); err != nil {
+		t.Fatalf("payment: %v", err)
+	}
+	emails := currentNotifier.snapshot()
+	if len(emails) != 1 {
+		t.Fatalf("expected 1 confirmation email (sender only), got %d", len(emails))
+	}
+	if !strings.Contains(emails[0].Subject, "Potvrda plaćanja") {
+		t.Errorf("subject: %q", emails[0].Subject)
+	}
+	if emails[0].To != srcOwner+"@example.com" {
+		t.Errorf("recipient: got %q, want sender (%s)", emails[0].To, srcOwner)
+	}
+	if !strings.Contains(emails[0].Body, "1500") {
+		t.Errorf("body should reference amount: %q", emails[0].Body)
+	}
+}
+
 // =====================================================================
 // Cards
 // =====================================================================
@@ -635,6 +822,45 @@ func TestIntegration_Card_Lifecycle(t *testing.T) {
 	}
 }
 
+// TestIntegration_UpdateCardLimit covers flow.pdf P6 "Klijent menja
+// limit kartice". Owner can change their own card; non-owner is
+// rejected; deactivated card is locked.
+func TestIntegration_UpdateCardLimit(t *testing.T) {
+	svc := setup(t)
+	clientID := uuid.NewString()
+	otherID := uuid.NewString()
+	acc := mintAccount(t, svc, clientID, domain.KindPersonalCheckingRSD, domain.CurrencyRSD, "0")
+	c, _, err := svc.CreateCard(clientCtx(clientID), CreateCardInput{
+		AccountID: acc.ID, Brand: domain.BrandVisa, Name: "L1", CardLimit: "100000",
+	})
+	if err != nil {
+		t.Fatalf("create card: %v", err)
+	}
+
+	updated, err := svc.UpdateCardLimit(clientCtx(clientID), c.ID, "50000")
+	if err != nil {
+		t.Fatalf("owner update: %v", err)
+	}
+	if updated.CardLimit != "50000.0000" {
+		t.Errorf("limit after update: %s, want 50000.0000", updated.CardLimit)
+	}
+
+	if _, err := svc.UpdateCardLimit(clientCtx(otherID), c.ID, "10"); err == nil {
+		t.Error("non-owner client should not be able to change limit")
+	}
+
+	if _, err := svc.UpdateCardLimit(clientCtx(clientID), c.ID, "0"); err == nil {
+		t.Error("zero limit should be rejected")
+	}
+
+	if _, err := svc.SetCardStatus(employeeAdminCtx(), c.ID, domain.CardDeactivated); err != nil {
+		t.Fatalf("deactivate: %v", err)
+	}
+	if _, err := svc.UpdateCardLimit(employeeAdminCtx(), c.ID, "75000"); err == nil {
+		t.Error("deactivated card should not accept limit change")
+	}
+}
+
 // TestIntegration_Card_PersonalLimit: spec p.27 — max 2 active personal
 // cards per account. The third request must fail.
 func TestIntegration_Card_PersonalLimit(t *testing.T) {
@@ -657,6 +883,100 @@ func TestIntegration_Card_PersonalLimit(t *testing.T) {
 	}
 	if err := mk(); err == nil {
 		t.Error("3rd personal card should be rejected")
+	}
+}
+
+// TestIntegration_Card_BusinessLimit: spec p.27 — max 1 active card per
+// "osoba" on a business account. "Osoba" is the company-owner client
+// when authorized_person_id is empty, or each individual OvlascenoLice
+// otherwise. Both buckets get their own 1-card budget.
+func TestIntegration_Card_BusinessLimit(t *testing.T) {
+	svc := setup(t)
+	owner := uuid.NewString()
+	co, err := svc.CreateCompany(employeeAdminCtx(), CreateCompanyInput{
+		Name:          "Biz d.o.o.",
+		RegistryID:    "33344455",
+		TaxID:         "300400500",
+		ActivityCode:  "62.01",
+		Address:       "Beograd",
+		OwnerClientID: owner,
+	})
+	if err != nil {
+		t.Fatalf("create company: %v", err)
+	}
+	acc, err := svc.CreateAccount(employeeAdminCtx(), CreateAccountInput{
+		OwnerClientID:  owner,
+		Kind:           domain.KindBusinessCheckingRSD,
+		Subtype:        domain.SubtypeDOO,
+		Currency:       domain.CurrencyRSD,
+		CompanyID:      co.ID,
+		OpeningBalance: "0",
+	})
+	if err != nil {
+		t.Fatalf("create business account: %v", err)
+	}
+
+	// Owner-self bucket: first card succeeds.
+	if _, _, err := svc.CreateCard(employeeAdminCtx(), CreateCardInput{
+		AccountID: acc.ID, Brand: domain.BrandVisa, Name: "Vlasnik", CardLimit: "100000",
+	}); err != nil {
+		t.Fatalf("first owner card: %v", err)
+	}
+	// Second owner-self card is rejected — max 1 per vlasnik.
+	if _, _, err := svc.CreateCard(employeeAdminCtx(), CreateCardInput{
+		AccountID: acc.ID, Brand: domain.BrandVisa, Name: "Vlasnik 2", CardLimit: "50000",
+	}); err == nil {
+		t.Error("2nd owner-self business card should be rejected")
+	}
+
+	// Add an OvlascenoLice — they get their own budget.
+	ap, err := svc.CreateAuthorizedPerson(employeeAdminCtx(), CreateAuthorizedPersonInput{
+		CompanyID:   co.ID,
+		FirstName:   "Marko",
+		LastName:    "Marković",
+		DateOfBirth: time.Date(1990, 1, 1, 0, 0, 0, 0, time.UTC),
+		Gender:      domain.GenderMale,
+		Email:       "marko@biz.local",
+		Phone:       "+381601112233",
+		Address:     "Beograd",
+	})
+	if err != nil {
+		t.Fatalf("create ap: %v", err)
+	}
+	if _, _, err := svc.CreateCard(employeeAdminCtx(), CreateCardInput{
+		AccountID: acc.ID, Brand: domain.BrandVisa, Name: "Marko 1",
+		CardLimit: "20000", AuthorizedPersonID: ap.ID,
+	}); err != nil {
+		t.Fatalf("first AP card: %v", err)
+	}
+	// Second card for the same OvlascenoLice is rejected.
+	if _, _, err := svc.CreateCard(employeeAdminCtx(), CreateCardInput{
+		AccountID: acc.ID, Brand: domain.BrandVisa, Name: "Marko 2",
+		CardLimit: "10000", AuthorizedPersonID: ap.ID,
+	}); err == nil {
+		t.Error("2nd card for same authorized person should be rejected")
+	}
+
+	// A second OvlascenoLice on the same company is independent — gets
+	// their own active card.
+	ap2, err := svc.CreateAuthorizedPerson(employeeAdminCtx(), CreateAuthorizedPersonInput{
+		CompanyID:   co.ID,
+		FirstName:   "Petar",
+		LastName:    "Petrović",
+		DateOfBirth: time.Date(1992, 2, 2, 0, 0, 0, 0, time.UTC),
+		Gender:      domain.GenderMale,
+		Email:       "petar@biz.local",
+		Phone:       "+381602223344",
+		Address:     "Beograd",
+	})
+	if err != nil {
+		t.Fatalf("create second ap: %v", err)
+	}
+	if _, _, err := svc.CreateCard(employeeAdminCtx(), CreateCardInput{
+		AccountID: acc.ID, Brand: domain.BrandVisa, Name: "Petar 1",
+		CardLimit: "20000", AuthorizedPersonID: ap2.ID,
+	}); err != nil {
+		t.Errorf("independent AP card should be allowed: %v", err)
 	}
 }
 
@@ -1131,9 +1451,10 @@ func TestIntegration_Recipients_CRUD(t *testing.T) {
 // Notifications
 // =====================================================================
 
-// TestIntegration_Notify_CardBlocked: the spec p.29 has "Banka šalje
-// obaveštenje" when a card is blocked. SetCardStatus → email sent.
-func TestIntegration_Notify_CardBlocked(t *testing.T) {
+// TestIntegration_Notify_CardStatusChanged covers spec p.29 "Banka
+// šalje obaveštenje" — block by client, unblock by employee, and
+// permanent deactivation each must emit one Serbian email.
+func TestIntegration_Notify_CardStatusChanged(t *testing.T) {
 	svc := setup(t)
 	clientID := uuid.NewString()
 	acc := mintAccount(t, svc, clientID, domain.KindPersonalCheckingRSD, domain.CurrencyRSD, "0")
@@ -1143,20 +1464,33 @@ func TestIntegration_Notify_CardBlocked(t *testing.T) {
 	if err != nil {
 		t.Fatalf("create card: %v", err)
 	}
-	currentNotifier.reset()
 
-	if _, err := svc.SetCardStatus(clientCtx(clientID), c.ID, domain.CardBlocked); err != nil {
-		t.Fatalf("block: %v", err)
-	}
-	emails := currentNotifier.snapshot()
-	if len(emails) != 1 {
-		t.Fatalf("expected 1 email on block, got %d", len(emails))
-	}
-	if !strings.Contains(emails[0].Subject, "blokirana") {
-		t.Errorf("subject: %q", emails[0].Subject)
-	}
-	if emails[0].To != clientID+"@example.com" {
-		t.Errorf("recipient: %q", emails[0].To)
+	for _, step := range []struct {
+		name       string
+		ctx        context.Context
+		next       domain.CardStatus
+		wantInSubj string
+	}{
+		{"block-by-client", clientCtx(clientID), domain.CardBlocked, "blokirana"},
+		{"unblock-by-employee", employeeAdminCtx(), domain.CardActive, "odblokirana"},
+		{"deactivate-by-employee", employeeAdminCtx(), domain.CardDeactivated, "deaktivirana"},
+	} {
+		t.Run(step.name, func(t *testing.T) {
+			currentNotifier.reset()
+			if _, err := svc.SetCardStatus(step.ctx, c.ID, step.next); err != nil {
+				t.Fatalf("set status %s: %v", step.next, err)
+			}
+			emails := currentNotifier.snapshot()
+			if len(emails) != 1 {
+				t.Fatalf("expected 1 email, got %d", len(emails))
+			}
+			if !strings.Contains(emails[0].Subject, step.wantInSubj) {
+				t.Errorf("subject: %q, want contains %q", emails[0].Subject, step.wantInSubj)
+			}
+			if emails[0].To != clientID+"@example.com" {
+				t.Errorf("recipient: %q", emails[0].To)
+			}
+		})
 	}
 }
 
@@ -1175,9 +1509,9 @@ func TestIntegration_Notify_LoanDecision(t *testing.T) {
 		{"reject", false, "salary too low", "odbijen", "salary too low"},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
-			currentNotifier.reset()
 			clientID := uuid.NewString()
 			acc := mintAccount(t, svc, clientID, domain.KindPersonalCheckingRSD, domain.CurrencyRSD, "5000000")
+			currentNotifier.reset() // discard the account-opened mail; only the loan-decision mail is under test
 			req, err := svc.SubmitLoanRequest(clientCtx(clientID), SubmitLoanRequestInput{
 				AccountID:                acc.ID,
 				LoanType:                 domain.LoanTypeCash,

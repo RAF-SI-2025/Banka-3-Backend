@@ -176,6 +176,14 @@ func (s *Server) SetCardStatus(ctx context.Context, in *bankpb.SetCardStatusRequ
 	return cardToProto(c), nil
 }
 
+func (s *Server) UpdateCardLimit(ctx context.Context, in *bankpb.UpdateCardLimitRequest) (*bankpb.Card, error) {
+	c, err := s.Svc.UpdateCardLimit(ctx, in.GetId(), in.GetCardLimit())
+	if err != nil {
+		return nil, err
+	}
+	return cardToProto(c), nil
+}
+
 // =====================================================================
 // Authorized persons
 // =====================================================================

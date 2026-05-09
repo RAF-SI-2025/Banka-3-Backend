@@ -21,18 +21,15 @@ type CreateAccountInput struct {
 	Currency       domain.Currency
 	Name           string
 	OpeningBalance string // decimal string; "" → "0"
-	CreateCard     bool   // slice 1: stored intent only
+	CreateCard     bool   // spec p.12: optional companion card
 }
 
 // CreateAccount mints a new account on behalf of a Klijent. Spec p.11:
 // only an authenticated employee can create accounts.
 //
-// Slice 1 limitations:
-//   - opening balance is recorded but no funding leg is posted (no
-//     payments service yet).
-//   - CreateCard is captured but the cards module isn't wired.
-//   - Maintenance fee defaults to 0 (the per-subtype fee table lives
-//     in a later slice).
+// When CreateCard is true the account is opened with a companion debit
+// card (Visa, daily-limit-matched ceiling) — flow.pdf P2 mandates that
+// the card shows up in the cards list afterwards.
 func (s *Service) CreateAccount(ctx context.Context, in CreateAccountInput) (*domain.Account, error) {
 	if err := s.requirePermission(ctx, permissions.AccountWrite); err != nil {
 		return nil, err
@@ -78,7 +75,38 @@ func (s *Service) CreateAccount(ctx context.Context, in CreateAccountInput) (*do
 		DailySpent:          "0",
 		MonthlySpent:        "0",
 	}
-	return s.Store.CreateAccount(ctx, a)
+	created, err := s.Store.CreateAccount(ctx, a)
+	if err != nil {
+		return nil, err
+	}
+
+	// Account-opened email (spec E2E "Sistem kreira račun i klijent
+	// dobija email obaveštenje"). Best-effort: failures must not roll
+	// back the account, so go through the same notify helper card
+	// status uses.
+	s.notifyAccountCreated(ctx, created)
+
+	// Companion card: spec p.12 + flow.pdf P2 — when the option is
+	// selected, an active card must be visible in the client's cards
+	// list right after account opening.
+	if in.CreateCard {
+		if _, _, err := s.CreateCard(ctx, CreateCardInput{
+			AccountID: created.ID,
+			Brand:     domain.BrandVisa,
+			Name:      defaultCompanionCardName(in.Kind),
+			CardLimit: created.DailyLimit,
+		}); err != nil {
+			return nil, err
+		}
+	}
+	return created, nil
+}
+
+func defaultCompanionCardName(k domain.AccountKind) string {
+	if k.IsBusiness() {
+		return "Poslovna kartica"
+	}
+	return "Lična kartica"
 }
 
 // DefaultMaintenanceFee returns the per-month fee for a freshly opened

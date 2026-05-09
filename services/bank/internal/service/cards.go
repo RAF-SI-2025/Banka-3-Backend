@@ -236,6 +236,48 @@ func (s *Service) SetCardStatus(ctx context.Context, id string, status domain.Ca
 	return updated, nil
 }
 
+// UpdateCardLimit changes the per-card spending cap. flow.pdf P6
+// "Klijent menja limit kartice". Clients can change the limit on
+// their own cards; employees with CardWrite can change any. The
+// gateway middleware adds the verifikacioni-kod gate (spec p.11).
+func (s *Service) UpdateCardLimit(ctx context.Context, id, newLimit string) (*domain.Card, error) {
+	p, err := s.requirePrincipal(ctx)
+	if err != nil {
+		return nil, err
+	}
+	target, err := s.Store.GetCardByID(ctx, id)
+	if err != nil {
+		return nil, err
+	}
+	if target.Status == domain.CardDeactivated {
+		return nil, apperr.FailedPrecondition("deaktivirana kartica se ne može menjati")
+	}
+	if p.UserKind == auth.KindClient {
+		a, err := s.Store.GetAccountByID(ctx, target.AccountID)
+		if err != nil {
+			return nil, err
+		}
+		if a.OwnerClientID != p.UserID {
+			return nil, apperr.PermissionDenied("nedovoljne permisije")
+		}
+	} else if err := s.requirePermission(ctx, permissions.CardWrite); err != nil {
+		return nil, err
+	}
+
+	limit := strings.TrimSpace(newLimit)
+	if limit == "" {
+		return nil, apperr.Validation("limit kartice je obavezan i mora biti veći od 0")
+	}
+	rat, err := money.Parse(limit)
+	if err != nil {
+		return nil, apperr.Validation("limit kartice nije validan iznos")
+	}
+	if !money.IsPositive(rat) {
+		return nil, apperr.Validation("limit kartice mora biti veći od 0")
+	}
+	return s.Store.UpdateCardLimit(ctx, id, limit)
+}
+
 // generateCardCredentials returns a Luhn-clean number for brand and a
 // 3-digit CVV.
 func generateCardCredentials(brand domain.CardBrand) (string, string, error) {
