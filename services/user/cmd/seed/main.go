@@ -244,16 +244,19 @@ func seedBank(ctx context.Context, pool *pgxpool.Pool, clientID, adminID string)
 	if clientID == "" || adminID == "" {
 		return fmt.Errorf("seedBank: clientID and adminID are required")
 	}
-	// Idempotency. Two checks because cypress's resetBackend truncates
-	// the user schema (re-mints clientID) but leaves bank rows; we
-	// don't want the second seed run to crash on the registry_id unique
-	// constraint just because the user side bounced.
+	// Idempotency. Three branches because cypress's resetBackend can
+	// truncate just the user schema (re-mints clientID) while bank rows
+	// stay around — leaving orphan fixtures pointing at a now-deleted
+	// client UUID. We don't want the second seed run to either crash on
+	// the registry_id unique constraint or quietly leave dangling
+	// references that show up in the portal as ownerless accounts.
 	//
 	//   a) accounts owned by this client → fixtures already planted
 	//      against this client; skip.
 	//   b) any row in bank.companies with the fixture registry_ids →
 	//      fixtures planted against a previous (now-deleted) client;
-	//      also skip rather than try to re-insert.
+	//      repoint to the current clientID/adminID instead of skipping.
+	//   c) neither → no fixtures; insert.
 	var have int
 	if err := pool.QueryRow(ctx,
 		`select count(*) from "bank".accounts where owner_client_id=$1`, clientID).Scan(&have); err != nil {
@@ -263,13 +266,44 @@ func seedBank(ctx context.Context, pool *pgxpool.Pool, clientID, adminID string)
 		fmt.Println("seed: bank fixtures already present for client; skipping")
 		return nil
 	}
-	if err := pool.QueryRow(ctx,
-		`select count(*) from "bank".companies where registry_id in ('12345678','23456789')`).Scan(&have); err != nil {
-		return fmt.Errorf("count fixture companies: %w", err)
-	}
-	if have > 0 {
-		fmt.Println("seed: bank fixtures already present (orphaned); skipping")
+	var oldClientID string
+	switch err := pool.QueryRow(ctx,
+		`select owner_client_id from "bank".companies
+		 where registry_id in ('12345678','23456789')
+		 limit 1`).Scan(&oldClientID); err {
+	case nil:
+		// Orphaned fixtures present — repoint everything keyed on the
+		// stale client UUID to the new clientID/adminID. Single tx so
+		// either every reference is fixed or none.
+		tx, err := pool.BeginTx(ctx, pgx.TxOptions{})
+		if err != nil {
+			return fmt.Errorf("begin repoint tx: %w", err)
+		}
+		defer func() { _ = tx.Rollback(ctx) }()
+		stmts := []struct {
+			q    string
+			args []any
+		}{
+			{`update "bank".companies set owner_client_id=$1 where owner_client_id=$2`, []any{clientID, oldClientID}},
+			{`update "bank".accounts set owner_client_id=$1, created_by_employee_id=$3 where owner_client_id=$2`, []any{clientID, oldClientID, adminID}},
+			{`update "bank".loans set client_id=$1 where client_id=$2`, []any{clientID, oldClientID}},
+			{`update "bank".loan_requests set client_id=$1, decided_by_employee_id=case when decided_by_employee_id is not null then $3::uuid else null end where client_id=$2`, []any{clientID, oldClientID, adminID}},
+			{`update "bank".payment_recipients set client_id=$1 where client_id=$2`, []any{clientID, oldClientID}},
+		}
+		for _, s := range stmts {
+			if _, err := tx.Exec(ctx, s.q, s.args...); err != nil {
+				return fmt.Errorf("repoint orphan fixtures: %w", err)
+			}
+		}
+		if err := tx.Commit(ctx); err != nil {
+			return fmt.Errorf("commit repoint: %w", err)
+		}
+		fmt.Printf("seed: bank fixtures repointed from old client %s to %s\n", oldClientID, clientID)
 		return nil
+	default:
+		if err.Error() != "no rows in result set" {
+			return fmt.Errorf("check fixture companies: %w", err)
+		}
 	}
 
 	bankCode := envOr("BANK_CODE", "333")
