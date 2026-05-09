@@ -224,6 +224,12 @@ service TradingService {
       body: "*"
     };
   }
+
+  rpc ListRealizedPnL(ListRealizedPnLRequest) returns (ListRealizedPnLResponse) {
+    option (google.api.http) = {
+      get: "/api/v1/tax/realized"
+    };
+  }
 }
 
 // =====================================================================
@@ -748,4 +754,41 @@ message RunTaxRequest {
 message RunTaxResponse {
   int32 users_taxed = 1;
   string total_collected_rsd = 2;
+}
+
+// RealizedPnLRow is one closing-sell row, decorated with the security
+// ticker for display. tax_amount_rsd is 15% of max(profit_rsd, 0) per
+// spec p.62 (losses don't generate tax under the simple model).
+message RealizedPnLRow {
+  string id                          = 1;
+  google.protobuf.Timestamp sale_at  = 2;
+  string security_id                 = 3;
+  string ticker                      = 4;
+  int32  quantity                    = 5;
+  string cost_basis_amt              = 6;     // native currency
+  string proceeds_amt                = 7;     // native currency
+  Currency currency                  = 8;     // native currency
+  string profit_native               = 9;     // proceeds - cost_basis (native)
+  string profit_rsd                  = 10;    // RSD-equivalent (no commission, spec p.62)
+  string tax_amount_rsd              = 11;    // 15% of max(profit_rsd, 0)
+  bool   taxed                       = 12;
+  google.protobuf.Timestamp taxed_at = 13;
+  string tax_op_id                   = 14;
+  string account_id                  = 15;
+}
+
+// ListRealizedPnLRequest scopes the realised-gain ledger view.
+//   user_id  is required.
+//   user_kind narrows when both kinds happen to share an ID (shouldn't,
+//             but kept for symmetry with tax board filters).
+//   from / to clip by realised_at; either may be omitted.
+message ListRealizedPnLRequest {
+  string user_id                = 1;
+  UserKind user_kind            = 2;
+  google.protobuf.Timestamp from = 3;
+  google.protobuf.Timestamp to   = 4;
+}
+
+message ListRealizedPnLResponse {
+  repeated RealizedPnLRow rows = 1;
 }

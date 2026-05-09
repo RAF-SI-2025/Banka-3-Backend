@@ -23,6 +23,8 @@ package service
 import (
 	"context"
 	"math/big"
+	"strings"
+	"time"
 
 	"github.com/RAF-SI-2025/Banka-3-Backend/pkg/apperr"
 	"github.com/RAF-SI-2025/Banka-3-Backend/pkg/auth"
@@ -55,18 +57,22 @@ type TaxSettler interface {
 type TaxPosition struct {
 	UserID        string
 	UserKind      domain.UserKind
+	DisplayName   string
 	UnpaidTaxRSD  string
 	PaidTaxYTDRSD string
 }
 
 // ListTaxPositionsInput narrows the set returned by ListTaxPositions.
 type ListTaxPositionsInput struct {
-	UserKind domain.UserKind // empty = both client and employee
+	UserKind  domain.UserKind // empty = both client and employee
+	NameQuery string          // case-insensitive substring of "first last"
 }
 
 // ListTaxPositions returns one row per user with non-zero unpaid or
 // year-to-date paid tax. Supervisor-only — clients don't see the tax
-// dashboard.
+// dashboard. display_name is resolved via Users (user-svc); the
+// name_query filter is applied after resolution and falls back to a
+// UUID substring match when Users is unwired.
 func (s *Service) ListTaxPositions(ctx context.Context, in ListTaxPositionsInput) ([]*TaxPosition, error) {
 	if _, err := s.requireSupervisor(ctx); err != nil {
 		return nil, err
@@ -75,6 +81,7 @@ func (s *Service) ListTaxPositions(ctx context.Context, in ListTaxPositionsInput
 	if err != nil {
 		return nil, err
 	}
+	needle := strings.ToLower(strings.TrimSpace(in.NameQuery))
 	out := make([]*TaxPosition, 0, len(aggs))
 	for _, a := range aggs {
 		unpaid, err := money.Parse(a.UnpaidGainRSD)
@@ -85,9 +92,31 @@ func (s *Service) ListTaxPositions(ctx context.Context, in ListTaxPositionsInput
 		if err != nil {
 			return nil, apperr.Internal("parse paid gain", err)
 		}
+		name := ""
+		if s.Users != nil {
+			n, err := s.Users.DisplayName(ctx, a.UserID, a.UserKind)
+			if err != nil {
+				// Resolution failure shouldn't drop the row from the
+				// supervisor view — they still need to see the debt.
+				// Log and fall through with an empty name.
+				s.Log.Warn("resolve display_name failed", "user_id", a.UserID, "kind", string(a.UserKind), "err", err.Error())
+			} else {
+				name = n
+			}
+		}
+		if needle != "" {
+			haystack := strings.ToLower(name)
+			if name == "" {
+				haystack = strings.ToLower(a.UserID)
+			}
+			if !strings.Contains(haystack, needle) {
+				continue
+			}
+		}
 		out = append(out, &TaxPosition{
 			UserID:        a.UserID,
 			UserKind:      a.UserKind,
+			DisplayName:   name,
 			UnpaidTaxRSD:  money.FormatAmount(money.Mul(unpaid, taxRate)),
 			PaidTaxYTDRSD: money.FormatAmount(money.Mul(paid, taxRate)),
 		})
@@ -255,3 +284,107 @@ type taxStoreShim interface {
 }
 
 var _ taxStoreShim = (*store.Store)(nil)
+
+// RealizedPnLRow is the supervisor-facing per-sale row. Mirrors the
+// proto message but stays in domain-string form so the service layer
+// is free of timestamppb/Currency-proto coupling.
+type RealizedPnLRow struct {
+	ID            string
+	SaleAt        time.Time
+	SecurityID    string
+	Ticker        string
+	AccountID     string
+	Quantity      int32
+	CostBasisAmt  string
+	ProceedsAmt   string
+	Currency      domain.Currency
+	ProfitNative  string
+	ProfitRSD     string
+	TaxAmountRSD  string
+	Taxed         bool
+	TaxedAt       *time.Time
+	TaxOpID       string
+}
+
+// ListRealizedPnLInput drives the supervisor "Realizovani gubici/dobici"
+// detail view. user_id is required; from/to clip realized_at when set.
+type ListRealizedPnLInput struct {
+	UserID   string
+	UserKind domain.UserKind
+	From     *time.Time
+	To       *time.Time
+}
+
+// ListRealizedPnL returns one row per closing sell-execution for the
+// given user, decorated with the security ticker and the per-row tax
+// (15% of max(profit_rsd, 0)). Supervisor-only — the supervisor tax
+// dashboard reads this; clients see their own realised P&L through
+// the portfolio surface.
+func (s *Service) ListRealizedPnL(ctx context.Context, in ListRealizedPnLInput) ([]*RealizedPnLRow, error) {
+	if _, err := s.requireSupervisor(ctx); err != nil {
+		return nil, err
+	}
+	if in.UserID == "" {
+		return nil, apperr.Validation("user_id is required")
+	}
+	rows, err := s.Store.ListRealizedGains(ctx, store.RealizedGainFilter{
+		UserID:   in.UserID,
+		UserKind: in.UserKind,
+		From:     in.From,
+		To:       in.To,
+	})
+	if err != nil {
+		return nil, err
+	}
+
+	// Batch-resolve tickers. Realised-gains rows in a date window
+	// usually concentrate on a handful of securities, so a per-id
+	// GetSecurity is cheaper than ListSecurities pagination.
+	tickerByID := map[string]string{}
+	for _, r := range rows {
+		if _, seen := tickerByID[r.SecurityID]; seen {
+			continue
+		}
+		sec, err := s.Store.GetSecurity(ctx, r.SecurityID)
+		if err != nil {
+			// Don't drop the row — supervisor needs to see the gain
+			// even when the security record was deleted. Leave ticker
+			// empty.
+			s.Log.Warn("resolve security ticker failed", "security_id", r.SecurityID, "err", err.Error())
+			tickerByID[r.SecurityID] = ""
+			continue
+		}
+		tickerByID[r.SecurityID] = sec.Ticker
+	}
+
+	out := make([]*RealizedPnLRow, 0, len(rows))
+	for _, r := range rows {
+		gainRSD, err := money.Parse(r.GainRSD)
+		if err != nil {
+			return nil, apperr.Internal("parse gain_rsd", err)
+		}
+		// Spec p.62: losses don't generate tax under the simple model.
+		var taxRSD = big.NewRat(0, 1)
+		if money.IsPositive(gainRSD) {
+			taxRSD = money.Mul(gainRSD, taxRate)
+		}
+		out = append(out, &RealizedPnLRow{
+			ID:           r.ID,
+			SaleAt:       r.RealizedAt,
+			SecurityID:   r.SecurityID,
+			Ticker:       tickerByID[r.SecurityID],
+			AccountID:    r.AccountID,
+			Quantity:     r.Quantity,
+			CostBasisAmt: r.CostBasisAmt,
+			ProceedsAmt:  r.ProceedsAmt,
+			Currency:     r.Currency,
+			ProfitNative: r.GainNative,
+			ProfitRSD:    r.GainRSD,
+			TaxAmountRSD: money.FormatAmount(taxRSD),
+			Taxed:        r.Taxed,
+			TaxedAt:      r.TaxedAt,
+			TaxOpID:      r.TaxOpID,
+		})
+	}
+	return out, nil
+}

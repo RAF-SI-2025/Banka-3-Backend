@@ -1181,6 +1181,163 @@ func TestIntegration_Tax_LossClamped(t *testing.T) {
 	}
 }
 
+// stubUsers is a deterministic UserResolver. The integration suite
+// wires it into the service before exercising the supervisor tax board
+// so display_name + name_query are exercised without spinning up the
+// user service.
+type stubUsers struct {
+	names map[string]string // user_id → display name
+}
+
+func (s *stubUsers) DisplayName(_ context.Context, userID string, _ domain.UserKind) (string, error) {
+	if n, ok := s.names[userID]; ok {
+		return n, nil
+	}
+	return "", nil
+}
+
+// writeRealizedGainAt seeds a realized_gain row at a chosen wall-clock
+// time so date-range filtering can be exercised. realized_at defaults
+// to now() when omitted; the integration tests below pin it explicitly.
+func writeRealizedGainAt(t *testing.T, userID, secID, accID, gainRSD string, realizedAt time.Time) error {
+	t.Helper()
+	const q = `
+        insert into "trading".realized_gains
+            (user_id, user_kind, security_id, account_id, quantity,
+             cost_basis_amt, proceeds_amt, currency,
+             gain_native, gain_rsd, realized_at)
+        values ($1,'client',$2,$3,1,
+                100::numeric, 200::numeric, 'RSD',
+                $4::numeric, $4::numeric, $5)`
+	_, err := fixPool.Exec(context.Background(), q, userID, secID, accID, gainRSD, realizedAt)
+	return err
+}
+
+// TestIntegration_ListRealizedPnL covers the supervisor detail-view
+// RPC: user filter, date-range clipping, ticker decoration, and the
+// per-row tax_amount math (15% of profit_rsd, clamped to 0 for losses).
+func TestIntegration_ListRealizedPnL(t *testing.T) {
+	svc := setup(t)
+	ex := seedExchange(t, svc, "XNYS", domain.CurrencyUSD)
+	sec, _ := seedStock(t, svc, "PNL", ex, "100", "100", "99", 1000)
+
+	clientID := uuid.NewString()
+	otherID := uuid.NewString()
+	accID := uuid.NewString()
+
+	// Three rows for clientID at distinct dates; one row for otherID
+	// to verify the user filter.
+	jan := time.Date(2026, 1, 15, 12, 0, 0, 0, time.UTC)
+	feb := time.Date(2026, 2, 10, 12, 0, 0, 0, time.UTC)
+	mar := time.Date(2026, 3, 20, 12, 0, 0, 0, time.UTC)
+	if err := writeRealizedGainAt(t, clientID, sec.ID, accID, "1000", jan); err != nil {
+		t.Fatalf("seed jan: %v", err)
+	}
+	if err := writeRealizedGainAt(t, clientID, sec.ID, accID, "-500", feb); err != nil {
+		t.Fatalf("seed feb (loss): %v", err)
+	}
+	if err := writeRealizedGainAt(t, clientID, sec.ID, accID, "2000", mar); err != nil {
+		t.Fatalf("seed mar: %v", err)
+	}
+	if err := writeRealizedGainAt(t, otherID, sec.ID, accID, "9999", feb); err != nil {
+		t.Fatalf("seed other: %v", err)
+	}
+
+	ctx := TaxCronContext(context.Background())
+	rows, err := svc.ListRealizedPnL(ctx, ListRealizedPnLInput{UserID: clientID})
+	if err != nil {
+		t.Fatalf("ListRealizedPnL all: %v", err)
+	}
+	if len(rows) != 3 {
+		t.Fatalf("rows=%d, want 3 (only clientID)", len(rows))
+	}
+	for _, r := range rows {
+		if r.Ticker != "PNL" {
+			t.Fatalf("ticker=%q, want PNL", r.Ticker)
+		}
+	}
+	// Loss row is preserved with tax=0; gain rows compute 15%.
+	for _, r := range rows {
+		var want string
+		switch {
+		case numericEq(r.ProfitRSD, "1000"):
+			want = "150"
+		case numericEq(r.ProfitRSD, "2000"):
+			want = "300"
+		case numericEq(r.ProfitRSD, "-500"):
+			want = "0"
+		default:
+			t.Fatalf("unexpected profit_rsd=%q", r.ProfitRSD)
+		}
+		if !numericEq(r.TaxAmountRSD, want) {
+			t.Fatalf("profit=%q → tax=%q, want %q", r.ProfitRSD, r.TaxAmountRSD, want)
+		}
+	}
+
+	// Date filter: only Feb-Mar.
+	from := time.Date(2026, 2, 1, 0, 0, 0, 0, time.UTC)
+	to := time.Date(2026, 3, 31, 23, 59, 59, 0, time.UTC)
+	clipped, err := svc.ListRealizedPnL(ctx, ListRealizedPnLInput{
+		UserID: clientID, From: &from, To: &to,
+	})
+	if err != nil {
+		t.Fatalf("ListRealizedPnL clipped: %v", err)
+	}
+	if len(clipped) != 2 {
+		t.Fatalf("clipped rows=%d, want 2 (Feb+Mar)", len(clipped))
+	}
+}
+
+// TestIntegration_ListTaxPositions_DisplayName covers the spec p.63
+// "filteri po imenu i prezimenu" path: rows carry the resolved name,
+// and name_query filters case-insensitively against it.
+func TestIntegration_ListTaxPositions_DisplayName(t *testing.T) {
+	svc := setup(t)
+	ex := seedExchange(t, svc, "XNYS", domain.CurrencyUSD)
+	sec, _ := seedStock(t, svc, "DNQ", ex, "100", "100", "99", 1000)
+
+	pera := uuid.NewString()
+	mika := uuid.NewString()
+	accID := uuid.NewString()
+	now := time.Now()
+	if err := writeRealizedGainAt(t, pera, sec.ID, accID, "1000", now); err != nil {
+		t.Fatalf("seed pera: %v", err)
+	}
+	if err := writeRealizedGainAt(t, mika, sec.ID, accID, "2000", now); err != nil {
+		t.Fatalf("seed mika: %v", err)
+	}
+
+	svc.Users = &stubUsers{names: map[string]string{
+		pera: "Petar Petrović",
+		mika: "Mika Mikić",
+	}}
+
+	ctx := TaxCronContext(context.Background())
+	all, err := svc.ListTaxPositions(ctx, ListTaxPositionsInput{})
+	if err != nil {
+		t.Fatalf("ListTaxPositions: %v", err)
+	}
+	if len(all) != 2 {
+		t.Fatalf("rows=%d, want 2", len(all))
+	}
+	gotName := map[string]string{}
+	for _, r := range all {
+		gotName[r.UserID] = r.DisplayName
+	}
+	if gotName[pera] != "Petar Petrović" {
+		t.Fatalf("pera display_name=%q", gotName[pera])
+	}
+
+	// Name filter: case-insensitive substring against display_name.
+	filtered, err := svc.ListTaxPositions(ctx, ListTaxPositionsInput{NameQuery: "petr"})
+	if err != nil {
+		t.Fatalf("ListTaxPositions filtered: %v", err)
+	}
+	if len(filtered) != 1 || filtered[0].UserID != pera {
+		t.Fatalf("filter petr → %#v, want only pera", filtered)
+	}
+}
+
 func writeRealizedGain(t *testing.T, svc *Service, userID, secID, accID, gainRSD string) error {
 	t.Helper()
 	tx, err := fixPool.Begin(context.Background())

@@ -10,6 +10,7 @@ import (
 	bankpb "github.com/RAF-SI-2025/Banka-3-Backend/gen/proto/bank/v1"
 	exchangepb "github.com/RAF-SI-2025/Banka-3-Backend/gen/proto/exchange/v1"
 	tradingpb "github.com/RAF-SI-2025/Banka-3-Backend/gen/proto/trading/v1"
+	userpb "github.com/RAF-SI-2025/Banka-3-Backend/gen/proto/user/v1"
 	"github.com/RAF-SI-2025/Banka-3-Backend/pkg/config"
 	"github.com/RAF-SI-2025/Banka-3-Backend/pkg/grpcserver"
 	"github.com/RAF-SI-2025/Banka-3-Backend/pkg/logger"
@@ -70,6 +71,21 @@ func Run() error {
 		svc.Rates = &exchangeAdapter{c: exchangepb.NewExchangeServiceClient(conn)}
 	} else {
 		log.Warn("EXCHANGE_GRPC_ADDR not set; agent-limit math will use raw notional for foreign trades")
+	}
+
+	// User-service resolver for the supervisor tax dashboard
+	// (display_name + name filter, spec p.63). The service tolerates a
+	// nil Users field on a minimal dev stack — display_name then comes
+	// back empty.
+	if userAddr := config.String("USER_GRPC_ADDR", ""); userAddr != "" {
+		conn, err := grpc.NewClient(userAddr, grpc.WithTransportCredentials(insecure.NewCredentials()))
+		if err != nil {
+			return fmt.Errorf("dial user: %w", err)
+		}
+		defer conn.Close()
+		svc.Users = &userResolverAdapter{c: userpb.NewUserServiceClient(conn)}
+	} else {
+		log.Warn("USER_GRPC_ADDR not set; tax dashboard display_name will be empty")
 	}
 
 	// Bank settler — the execution worker dials this on every fill to

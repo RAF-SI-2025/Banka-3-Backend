@@ -3,6 +3,7 @@ package store
 import (
 	"context"
 	"strings"
+	"time"
 
 	"github.com/RAF-SI-2025/Banka-3-Backend/pkg/apperr"
 	"github.com/RAF-SI-2025/Banka-3-Backend/services/trading/internal/domain"
@@ -45,6 +46,8 @@ type RealizedGainFilter struct {
 	UserID    string
 	UserKind  domain.UserKind
 	OnlyTaxed *bool
+	From      *time.Time // inclusive lower bound on realized_at
+	To        *time.Time // inclusive upper bound on realized_at
 }
 
 // ListRealizedGains returns matching rows. Used by both the tax-position
@@ -64,6 +67,12 @@ func (s *Store) ListRealizedGains(ctx context.Context, f RealizedGainFilter) ([]
 	}
 	if f.OnlyTaxed != nil {
 		add("taxed = ?", *f.OnlyTaxed)
+	}
+	if f.From != nil {
+		add("realized_at >= ?", *f.From)
+	}
+	if f.To != nil {
+		add("realized_at <= ?", *f.To)
 	}
 	where := ""
 	if len(conds) > 0 {

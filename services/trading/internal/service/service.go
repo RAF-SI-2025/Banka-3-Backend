@@ -46,6 +46,17 @@ type RateProvider interface {
 	Quote(ctx context.Context, from, to domain.Currency) (bid, ask string, err error)
 }
 
+// UserResolver resolves cross-service user details that the trading
+// service needs but does not own — currently just the supervisor tax
+// dashboard's "Ime i prezime" column + name filter (spec p.63). The
+// adapter in services/trading/internal/app dials the user service.
+// Tests inject a stub. May be nil on a minimal dev stack: in that case
+// display_name comes back empty and the name_query filter degrades to
+// a UUID substring match.
+type UserResolver interface {
+	DisplayName(ctx context.Context, userID string, kind domain.UserKind) (string, error)
+}
+
 // MarginChecker reads the funding-source state needed by spec p.55
 // margin-eligibility checks: the source account's balance and (for
 // clients only) their largest active loan principal. The trading
@@ -89,6 +100,10 @@ type Service struct {
 	// (spec p.42). May be nil on a minimal dev stack; forex orders
 	// then skip the cash leg with a logged warning.
 	ForexSettler ForexSettler
+	// Users resolves display names for the supervisor tax dashboard
+	// (spec p.63). May be nil on a minimal dev stack; display_name
+	// then comes back empty.
+	Users UserResolver
 	// Now is the wall-clock used by every time-dependent path. Tests
 	// pin it; production leaves it nil and falls through to time.Now.
 	Now func() time.Time

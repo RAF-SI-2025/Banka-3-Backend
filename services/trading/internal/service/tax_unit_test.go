@@ -70,3 +70,31 @@ func TestListTaxPositions_RequiresSupervisor(t *testing.T) {
 		t.Fatal("expected permission denied for non-supervisor")
 	}
 }
+
+// TestListRealizedPnL_RequiresSupervisor — same gate as the rest of
+// the supervisor tax surface.
+func TestListRealizedPnL_RequiresSupervisor(t *testing.T) {
+	svc := &Service{Log: slog.Default()}
+	ctx := auth.WithPrincipal(context.Background(), auth.Principal{
+		UserID:      "00000000-0000-0000-0000-000000000099",
+		UserKind:    auth.KindClient,
+		Permissions: []string{permissions.TradingClient},
+	})
+	if _, err := svc.ListRealizedPnL(ctx, ListRealizedPnLInput{UserID: "x"}); err == nil {
+		t.Fatal("expected permission denied for non-supervisor")
+	}
+}
+
+// TestListRealizedPnL_RequiresUserID — supervisor without user_id is
+// a validation error.
+func TestListRealizedPnL_RequiresUserID(t *testing.T) {
+	svc := &Service{Log: slog.Default()}
+	ctx := auth.WithPrincipal(context.Background(), auth.Principal{
+		UserID:      "00000000-0000-0000-0000-000000000001",
+		UserKind:    auth.KindEmployee,
+		Permissions: []string{permissions.Admin},
+	})
+	if _, err := svc.ListRealizedPnL(ctx, ListRealizedPnLInput{}); err == nil {
+		t.Fatal("expected validation error for empty user_id")
+	}
+}
