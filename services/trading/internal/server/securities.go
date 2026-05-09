@@ -43,12 +43,12 @@ func (s *Server) UpsertSecurity(ctx context.Context, in *tradingpb.UpsertSecurit
 	return securityToProto(out), nil
 }
 
-func (s *Server) GetSecurity(ctx context.Context, in *tradingpb.GetSecurityRequest) (*tradingpb.Security, error) {
-	sec, err := s.Svc.GetSecurity(ctx, in.GetId())
+func (s *Server) GetSecurity(ctx context.Context, in *tradingpb.GetSecurityRequest) (*tradingpb.SecurityWithListing, error) {
+	swl, err := s.Svc.GetSecurity(ctx, in.GetId())
 	if err != nil {
 		return nil, err
 	}
-	return securityToProto(sec), nil
+	return securityWithListingToProto(swl), nil
 }
 
 func (s *Server) ListSecurities(ctx context.Context, in *tradingpb.ListSecuritiesRequest) (*tradingpb.ListSecuritiesResponse, error) {

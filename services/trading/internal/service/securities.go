@@ -2,6 +2,7 @@ package service
 
 import (
 	"context"
+	"errors"
 	"math/big"
 	"strings"
 	"time"
@@ -34,12 +35,29 @@ func (s *Service) UpsertSecurity(ctx context.Context, in *domain.Security) (*dom
 	return s.Store.UpsertSecurity(ctx, in)
 }
 
-// GetSecurity returns one security; any authenticated user can read.
-func (s *Service) GetSecurity(ctx context.Context, id string) (*domain.Security, error) {
+// GetSecurity returns one security joined with its listing and the
+// derived margin metrics — same envelope ListSecurities/ListListings
+// emit, so the FE can hydrate a detail page off a single round trip.
+// Options have no listing row (premium lives on the security itself);
+// the listing field on the envelope stays nil in that case.
+func (s *Service) GetSecurity(ctx context.Context, id string) (*SecurityWithListing, error) {
 	if _, err := s.requirePrincipal(ctx); err != nil {
 		return nil, err
 	}
-	return s.Store.GetSecurity(ctx, id)
+	sec, err := s.Store.GetSecurity(ctx, id)
+	if err != nil {
+		return nil, err
+	}
+	var listing *domain.Listing
+	if l, lerr := s.Store.GetListingBySecurityID(ctx, sec.ID); lerr == nil {
+		listing = l
+	} else {
+		var ae *apperr.Error
+		if !(errors.As(lerr, &ae) && ae.Kind == apperr.KindNotFound) {
+			return nil, lerr
+		}
+	}
+	return decorateSecurity(sec, listing), nil
 }
 
 // ListSecuritiesInput exposes the catalog filters to the server layer

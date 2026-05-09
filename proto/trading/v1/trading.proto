@@ -111,7 +111,7 @@ service TradingService {
     };
   }
 
-  rpc GetSecurity(GetSecurityRequest) returns (Security) {
+  rpc GetSecurity(GetSecurityRequest) returns (SecurityWithListing) {
     option (google.api.http) = {
       get: "/api/v1/securities/{id}"
     };
