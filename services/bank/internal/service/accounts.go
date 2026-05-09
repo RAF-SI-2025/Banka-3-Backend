@@ -45,7 +45,7 @@ func (s *Service) CreateAccount(ctx context.Context, in CreateAccountInput) (*do
 		return nil, err
 	}
 
-	number, err := account.Generate(s.Cfg.BankCode, s.Cfg.Branch, kindToAccountType(in.Kind))
+	number, err := account.Generate(s.Cfg.BankCode, s.Cfg.Branch, kindAndSubtypeToAccountType(in.Kind, in.Subtype))
 	if err != nil {
 		return nil, apperr.Internal("generate account number", err)
 	}
@@ -183,6 +183,45 @@ func (s *Service) UpdateAccountLimits(ctx context.Context, id, daily, monthly st
 	return s.Store.UpdateAccountLimits(ctx, id, strings.TrimSpace(daily), strings.TrimSpace(monthly))
 }
 
+// UpdateAccountName implements the spec p.20 "Promena naziva računa"
+// flow. The principal must be the account owner (clients renaming
+// their own account); employees with AccountWrite are also allowed
+// for back-office corrections. The new name must differ from the
+// current one and must not collide with another active account
+// belonging to the same client (per spec p.20 validation rules).
+func (s *Service) UpdateAccountName(ctx context.Context, id, name string) (*domain.Account, error) {
+	name = strings.TrimSpace(name)
+	if name == "" {
+		return nil, apperr.Validation("naziv ne sme biti prazan")
+	}
+	current, err := s.Store.GetAccountByID(ctx, id)
+	if err != nil {
+		return nil, err
+	}
+	p, ok := auth.PrincipalFrom(ctx)
+	if !ok {
+		return nil, apperr.Unauthenticated("not authenticated")
+	}
+	isOwner := current.OwnerClientID == p.UserID
+	hasEmployeePerm := permissions.Has(p.Permissions, permissions.AccountWrite)
+	if !isOwner && !hasEmployeePerm {
+		return nil, apperr.PermissionDenied("samo vlasnik računa može menjati naziv")
+	}
+	if name == current.Name {
+		return nil, apperr.Validation("novo ime mora biti različito od trenutnog")
+	}
+	if current.OwnerClientID != "" {
+		taken, err := s.Store.AccountNameTakenByOwner(ctx, current.OwnerClientID, name, id)
+		if err != nil {
+			return nil, err
+		}
+		if taken {
+			return nil, apperr.Conflict("već imate račun sa tim nazivom")
+		}
+	}
+	return s.Store.UpdateAccountName(ctx, id, name)
+}
+
 func (s *Service) SetAccountStatus(ctx context.Context, id string, status domain.AccountStatus) (*domain.Account, error) {
 	if err := s.requirePermission(ctx, permissions.AccountWrite); err != nil {
 		return nil, err
@@ -259,20 +298,38 @@ func canSeeAccount(p auth.Principal, a *domain.Account) bool {
 	return permissions.HasAny(p.Permissions, permissions.AccountRead, permissions.Admin)
 }
 
-func kindToAccountType(k domain.AccountKind) account.Type {
+// kindAndSubtypeToAccountType picks the trailing two-digit account-type
+// code per spec p.16. Personal RSD checking branches on subtype because
+// the spec gives savings/pensioner/youth/student/unemployed each their
+// own code; business RSD checking collapses DOO/AD/Fondacija onto 12;
+// the FX bucket has no subtypes (21 lični, 22 poslovni).
+func kindAndSubtypeToAccountType(k domain.AccountKind, st domain.AccountSubtype) account.Type {
 	switch k {
 	case domain.KindPersonalCheckingRSD:
-		return account.TypePersonalCheckingRSD
+		switch st {
+		case domain.SubtypeSavings:
+			return account.TypeSavings
+		case domain.SubtypePensioner:
+			return account.TypePensioner
+		case domain.SubtypeYouth:
+			return account.TypeYouth
+		case domain.SubtypeStudent:
+			return account.TypeStudent
+		case domain.SubtypeUnemployed:
+			return account.TypeUnemployed
+		}
+		// SubtypeStandard (and any unset) → 11.
+		return account.TypePersonalChecking
+	case domain.KindBusinessCheckingRSD:
+		return account.TypeBusinessChecking
 	case domain.KindPersonalFX:
 		return account.TypePersonalFX
-	case domain.KindBusinessCheckingRSD:
-		return account.TypeBusinessCheckingRSD
 	case domain.KindBusinessFX:
 		return account.TypeBusinessFX
 	case domain.KindSystem:
 		return account.TypeSystem
 	}
-	return account.TypePersonalCheckingRSD
+	return account.TypePersonalChecking
 }
 
 func defaultAccountName(k domain.AccountKind, c domain.Currency) string {

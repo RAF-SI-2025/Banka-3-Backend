@@ -13,18 +13,22 @@ import (
 
 	pkgauth "github.com/RAF-SI-2025/Banka-3-Backend/pkg/auth"
 	"github.com/RAF-SI-2025/Banka-3-Backend/pkg/config"
+	pkgidem "github.com/RAF-SI-2025/Banka-3-Backend/pkg/idempotency"
 	"github.com/RAF-SI-2025/Banka-3-Backend/pkg/logger"
 	"github.com/RAF-SI-2025/Banka-3-Backend/pkg/probes"
 	pkgredis "github.com/RAF-SI-2025/Banka-3-Backend/pkg/redis"
 	"github.com/RAF-SI-2025/Banka-3-Backend/pkg/sessionversion"
 	"github.com/RAF-SI-2025/Banka-3-Backend/pkg/shutdown"
+	pkgverif "github.com/RAF-SI-2025/Banka-3-Backend/pkg/verification"
 
 	bankpb "github.com/RAF-SI-2025/Banka-3-Backend/gen/proto/bank/v1"
 	exchangepb "github.com/RAF-SI-2025/Banka-3-Backend/gen/proto/exchange/v1"
 	userpb "github.com/RAF-SI-2025/Banka-3-Backend/gen/proto/user/v1"
 	"github.com/RAF-SI-2025/Banka-3-Backend/services/gateway/internal/auth"
 	"github.com/RAF-SI-2025/Banka-3-Backend/services/gateway/internal/clients"
+	"github.com/RAF-SI-2025/Banka-3-Backend/services/gateway/internal/idempotency"
 	"github.com/RAF-SI-2025/Banka-3-Backend/services/gateway/internal/router"
+	gwverif "github.com/RAF-SI-2025/Banka-3-Backend/services/gateway/internal/verification"
 
 	"github.com/grpc-ecosystem/grpc-gateway/v2/runtime"
 	"golang.org/x/sync/errgroup"
@@ -68,10 +72,29 @@ func Run() error {
 		PublicPrefixes: router.PublicPrefixes(),
 	})
 
+	// Idempotency cache for the Idempotency-Key middleware. TTL matches
+	// the typical e-commerce/payments retry window; tune via env when
+	// real traffic patterns inform a better number.
+	idemCache := &pkgidem.Cache{
+		R:   rdb,
+		TTL: config.Duration("IDEMPOTENCY_TTL", 24*time.Hour),
+	}
+	idemMW := idempotency.Middleware(idemCache, log)
+
+	// Verification: spec p.11 verifikacioni-kod placeholder. Mobile app
+	// is deferred until c5; until then the issuer returns the code in
+	// the HTTP response so the FE can display it inline. Middleware
+	// gates payments / transfers / limit changes / card issuance.
+	verifier := &pkgverif.Cache{R: rdb}
+	verifMW := gwverif.Middleware(verifier, gwverif.DefaultRules(), log)
+
 	r := &router.Router{
-		Users:         cs.User,
-		AuthMW:        authMW,
-		SecureCookies: config.Bool("SECURE_COOKIES", false),
+		Users:          cs.User,
+		AuthMW:         authMW,
+		IdempotencyMW:  idemMW,
+		VerificationMW: verifMW,
+		Verifier:       verifier,
+		SecureCookies:  config.Bool("SECURE_COOKIES", false),
 	}
 
 	// Annotator forwards the authenticated principal (set on the request

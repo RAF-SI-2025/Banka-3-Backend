@@ -92,8 +92,12 @@ type Loan struct {
 	NextInstallmentDate   *time.Time
 	NextInstallmentAmount string
 	Status                LoanStatus
-	ContractedAt          time.Time
-	MaturesAt             *time.Time
+	// LatePenaltyApplied is set true after the +0.05% bump has been
+	// added to BaseRate following a 72h retry failure (spec p.35).
+	// Idempotency flag — never re-applied for the same loan.
+	LatePenaltyApplied bool
+	ContractedAt       time.Time
+	MaturesAt          *time.Time
 }
 
 // EffectiveRate returns base + offset + margin, summed in callers via
@@ -124,7 +128,12 @@ type LoanInstallment struct {
 	Currency          Currency
 	ExpectedDueDate   time.Time
 	ActualPaidAt      *time.Time
-	Status            InstallmentStatus
+	// OverdueSince is the timestamp of the first failed debit attempt;
+	// the daily cron uses it to schedule the spec p.35 72h retry. NULL
+	// for installments that have either never been attempted or were
+	// paid on the first try.
+	OverdueSince *time.Time
+	Status       InstallmentStatus
 }
 
 // =====================================================================

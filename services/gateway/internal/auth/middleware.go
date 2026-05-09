@@ -19,16 +19,33 @@ import (
 	"net/http"
 	"strings"
 
+	"google.golang.org/grpc"
+
 	pkgauth "github.com/RAF-SI-2025/Banka-3-Backend/pkg/auth"
 	"github.com/RAF-SI-2025/Banka-3-Backend/pkg/sessionversion"
 	userpb "github.com/RAF-SI-2025/Banka-3-Backend/gen/proto/user/v1"
 )
 
+// SessionCache is the read+write surface the middleware needs from the
+// session-version cache. *sessionversion.Cache satisfies it; tests stub
+// it directly so the middleware can run without Redis.
+type SessionCache interface {
+	Current(ctx context.Context, kind, id string) (int64, error)
+	Set(ctx context.Context, kind, id string, v int64) error
+}
+
+// SessionVersionLookup is the slice of UserServiceClient the middleware
+// actually uses. The full generated client satisfies it; tests stub it
+// without implementing the other ~18 RPCs.
+type SessionVersionLookup interface {
+	GetSessionVersion(ctx context.Context, in *userpb.GetSessionVersionRequest, opts ...grpc.CallOption) (*userpb.GetSessionVersionResponse, error)
+}
+
 // Config holds dependencies for the middleware.
 type Config struct {
 	JWTKey         []byte
-	SessionCache   *sessionversion.Cache
-	UserClient     userpb.UserServiceClient
+	SessionCache   SessionCache
+	UserClient     SessionVersionLookup
 	PublicPrefixes []string // request paths that bypass auth
 }
 

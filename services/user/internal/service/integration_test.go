@@ -242,61 +242,33 @@ func TestIntegration_Login_HappyPath(t *testing.T) {
 	}
 }
 
-func TestIntegration_Login_WrongPasswordCounts(t *testing.T) {
+func TestIntegration_Login_WrongPassword(t *testing.T) {
 	svc, _ := setup(t)
 	admin := makeAdmin(t, svc)
 
-	for i := 0; i < 2; i++ {
-		_, err := svc.Login(context.Background(), admin.Email, "Wrong123")
-		if !isApperr(err, apperr.KindUnauthenticated) {
-			t.Fatalf("attempt %d: want Unauthenticated, got %v", i, err)
-		}
-	}
-	// Third strike — apperr.PermissionDenied with the lock message.
-	_, err := svc.Login(context.Background(), admin.Email, "Wrong123")
-	if !isApperr(err, apperr.KindPermissionDenied) {
-		t.Fatalf("attempt 3: want PermissionDenied, got %v", err)
-	}
-	if msg := apperrMsg(err); !contains([]string{msg}, "privremeno zaključan") {
-		t.Errorf("unexpected lock message: %q", msg)
-	}
-
-	// Even correct password is locked out now.
-	_, err = svc.Login(context.Background(), admin.Email, "Admin123!")
-	if !isApperr(err, apperr.KindPermissionDenied) {
-		t.Fatalf("locked + correct pw: want PermissionDenied, got %v", err)
-	}
-}
-
-func TestIntegration_Login_SuccessClearsCounter(t *testing.T) {
-	svc, _ := setup(t)
-	admin := makeAdmin(t, svc)
-
-	// Two wrong attempts, then a correct one.
-	for i := 0; i < 2; i++ {
-		_, _ = svc.Login(context.Background(), admin.Email, "Wrong123")
-	}
-	if _, err := svc.Login(context.Background(), admin.Email, "Admin123!"); err != nil {
-		t.Fatalf("correct after 2 wrong: %v", err)
-	}
-	// One more wrong attempt should NOT immediately lock — counter was
-	// cleared on success.
 	_, err := svc.Login(context.Background(), admin.Email, "Wrong123")
 	if !isApperr(err, apperr.KindUnauthenticated) {
-		t.Fatalf("post-clear single wrong: want Unauthenticated, got %v", err)
+		t.Fatalf("want Unauthenticated, got %v", err)
+	}
+	if msg := apperrMsg(err); msg != "Neispravni kredencijali" {
+		t.Errorf("want %q, got %q", "Neispravni kredencijali", msg)
 	}
 }
 
+// TestIntegration_Login_UnknownUser pins the anti-enumeration policy:
+// nonexistent emails return the same "Neispravni kredencijali" /
+// Unauthenticated as a wrong password, so an attacker can't probe
+// the address book by observing different error responses.
 func TestIntegration_Login_UnknownUser(t *testing.T) {
 	svc, _ := setup(t)
 	makeAdmin(t, svc)
 
 	_, err := svc.Login(context.Background(), "nobody@banka.local", "Anything1")
-	if !isApperr(err, apperr.KindNotFound) {
-		t.Fatalf("want NotFound, got %v", err)
+	if !isApperr(err, apperr.KindUnauthenticated) {
+		t.Fatalf("want Unauthenticated, got %v", err)
 	}
-	if msg := apperrMsg(err); msg != "Korisnik ne postoji" {
-		t.Errorf("want spec-exact 'Korisnik ne postoji', got %q", msg)
+	if msg := apperrMsg(err); msg != "Neispravni kredencijali" {
+		t.Errorf("want %q, got %q", "Neispravni kredencijali", msg)
 	}
 }
 
@@ -383,6 +355,27 @@ func TestIntegration_Activation_PasswordTooWeak(t *testing.T) {
 	}
 }
 
+// TestIntegration_Activation_TokenExpired pins the spec p.10 24h TTL.
+// We don't sleep — backdating expires_at directly mimics the rollover
+// without a 24h test run.
+func TestIntegration_Activation_TokenExpired(t *testing.T) {
+	svc, notif := setup(t)
+	admin := makeAdmin(t, svc)
+	emp := createEmployee(t, svc, admin.ID, "ana@banka.local", "ana", "agent", true)
+	plaintext := extractToken(t, notif, "ana@banka.local", "/activate?token=")
+
+	if _, err := fixPool.Exec(context.Background(),
+		`update "user".activation_tokens set expires_at = now() - interval '1 minute' where employee_id = $1`,
+		emp.ID); err != nil {
+		t.Fatalf("backdate token: %v", err)
+	}
+
+	err := svc.ActivateAccount(context.Background(), plaintext, "Ana12345")
+	if !isApperr(err, apperr.KindFailedPrecondition) {
+		t.Fatalf("expired token: want FailedPrecondition, got %v", err)
+	}
+}
+
 // =====================================================================
 // Password reset
 // =====================================================================
@@ -422,6 +415,33 @@ func TestIntegration_ResetUnknownEmailSilentlySucceeds(t *testing.T) {
 	}
 	if len(notif.sentTo("nobody@banka.local")) != 0 {
 		t.Error("no email should have been sent")
+	}
+}
+
+// TestIntegration_Reset_TokenExpired pins the spec p.10 15-minute TTL
+// on reset tokens. Same backdating trick as the activation test.
+func TestIntegration_Reset_TokenExpired(t *testing.T) {
+	svc, notif := setup(t)
+	admin := makeAdmin(t, svc)
+
+	if err := svc.RequestPasswordReset(context.Background(), admin.Email); err != nil {
+		t.Fatalf("request: %v", err)
+	}
+	plaintext := extractToken(t, notif, admin.Email, "/password-reset/confirm?token=")
+
+	if _, err := fixPool.Exec(context.Background(),
+		`update "user".password_reset_tokens set expires_at = now() - interval '1 minute' where user_id = $1`,
+		admin.ID); err != nil {
+		t.Fatalf("backdate token: %v", err)
+	}
+
+	err := svc.ConfirmPasswordReset(context.Background(), plaintext, "NewAdmin123")
+	if !isApperr(err, apperr.KindFailedPrecondition) {
+		t.Fatalf("expired token: want FailedPrecondition, got %v", err)
+	}
+	// Old password still valid.
+	if _, err := svc.Login(context.Background(), admin.Email, "Admin123!"); err != nil {
+		t.Errorf("old pw should still work after expired reset: %v", err)
 	}
 }
 

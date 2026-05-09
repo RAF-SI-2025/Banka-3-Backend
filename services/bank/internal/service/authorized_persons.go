@@ -35,7 +35,7 @@ func (s *Service) CreateAuthorizedPerson(ctx context.Context, in CreateAuthorize
 	if _, err := s.Store.GetCompanyByID(ctx, in.CompanyID); err != nil {
 		return nil, err
 	}
-	if err := validateAP(in); err != nil {
+	if err := s.validateAP(in); err != nil {
 		return nil, err
 	}
 	return s.Store.CreateAuthorizedPerson(ctx, &domain.AuthorizedPerson{
@@ -60,7 +60,7 @@ func (s *Service) ListAuthorizedPersons(ctx context.Context, companyID string) (
 	return s.Store.ListAuthorizedPersonsByCompany(ctx, companyID)
 }
 
-func validateAP(in CreateAuthorizedPersonInput) error {
+func (s *Service) validateAP(in CreateAuthorizedPersonInput) error {
 	switch {
 	case strings.TrimSpace(in.CompanyID) == "":
 		return apperr.Validation("company id is required")
@@ -85,7 +85,7 @@ func validateAP(in CreateAuthorizedPersonInput) error {
 	if !apPhoneRe.MatchString(strings.TrimSpace(in.Phone)) {
 		return apperr.Validation("phone format is invalid")
 	}
-	if !in.DateOfBirth.Before(time.Now()) {
+	if !in.DateOfBirth.Before(s.now()) {
 		return apperr.Validation("date of birth must be in the past")
 	}
 	return nil

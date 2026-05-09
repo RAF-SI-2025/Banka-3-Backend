@@ -14,6 +14,7 @@ package service
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"log/slog"
 	"os"
@@ -25,11 +26,20 @@ import (
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5/pgxpool"
 
+	"github.com/RAF-SI-2025/Banka-3-Backend/pkg/apperr"
 	"github.com/RAF-SI-2025/Banka-3-Backend/pkg/auth"
 	"github.com/RAF-SI-2025/Banka-3-Backend/pkg/permissions"
 	"github.com/RAF-SI-2025/Banka-3-Backend/services/bank/internal/domain"
 	"github.com/RAF-SI-2025/Banka-3-Backend/services/bank/internal/store"
 )
+
+func isApperr(err error, kind apperr.Kind) bool {
+	var ae *apperr.Error
+	if !errors.As(err, &ae) {
+		return false
+	}
+	return ae.Kind == kind
+}
 
 // =====================================================================
 // Shared fixture
@@ -102,9 +112,10 @@ func setup(t *testing.T) *Service {
 	st := store.New(fixPool)
 	logger := slog.New(slog.NewTextHandler(os.Stderr, &slog.HandlerOptions{Level: slog.LevelWarn}))
 	svc := New(st, Config{
-		BankCode:     "265",
+		BankCode:     "333",
 		Branch:       "0001",
 		FXCommission: "0.005",
+		CVVPepper:    "test-pepper",
 	}, logger)
 	svc.Rates = pinnedRates{}
 	svc.Notifier = currentNotifier
@@ -297,8 +308,11 @@ func TestIntegration_CreateAccount_RSDChecking(t *testing.T) {
 	if len(a.Number) != 18 {
 		t.Errorf("account number length = %d, want 18", len(a.Number))
 	}
-	if !strings.HasPrefix(a.Number, "265") {
+	if !strings.HasPrefix(a.Number, "333") {
 		t.Errorf("bank prefix: got %s…", a.Number[:3])
+	}
+	if !strings.HasSuffix(a.Number, "11") {
+		t.Errorf("type suffix: got %s, want 11 (personal standard checking, spec p.16)", a.Number[16:])
 	}
 	if a.Balance != "1000.0000" || a.AvailableBalance != "1000.0000" {
 		t.Errorf("opening flow: balance=%s available=%s", a.Balance, a.AvailableBalance)
@@ -424,6 +438,78 @@ func TestIntegration_CreatePayment_InsufficientFunds(t *testing.T) {
 	srcAfter, _ := svc.Store.GetAccountByID(context.Background(), src.ID)
 	if srcAfter.AvailableBalance != "100.0000" {
 		t.Errorf("source balance touched on failure: %s", srcAfter.AvailableBalance)
+	}
+}
+
+// TestIntegration_CreatePayment_FX is the inter-client cross-currency
+// flow (spec p.21). EUR → USD payment between two clients goes through
+// the bank's EUR and USD house accounts, with ASK rates on both legs
+// (per spec p.26 "uvek prodajni kurs"):
+//
+//   - source pays 100 EUR (debited)
+//   - bank EUR house +100.00 (received from source)
+//   - bank EUR house → bank USD house: 100 × 117.50 / 110.50 ≈ 106.33 USD
+//     after the bank's internal RSD hop, with 0.5% commission taken on
+//     the destination side → net 105.80 USD
+//   - destination receives 105.80 USD
+//
+// This is the spec's headline payment scenario; same-currency is
+// covered above and own-account FX is covered below.
+func TestIntegration_CreatePayment_FX(t *testing.T) {
+	svc := setup(t)
+	ctx := context.Background()
+
+	srcOwner := uuid.NewString()
+	dstOwner := uuid.NewString()
+	src := mintAccount(t, svc, srcOwner, domain.KindPersonalFX, domain.CurrencyEUR, "200")
+	dst := mintAccount(t, svc, dstOwner, domain.KindPersonalFX, domain.CurrencyUSD, "0")
+
+	houseEURBefore, _ := svc.Store.GetSystemAccount(ctx, domain.CurrencyEUR)
+	houseUSDBefore, _ := svc.Store.GetSystemAccount(ctx, domain.CurrencyUSD)
+
+	res, err := svc.CreatePayment(clientCtx(srcOwner), CreatePaymentInput{
+		FromAccountID:   src.ID,
+		ToAccountNumber: dst.Number,
+		Amount:          "100",
+		RecipientName:   "Drugi klijent",
+		PaymentCode:     "289",
+		Purpose:         "Plaćanje preko valute",
+	})
+	if err != nil {
+		t.Fatalf("FX payment: %v", err)
+	}
+	if res.Status != domain.TxStatusRealized {
+		t.Errorf("status: %s, want realized", res.Status)
+	}
+	// Two transactions: source-leg (EUR debit) + destination-leg (USD
+	// credit). The internal house-to-house RSD hop is implicit in the
+	// rateAndConvert path; only the customer-visible legs are written.
+	if len(res.Transactions) < 2 {
+		t.Errorf("FX payment should write at least 2 transaction legs, got %d", len(res.Transactions))
+	}
+
+	srcAfter, _ := svc.Store.GetAccountByID(ctx, src.ID)
+	dstAfter, _ := svc.Store.GetAccountByID(ctx, dst.ID)
+	if srcAfter.AvailableBalance != "100.0000" {
+		t.Errorf("source EUR balance: %s, want 100.0000 (200 − 100)", srcAfter.AvailableBalance)
+	}
+	// Net USD after commission. With ASK rates EUR=117.50 / USD=110.50:
+	// 100 × 117.50 / 110.50 = 106.3348… USD; minus 0.5% commission = 105.8031.
+	if !strings.HasPrefix(dstAfter.AvailableBalance, "105.8") {
+		t.Errorf("dest USD balance: %s, want ~105.80", dstAfter.AvailableBalance)
+	}
+
+	houseEURAfter, _ := svc.Store.GetSystemAccount(ctx, domain.CurrencyEUR)
+	houseUSDAfter, _ := svc.Store.GetSystemAccount(ctx, domain.CurrencyUSD)
+	deltaEUR := mustSub(t, houseEURAfter.AvailableBalance, houseEURBefore.AvailableBalance)
+	deltaUSD := mustSub(t, houseUSDAfter.AvailableBalance, houseUSDBefore.AvailableBalance)
+	if deltaEUR != "100.0000" {
+		t.Errorf("bank EUR house delta: %s, want +100.0000 (received from source)", deltaEUR)
+	}
+	// Bank pays out the customer-net USD; the spread+commission stays
+	// on the bank's books.
+	if !strings.HasPrefix(deltaUSD, "-105.8") {
+		t.Errorf("bank USD house delta: %s, want ~-105.80", deltaUSD)
 	}
 }
 
@@ -788,6 +874,213 @@ func TestIntegration_Loan_DecideRejection(t *testing.T) {
 	}
 }
 
+// TestIntegration_Loan_FirstFailureMarksOverdue: insufficient funds on
+// the first debit attempt must flip the installment to 'overdue', set
+// overdue_since=~now, and flip the loan to overdue. Crucially, the
+// status writes must commit even though the debit failed — the prior
+// implementation rolled them back along with the failed UPDATE.
+func TestIntegration_Loan_FirstFailureMarksOverdue(t *testing.T) {
+	svc := setup(t)
+	ctx := context.Background()
+	clientID := uuid.NewString()
+	acc := mintAccount(t, svc, clientID, domain.KindPersonalCheckingRSD, domain.CurrencyRSD, "0")
+
+	loan := approveCashLoan(t, svc, clientID, acc.ID, "1000000", 60)
+
+	// Drain the account to below the installment so the next debit fails.
+	if _, err := fixPool.Exec(ctx, `update bank.accounts set balance=0, available_balance=0 where id=$1`, acc.ID); err != nil {
+		t.Fatalf("drain: %v", err)
+	}
+	// Force the first installment due today.
+	if _, err := fixPool.Exec(ctx, `update bank.loan_installments set expected_due_date = now() - interval '1 hour' where loan_id = $1 and sequence_number = 1`, loan.ID); err != nil {
+		t.Fatalf("backdate due: %v", err)
+	}
+
+	res, err := svc.RunInstallmentJob(employeeAdminCtx(), time.Now())
+	if err != nil {
+		t.Fatalf("run: %v", err)
+	}
+	if res.Paid != 0 || res.Missed != 1 || res.Penalised != 0 {
+		t.Errorf("counters: %+v, want Paid=0 Missed=1 Penalised=0", res)
+	}
+
+	insts, _ := svc.Store.ListInstallmentsByLoan(ctx, loan.ID)
+	if len(insts) != 1 {
+		t.Fatalf("installments: got %d, want 1 (no next scheduled while overdue)", len(insts))
+	}
+	if insts[0].Status != domain.InstallmentOverdue {
+		t.Errorf("installment status: %s, want overdue", insts[0].Status)
+	}
+	if insts[0].OverdueSince == nil {
+		t.Error("overdue_since not stamped")
+	}
+
+	loanAfter, _ := svc.Store.GetLoanByID(ctx, loan.ID)
+	if loanAfter.Status != domain.LoanOverdue {
+		t.Errorf("loan status: %s, want overdue", loanAfter.Status)
+	}
+	if loanAfter.LatePenaltyApplied {
+		t.Error("late_penalty_applied=true after FIRST miss; spec says it kicks in on the 72h retry, not now")
+	}
+	if loanAfter.BaseRate != "6.0000" {
+		t.Errorf("base_rate touched on first miss: %s, want 6.0000 (1M RSD bracket per spec p.33)", loanAfter.BaseRate)
+	}
+}
+
+// TestIntegration_Loan_RetryWithinWindowIsSkipped: between the first
+// miss and the 72h mark, the cron must NOT pick the row up again.
+func TestIntegration_Loan_RetryWithinWindowIsSkipped(t *testing.T) {
+	svc := setup(t)
+	ctx := context.Background()
+	clientID := uuid.NewString()
+	acc := mintAccount(t, svc, clientID, domain.KindPersonalCheckingRSD, domain.CurrencyRSD, "0")
+
+	loan := approveCashLoan(t, svc, clientID, acc.ID, "1000000", 60)
+	if _, err := fixPool.Exec(ctx, `update bank.accounts set balance=0, available_balance=0 where id=$1`, acc.ID); err != nil {
+		t.Fatalf("drain: %v", err)
+	}
+	if _, err := fixPool.Exec(ctx, `update bank.loan_installments set expected_due_date = now() - interval '1 hour' where loan_id = $1`, loan.ID); err != nil {
+		t.Fatalf("backdate due: %v", err)
+	}
+	// First run → Missed.
+	if _, err := svc.RunInstallmentJob(employeeAdminCtx(), time.Now()); err != nil {
+		t.Fatalf("run 1: %v", err)
+	}
+	// Run again immediately — overdue_since is "now", retry window has
+	// not elapsed; nothing should be processed.
+	res, err := svc.RunInstallmentJob(employeeAdminCtx(), time.Now())
+	if err != nil {
+		t.Fatalf("run 2: %v", err)
+	}
+	if res.Processed != 0 {
+		t.Errorf("processed: %d, want 0 (within 72h window)", res.Processed)
+	}
+}
+
+// TestIntegration_Loan_RetryAfter72hAppliesPenalty: backdate
+// overdue_since past the 72h window and leave the account underfunded.
+// The cron must retry, fail, apply the +0.05% bump (spec p.35), and
+// reschedule the next retry. A third retry within the new window must
+// NOT bump again (one bump per loan).
+func TestIntegration_Loan_RetryAfter72hAppliesPenalty(t *testing.T) {
+	svc := setup(t)
+	ctx := context.Background()
+	clientID := uuid.NewString()
+	acc := mintAccount(t, svc, clientID, domain.KindPersonalCheckingRSD, domain.CurrencyRSD, "0")
+
+	loan := approveCashLoan(t, svc, clientID, acc.ID, "1000000", 60)
+	originalAmount := loan.InstallmentAmount
+
+	// Drain + backdate due date + run job → Missed (first failure).
+	if _, err := fixPool.Exec(ctx, `update bank.accounts set balance=0, available_balance=0 where id=$1`, acc.ID); err != nil {
+		t.Fatalf("drain: %v", err)
+	}
+	if _, err := fixPool.Exec(ctx, `update bank.loan_installments set expected_due_date = now() - interval '1 hour' where loan_id = $1`, loan.ID); err != nil {
+		t.Fatalf("backdate due: %v", err)
+	}
+	if _, err := svc.RunInstallmentJob(employeeAdminCtx(), time.Now()); err != nil {
+		t.Fatalf("run 1: %v", err)
+	}
+
+	// Backdate overdue_since past the 72h retry window.
+	if _, err := fixPool.Exec(ctx, `update bank.loan_installments set overdue_since = now() - interval '73 hours' where loan_id = $1`, loan.ID); err != nil {
+		t.Fatalf("backdate overdue_since: %v", err)
+	}
+	// Account still underfunded → retry fails → penalty applied.
+	res, err := svc.RunInstallmentJob(employeeAdminCtx(), time.Now())
+	if err != nil {
+		t.Fatalf("run 2: %v", err)
+	}
+	if res.Penalised != 1 {
+		t.Errorf("penalised count: %d, want 1", res.Penalised)
+	}
+
+	loanAfterPenalty, _ := svc.Store.GetLoanByID(ctx, loan.ID)
+	if !loanAfterPenalty.LatePenaltyApplied {
+		t.Error("late_penalty_applied=false after 72h retry failure")
+	}
+	if loanAfterPenalty.BaseRate != "6.0500" {
+		t.Errorf("base_rate after bump: %s, want 6.0500 (= 6.00 + 0.05)", loanAfterPenalty.BaseRate)
+	}
+	if loanAfterPenalty.InstallmentAmount == originalAmount {
+		t.Errorf("installment amount unchanged after penalty: %s (original %s)", loanAfterPenalty.InstallmentAmount, originalAmount)
+	}
+	insts, _ := svc.Store.ListInstallmentsByLoan(ctx, loan.ID)
+	if len(insts) != 1 {
+		t.Fatalf("expected single still-overdue installment, got %d", len(insts))
+	}
+	// overdue_since must have been reset to ~now to schedule the next 72h window.
+	if insts[0].OverdueSince == nil || time.Since(*insts[0].OverdueSince) > time.Minute {
+		t.Errorf("overdue_since not rescheduled near now: %v", insts[0].OverdueSince)
+	}
+
+	// Third pass: backdate again past 72h, account still empty → retry
+	// fails, should be RetryFailed (no second bump).
+	if _, err := fixPool.Exec(ctx, `update bank.loan_installments set overdue_since = now() - interval '73 hours' where loan_id = $1`, loan.ID); err != nil {
+		t.Fatalf("backdate overdue_since 2: %v", err)
+	}
+	res, err = svc.RunInstallmentJob(employeeAdminCtx(), time.Now())
+	if err != nil {
+		t.Fatalf("run 3: %v", err)
+	}
+	if res.Penalised != 0 {
+		t.Errorf("penalised on second retry: %d (must be 0; bump is one-shot)", res.Penalised)
+	}
+	if res.Overdue != 1 {
+		t.Errorf("overdue count on second retry: %d, want 1", res.Overdue)
+	}
+	loanAfterIdempotent, _ := svc.Store.GetLoanByID(ctx, loan.ID)
+	if loanAfterIdempotent.BaseRate != "6.0500" {
+		t.Errorf("base_rate bumped twice: %s, want 6.0500", loanAfterIdempotent.BaseRate)
+	}
+}
+
+// TestIntegration_Loan_RetryAfter72hPaysAndClears: same backdating but
+// with the account refunded between cron runs — the retry succeeds,
+// loan flips back to approved, late_penalty_applied stays false (we
+// never had a second consecutive failure).
+func TestIntegration_Loan_RetryAfter72hPaysAndClears(t *testing.T) {
+	svc := setup(t)
+	ctx := context.Background()
+	clientID := uuid.NewString()
+	acc := mintAccount(t, svc, clientID, domain.KindPersonalCheckingRSD, domain.CurrencyRSD, "0")
+
+	loan := approveCashLoan(t, svc, clientID, acc.ID, "1000000", 60)
+
+	// Drain → Miss.
+	if _, err := fixPool.Exec(ctx, `update bank.accounts set balance=0, available_balance=0 where id=$1`, acc.ID); err != nil {
+		t.Fatalf("drain: %v", err)
+	}
+	if _, err := fixPool.Exec(ctx, `update bank.loan_installments set expected_due_date = now() - interval '1 hour' where loan_id = $1`, loan.ID); err != nil {
+		t.Fatalf("backdate due: %v", err)
+	}
+	if _, err := svc.RunInstallmentJob(employeeAdminCtx(), time.Now()); err != nil {
+		t.Fatalf("run 1: %v", err)
+	}
+
+	// Refund + advance the retry window → retry succeeds.
+	if _, err := fixPool.Exec(ctx, `update bank.accounts set balance=1000000, available_balance=1000000 where id=$1`, acc.ID); err != nil {
+		t.Fatalf("refund: %v", err)
+	}
+	if _, err := fixPool.Exec(ctx, `update bank.loan_installments set overdue_since = now() - interval '73 hours' where loan_id = $1`, loan.ID); err != nil {
+		t.Fatalf("backdate overdue_since: %v", err)
+	}
+	res, err := svc.RunInstallmentJob(employeeAdminCtx(), time.Now())
+	if err != nil {
+		t.Fatalf("run 2: %v", err)
+	}
+	if res.Paid != 1 {
+		t.Errorf("paid count: %d, want 1", res.Paid)
+	}
+	loanAfter, _ := svc.Store.GetLoanByID(ctx, loan.ID)
+	if loanAfter.Status != domain.LoanApproved {
+		t.Errorf("loan status: %s, want approved (back from overdue)", loanAfter.Status)
+	}
+	if loanAfter.LatePenaltyApplied {
+		t.Error("penalty applied despite recovery before second failure")
+	}
+}
+
 // =====================================================================
 // Recipients
 // =====================================================================
@@ -916,6 +1209,46 @@ func TestIntegration_Notify_LoanDecision(t *testing.T) {
 	}
 }
 
+// TestIntegration_Notify_InstallmentMissed: when the installment-cron
+// can't pull a rate because the account is short, the bank sends a
+// Serbian email to the client (spec p.35 "Banka šalje obaveštenje" on
+// missed rates). Mirrors TestIntegration_Loan_FirstFailureMarksOverdue
+// but asserts on the notifier rather than ledger state.
+func TestIntegration_Notify_InstallmentMissed(t *testing.T) {
+	svc := setup(t)
+	ctx := context.Background()
+	clientID := uuid.NewString()
+	acc := mintAccount(t, svc, clientID, domain.KindPersonalCheckingRSD, domain.CurrencyRSD, "0")
+
+	loan := approveCashLoan(t, svc, clientID, acc.ID, "1000000", 60)
+	currentNotifier.reset()
+
+	if _, err := fixPool.Exec(ctx, `update bank.accounts set balance=0, available_balance=0 where id=$1`, acc.ID); err != nil {
+		t.Fatalf("drain: %v", err)
+	}
+	if _, err := fixPool.Exec(ctx, `update bank.loan_installments set expected_due_date = now() - interval '1 hour' where loan_id = $1 and sequence_number = 1`, loan.ID); err != nil {
+		t.Fatalf("backdate due: %v", err)
+	}
+
+	if _, err := svc.RunInstallmentJob(employeeAdminCtx(), time.Now()); err != nil {
+		t.Fatalf("run: %v", err)
+	}
+
+	emails := currentNotifier.snapshot()
+	if len(emails) != 1 {
+		t.Fatalf("expected 1 missed-installment email, got %d", len(emails))
+	}
+	if !strings.Contains(emails[0].Subject, "Rata") {
+		t.Errorf("subject: %q", emails[0].Subject)
+	}
+	if !strings.Contains(emails[0].Body, "nije realizovana") {
+		t.Errorf("body missing 'nije realizovana': %q", emails[0].Body)
+	}
+	if emails[0].To != clientID+"@example.com" {
+		t.Errorf("recipient: %q", emails[0].To)
+	}
+}
+
 // =====================================================================
 // Maintenance fee cron
 // =====================================================================
@@ -1017,6 +1350,116 @@ func TestIntegration_MaintenanceFee_FXAccountSkipped(t *testing.T) {
 }
 
 // =====================================================================
+// Spent reset cron
+// =====================================================================
+
+// TestIntegration_SpentReset_RollsOverDaily walks the cron path: bump
+// daily_spent on a freshly-created account, backdate daily_spent_reset_on
+// to yesterday, run the job, assert daily_spent is now 0 and the reset
+// stamp is today. monthly_spent stays untouched (same calendar month).
+func TestIntegration_SpentReset_RollsOverDaily(t *testing.T) {
+	svc := setup(t)
+	ctx := context.Background()
+	clientID := uuid.NewString()
+	acc := mintAccount(t, svc, clientID, domain.KindPersonalCheckingRSD, domain.CurrencyRSD, "1000")
+
+	if _, err := fixPool.Exec(ctx, `
+        update bank.accounts
+           set daily_spent = 50000, monthly_spent = 100000,
+               daily_spent_reset_on = current_date - interval '1 day'
+         where id = $1`, acc.ID); err != nil {
+		t.Fatalf("backdate: %v", err)
+	}
+
+	res, err := svc.RunSpentResetJob(employeeAdminCtx())
+	if err != nil {
+		t.Fatalf("run: %v", err)
+	}
+	if res.Daily != 1 {
+		t.Errorf("daily resets: %d, want 1", res.Daily)
+	}
+	if res.Monthly != 0 {
+		t.Errorf("monthly resets: %d, want 0 (same calendar month)", res.Monthly)
+	}
+
+	accAfter, _ := svc.Store.GetAccountByID(ctx, acc.ID)
+	if accAfter.DailySpent != "0.0000" {
+		t.Errorf("daily_spent: %s, want 0", accAfter.DailySpent)
+	}
+	if accAfter.MonthlySpent != "100000.0000" {
+		t.Errorf("monthly_spent touched: %s, want 100000.0000", accAfter.MonthlySpent)
+	}
+}
+
+// TestIntegration_SpentReset_RollsOverMonthly: backdate monthly_spent_reset_on
+// to last month, expect monthly_spent zeroed and daily_spent zeroed too
+// (since rolling the calendar month also rolls the day).
+func TestIntegration_SpentReset_RollsOverMonthly(t *testing.T) {
+	svc := setup(t)
+	ctx := context.Background()
+	clientID := uuid.NewString()
+	acc := mintAccount(t, svc, clientID, domain.KindPersonalCheckingRSD, domain.CurrencyRSD, "1000")
+
+	if _, err := fixPool.Exec(ctx, `
+        update bank.accounts
+           set daily_spent = 50000, monthly_spent = 600000,
+               daily_spent_reset_on   = current_date - interval '40 days',
+               monthly_spent_reset_on = current_date - interval '40 days'
+         where id = $1`, acc.ID); err != nil {
+		t.Fatalf("backdate: %v", err)
+	}
+
+	res, err := svc.RunSpentResetJob(employeeAdminCtx())
+	if err != nil {
+		t.Fatalf("run: %v", err)
+	}
+	if res.Daily != 1 || res.Monthly != 1 {
+		t.Errorf("resets: daily=%d monthly=%d, want 1/1", res.Daily, res.Monthly)
+	}
+
+	accAfter, _ := svc.Store.GetAccountByID(ctx, acc.ID)
+	if accAfter.DailySpent != "0.0000" {
+		t.Errorf("daily_spent: %s, want 0", accAfter.DailySpent)
+	}
+	if accAfter.MonthlySpent != "0.0000" {
+		t.Errorf("monthly_spent: %s, want 0", accAfter.MonthlySpent)
+	}
+}
+
+// TestIntegration_SpentReset_Idempotent: a second run on the same day
+// touches zero rows because the reset columns were just stamped.
+func TestIntegration_SpentReset_Idempotent(t *testing.T) {
+	svc := setup(t)
+	ctx := context.Background()
+	clientID := uuid.NewString()
+	acc := mintAccount(t, svc, clientID, domain.KindPersonalCheckingRSD, domain.CurrencyRSD, "1000")
+
+	if _, err := fixPool.Exec(ctx, `
+        update bank.accounts
+           set daily_spent = 50000,
+               daily_spent_reset_on = current_date - interval '1 day'
+         where id = $1`, acc.ID); err != nil {
+		t.Fatalf("backdate: %v", err)
+	}
+
+	first, err := svc.RunSpentResetJob(employeeAdminCtx())
+	if err != nil {
+		t.Fatalf("run 1: %v", err)
+	}
+	if first.Daily != 1 {
+		t.Errorf("first run: daily=%d, want 1", first.Daily)
+	}
+
+	second, err := svc.RunSpentResetJob(employeeAdminCtx())
+	if err != nil {
+		t.Fatalf("run 2: %v", err)
+	}
+	if second.Daily != 0 || second.Monthly != 0 {
+		t.Errorf("second run touched rows: %+v", second)
+	}
+}
+
+// =====================================================================
 // Companies
 // =====================================================================
 
@@ -1054,6 +1497,133 @@ func TestIntegration_Company_CRUD(t *testing.T) {
 	}
 }
 
+// TestIntegration_AuthorizedPerson_CRUD covers the spec p.15 owner-of-
+// company surface: an admin adds OvlascenaLica to a Firma, lists them
+// back, and the validation gate rejects malformed phone/email/dob.
+func TestIntegration_AuthorizedPerson_CRUD(t *testing.T) {
+	svc := setup(t)
+	owner := uuid.NewString()
+	c, err := svc.CreateCompany(employeeAdminCtx(), CreateCompanyInput{
+		Name:          "Firma d.o.o.",
+		RegistryID:    "11122233",
+		TaxID:         "100200300",
+		ActivityCode:  "62.01",
+		Address:       "Novi Sad",
+		OwnerClientID: owner,
+	})
+	if err != nil {
+		t.Fatalf("create company: %v", err)
+	}
+
+	dob := time.Date(1985, 5, 1, 0, 0, 0, 0, time.UTC)
+	ap, err := svc.CreateAuthorizedPerson(employeeAdminCtx(), CreateAuthorizedPersonInput{
+		CompanyID:   c.ID,
+		FirstName:   "Mira",
+		LastName:    "Mirić",
+		DateOfBirth: dob,
+		Gender:      domain.GenderFemale,
+		Email:       "mira@firma.local",
+		Phone:       "+381601234567",
+		Address:     "Bulevar 1",
+	})
+	if err != nil {
+		t.Fatalf("create ap: %v", err)
+	}
+	if ap.CompanyID != c.ID {
+		t.Errorf("company link wrong: %s vs %s", ap.CompanyID, c.ID)
+	}
+
+	persons, err := svc.ListAuthorizedPersons(employeeAdminCtx(), c.ID)
+	if err != nil {
+		t.Fatalf("list ap: %v", err)
+	}
+	if len(persons) != 1 || persons[0].ID != ap.ID {
+		t.Errorf("list mismatch: %+v", persons)
+	}
+
+	// A second AP under the same company should coexist.
+	if _, err := svc.CreateAuthorizedPerson(employeeAdminCtx(), CreateAuthorizedPersonInput{
+		CompanyID:   c.ID,
+		FirstName:   "Petar",
+		LastName:    "Petrović",
+		DateOfBirth: dob,
+		Gender:      domain.GenderMale,
+		Email:       "petar@firma.local",
+		Phone:       "+381602222222",
+		Address:     "Bulevar 2",
+	}); err != nil {
+		t.Fatalf("create second ap: %v", err)
+	}
+	persons, _ = svc.ListAuthorizedPersons(employeeAdminCtx(), c.ID)
+	if len(persons) != 2 {
+		t.Errorf("expected 2 APs, got %d", len(persons))
+	}
+
+	// Validation gates.
+	cases := []struct {
+		name string
+		in   CreateAuthorizedPersonInput
+	}{
+		{"bad email", CreateAuthorizedPersonInput{
+			CompanyID: c.ID, FirstName: "X", LastName: "Y", DateOfBirth: dob, Gender: domain.GenderFemale,
+			Email: "not-an-email", Phone: "+381601111111", Address: "Z",
+		}},
+		{"bad phone", CreateAuthorizedPersonInput{
+			CompanyID: c.ID, FirstName: "X", LastName: "Y", DateOfBirth: dob, Gender: domain.GenderFemale,
+			Email: "ok@x.com", Phone: "abc", Address: "Z",
+		}},
+		{"future dob", CreateAuthorizedPersonInput{
+			CompanyID: c.ID, FirstName: "X", LastName: "Y",
+			DateOfBirth: time.Now().Add(24 * time.Hour),
+			Gender:      domain.GenderFemale,
+			Email:       "ok@x.com", Phone: "+381601111111", Address: "Z",
+		}},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			if _, err := svc.CreateAuthorizedPerson(employeeAdminCtx(), tc.in); err == nil {
+				t.Errorf("%s: expected validation error", tc.name)
+			}
+		})
+	}
+}
+
+// TestIntegration_UpdateAccountName covers the spec p.20 rename popup.
+// Owner can rename to a fresh name; same-name and another-account
+// collisions are rejected; non-owners (other clients) cannot rename
+// someone else's account.
+func TestIntegration_UpdateAccountName(t *testing.T) {
+	svc := setup(t)
+	owner := uuid.NewString()
+	stranger := uuid.NewString()
+	a := mintAccount(t, svc, owner, domain.KindPersonalCheckingRSD, domain.CurrencyRSD, "0")
+	a2 := mintAccount(t, svc, owner, domain.KindPersonalFX, domain.CurrencyEUR, "0")
+
+	// Happy path.
+	updated, err := svc.UpdateAccountName(clientCtx(owner), a.ID, "Glavni račun")
+	if err != nil {
+		t.Fatalf("rename: %v", err)
+	}
+	if updated.Name != "Glavni račun" {
+		t.Errorf("name not persisted: %q", updated.Name)
+	}
+
+	// Same name → reject.
+	if _, err := svc.UpdateAccountName(clientCtx(owner), a.ID, "Glavni račun"); !isApperr(err, apperr.KindValidation) {
+		t.Errorf("same-name: want Validation, got %v", err)
+	}
+
+	// Collision with sibling account → reject.
+	if _, err := svc.UpdateAccountName(clientCtx(owner), a2.ID, "Glavni račun"); !isApperr(err, apperr.KindConflict) {
+		t.Errorf("sibling-collision: want Conflict, got %v", err)
+	}
+
+	// Stranger cannot rename someone else's account.
+	if _, err := svc.UpdateAccountName(clientCtx(stranger), a.ID, "Hijack"); !isApperr(err, apperr.KindPermissionDenied) {
+		t.Errorf("stranger rename: want PermissionDenied, got %v", err)
+	}
+}
+
 // =====================================================================
 // Helpers
 // =====================================================================
@@ -1075,5 +1645,36 @@ func mustFloat(t *testing.T, s string) float64 {
 		t.Fatalf("float parse %q: %v", s, err)
 	}
 	return f
+}
+
+// approveCashLoan submits a cash loan request as `clientID`, approves
+// it as the admin, and returns the materialised loan. Sized for the
+// late-payment tests; the principal disbursement leg credits `accID`.
+func approveCashLoan(t *testing.T, svc *Service, clientID, accID, amount string, installments int) *domain.Loan {
+	t.Helper()
+	req, err := svc.SubmitLoanRequest(clientCtx(clientID), SubmitLoanRequestInput{
+		AccountID:                accID,
+		LoanType:                 domain.LoanTypeCash,
+		InterestType:             domain.InterestFixed,
+		Amount:                   amount,
+		Currency:                 domain.CurrencyRSD,
+		Purpose:                  "test",
+		MonthlySalary:            "100000",
+		EmploymentStatus:         domain.EmploymentPermanent,
+		EmploymentDurationMonths: 24,
+		InstallmentsTotal:        installments,
+		ContactPhone:             "+381111222333",
+	})
+	if err != nil {
+		t.Fatalf("submit loan: %v", err)
+	}
+	if _, err := svc.DecideLoanRequest(employeeAdminCtx(), req.ID, true, ""); err != nil {
+		t.Fatalf("approve loan: %v", err)
+	}
+	loans, _, err := svc.ListLoans(employeeAdminCtx(), domain.LoanFilter{ClientID: clientID}, 1, 1)
+	if err != nil || len(loans) != 1 {
+		t.Fatalf("list loans after approve: err=%v len=%d", err, len(loans))
+	}
+	return loans[0]
 }
 

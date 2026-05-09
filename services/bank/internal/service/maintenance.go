@@ -35,7 +35,7 @@ func (s *Service) RunMaintenanceFeeJob(ctx context.Context, now time.Time) (*Mai
 		return nil, err
 	}
 	if now.IsZero() {
-		now = time.Now()
+		now = s.now()
 	}
 	return s.runMaintenanceFeeJob(ctx, now)
 }
@@ -43,7 +43,7 @@ func (s *Service) RunMaintenanceFeeJob(ctx context.Context, now time.Time) (*Mai
 // RunMaintenanceFeeJobAuto is the un-authenticated entry used by the
 // in-process cron.
 func (s *Service) RunMaintenanceFeeJobAuto(ctx context.Context) error {
-	res, err := s.runMaintenanceFeeJob(ctx, time.Now())
+	res, err := s.runMaintenanceFeeJob(ctx, s.now())
 	if err != nil {
 		return err
 	}

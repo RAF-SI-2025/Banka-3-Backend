@@ -56,7 +56,7 @@ func (s *Service) CreatePayment(ctx context.Context, in CreatePaymentInput) (*do
 	result := &domain.PaymentResult{OpID: op, Status: domain.TxStatusRealized}
 
 	err = s.Store.ExecuteAtomic(ctx, func(tx pgx.Tx) error {
-		legs, err := s.executeMoneyMove(ctx, tx, from, to, amt, domain.TxKindPayment, op, p.UserID, paymentMeta{
+		legs, err := s.executeMoneyMove(ctx, tx, from, to, amt, domain.TxKindPayment, op, p, paymentMeta{
 			RecipientName:   in.RecipientName,
 			PaymentCode:     code,
 			ReferenceNumber: in.ReferenceNumber,
@@ -138,7 +138,7 @@ func (s *Service) CreateTransfer(ctx context.Context, in CreateTransferInput) (*
 		if from.Currency != to.Currency {
 			kind = domain.TxKindExchange
 		}
-		legs, err := s.executeMoneyMove(ctx, tx, from, to, amt, kind, op, p.UserID, paymentMeta{Purpose: in.Purpose})
+		legs, err := s.executeMoneyMove(ctx, tx, from, to, amt, kind, op, p, paymentMeta{Purpose: in.Purpose})
 		if err != nil {
 			return err
 		}
@@ -167,8 +167,9 @@ type paymentMeta struct {
 // hops through bank house accounts on FX, and writes 1-2 ledger legs.
 //
 // All balance updates run inside the caller's pgx.Tx so a partial
-// failure rolls back fully.
-func (s *Service) executeMoneyMove(ctx context.Context, tx pgx.Tx, from, to *domain.Account, fromAmt *big.Rat, kind domain.TransactionKind, opID, initiator string, meta paymentMeta) ([]*domain.Transaction, error) {
+// failure rolls back fully. The principal carries through so the
+// FX-commission branch can short-circuit for actuary trades.
+func (s *Service) executeMoneyMove(ctx context.Context, tx pgx.Tx, from, to *domain.Account, fromAmt *big.Rat, kind domain.TransactionKind, opID string, initiator auth.Principal, meta paymentMeta) ([]*domain.Transaction, error) {
 	if from.Status != domain.AccountActive || to.Status != domain.AccountActive {
 		return nil, apperr.FailedPrecondition("jedan od računa nije aktivan")
 	}
@@ -193,7 +194,7 @@ func (s *Service) executeMoneyMove(ctx context.Context, tx pgx.Tx, from, to *dom
 			FromAmount: fromStr, ToAmount: fromStr,
 			RecipientName: meta.RecipientName, PaymentCode: meta.PaymentCode,
 			ReferenceNumber: meta.ReferenceNumber, Purpose: meta.Purpose,
-			InitiatorClientID: initiator,
+			InitiatorClientID: initiator.UserID,
 			Status:            domain.TxStatusRealized,
 		})
 		if err != nil {
@@ -216,7 +217,7 @@ func (s *Service) executeMoneyMove(ctx context.Context, tx pgx.Tx, from, to *dom
 	if err != nil {
 		return nil, err
 	}
-	commission := money.Mul(toBefore, s.commissionRate())
+	commission := money.Mul(toBefore, s.commissionRateFor(initiator))
 	toAmt := money.Sub(toBefore, commission)
 	if !money.IsPositive(toAmt) {
 		return nil, apperr.Validation("amount too small after commission")
@@ -250,7 +251,7 @@ func (s *Service) executeMoneyMove(ctx context.Context, tx pgx.Tx, from, to *dom
 		FromAmount: fromStr, ToAmount: fromStr,
 		RecipientName: meta.RecipientName, PaymentCode: meta.PaymentCode,
 		ReferenceNumber: meta.ReferenceNumber, Purpose: meta.Purpose,
-		InitiatorClientID: initiator,
+		InitiatorClientID: initiator.UserID,
 		Status:            domain.TxStatusRealized,
 	})
 	if err != nil {
@@ -261,7 +262,7 @@ func (s *Service) executeMoneyMove(ctx context.Context, tx pgx.Tx, from, to *dom
 		FromAccountID: bankTo.ID, ToAccountID: to.ID,
 		FromAmount: toStr, ToAmount: toStr,
 		Rate:              money.FormatRate(composite),
-		InitiatorClientID: initiator,
+		InitiatorClientID: initiator.UserID,
 		Status:            domain.TxStatusRealized,
 	})
 	if err != nil {

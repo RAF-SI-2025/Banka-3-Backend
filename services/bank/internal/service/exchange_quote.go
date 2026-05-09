@@ -5,7 +5,9 @@ import (
 	"math/big"
 
 	"github.com/RAF-SI-2025/Banka-3-Backend/pkg/apperr"
+	"github.com/RAF-SI-2025/Banka-3-Backend/pkg/auth"
 	"github.com/RAF-SI-2025/Banka-3-Backend/pkg/money"
+	"github.com/RAF-SI-2025/Banka-3-Backend/pkg/permissions"
 	"github.com/RAF-SI-2025/Banka-3-Backend/services/bank/internal/domain"
 )
 
@@ -52,10 +54,14 @@ func (s *Service) QuoteExchange(ctx context.Context, from, to domain.Currency, a
 		return nil, err
 	}
 
+	// Quote previews don't always have an authenticated principal on
+	// ctx (e.g. the public rates calculator). Treat absent principal
+	// as "client" — clients pay the commission, actuaries don't.
+	p, _ := auth.PrincipalFrom(ctx)
 	commission := big.NewRat(0, 1)
 	toAfter := toBefore
 	if includeCommission {
-		commission = money.Mul(toBefore, s.commissionRate())
+		commission = money.Mul(toBefore, s.commissionRateFor(p))
 		toAfter = money.Sub(toBefore, commission)
 	}
 
@@ -67,7 +73,25 @@ func (s *Service) QuoteExchange(ctx context.Context, from, to domain.Currency, a
 	}, nil
 }
 
+// commissionRateFor returns the FX commission to apply for principal p.
+//
+// Spec edge case (CLAUDE.md #2): clients pay 0–1% on every cross-
+// currency conversion; actuaries trading on behalf of the bank pay
+// none. For c2 no role bundle carries the Actuary permission so this
+// always returns the configured rate, but the structural branch is
+// in place so c3 actuary-driven trades route through the same code
+// path without retrofit.
+func (s *Service) commissionRateFor(p auth.Principal) *big.Rat {
+	if permissions.IsActuary(p.Permissions) {
+		return big.NewRat(0, 1)
+	}
+	return s.commissionRate()
+}
+
 // commissionRate returns the configured FX commission (default 0.5%).
+// Clients of this method must already have decided that the actor is
+// not an actuary; use commissionRateFor at call sites that touch a
+// principal.
 func (s *Service) commissionRate() *big.Rat {
 	if s.Cfg.FXCommission != "" {
 		if r, err := money.Parse(s.Cfg.FXCommission); err == nil {
@@ -79,13 +103,19 @@ func (s *Service) commissionRate() *big.Rat {
 
 // rateAndConvert resolves the conversion. Returns composite rate
 // (to per 1 from) and to-amount before commission.
+//
+// Spec p.26 pins the rate-direction policy: "uvek koristi prodajni
+// kurs" — always use the sell-side rate of the foreign/RSD pair, on
+// every leg, even when the bank is buying foreign from the client.
+// The bank's profit comes from the commission, not from the bid/ask
+// spread. Cross-currency goes through RSD: X → RSD at ASK_X, then
+// RSD → Y at ASK_Y (primer 2). The BID column is unused by this path.
 func (s *Service) rateAndConvert(ctx context.Context, from, to domain.Currency, amt *big.Rat) (composite, toAmount *big.Rat, err error) {
 	if s.Rates == nil {
 		return nil, nil, apperr.Internal("exchange rate provider not configured", nil)
 	}
 	switch {
 	case from == domain.CurrencyRSD:
-		// RSD → X: bank sells X, use ASK of (X,RSD).
 		_, ask, err := s.Rates.Quote(ctx, to, domain.CurrencyRSD)
 		if err != nil {
 			return nil, nil, err
@@ -104,35 +134,39 @@ func (s *Service) rateAndConvert(ctx context.Context, from, to domain.Currency, 
 		}
 		return invAsk, conv, nil
 	case to == domain.CurrencyRSD:
-		// X → RSD: bank buys X, use BID of (X,RSD).
-		bid, _, err := s.Rates.Quote(ctx, from, domain.CurrencyRSD)
+		_, ask, err := s.Rates.Quote(ctx, from, domain.CurrencyRSD)
 		if err != nil {
 			return nil, nil, err
 		}
-		bidR, perr := money.Parse(bid)
+		askR, perr := money.Parse(ask)
 		if perr != nil {
 			return nil, nil, apperr.Internal("parse rate", perr)
 		}
-		conv := money.Mul(amt, bidR)
-		return bidR, conv, nil
+		conv := money.Mul(amt, askR)
+		return askR, conv, nil
 	default:
-		// X → Y: X→RSD at bid, then RSD→Y at ask.
-		bid, _, err := s.Rates.Quote(ctx, from, domain.CurrencyRSD)
+		_, askFrom, err := s.Rates.Quote(ctx, from, domain.CurrencyRSD)
 		if err != nil {
 			return nil, nil, err
 		}
-		_, ask, err := s.Rates.Quote(ctx, to, domain.CurrencyRSD)
+		_, askTo, err := s.Rates.Quote(ctx, to, domain.CurrencyRSD)
 		if err != nil {
 			return nil, nil, err
 		}
-		bidR, _ := money.Parse(bid)
-		askR, _ := money.Parse(ask)
-		rsdAmt := money.Mul(amt, bidR)
-		conv, derr := money.Div(rsdAmt, askR)
+		askFromR, perr := money.Parse(askFrom)
+		if perr != nil {
+			return nil, nil, apperr.Internal("parse from rate", perr)
+		}
+		askToR, perr := money.Parse(askTo)
+		if perr != nil {
+			return nil, nil, apperr.Internal("parse to rate", perr)
+		}
+		rsdAmt := money.Mul(amt, askFromR)
+		conv, derr := money.Div(rsdAmt, askToR)
 		if derr != nil {
 			return nil, nil, apperr.Validation(derr.Error())
 		}
-		composite, derr := money.Div(bidR, askR)
+		composite, derr := money.Div(askFromR, askToR)
 		if derr != nil {
 			return nil, nil, apperr.Internal("composite rate", derr)
 		}

@@ -1,6 +1,7 @@
 // Package grpcserver wraps grpc.Server with sensible defaults: panic
-// recovery, slog request logging, apperr → gRPC status mapping, and
-// graceful shutdown on context cancel.
+// recovery, slog request logging, buf-validate request validation,
+// apperr → gRPC status mapping, and graceful shutdown on context
+// cancel.
 package grpcserver
 
 import (
@@ -11,11 +12,13 @@ import (
 	"runtime/debug"
 	"time"
 
+	"buf.build/go/protovalidate"
 	"github.com/RAF-SI-2025/Banka-3-Backend/pkg/apperr"
 	authmw "github.com/RAF-SI-2025/Banka-3-Backend/pkg/auth"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
+	"google.golang.org/protobuf/proto"
 )
 
 // Run starts a gRPC server bound to addr. register is called with the
@@ -28,11 +31,17 @@ func Run(ctx context.Context, log *slog.Logger, addr string, register func(*grpc
 		return fmt.Errorf("listen %s: %w", addr, err)
 	}
 
+	validator, err := protovalidate.New()
+	if err != nil {
+		return fmt.Errorf("init protovalidate: %w", err)
+	}
+
 	srv := grpc.NewServer(
 		grpc.ChainUnaryInterceptor(
 			recoveryInterceptor(log),
 			loggingInterceptor(log),
 			authmw.MetadataInterceptor(),
+			validationInterceptor(validator),
 			errorMapInterceptor(),
 		),
 	)
@@ -93,6 +102,27 @@ func loggingInterceptor(log *slog.Logger) grpc.UnaryServerInterceptor {
 			slog.String("code", status.Code(err).String()),
 		)
 		return resp, err
+	}
+}
+
+// validationInterceptor runs buf-validate rules on every incoming
+// request message. Failures are returned as apperr.Validation so the
+// adjacent errorMapInterceptor maps them to InvalidArgument with the
+// concrete reason in the message — that's what the FE surfaces to the
+// user, so it must be specific (e.g. "from_account_id: must be a
+// valid UUID") rather than generic "invalid input".
+//
+// Sits *between* auth-metadata and errorMap so the principal is on the
+// context (useful for log correlation) and our error envelope is
+// applied uniformly.
+func validationInterceptor(v protovalidate.Validator) grpc.UnaryServerInterceptor {
+	return func(ctx context.Context, req any, info *grpc.UnaryServerInfo, handler grpc.UnaryHandler) (any, error) {
+		if pm, ok := req.(proto.Message); ok {
+			if err := v.Validate(pm); err != nil {
+				return nil, apperr.Validation(err.Error())
+			}
+		}
+		return handler(ctx, req)
 	}
 }
 

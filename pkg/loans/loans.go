@@ -9,6 +9,7 @@ package loans
 
 import (
 	"math/big"
+	"time"
 
 	"github.com/RAF-SI-2025/Banka-3-Backend/pkg/money"
 )
@@ -35,6 +36,20 @@ const (
 // PomerajRange is the absolute bound on the variable-rate offset.
 // Spec p.33: pomeraj is in [-1.50%, +1.50%] generated monthly.
 const PomerajRange = "1.50"
+
+// LatePenaltyBump is the annual-percent increment added to a loan's
+// base rate after a second consecutive failed installment debit
+// (spec p.35: "Povećanja osnovice kamatne stope (npr. +0.05% za
+// kašnjenje)"). One-time bump per loan; tracked via the
+// late_penalty_applied flag in the loans table.
+const LatePenaltyBump = "0.05"
+
+// RetryAfter is how long the cron waits between debit attempts on an
+// overdue installment (spec p.35: "Sistem ponovo pokušava da naplati
+// ratu za 72h - odluka tima za broj sati"). Authoritative copy lives
+// in SQL as INTERVAL '72 hours'; the Go constant is for tests and any
+// pre-flight checks.
+const RetryAfter = 72 * time.Hour
 
 // AllowedInstallments returns the installment counts the FE form
 // must offer for this loan type, per spec p.31. Empty slice means

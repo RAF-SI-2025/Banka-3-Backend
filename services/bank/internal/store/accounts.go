@@ -122,6 +122,45 @@ func (s *Store) UpdateAccountLimits(ctx context.Context, id, daily, monthly stri
 	return out, nil
 }
 
+// UpdateAccountName overwrites the display name. Caller is responsible
+// for the spec p.20 invariants (owner check, distinct from current,
+// distinct from sibling accounts).
+func (s *Store) UpdateAccountName(ctx context.Context, id, name string) (*domain.Account, error) {
+	const q = `
+        update "bank".accounts set name = $2, updated_at = now()
+        where id = $1
+        returning ` + accountColumns
+	out, err := scanAccount(s.Pool.QueryRow(ctx, q, id, name))
+	if err != nil {
+		if noRows(err) {
+			return nil, apperr.NotFound("account not found")
+		}
+		return nil, apperr.Internal("update name", err)
+	}
+	return out, nil
+}
+
+// AccountNameTakenByOwner checks whether ownerClientID already has an
+// active account with the given name (case-insensitive), excluding
+// excludeID so a no-op rename doesn't trip the constraint. Spec p.20
+// validation: "novo ime se ne poklapa s imenom nekog drugog računa
+// iste mušterije".
+func (s *Store) AccountNameTakenByOwner(ctx context.Context, ownerClientID, name, excludeID string) (bool, error) {
+	const q = `
+        select exists(
+            select 1 from "bank".accounts
+            where owner_client_id = $1
+              and lower(name) = lower($2)
+              and id <> $3
+              and status <> 'closed'
+        )`
+	var taken bool
+	if err := s.Pool.QueryRow(ctx, q, ownerClientID, name, excludeID).Scan(&taken); err != nil {
+		return false, apperr.Internal("check name uniqueness", err)
+	}
+	return taken, nil
+}
+
 func (s *Store) SetAccountStatus(ctx context.Context, id string, status domain.AccountStatus) (*domain.Account, error) {
 	const q = `
         update "bank".accounts set status = $2, updated_at = now()
@@ -230,4 +269,57 @@ func (s *Store) ListAccounts(ctx context.Context, f domain.AccountFilter, page, 
 		out = append(out, a)
 	}
 	return out, total, rows.Err()
+}
+
+// ResetSpentCounters zeroes daily_spent for every account whose recorded
+// daily-reset date is older than today, and monthly_spent for every
+// account whose recorded monthly-reset date is in a prior calendar
+// month. Returns the row counts touched in each pass.
+//
+// Idempotent: running the cron twice on the same day does no work the
+// second time (the WHERE clauses match nothing once the reset columns
+// have been stamped).
+//
+// Both updates run inside a single transaction so a payment landing
+// between the two passes can't have its daily_spent increment overwritten
+// by the daily reset and then have the monthly reset fire against a row
+// that's already moved on. CURRENT_DATE is evaluated server-side, so the
+// result depends on the Postgres clock — tests that need to fake the
+// rollover backdate the reset columns directly rather than inject a
+// clock here.
+func (s *Store) ResetSpentCounters(ctx context.Context) (daily, monthly int64, err error) {
+	tx, err := s.Pool.Begin(ctx)
+	if err != nil {
+		return 0, 0, apperr.Internal("begin spent-reset tx", err)
+	}
+	defer func() { _ = tx.Rollback(ctx) }()
+
+	const dailyQ = `
+        update "bank".accounts
+           set daily_spent          = 0,
+               daily_spent_reset_on = current_date,
+               updated_at           = now()
+         where daily_spent_reset_on < current_date`
+	tag, err := tx.Exec(ctx, dailyQ)
+	if err != nil {
+		return 0, 0, apperr.Internal("reset daily spent", err)
+	}
+	daily = tag.RowsAffected()
+
+	const monthlyQ = `
+        update "bank".accounts
+           set monthly_spent          = 0,
+               monthly_spent_reset_on = current_date,
+               updated_at             = now()
+         where date_trunc('month', monthly_spent_reset_on) < date_trunc('month', current_date)`
+	tag, err = tx.Exec(ctx, monthlyQ)
+	if err != nil {
+		return daily, 0, apperr.Internal("reset monthly spent", err)
+	}
+	monthly = tag.RowsAffected()
+
+	if err := tx.Commit(ctx); err != nil {
+		return 0, 0, apperr.Internal("commit spent-reset tx", err)
+	}
+	return daily, monthly, nil
 }

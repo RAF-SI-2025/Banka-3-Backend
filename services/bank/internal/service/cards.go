@@ -11,7 +11,7 @@ import (
 	"github.com/RAF-SI-2025/Banka-3-Backend/pkg/apperr"
 	"github.com/RAF-SI-2025/Banka-3-Backend/pkg/auth"
 	"github.com/RAF-SI-2025/Banka-3-Backend/pkg/card"
-	"github.com/RAF-SI-2025/Banka-3-Backend/pkg/passwords"
+	"github.com/RAF-SI-2025/Banka-3-Backend/pkg/cvv"
 	"github.com/RAF-SI-2025/Banka-3-Backend/pkg/permissions"
 	"github.com/RAF-SI-2025/Banka-3-Backend/services/bank/internal/domain"
 )
@@ -66,11 +66,11 @@ func (s *Service) CreateCard(ctx context.Context, in CreateCardInput) (*domain.C
 	if brand == "" {
 		brand = domain.BrandVisa
 	}
-	number, cvv, err := generateCardCredentials(brand)
+	number, cvvPlain, err := generateCardCredentials(brand)
 	if err != nil {
 		return nil, "", err
 	}
-	cvvHash, err := passwords.Hash(cvv)
+	cvvHash, err := cvv.Hash(cvvPlain, s.Cfg.CVVPepper)
 	if err != nil {
 		return nil, "", apperr.Internal("hash cvv", err)
 	}
@@ -92,13 +92,13 @@ func (s *Service) CreateCard(ctx context.Context, in CreateCardInput) (*domain.C
 		AccountID:          a.ID,
 		AuthorizedPersonID: strings.TrimSpace(in.AuthorizedPersonID),
 		CardLimit:          limit,
-		ExpiresAt:          time.Now().Add(cardLifetime),
+		ExpiresAt:          s.now().Add(cardLifetime),
 		Status:             domain.CardActive,
 	})
 	if err != nil {
 		return nil, "", err
 	}
-	return c, cvv, nil
+	return c, cvvPlain, nil
 }
 
 // enforceCardLimits applies spec p.27. For poslovni accounts, the

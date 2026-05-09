@@ -4,6 +4,7 @@ package service
 import (
 	"context"
 	"log/slog"
+	"time"
 
 	"github.com/RAF-SI-2025/Banka-3-Backend/pkg/apperr"
 	"github.com/RAF-SI-2025/Banka-3-Backend/pkg/auth"
@@ -17,6 +18,7 @@ type Config struct {
 	BankCode     string // 3 digits — this bank's prefix in the 18-digit number
 	Branch       string // 4 digits — default branch for new accounts
 	FXCommission string // "0.005" → 0.5% (default). Empty → default.
+	CVVPepper    string // server-side key for HMAC-SHA256 CVV digests
 }
 
 type Service struct {
@@ -35,6 +37,23 @@ type Service struct {
 	// backed flows so the bank service doesn't have to keep its own
 	// copy of the email (cross-schema joins are forbidden).
 	UserResolver UserResolver
+	// Now is the wall-clock used by every time-dependent service path
+	// (card expiry stamps, loan installment schedules, due-date probes,
+	// maintenance/spent-reset cron defaults). Tests overwrite it to
+	// pin the clock; production leaves it nil and falls through to
+	// time.Now via s.now.
+	Now func() time.Time
+}
+
+// now returns the service clock, defaulting to time.Now when no
+// override has been wired. Always go through this helper rather than
+// calling time.Now directly inside service methods so tests can
+// reproduce date-sensitive behaviour deterministically.
+func (s *Service) now() time.Time {
+	if s.Now != nil {
+		return s.Now()
+	}
+	return time.Now()
 }
 
 // Notifier is the bank service's user-notification surface. The

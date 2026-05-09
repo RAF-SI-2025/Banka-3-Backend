@@ -5,6 +5,7 @@ package banka.bank.v1;
 import "google/api/annotations.proto";
 import "google/protobuf/empty.proto";
 import "google/protobuf/timestamp.proto";
+import "buf/validate/validate.proto";
 
 // BankService owns the c2 banking entities: companies, accounts (and
 // later cards, payments, transfers, exchange, loans). The slice 1
@@ -76,6 +77,19 @@ service BankService {
   rpc UpdateAccountLimits(UpdateAccountLimitsRequest) returns (Account) {
     option (google.api.http) = {
       patch: "/api/v1/accounts/{id}/limits"
+      body: "*"
+    };
+  }
+
+  // UpdateAccountName implements spec p.20 "Promena naziva računa".
+  // Only the account owner may rename. The new name must differ from
+  // the current name and must not collide with another active account
+  // owned by the same client. No verification gate — renaming doesn't
+  // move money, and the spec p.20 popup doesn't require a code (only
+  // limit changes do).
+  rpc UpdateAccountName(UpdateAccountNameRequest) returns (Account) {
+    option (google.api.http) = {
+      patch: "/api/v1/accounts/{id}/name"
       body: "*"
     };
   }
@@ -277,15 +291,16 @@ enum Currency {
   CURRENCY_AUD         = 8;
 }
 
-// AccountKind matches the trailing TT in the 18-digit account number.
-// See pkg/account.Type — values are kept in sync.
+// AccountKind picks the broad bucket; the trailing TT in the 18-digit
+// account number depends on (kind, subtype) per spec p.16. See
+// pkg/account.Type for the exact mapping.
 enum AccountKind {
   ACCOUNT_KIND_UNSPECIFIED            = 0;
-  ACCOUNT_KIND_PERSONAL_CHECKING_RSD  = 1; // lični tekući RSD (TT=10)
-  ACCOUNT_KIND_PERSONAL_FX            = 2; // lični devizni    (TT=20)
-  ACCOUNT_KIND_BUSINESS_CHECKING_RSD  = 3; // poslovni tekući  (TT=11)
-  ACCOUNT_KIND_BUSINESS_FX            = 4; // poslovni devizni (TT=21)
-  ACCOUNT_KIND_SYSTEM                 = 5; // bank-owned house (TT=99)
+  ACCOUNT_KIND_PERSONAL_CHECKING_RSD  = 1; // lični tekući RSD  (TT=11/13/14/15/16/17 by subtype)
+  ACCOUNT_KIND_PERSONAL_FX            = 2; // lični devizni     (TT=21)
+  ACCOUNT_KIND_BUSINESS_CHECKING_RSD  = 3; // poslovni tekući   (TT=12)
+  ACCOUNT_KIND_BUSINESS_FX            = 4; // poslovni devizni  (TT=22)
+  ACCOUNT_KIND_SYSTEM                 = 5; // bank-owned house  (TT=99, internal)
 }
 
 // AccountSubtype only applies to Lični Tekući RSD per spec p.12; the
@@ -362,19 +377,22 @@ message Account {
 // =====================================================================
 
 message CreateCompanyRequest {
-  string name           = 1;
-  string registry_id    = 2;
-  string tax_id         = 3;
-  string activity_code  = 4;
-  string address        = 5;
-  string owner_client_id = 6;
+  string name           = 1 [(buf.validate.field).string = {min_len: 1, max_len: 200}];
+  // Matični broj is exactly 8 digits per Serbian APR.
+  string registry_id    = 2 [(buf.validate.field).string.pattern = "^[0-9]{8}$"];
+  // PIB is exactly 9 digits.
+  string tax_id         = 3 [(buf.validate.field).string.pattern = "^[0-9]{9}$"];
+  // Šifra delatnosti is "xx.xx" or "xx.x" (spec p.14).
+  string activity_code  = 4 [(buf.validate.field).string.pattern = "^[0-9]{2}\\.[0-9]{1,2}$"];
+  string address        = 5 [(buf.validate.field).string = {min_len: 1, max_len: 200}];
+  string owner_client_id = 6 [(buf.validate.field).string.uuid = true];
 }
 
 message ListCompaniesRequest {
-  string name_query        = 1;
-  string registry_id_query = 2;
-  int32  page              = 3;
-  int32  page_size         = 4;
+  string name_query        = 1 [(buf.validate.field).string.max_len = 128];
+  string registry_id_query = 2 [(buf.validate.field).string.max_len = 16];
+  int32  page              = 3 [(buf.validate.field).int32 = {gte: 0}];
+  int32  page_size         = 4 [(buf.validate.field).int32 = {gte: 0, lte: 200}];
 }
 
 message ListCompaniesResponse {
@@ -384,14 +402,14 @@ message ListCompaniesResponse {
   int64  total               = 4;
 }
 
-message GetCompanyRequest { string id = 1; }
+message GetCompanyRequest { string id = 1 [(buf.validate.field).string.uuid = true]; }
 
 message UpdateCompanyRequest {
-  string id            = 1;
-  string name          = 2;  // empty = no change
-  string activity_code = 3;
-  string address       = 4;
-  string owner_client_id = 5;
+  string id            = 1 [(buf.validate.field).string.uuid = true];
+  string name          = 2 [(buf.validate.field).string.max_len = 200];
+  string activity_code = 3 [(buf.validate.field).string.pattern = "^[0-9]{2}\\.[0-9]{1,2}$", (buf.validate.field).ignore = IGNORE_IF_ZERO_VALUE];
+  string address       = 4 [(buf.validate.field).string.max_len = 200];
+  string owner_client_id = 5 [(buf.validate.field).string.uuid = true, (buf.validate.field).ignore = IGNORE_IF_ZERO_VALUE];
 }
 
 // =====================================================================
@@ -399,28 +417,26 @@ message UpdateCompanyRequest {
 // =====================================================================
 
 message CreateAccountRequest {
-  string         owner_client_id = 1;
-  string         company_id      = 2;  // required for ACCOUNT_KIND_BUSINESS_*
-  AccountKind    kind            = 3;
-  AccountSubtype subtype         = 4;  // required for personal RSD checking
-  Currency       currency        = 5;
-  string         name            = 6;  // optional friendly name
-  string         opening_balance = 7;  // decimal string; "0" if absent
-  // create_card: when true the bank service emits a CardCreated event
-  // for the cards module to act on. Slice 1 stores the flag and ignores
-  // it (cards land in slice 2).
+  string         owner_client_id = 1 [(buf.validate.field).string.uuid = true];
+  // Required for ACCOUNT_KIND_BUSINESS_*; UUID format when set.
+  string         company_id      = 2 [(buf.validate.field).string.uuid = true, (buf.validate.field).ignore = IGNORE_IF_ZERO_VALUE];
+  AccountKind    kind            = 3 [(buf.validate.field).enum = {defined_only: true, not_in: [0, 5]}]; // forbid UNSPECIFIED + SYSTEM
+  AccountSubtype subtype         = 4 [(buf.validate.field).enum.defined_only = true];
+  Currency       currency        = 5 [(buf.validate.field).enum = {defined_only: true, not_in: [0]}];
+  string         name            = 6 [(buf.validate.field).string.max_len = 100];
+  // Decimal string with up to 4 fraction digits; "0" if absent. Match
+  // the storage scale so we don't quietly truncate.
+  string         opening_balance = 7 [(buf.validate.field).string.pattern = "^[0-9]+(\\.[0-9]{1,4})?$", (buf.validate.field).ignore = IGNORE_IF_ZERO_VALUE];
   bool           create_card     = 8;
 }
 
 message ListAccountsRequest {
-  // owner_client_id filters to accounts owned by a specific client.
-  // Clients see only their own; employees can pass any.
-  string         owner_client_id = 1;
-  AccountKind    kind            = 2;
-  Currency       currency        = 3;
-  AccountStatus  status          = 4;
-  int32          page            = 5;
-  int32          page_size       = 6;
+  string         owner_client_id = 1 [(buf.validate.field).string.uuid = true, (buf.validate.field).ignore = IGNORE_IF_ZERO_VALUE];
+  AccountKind    kind            = 2 [(buf.validate.field).enum.defined_only = true];
+  Currency       currency        = 3 [(buf.validate.field).enum.defined_only = true];
+  AccountStatus  status          = 4 [(buf.validate.field).enum.defined_only = true];
+  int32          page            = 5 [(buf.validate.field).int32 = {gte: 0}];
+  int32          page_size       = 6 [(buf.validate.field).int32 = {gte: 0, lte: 200}];
 }
 
 message ListAccountsResponse {
@@ -430,17 +446,25 @@ message ListAccountsResponse {
   int64  total              = 4;
 }
 
-message GetAccountRequest { string id = 1; }
+message GetAccountRequest { string id = 1 [(buf.validate.field).string.uuid = true]; }
 
 message UpdateAccountLimitsRequest {
-  string id            = 1;
-  string daily_limit   = 2;  // decimal string; empty = no change
-  string monthly_limit = 3;
+  string id            = 1 [(buf.validate.field).string.uuid = true];
+  string daily_limit   = 2 [(buf.validate.field).string.pattern = "^[0-9]+(\\.[0-9]{1,4})?$", (buf.validate.field).ignore = IGNORE_IF_ZERO_VALUE];
+  string monthly_limit = 3 [(buf.validate.field).string.pattern = "^[0-9]+(\\.[0-9]{1,4})?$", (buf.validate.field).ignore = IGNORE_IF_ZERO_VALUE];
+}
+
+message UpdateAccountNameRequest {
+  string id   = 1 [(buf.validate.field).string.uuid = true];
+  // Spec p.20 doesn't pin a length; we cap at 64 to keep the column
+  // bounded and the UI tidy. Min 1 because empty would defeat the
+  // "must differ from current" rule.
+  string name = 2 [(buf.validate.field).string = {min_len: 1, max_len: 64}];
 }
 
 message SetAccountStatusRequest {
-  string        id     = 1;
-  AccountStatus status = 2;
+  string        id     = 1 [(buf.validate.field).string.uuid = true];
+  AccountStatus status = 2 [(buf.validate.field).enum = {defined_only: true, not_in: [0]}];
 }
 
 // =====================================================================
@@ -492,25 +516,28 @@ message Transaction {
 }
 
 message CreatePaymentRequest {
-  string from_account_id   = 1;
-  // The recipient account is supplied as a full 18-digit number, not a
-  // UUID — the FE form uses the spec's "Račun primaoca" field.
-  string to_account_number = 2;
-  string amount            = 3;   // decimal string in from-account currency
-  string recipient_name    = 4;
-  string payment_code      = 5;   // default "289" applied server-side if empty
-  string reference_number  = 6;   // optional ("Poziv na broj")
-  string purpose           = 7;   // "Svrha plaćanja"
-  // save_recipient: when true, also create/update a PaymentRecipient
-  // template for the caller. Spec p.21 "Dodaj primaoca" UX shortcut.
+  string from_account_id   = 1 [(buf.validate.field).string.uuid = true];
+  // The recipient account is the spec's 18-digit "Račun primaoca". The
+  // mod-11 checksum is verified server-side; here we only enforce the
+  // shape so obviously-invalid input is rejected at the gateway.
+  string to_account_number = 2 [(buf.validate.field).string.pattern = "^[0-9]{18}$"];
+  // Positive decimal in from-account currency, up to 4 fraction digits
+  // (matching the numeric(20,4) storage).
+  string amount            = 3 [(buf.validate.field).string.pattern = "^(0*[1-9][0-9]*|[0-9]+\\.[0-9]{1,4}|0\\.0*[1-9][0-9]{0,3})$"];
+  string recipient_name    = 4 [(buf.validate.field).string = {min_len: 1, max_len: 100}];
+  // Spec p.21: 3 digits, first one "1" (gotovinska) or "2" (bezgotovinska);
+  // online plaćanja uses 2xx. Default 289 is filled in server-side if empty.
+  string payment_code      = 5 [(buf.validate.field).string.pattern = "^[12][0-9]{2}$", (buf.validate.field).ignore = IGNORE_IF_ZERO_VALUE];
+  string reference_number  = 6 [(buf.validate.field).string.max_len = 64];
+  string purpose           = 7 [(buf.validate.field).string.max_len = 200];
   bool   save_recipient    = 8;
 }
 
 message CreateTransferRequest {
-  string from_account_id = 1;
-  string to_account_id   = 2;
-  string amount          = 3;
-  string purpose         = 4;
+  string from_account_id = 1 [(buf.validate.field).string.uuid = true];
+  string to_account_id   = 2 [(buf.validate.field).string.uuid = true];
+  string amount          = 3 [(buf.validate.field).string.pattern = "^(0*[1-9][0-9]*|[0-9]+\\.[0-9]{1,4}|0\\.0*[1-9][0-9]{0,3})$"];
+  string purpose         = 4 [(buf.validate.field).string.max_len = 200];
 }
 
 message PaymentResult {
@@ -522,11 +549,11 @@ message PaymentResult {
 }
 
 message QuoteExchangeRequest {
-  Currency from     = 1;
-  Currency to       = 2;
-  string   amount   = 3;   // amount in `from` currency
+  Currency from   = 1 [(buf.validate.field).enum = {defined_only: true, not_in: [0]}];
+  Currency to     = 2 [(buf.validate.field).enum = {defined_only: true, not_in: [0]}];
+  string   amount = 3 [(buf.validate.field).string.pattern = "^(0*[1-9][0-9]*|[0-9]+\\.[0-9]{1,4}|0\\.0*[1-9][0-9]{0,3})$"];
   // include_commission: when true the response factors the bank's
-  // 0.5% menjačnica commission. Set to false for the rates calculator
+  // menjačnica commission. Set to false for the rates calculator
   // page where we just want the raw equivalent.
   bool include_commission = 4;
 }
@@ -542,11 +569,12 @@ message ListTransactionsRequest {
   // account_id filters to legs that touch this account on either side.
   // Empty + employee → see-everything; empty + client → all of caller's
   // accounts.
-  string account_id      = 1;
-  string op_kind         = 2;   // 'payment' | 'transfer' | 'exchange' (filter)
-  string status          = 3;
-  int32  page            = 4;
-  int32  page_size       = 5;
+  string account_id      = 1 [(buf.validate.field).string.uuid = true, (buf.validate.field).ignore = IGNORE_IF_ZERO_VALUE];
+  // 'payment' | 'transfer' | 'exchange' | 'fee' — keep loose, server enforces.
+  string op_kind         = 2 [(buf.validate.field).string.max_len = 32];
+  string status          = 3 [(buf.validate.field).string.max_len = 32];
+  int32  page            = 4 [(buf.validate.field).int32 = {gte: 0}];
+  int32  page_size       = 5 [(buf.validate.field).int32 = {gte: 0, lte: 200}];
 }
 
 message ListTransactionsResponse {
@@ -569,8 +597,8 @@ message PaymentRecipient {
 }
 
 message CreatePaymentRecipientRequest {
-  string name           = 1;
-  string account_number = 2;
+  string name           = 1 [(buf.validate.field).string = {min_len: 1, max_len: 100}];
+  string account_number = 2 [(buf.validate.field).string.pattern = "^[0-9]{18}$"];
 }
 
 message ListPaymentRecipientsRequest {}
@@ -580,12 +608,12 @@ message ListPaymentRecipientsResponse {
 }
 
 message UpdatePaymentRecipientRequest {
-  string id             = 1;
-  string name           = 2;
-  string account_number = 3;
+  string id             = 1 [(buf.validate.field).string.uuid = true];
+  string name           = 2 [(buf.validate.field).string = {min_len: 1, max_len: 100}, (buf.validate.field).ignore = IGNORE_IF_ZERO_VALUE];
+  string account_number = 3 [(buf.validate.field).string.pattern = "^[0-9]{18}$", (buf.validate.field).ignore = IGNORE_IF_ZERO_VALUE];
 }
 
-message DeletePaymentRecipientRequest { string id = 1; }
+message DeletePaymentRecipientRequest { string id = 1 [(buf.validate.field).string.uuid = true]; }
 
 // =====================================================================
 // Cards
@@ -623,15 +651,16 @@ message Card {
 }
 
 message CreateCardRequest {
-  string    account_id           = 1;
-  string    authorized_person_id = 2;   // required for poslovni-with-OvlascenoLice
-  CardBrand brand                = 3;
-  string    name                 = 4;   // e.g. "Debit"
-  string    card_limit           = 5;   // decimal string; "" → "0"
+  string    account_id           = 1 [(buf.validate.field).string.uuid = true];
+  // Required for poslovni-with-OvlascenoLice; UUID format when set.
+  string    authorized_person_id = 2 [(buf.validate.field).string.uuid = true, (buf.validate.field).ignore = IGNORE_IF_ZERO_VALUE];
+  CardBrand brand                = 3 [(buf.validate.field).enum = {defined_only: true, not_in: [0]}];
+  string    name                 = 4 [(buf.validate.field).string = {min_len: 1, max_len: 64}];
+  string    card_limit           = 5 [(buf.validate.field).string.pattern = "^[0-9]+(\\.[0-9]{1,4})?$", (buf.validate.field).ignore = IGNORE_IF_ZERO_VALUE];
 }
 
 message ListCardsRequest {
-  string account_id = 1;   // optional filter
+  string account_id = 1 [(buf.validate.field).string.uuid = true, (buf.validate.field).ignore = IGNORE_IF_ZERO_VALUE];
 }
 
 message ListCardsResponse {
@@ -639,8 +668,8 @@ message ListCardsResponse {
 }
 
 message SetCardStatusRequest {
-  string     id     = 1;
-  CardStatus status = 2;
+  string     id     = 1 [(buf.validate.field).string.uuid = true];
+  CardStatus status = 2 [(buf.validate.field).enum = {defined_only: true, not_in: [0]}];
 }
 
 // =====================================================================
@@ -669,18 +698,18 @@ enum Gender {
 }
 
 message CreateAuthorizedPersonRequest {
-  string company_id    = 1;
-  string first_name    = 2;
-  string last_name     = 3;
-  string date_of_birth = 4;
-  Gender gender        = 5;
-  string email         = 6;
-  string phone         = 7;
-  string address       = 8;
+  string company_id    = 1 [(buf.validate.field).string.uuid = true];
+  string first_name    = 2 [(buf.validate.field).string = {min_len: 1, max_len: 64}];
+  string last_name     = 3 [(buf.validate.field).string = {min_len: 1, max_len: 64}];
+  string date_of_birth = 4 [(buf.validate.field).string.pattern = "^\\d{4}-\\d{2}-\\d{2}$"];
+  Gender gender        = 5 [(buf.validate.field).enum = {defined_only: true, not_in: [0]}];
+  string email         = 6 [(buf.validate.field).string.email = true];
+  string phone         = 7 [(buf.validate.field).string = {min_len: 1, max_len: 32, pattern: "^\\+?[0-9 ()-]+$"}];
+  string address       = 8 [(buf.validate.field).string = {min_len: 1, max_len: 200}];
 }
 
 message ListAuthorizedPersonsRequest {
-  string company_id = 1;
+  string company_id = 1 [(buf.validate.field).string.uuid = true];
 }
 
 message ListAuthorizedPersonsResponse {
@@ -799,25 +828,27 @@ message LoanWithInstallments {
 }
 
 message SubmitLoanRequestRequest {
-  string            account_id               = 1;
-  LoanType          loan_type                = 2;
-  InterestType      interest_type            = 3;
-  string            amount                   = 4;
-  Currency          currency                 = 5;
-  string            purpose                  = 6;
-  string            monthly_salary           = 7;
-  EmploymentStatus  employment_status        = 8;
-  int32             employment_duration_months = 9;
-  int32             installments_total       = 10;
-  string            contact_phone            = 11;
+  string            account_id               = 1  [(buf.validate.field).string.uuid = true];
+  LoanType          loan_type                = 2  [(buf.validate.field).enum = {defined_only: true, not_in: [0]}];
+  InterestType      interest_type            = 3  [(buf.validate.field).enum = {defined_only: true, not_in: [0]}];
+  string            amount                   = 4  [(buf.validate.field).string.pattern = "^(0*[1-9][0-9]*|[0-9]+\\.[0-9]{1,4}|0\\.0*[1-9][0-9]{0,3})$"];
+  Currency          currency                 = 5  [(buf.validate.field).enum = {defined_only: true, not_in: [0]}];
+  string            purpose                  = 6  [(buf.validate.field).string = {min_len: 1, max_len: 200}];
+  string            monthly_salary           = 7  [(buf.validate.field).string.pattern = "^[0-9]+(\\.[0-9]{1,4})?$"];
+  EmploymentStatus  employment_status        = 8  [(buf.validate.field).enum = {defined_only: true, not_in: [0]}];
+  int32             employment_duration_months = 9 [(buf.validate.field).int32 = {gte: 0, lte: 600}];
+  // Spec p.31: discrete tenor counts; the service-layer further checks
+  // the value against the loan type (housing 60–360, others 12–84).
+  int32             installments_total       = 10 [(buf.validate.field).int32 = {gte: 12, lte: 360}];
+  string            contact_phone            = 11 [(buf.validate.field).string = {min_len: 1, max_len: 32, pattern: "^\\+?[0-9 ()-]+$"}];
 }
 
 message ListLoanRequestsRequest {
-  LoanRequestStatus status     = 1;
-  LoanType          loan_type  = 2;
-  string            account_id = 3;
-  int32             page       = 4;
-  int32             page_size  = 5;
+  LoanRequestStatus status     = 1 [(buf.validate.field).enum.defined_only = true];
+  LoanType          loan_type  = 2 [(buf.validate.field).enum.defined_only = true];
+  string            account_id = 3 [(buf.validate.field).string.uuid = true, (buf.validate.field).ignore = IGNORE_IF_ZERO_VALUE];
+  int32             page       = 4 [(buf.validate.field).int32 = {gte: 0}];
+  int32             page_size  = 5 [(buf.validate.field).int32 = {gte: 0, lte: 200}];
 }
 
 message ListLoanRequestsResponse {
@@ -828,18 +859,18 @@ message ListLoanRequestsResponse {
 }
 
 message DecideLoanRequestRequest {
-  string id       = 1;
+  string id       = 1 [(buf.validate.field).string.uuid = true];
   bool   approve  = 2;
-  string reason   = 3; // when approve=false
+  string reason   = 3 [(buf.validate.field).string.max_len = 200]; // when approve=false
 }
 
 message ListLoansRequest {
-  string     client_id  = 1;
-  string     account_id = 2;
-  LoanType   loan_type  = 3;
-  LoanStatus status     = 4;
-  int32      page       = 5;
-  int32      page_size  = 6;
+  string     client_id  = 1 [(buf.validate.field).string.uuid = true, (buf.validate.field).ignore = IGNORE_IF_ZERO_VALUE];
+  string     account_id = 2 [(buf.validate.field).string.uuid = true, (buf.validate.field).ignore = IGNORE_IF_ZERO_VALUE];
+  LoanType   loan_type  = 3 [(buf.validate.field).enum.defined_only = true];
+  LoanStatus status     = 4 [(buf.validate.field).enum.defined_only = true];
+  int32      page       = 5 [(buf.validate.field).int32 = {gte: 0}];
+  int32      page_size  = 6 [(buf.validate.field).int32 = {gte: 0, lte: 200}];
 }
 
 message ListLoansResponse {
@@ -849,12 +880,12 @@ message ListLoansResponse {
   int64 total     = 4;
 }
 
-message GetLoanRequest { string id = 1; }
+message GetLoanRequest { string id = 1 [(buf.validate.field).string.uuid = true]; }
 
 message RunInstallmentJobRequest {
   // due_on lets the caller process a specific date (YYYY-MM-DD) for
   // testing. Empty → today.
-  string due_on = 1;
+  string due_on = 1 [(buf.validate.field).string.pattern = "^\\d{4}-\\d{2}-\\d{2}$", (buf.validate.field).ignore = IGNORE_IF_ZERO_VALUE];
 }
 
 message RunInstallmentJobResponse {

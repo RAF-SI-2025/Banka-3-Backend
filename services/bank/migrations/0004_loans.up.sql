@@ -12,8 +12,9 @@
 -- (base + offset + margin) / 12 — derived, not stored.
 --
 -- Loan currency = account currency (enforced in service); the brackets
--- are RSD-denominated, so non-RSD loans use the menjačnica BID to
--- compute their RSD-equivalent for bracket lookup (per spec p.33).
+-- are RSD-denominated, so non-RSD loans use the menjačnica ASK rate to
+-- compute their RSD-equivalent for bracket lookup (per spec p.33,
+-- consistent with the menjačnica policy in spec p.26).
 
 -- Extend transactions.op_kind to cover loan flows. We use the same
 -- ledger so "Pregled plaćanja" automatically renders disbursement and

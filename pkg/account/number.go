@@ -24,15 +24,43 @@ const (
 )
 
 // Type encodes the trailing two-digit account-type code. Values are
-// fixed by the system; new account types append.
+// frozen by the spec (Banka2025.pdf p.16) so every bank in the system
+// shares the same suffix-to-meaning mapping. New account types must
+// pick an unused two-digit value; never repurpose.
+//
+// Spec p.16:
+//
+//	Tekući račun bucket (1*):
+//	  11  lični standardni
+//	  12  poslovni (DOO/AD/Fondacija collapse here)
+//	  13  štedni
+//	  14  penzionerski
+//	  15  za mlade
+//	  16  za studente
+//	  17  za nezaposlene
+//	Devizni račun bucket (2*):
+//	  21  lični
+//	  22  poslovni
+//	System bucket (9*):
+//	  99  bank-owned house account (not in spec — internal sentinel)
 type Type int
 
 const (
-	TypePersonalCheckingRSD Type = 10 // lični tekući (RSD)
-	TypePersonalFX          Type = 20 // lični devizni
-	TypeBusinessCheckingRSD Type = 11 // poslovni tekući (RSD)
-	TypeBusinessFX          Type = 21 // poslovni devizni
-	TypeSystem              Type = 99 // bank-owned house account
+	// Tekući bucket — RSD only.
+	TypePersonalChecking Type = 11
+	TypeBusinessChecking Type = 12
+	TypeSavings          Type = 13
+	TypePensioner        Type = 14
+	TypeYouth            Type = 15
+	TypeStudent          Type = 16
+	TypeUnemployed       Type = 17
+
+	// Devizni bucket — one of the seven supported FX currencies.
+	TypePersonalFX Type = 21
+	TypeBusinessFX Type = 22
+
+	// System bucket — bank's own house accounts (not in spec).
+	TypeSystem Type = 99
 )
 
 // Validate reports whether s is a syntactically valid account number:

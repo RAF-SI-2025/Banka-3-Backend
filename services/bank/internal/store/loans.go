@@ -165,7 +165,7 @@ const loanColumns = `
     base_rate::text, margin::text, current_offset::text,
     installments_total, installment_amount::text, remaining_principal::text,
     next_installment_date, coalesce(next_installment_amount::text, ''),
-    status, contracted_at, matures_at
+    status, late_penalty_applied, contracted_at, matures_at
 `
 
 func scanLoan(row interface{ Scan(...any) error }) (*domain.Loan, error) {
@@ -179,7 +179,7 @@ func scanLoan(row interface{ Scan(...any) error }) (*domain.Loan, error) {
 		&l.BaseRate, &l.Margin, &l.CurrentOffset,
 		&l.InstallmentsTotal, &l.InstallmentAmount, &l.RemainingPrincipal,
 		&nextDate, &l.NextInstallmentAmount,
-		&status, &l.ContractedAt, &maturesAt,
+		&status, &l.LatePenaltyApplied, &l.ContractedAt, &maturesAt,
 	); err != nil {
 		return nil, err
 	}
@@ -352,22 +352,23 @@ func (s *Store) ListActiveVariableLoans(ctx context.Context) ([]*domain.Loan, er
 
 const installmentColumns = `
     id, loan_id, sequence_number, amount::text, interest_rate_at_due::text, currency,
-    expected_due_date, actual_paid_at, status
+    expected_due_date, actual_paid_at, overdue_since, status
 `
 
 func scanInstallment(row interface{ Scan(...any) error }) (*domain.LoanInstallment, error) {
 	var i domain.LoanInstallment
 	var currency, status string
-	var paid *time.Time
+	var paid, overdueSince *time.Time
 	if err := row.Scan(
 		&i.ID, &i.LoanID, &i.SequenceNumber, &i.Amount, &i.InterestRateAtDue, &currency,
-		&i.ExpectedDueDate, &paid, &status,
+		&i.ExpectedDueDate, &paid, &overdueSince, &status,
 	); err != nil {
 		return nil, err
 	}
 	i.Currency = domain.Currency(currency)
 	i.Status = domain.InstallmentStatus(status)
 	i.ActualPaidAt = paid
+	i.OverdueSince = overdueSince
 	return &i, nil
 }
 
@@ -396,20 +397,114 @@ func (s *Store) MarkInstallmentPaid(ctx context.Context, tx pgx.Tx, id string) e
 	return nil
 }
 
+// CountPaidInstallments returns the number of installments already
+// paid for loanID. Used by the variable-rate cron to figure out how
+// many installments remain when re-amortising.
+func (s *Store) CountPaidInstallments(ctx context.Context, loanID string) (int, error) {
+	const q = `select count(*) from "bank".loan_installments where loan_id = $1 and status = 'paid'`
+	var n int
+	if err := s.Pool.QueryRow(ctx, q, loanID).Scan(&n); err != nil {
+		return 0, apperr.Internal("count paid installments", err)
+	}
+	return n, nil
+}
+
+// MarkInstallmentOverdue flips status='overdue' and stamps overdue_since
+// on first failure. The COALESCE preserves the original failure
+// timestamp on subsequent retry losses, so the 72h-retry window is
+// measured from the first miss, not the most recent one.
 func (s *Store) MarkInstallmentOverdue(ctx context.Context, tx pgx.Tx, id string) error {
-	const q = `update "bank".loan_installments set status = 'overdue', updated_at = now() where id = $1`
+	const q = `
+        update "bank".loan_installments
+           set status        = 'overdue',
+               overdue_since = coalesce(overdue_since, now()),
+               updated_at    = now()
+         where id = $1`
 	if _, err := tx.Exec(ctx, q, id); err != nil {
 		return apperr.Internal("mark installment overdue", err)
 	}
 	return nil
 }
 
-// ListInstallmentsDueOn returns unpaid installments whose expected
-// due date is on or before `dueOn`. Used by the daily cron.
+// RescheduleOverdueRetry pushes the next retry window 72h out by
+// resetting overdue_since to now. Called when a retry-after-72h debit
+// also fails.
+func (s *Store) RescheduleOverdueRetry(ctx context.Context, tx pgx.Tx, id string) error {
+	const q = `
+        update "bank".loan_installments
+           set overdue_since = now(),
+               updated_at    = now()
+         where id = $1`
+	if _, err := tx.Exec(ctx, q, id); err != nil {
+		return apperr.Internal("reschedule overdue retry", err)
+	}
+	return nil
+}
+
+// ApplyLatePenalty bumps the loan's base_rate by `+bumpPct` (annual %)
+// and rewrites installment_amount + every still-unpaid installment's
+// amount/rate to the new schedule, per spec p.35. Idempotent: the
+// WHERE clause skips loans where late_penalty_applied is already true,
+// so a duplicate cron run is a no-op.
+func (s *Store) ApplyLatePenalty(
+	ctx context.Context, tx pgx.Tx,
+	loanID, bumpPct, newInstallmentAmount, newRateAtDue string,
+) error {
+	const loanQ = `
+        update "bank".loans
+           set base_rate            = base_rate + $2::numeric,
+               installment_amount   = $3::numeric,
+               next_installment_amount = case
+                   when next_installment_amount is null then null
+                   else $3::numeric
+               end,
+               late_penalty_applied = true,
+               updated_at           = now()
+         where id = $1
+           and late_penalty_applied = false
+        returning id`
+	var got string
+	err := tx.QueryRow(ctx, loanQ, loanID, bumpPct, newInstallmentAmount).Scan(&got)
+	if err != nil {
+		if noRows(err) {
+			// Already applied — nothing to do.
+			return nil
+		}
+		return apperr.Internal("apply late penalty", err)
+	}
+	const instQ = `
+        update "bank".loan_installments
+           set amount               = $2::numeric,
+               interest_rate_at_due = $3::numeric,
+               updated_at           = now()
+         where loan_id = $1
+           and status in ('unpaid','overdue')`
+	if _, err := tx.Exec(ctx, instQ, loanID, newInstallmentAmount, newRateAtDue); err != nil {
+		return apperr.Internal("rewrite installments after penalty", err)
+	}
+	return nil
+}
+
+// ListInstallmentsDueOn returns rows the daily cron should attempt to
+// debit. Two flavours:
+//
+//	1. status='unpaid' AND expected_due_date <= now — first attempt on
+//	   today's installments.
+//	2. status='overdue' AND overdue_since + INTERVAL '72 hours' <= now
+//	   — retry after the spec p.35 wait window has elapsed.
+//
+// Sorted by due date so older arrears are tried first.
+//
+// $1 is explicitly cast to timestamptz on both sides so type inference
+// doesn't widen it to `date` (which would silently truncate the time
+// of day and make the second comparison miss the same calendar day).
 func (s *Store) ListInstallmentsDueOn(ctx context.Context, dueOn time.Time) ([]*domain.LoanInstallment, error) {
-	const q = `select ` + installmentColumns + ` from "bank".loan_installments
-              where status in ('unpaid','overdue') and expected_due_date <= $1
-              order by expected_due_date, sequence_number`
+	const q = `
+        select ` + installmentColumns + `
+          from "bank".loan_installments
+         where (status = 'unpaid'  and expected_due_date <= $1::timestamptz)
+            or (status = 'overdue' and overdue_since + interval '72 hours' <= $1::timestamptz)
+         order by expected_due_date, sequence_number`
 	rows, err := s.Pool.Query(ctx, q, dueOn)
 	if err != nil {
 		return nil, apperr.Internal("list due installments", err)

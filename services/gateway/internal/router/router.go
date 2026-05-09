@@ -7,6 +7,7 @@ import (
 	"net/http"
 
 	userpb "github.com/RAF-SI-2025/Banka-3-Backend/gen/proto/user/v1"
+	"github.com/RAF-SI-2025/Banka-3-Backend/pkg/verification"
 	"github.com/RAF-SI-2025/Banka-3-Backend/services/gateway/internal/auth"
 
 	"github.com/grpc-ecosystem/grpc-gateway/v2/runtime"
@@ -15,14 +16,26 @@ import (
 
 // Router holds dependencies shared across HTTP handlers.
 type Router struct {
-	Users         userpb.UserServiceClient
-	AuthMW        func(http.Handler) http.Handler
-	SecureCookies bool
+	Users           userpb.UserServiceClient
+	AuthMW          func(http.Handler) http.Handler
+	IdempotencyMW   func(http.Handler) http.Handler
+	VerificationMW  func(http.Handler) http.Handler
+	Verifier        verification.Verifier
+	SecureCookies   bool
 }
 
 // Mount returns the gateway's top-level handler. Public auth endpoints
 // are registered explicitly; everything else is delegated to the
 // grpc-gateway runtime (which is wrapped in the auth middleware).
+//
+// Middleware order on the /api/ path is auth → verification →
+// idempotency → gwMux. Auth attaches the principal; verification
+// consumes the X-Verification-* headers on routes flagged in the
+// rule table (payments, transfers, limit changes, card issuance);
+// idempotency replays cached 2xx responses; the grpc-gateway runtime
+// dispatches to the upstream service. Login / refresh / logout bypass
+// the chain — they must always re-execute (a cached login response
+// would replay a stale access token).
 func (r *Router) Mount(ctx context.Context, gwMux *runtime.ServeMux, registerGW func(context.Context, *runtime.ServeMux) error) (http.Handler, error) {
 	if err := registerGW(ctx, gwMux); err != nil {
 		return nil, err
@@ -35,9 +48,23 @@ func (r *Router) Mount(ctx context.Context, gwMux *runtime.ServeMux, registerGW 
 	mux.HandleFunc("POST /api/v1/auth/refresh", r.RefreshHandler())
 	mux.HandleFunc("POST /api/v1/auth/logout", r.LogoutHandler())
 
+	// Verification: code-issue endpoint is gated by auth (so we know
+	// who's asking) but does not itself need a verification code.
+	if r.Verifier != nil {
+		mux.Handle("POST /api/v1/verification/request", r.AuthMW(http.HandlerFunc(r.VerificationHandler())))
+	}
+
 	// Everything else (activation, password reset, employees, clients,
-	// /me, etc.) goes through grpc-gateway under the auth middleware.
-	mux.Handle("/api/", r.AuthMW(gwMux))
+	// /me, etc.) goes through grpc-gateway under auth + verification +
+	// idempotency.
+	apiHandler := http.Handler(gwMux)
+	if r.IdempotencyMW != nil {
+		apiHandler = r.IdempotencyMW(apiHandler)
+	}
+	if r.VerificationMW != nil {
+		apiHandler = r.VerificationMW(apiHandler)
+	}
+	mux.Handle("/api/", r.AuthMW(apiHandler))
 
 	// Plain ping so dev can sanity-check the gateway.
 	mux.HandleFunc("GET /api/v1/ping", func(w http.ResponseWriter, _ *http.Request) {
@@ -99,7 +126,7 @@ func withCORS(next http.Handler) http.Handler {
 		}
 		if r.Method == http.MethodOptions {
 			w.Header().Set("Access-Control-Allow-Methods", "GET, POST, PUT, PATCH, DELETE, OPTIONS")
-			w.Header().Set("Access-Control-Allow-Headers", "Authorization, Content-Type, Idempotency-Key")
+			w.Header().Set("Access-Control-Allow-Headers", "Authorization, Content-Type, Idempotency-Key, X-Verification-Id, X-Verification-Code")
 			w.Header().Set("Access-Control-Max-Age", "300")
 			w.WriteHeader(http.StatusNoContent)
 			return
@@ -108,10 +135,11 @@ func withCORS(next http.Handler) http.Handler {
 	})
 }
 
-// Compile-time check we use the auth import even when middleware is the
-// only consumer.
-var _ = auth.Middleware
-
-// Compile-time check that errors is referenced (used in writeGRPCError
-// fallback in a future revision).
-var _ = errors.New
+// auth and errors imports are referenced indirectly (auth via the
+// outer app wiring; errors by writeGRPCError-adjacent code below).
+// Surface them so an unused-import lint doesn't bite if a refactor
+// drops their last visible call site.
+var (
+	_ = auth.Middleware
+	_ = errors.New
+)

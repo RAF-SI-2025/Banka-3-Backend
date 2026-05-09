@@ -22,6 +22,13 @@ const (
 	PermissionGrant = "permission.grant"
 )
 
+// Actuary marks a holder as a bank actuary (spec p.5: agent or
+// supervisor variant). Carried across c2 + c3 so the FX-commission
+// branch can already short-circuit to zero on actuary trades when
+// c3 lands; in c2 no role bundle assigns it, so all FX moves still
+// charge the configured commission.
+const Actuary = "actuary"
+
 // Celina 2 — basic banking. Companies, accounts, FX rates, payments.
 // (Card/payment/loan permissions append in subsequent slices.)
 const (
@@ -126,3 +133,8 @@ func HasAll(holder []string, targets ...string) bool {
 	}
 	return true
 }
+
+// IsActuary reports whether the holder set marks the principal as a
+// bank actuary. Trade-on-behalf-of-the-bank flows skip per-client
+// fees (e.g. menjačnica commission) when this returns true.
+func IsActuary(holder []string) bool { return Has(holder, Actuary) }

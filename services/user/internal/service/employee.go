@@ -15,7 +15,7 @@ import (
 
 // emailRe and phoneRe enforce minimal create-time format checks. The DB
 // has the unique constraint on email; these are user-facing filters so
-// the activation email and lockout key don't end up holding garbage.
+// the activation email doesn't end up holding garbage.
 var (
 	emailRe = regexp.MustCompile(`^[^\s@]+@[^\s@]+\.[^\s@]+$`)
 	phoneRe = regexp.MustCompile(`^\+?[0-9]{6,20}$`)

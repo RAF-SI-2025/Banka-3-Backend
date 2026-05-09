@@ -247,25 +247,3 @@ func TestDiffEmployee(t *testing.T) {
 	})
 }
 
-func TestFormatLockMessage(t *testing.T) {
-	cases := []struct {
-		in   time.Duration
-		want string
-	}{
-		{15 * time.Minute, "Pokušajte ponovo za 15 min."},
-		{14*time.Minute + 30*time.Second, "Pokušajte ponovo za 15 min."}, // rounded up
-		{30 * time.Second, "Pokušajte ponovo za 1 min."},                 // floor 1
-		{0, "Pokušajte ponovo za 1 min."},
-	}
-	for _, tc := range cases {
-		t.Run(tc.in.String(), func(t *testing.T) {
-			got := formatLockMessage(tc.in)
-			if !strings.Contains(got, tc.want) {
-				t.Fatalf("got %q, want substring %q", got, tc.want)
-			}
-			if !strings.HasPrefix(got, "Nalog je privremeno zaključan") {
-				t.Fatalf("missing Serbian prefix: %q", got)
-			}
-		})
-	}
-}

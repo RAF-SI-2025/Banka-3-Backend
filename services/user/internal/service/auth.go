@@ -25,21 +25,17 @@ type LoginResult struct {
 }
 
 // Login authenticates by email + password against employees first, then
-// clients. Wrong-password attempts are counted; after loginMaxFailures
-// in loginFailureWindow, the account is locked for loginLockDuration.
+// clients.
 //
-// Spec scenarios (PDF + E2E):
-//   - "Korisnik ne postoji" when the email isn't in the system.
-//   - "Neispravni kredencijali" when the email exists but the password is wrong.
-//   - Lock message after 3 strikes; subsequent attempts return it directly.
+// Both "email not found" and "wrong password" return the same
+// "Neispravni kredencijali" message so an attacker can't probe for
+// valid email addresses by observing different error responses. The
+// spec calls out the wrong-password copy explicitly (E2E p.4) and we
+// apply it uniformly to the unknown-email path too.
 func (s *Service) Login(ctx context.Context, email, password string) (*LoginResult, error) {
 	email = strings.TrimSpace(email)
 	if email == "" || password == "" {
 		return nil, apperr.Validation("email and password are required")
-	}
-
-	if locked, retry, err := s.isLoginLocked(ctx, email); err == nil && locked {
-		return nil, apperr.PermissionDenied(formatLockMessage(retry))
 	}
 
 	emp, err := s.Store.GetEmployeeByEmail(ctx, email)
@@ -58,11 +54,10 @@ func (s *Service) Login(ctx context.Context, email, password string) (*LoginResu
 		return nil, err
 	}
 
-	// Spec wants this exact message — leak that the user doesn't exist.
-	// In a real bank we'd avoid email enumeration, but the test scenario
-	// is explicit about "Korisnik ne postoji". Unknown emails don't count
-	// toward the lockout: they have no password to be wrong against.
-	return nil, apperr.NotFound("Korisnik ne postoji")
+	// Email not in the system: return the same "Neispravni kredencijali"
+	// the wrong-password path uses. See the doc comment above for why we
+	// don't surface "Korisnik ne postoji" anymore.
+	return nil, apperr.Unauthenticated("Neispravni kredencijali")
 }
 
 func (s *Service) completeLogin(
@@ -83,13 +78,8 @@ func (s *Service) completeLogin(
 	}
 	ok, err := passwords.Verify(password, passwordHash)
 	if err != nil || !ok {
-		s.recordLoginFailure(ctx, email)
-		if locked, retry, lerr := s.isLoginLocked(ctx, email); lerr == nil && locked {
-			return nil, apperr.PermissionDenied(formatLockMessage(retry))
-		}
 		return nil, apperr.Unauthenticated("Neispravni kredencijali")
 	}
-	s.clearLoginFailures(ctx, email)
 	return s.issueTokens(ctx, kind, userID, perms, sessionVersion)
 }
 

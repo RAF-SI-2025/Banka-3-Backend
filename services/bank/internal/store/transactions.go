@@ -50,10 +50,20 @@ func (s *Store) ExecuteAtomic(ctx context.Context, fn func(tx pgx.Tx) error) err
 	})
 }
 
+// ErrInsufficientFunds is the singleton sentinel returned by
+// AdjustBalance when the debit would push available_balance below
+// zero. Callers that handle the case as a normal business outcome
+// (e.g. the installment cron's overdue path) match it with errors.Is;
+// the gRPC interceptor maps it to FailedPrecondition either way.
+var ErrInsufficientFunds = &apperr.Error{
+	Kind:    apperr.KindFailedPrecondition,
+	Message: "nedovoljno sredstava na računu",
+}
+
 // AdjustBalance increments balance + available_balance by delta (which
-// may be negative for a debit). Rejects when the result would underflow
-// available_balance below zero. Caller supplies the *pgx.Tx so the
-// debit + credit + ledger row are atomic.
+// may be negative for a debit). Returns ErrInsufficientFunds when the
+// result would underflow available_balance below zero. Caller supplies
+// the *pgx.Tx so the debit + credit + ledger row are atomic.
 //
 // daily_spent / monthly_spent are bumped only when delta < 0 (a debit
 // from the account); FX-leg incoming credits don't count toward limits.
@@ -72,7 +82,7 @@ func (s *Store) AdjustBalance(ctx context.Context, tx pgx.Tx, accountID, delta s
 	err := tx.QueryRow(ctx, q, accountID, delta).Scan(&got)
 	if err != nil {
 		if noRows(err) {
-			return apperr.FailedPrecondition("nedovoljno sredstava na računu")
+			return ErrInsufficientFunds
 		}
 		return apperr.Internal("adjust balance", err)
 	}

@@ -49,9 +49,12 @@ func Run() error {
 
 	st := store.New(pool)
 	svc := service.New(st, service.Config{
-		BankCode:     config.String("BANK_CODE", "265"),
+		BankCode:     config.String("BANK_CODE", "333"),
 		Branch:       config.String("BANK_BRANCH", "0001"),
 		FXCommission: config.String("BANK_FX_COMMISSION", "0.005"),
+		// MustString fails fast in prod if the operator forgot to set
+		// the pepper; .env.example carries a placeholder for dev.
+		CVVPepper: config.MustString("BANK_CVV_PEPPER"),
 	}, log)
 
 	if exAddr := config.String("EXCHANGE_GRPC_ADDR", ""); exAddr != "" {
@@ -101,6 +104,10 @@ func Run() error {
 	installmentInterval := config.Duration("INSTALLMENT_JOB_INTERVAL", 24*time.Hour)
 	variableRateInterval := config.Duration("VARIABLE_RATE_JOB_INTERVAL", 30*24*time.Hour)
 	maintenanceFeeInterval := config.Duration("MAINTENANCE_FEE_JOB_INTERVAL", 24*time.Hour)
+	// Spent counters roll over by calendar day/month; the SQL is
+	// idempotent so an hourly tick gives us at-most-1h of staleness
+	// after midnight without burning DB on the no-op runs.
+	spentResetInterval := config.Duration("SPENT_RESET_JOB_INTERVAL", time.Hour)
 
 	probeSrv := probes.New(fmt.Sprintf(":%d", config.Int("PROBE_PORT", 8081)))
 	probeSrv.Register("postgres", func(ctx context.Context) error { return postgres.Ping(ctx, pool) })
@@ -129,6 +136,9 @@ func Run() error {
 	}
 	if maintenanceFeeInterval > 0 {
 		g.Go(func() error { return runJobLoop(gctx, log, "maintenance-fee", maintenanceFeeInterval, svc.RunMaintenanceFeeJobAuto) })
+	}
+	if spentResetInterval > 0 {
+		g.Go(func() error { return runJobLoop(gctx, log, "spent-reset", spentResetInterval, svc.RunSpentResetJobAuto) })
 	}
 
 	probeSrv.MarkReady()

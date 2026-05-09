@@ -3,6 +3,7 @@ package service
 import (
 	"context"
 	"crypto/rand"
+	"errors"
 	"fmt"
 	"math/big"
 	"strings"
@@ -14,6 +15,7 @@ import (
 	"github.com/RAF-SI-2025/Banka-3-Backend/pkg/money"
 	"github.com/RAF-SI-2025/Banka-3-Backend/pkg/permissions"
 	"github.com/RAF-SI-2025/Banka-3-Backend/services/bank/internal/domain"
+	"github.com/RAF-SI-2025/Banka-3-Backend/services/bank/internal/store"
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5"
 )
@@ -136,15 +138,19 @@ func (s *Service) materializeLoan(ctx context.Context, tx pgx.Tx, req *domain.Lo
 	}
 
 	// Convert principal to RSD-equivalent for bracket lookup
-	// (spec p.33). For RSD loans skip the conversion.
+	// (spec p.33). For RSD loans skip the conversion. Uses the ASK
+	// rate to stay consistent with the menjačnica policy (spec p.26).
 	amountRSD := principal
 	if req.Currency != domain.CurrencyRSD {
-		bid, _, err := s.Rates.Quote(ctx, req.Currency, domain.CurrencyRSD)
+		_, ask, err := s.Rates.Quote(ctx, req.Currency, domain.CurrencyRSD)
 		if err != nil {
 			return nil, apperr.Internal("rate lookup", err)
 		}
-		bidR, _ := money.Parse(bid)
-		amountRSD = money.Mul(principal, bidR)
+		askR, perr := money.Parse(ask)
+		if perr != nil {
+			return nil, apperr.Internal("parse rate", perr)
+		}
+		amountRSD = money.Mul(principal, askR)
 	}
 
 	base := loans.BaseRate(amountRSD)
@@ -158,10 +164,10 @@ func (s *Service) materializeLoan(ctx context.Context, tx pgx.Tx, req *domain.Lo
 	annuity := loans.Annuity(principal, monthly, req.InstallmentsTotal)
 	annuityStr := money.FormatAmount(annuity)
 
-	now := time.Now()
+	now := s.now()
 	firstDue := now.AddDate(0, 1, 0)
 	matures := now.AddDate(0, req.InstallmentsTotal, 0)
-	loanNum := generateLoanNumber()
+	loanNum := s.generateLoanNumber()
 
 	loan := &domain.Loan{
 		LoanNumber:            loanNum,
@@ -294,75 +300,137 @@ func (s *Service) GetLoan(ctx context.Context, id string) (*domain.Loan, []*doma
 type InstallmentJobResult struct {
 	Processed int
 	Paid      int
-	Overdue   int
+	Missed    int // first-attempt failures (status flipped to overdue)
+	Penalised int // 72h-retry failures that triggered the +0.05% bump
+	Overdue   int // failures that didn't pay this run (Missed + Penalised + repeat retries)
 }
 
-// RunInstallmentJob iterates due-or-overdue installments and tries to
-// debit the client's account. On success: mark paid, schedule the
-// next installment, decrement remaining_principal. On failure: mark
-// overdue (the spec's 72h-retry + penalty escalation lives later;
-// for slice 3 we just flag the row).
+// RunInstallmentJob is the admin-gated manual entry point; the cron
+// uses RunInstallmentJobAuto. Both share runInstallmentJob.
 func (s *Service) RunInstallmentJob(ctx context.Context, dueOn time.Time) (*InstallmentJobResult, error) {
 	if err := s.requirePermission(ctx, permissions.Admin); err != nil {
 		return nil, err
 	}
 	if dueOn.IsZero() {
-		dueOn = time.Now()
+		dueOn = s.now()
 	}
+	return s.runInstallmentJob(ctx, dueOn)
+}
+
+// RunInstallmentJobAuto is the un-authenticated cron entry.
+func (s *Service) RunInstallmentJobAuto(ctx context.Context) error {
+	res, err := s.runInstallmentJob(ctx, s.now())
+	if err != nil {
+		return err
+	}
+	if res.Processed > 0 {
+		s.Log.Info("installment job ran",
+			"processed", res.Processed,
+			"paid", res.Paid, "missed", res.Missed,
+			"penalised", res.Penalised, "overdue", res.Overdue)
+	}
+	return nil
+}
+
+// runInstallmentJob iterates installments the cron should attempt and
+// dispatches each through collectOneInstallment. The store-side query
+// already filters to (a) unpaid+due-today and (b) overdue+72h-elapsed,
+// so we don't re-check timing here.
+func (s *Service) runInstallmentJob(ctx context.Context, dueOn time.Time) (*InstallmentJobResult, error) {
 	due, err := s.Store.ListInstallmentsDueOn(ctx, dueOn)
 	if err != nil {
 		return nil, err
 	}
 	res := &InstallmentJobResult{Processed: len(due)}
 	for _, inst := range due {
-		if err := s.collectOneInstallment(ctx, inst); err != nil {
+		outcome, err := s.collectOneInstallment(ctx, inst)
+		if err != nil {
+			s.Log.Warn("installment job: unexpected error",
+				"installment_id", inst.ID, "loan_id", inst.LoanID, "error", err)
 			res.Overdue++
-			s.Log.Warn("installment unpaid", "installment_id", inst.ID, "loan_id", inst.LoanID, "error", err)
-			if loan, lerr := s.Store.GetLoanByID(ctx, inst.LoanID); lerr == nil {
-				s.notifyInstallmentMissed(ctx, loan, inst)
-			}
 			continue
 		}
-		res.Paid++
+		switch outcome {
+		case installmentPaid:
+			res.Paid++
+		case installmentMissed:
+			res.Missed++
+			res.Overdue++
+			s.notifyMiss(ctx, inst)
+		case installmentPenalised:
+			res.Penalised++
+			res.Overdue++
+			s.notifyMiss(ctx, inst)
+		case installmentRetryFailed:
+			res.Overdue++
+			s.notifyMiss(ctx, inst)
+		}
 	}
 	return res, nil
 }
 
-func (s *Service) collectOneInstallment(ctx context.Context, inst *domain.LoanInstallment) error {
-	return s.Store.ExecuteAtomic(ctx, func(tx pgx.Tx) error {
+// installmentOutcome reports what the per-row debit actually did.
+type installmentOutcome int
+
+const (
+	installmentPaid        installmentOutcome = iota // debit succeeded
+	installmentMissed                                // first-attempt failure: row marked overdue
+	installmentPenalised                             // retry-after-72h failure: +0.05% bump applied
+	installmentRetryFailed                           // retry-after-72h failure, penalty already applied
+)
+
+// collectOneInstallment attempts to debit `inst` and returns the
+// outcome. Insufficient funds is a normal business case (committed as
+// overdue, no error); errors are reserved for unexpected DB failures.
+//
+// State machine, keyed on (inst.Status, inst.OverdueSince, loan.LatePenaltyApplied):
+//
+//	unpaid, _, _       → try debit. Success → Paid. Fail → Missed (mark overdue).
+//	overdue, set, false → 72h+ retry. Success → Paid (loan flips back to approved).
+//	                       Fail → apply +0.05% bump, reschedule retry. → Penalised.
+//	overdue, set, true  → 72h+ retry. Success → Paid. Fail → reschedule
+//	                       retry, no further bump. → RetryFailed.
+//
+// Spec p.35.
+func (s *Service) collectOneInstallment(ctx context.Context, inst *domain.LoanInstallment) (installmentOutcome, error) {
+	var outcome installmentOutcome
+	err := s.Store.ExecuteAtomic(ctx, func(tx pgx.Tx) error {
 		loan, err := s.Store.GetLoanByID(ctx, inst.LoanID)
 		if err != nil {
 			return err
 		}
-		// Try to debit the client's account → bank's currency-house.
 		bankHouse, err := s.Store.GetSystemAccount(ctx, loan.Currency)
 		if err != nil {
 			return err
 		}
+
 		amt, _ := money.Parse(inst.Amount)
 		neg := money.FormatAmount(money.Sub(money.MustParse("0"), amt))
 		if err := s.Store.AdjustBalance(ctx, tx, loan.AccountID, neg); err != nil {
-			// Insufficient funds — flag overdue, surface to caller.
-			if oerr := s.Store.MarkInstallmentOverdue(ctx, tx, inst.ID); oerr != nil {
-				return oerr
+			if !errors.Is(err, store.ErrInsufficientFunds) {
+				return err
 			}
-			// Also flip the loan to overdue if it isn't already.
-			if loan.Status != domain.LoanOverdue {
-				if uerr := s.Store.UpdateLoanAfterInstallment(ctx, tx, loan.ID, loan.RemainingPrincipal, loan.NextInstallmentAmount, loan.NextInstallmentDate, domain.LoanOverdue); uerr != nil {
-					return uerr
-				}
+			// Insufficient funds → record overdue / apply penalty.
+			// We commit (return nil) so the bookkeeping isn't rolled
+			// back along with the failed debit.
+			oc, herr := s.handleInsufficientFunds(ctx, tx, loan, inst)
+			if herr != nil {
+				return herr
 			}
-			return err
+			outcome = oc
+			return nil
 		}
+
+		// Successful debit: credit the bank's currency-house, mark
+		// installment paid, write the ledger leg, and schedule the next.
 		if err := s.Store.AdjustBalance(ctx, tx, bankHouse.ID, inst.Amount); err != nil {
 			return err
 		}
 		if err := s.Store.MarkInstallmentPaid(ctx, tx, inst.ID); err != nil {
 			return err
 		}
-		op := uuid.NewString()
 		if _, err := s.Store.InsertTransaction(ctx, tx, &domain.Transaction{
-			OpID:              op,
+			OpID:              uuid.NewString(),
 			Kind:              domain.TransactionKind("loan_installment"),
 			LegIndex:          1,
 			FromAccountID:     loan.AccountID,
@@ -376,9 +444,8 @@ func (s *Service) collectOneInstallment(ctx context.Context, inst *domain.LoanIn
 			return err
 		}
 
-		// Compute remaining_principal: principal-portion of this
-		// installment = amount − interest. Interest charged on the
-		// outstanding balance at the captured-at-due rate / 12.
+		// remaining_principal -= principal-part of this installment.
+		// principal-part = amount − (remaining × monthlyRate-at-due).
 		remaining, _ := money.Parse(loan.RemainingPrincipal)
 		annualPct, _ := money.Parse(inst.InterestRateAtDue)
 		monthlyRate, _ := money.Div(annualPct, money.MustParse("1200"))
@@ -398,14 +465,15 @@ func (s *Service) collectOneInstallment(ctx context.Context, inst *domain.LoanIn
 		} else {
 			d := inst.ExpectedDueDate.AddDate(0, 1, 0)
 			nextDate = &d
-			// Schedule the next installment row using the loan's
-			// current installment_amount (which the variable-rate cron
-			// may have refreshed since the last debit).
+			rateAtDue := money.Format(
+				money.Add(money.Add(money.MustParse(loan.BaseRate), money.MustParse(loan.CurrentOffset)), money.MustParse(loan.Margin)),
+				4,
+			)
 			if _, err := s.Store.CreateInstallment(ctx, tx, &domain.LoanInstallment{
 				LoanID:            loan.ID,
 				SequenceNumber:    inst.SequenceNumber + 1,
 				Amount:            loan.InstallmentAmount,
-				InterestRateAtDue: money.Format(money.Add(money.Add(money.MustParse(loan.BaseRate), money.MustParse(loan.CurrentOffset)), money.MustParse(loan.Margin)), 4),
+				InterestRateAtDue: rateAtDue,
 				Currency:          loan.Currency,
 				ExpectedDueDate:   d,
 				Status:            domain.InstallmentUnpaid,
@@ -414,64 +482,143 @@ func (s *Service) collectOneInstallment(ctx context.Context, inst *domain.LoanIn
 			}
 			nextAmount = loan.InstallmentAmount
 		}
-		return s.Store.UpdateLoanAfterInstallment(ctx, tx, loan.ID, money.FormatAmount(newRemaining), nextAmount, nextDate, nextStatus)
+		if err := s.Store.UpdateLoanAfterInstallment(ctx, tx, loan.ID, money.FormatAmount(newRemaining), nextAmount, nextDate, nextStatus); err != nil {
+			return err
+		}
+		outcome = installmentPaid
+		return nil
 	})
+	return outcome, err
 }
 
-// RunInstallmentJobAuto is the un-authenticated entry point used by
-// the in-process cron. It bypasses the principal check (there's no
-// caller) and runs the same business logic.
-func (s *Service) RunInstallmentJobAuto(ctx context.Context) error {
-	dueOn := time.Now()
-	due, err := s.Store.ListInstallmentsDueOn(ctx, dueOn)
-	if err != nil {
-		return err
-	}
-	for _, inst := range due {
-		if err := s.collectOneInstallment(ctx, inst); err != nil {
-			s.Log.Warn("cron: installment unpaid", "installment_id", inst.ID, "error", err)
-			if loan, lerr := s.Store.GetLoanByID(ctx, inst.LoanID); lerr == nil {
-				s.notifyInstallmentMissed(ctx, loan, inst)
+// handleInsufficientFunds runs the spec p.35 missed-payment branch
+// inside the same tx as the failed debit. Either marks the row
+// overdue for the first time, applies the +0.05% bump on the second
+// failure, or just reschedules subsequent failures.
+func (s *Service) handleInsufficientFunds(
+	ctx context.Context, tx pgx.Tx,
+	loan *domain.Loan, inst *domain.LoanInstallment,
+) (installmentOutcome, error) {
+	if inst.OverdueSince == nil {
+		// First failure on this row.
+		if err := s.Store.MarkInstallmentOverdue(ctx, tx, inst.ID); err != nil {
+			return 0, err
+		}
+		if loan.Status != domain.LoanOverdue {
+			if err := s.Store.UpdateLoanAfterInstallment(ctx, tx, loan.ID,
+				loan.RemainingPrincipal, loan.NextInstallmentAmount,
+				loan.NextInstallmentDate, domain.LoanOverdue); err != nil {
+				return 0, err
 			}
 		}
+		return installmentMissed, nil
 	}
-	return nil
+	// Already overdue → this is a 72h-retry that also failed.
+	if !loan.LatePenaltyApplied {
+		if err := s.applyLatePenalty(ctx, tx, loan); err != nil {
+			return 0, err
+		}
+		if err := s.Store.RescheduleOverdueRetry(ctx, tx, inst.ID); err != nil {
+			return 0, err
+		}
+		return installmentPenalised, nil
+	}
+	// Penalty already applied — just push the next retry 72h out.
+	if err := s.Store.RescheduleOverdueRetry(ctx, tx, inst.ID); err != nil {
+		return 0, err
+	}
+	return installmentRetryFailed, nil
 }
 
-// RunVariableRateJobAuto is the un-authenticated cron entry point.
-func (s *Service) RunVariableRateJobAuto(ctx context.Context) error {
-	loansList, err := s.Store.ListActiveVariableLoans(ctx)
+// applyLatePenalty bumps the loan's base rate by +0.05% and recomputes
+// the installment amount over the remaining schedule. Uses the count
+// of paid installments to determine the remaining horizon.
+func (s *Service) applyLatePenalty(ctx context.Context, tx pgx.Tx, loan *domain.Loan) error {
+	paid, err := s.countPaidInstallments(ctx, loan.ID)
 	if err != nil {
 		return err
 	}
-	for _, l := range loansList {
-		if err := s.refreshOneVariableLoan(ctx, l); err != nil {
-			s.Log.Warn("cron: variable-rate refresh failed", "loan_id", l.ID, "error", err)
-		}
+	nRemaining := loan.InstallmentsTotal - paid
+	if nRemaining <= 0 {
+		// No future installments — penalty is moot. Still flip the flag
+		// so we don't keep evaluating.
+		return s.Store.ApplyLatePenalty(ctx, tx, loan.ID, loans.LatePenaltyBump,
+			loan.InstallmentAmount, "0")
 	}
-	return nil
+	bump := money.MustParse(loans.LatePenaltyBump)
+	newBase := money.Add(money.MustParse(loan.BaseRate), bump)
+	margin := money.MustParse(loan.Margin)
+	offset := money.MustParse(loan.CurrentOffset)
+	monthly := loans.MonthlyRate(newBase, offset, margin)
+	remaining := money.MustParse(loan.RemainingPrincipal)
+	annuity := loans.Annuity(remaining, monthly, nRemaining)
+	newRateAtDue := money.Format(money.Add(money.Add(newBase, offset), margin), 4)
+	return s.Store.ApplyLatePenalty(ctx, tx, loan.ID, loans.LatePenaltyBump,
+		money.FormatAmount(annuity), newRateAtDue)
 }
 
-// VariableRateJobResult captures the monthly cron's outcome.
+// notifyMiss is the missed-payment notification hook, factored out so
+// the cron loop reads cleanly. Best-effort; logged on failure.
+func (s *Service) notifyMiss(ctx context.Context, inst *domain.LoanInstallment) {
+	loan, err := s.Store.GetLoanByID(ctx, inst.LoanID)
+	if err != nil {
+		s.Log.Warn("notify miss: get loan failed", "loan_id", inst.LoanID, "error", err)
+		return
+	}
+	s.notifyInstallmentMissed(ctx, loan, inst)
+}
+
+// VariableRateJobResult captures the monthly cron's outcome. Mirrors
+// InstallmentJobResult so the admin RPC can render the same kind of
+// summary regardless of which cron the operator ran.
 type VariableRateJobResult struct {
-	Updated int
+	Processed int // active variable-rate loans seen
+	Updated   int // refreshed successfully
+	Failed    int // failed to refresh (logged; job continues)
 }
 
-// RunVariableRateJob refreshes the random pomeraj for every active
-// variable-rate loan and recomputes the installment amount. Spec
-// p.34 "Naša simulacija → Opcija 1": pomeraj in [-1.50%, +1.50%].
+// RunVariableRateJob is the admin-gated manual entry point; the cron
+// uses RunVariableRateJobAuto. Both share runVariableRateJob.
+//
+// Spec p.34 "Naša simulacija → Opcija 1": pomeraj in [-1.50%, +1.50%].
+// One bad loan must not abort the whole job — both entry points run
+// best-effort and surface failure counts via the result.
 func (s *Service) RunVariableRateJob(ctx context.Context) (*VariableRateJobResult, error) {
 	if err := s.requirePermission(ctx, permissions.Admin); err != nil {
 		return nil, err
 	}
+	return s.runVariableRateJob(ctx)
+}
+
+// RunVariableRateJobAuto is the un-authenticated cron entry.
+func (s *Service) RunVariableRateJobAuto(ctx context.Context) error {
+	res, err := s.runVariableRateJob(ctx)
+	if err != nil {
+		return err
+	}
+	if res.Processed > 0 {
+		s.Log.Info("variable-rate job ran",
+			"processed", res.Processed,
+			"updated", res.Updated,
+			"failed", res.Failed)
+	}
+	return nil
+}
+
+// runVariableRateJob loads every active variable-rate loan and re-rolls
+// the pomeraj on each. Per-loan errors are logged and counted; only a
+// failure to load the list itself bubbles up.
+func (s *Service) runVariableRateJob(ctx context.Context) (*VariableRateJobResult, error) {
 	loansList, err := s.Store.ListActiveVariableLoans(ctx)
 	if err != nil {
 		return nil, err
 	}
-	res := &VariableRateJobResult{}
+	res := &VariableRateJobResult{Processed: len(loansList)}
 	for _, l := range loansList {
 		if err := s.refreshOneVariableLoan(ctx, l); err != nil {
-			return nil, err
+			s.Log.Warn("variable-rate refresh failed", "loan_id", l.ID, "error", err)
+			res.Failed++
+			continue
 		}
 		res.Updated++
 	}
@@ -502,12 +649,7 @@ func (s *Service) refreshOneVariableLoan(ctx context.Context, l *domain.Loan) er
 }
 
 func (s *Service) countPaidInstallments(ctx context.Context, loanID string) (int, error) {
-	const q = `select count(*) from "bank".loan_installments where loan_id = $1 and status = 'paid'`
-	var n int
-	if err := s.Store.Pool.QueryRow(ctx, q, loanID).Scan(&n); err != nil {
-		return 0, apperr.Internal("count paid installments", err)
-	}
-	return n, nil
+	return s.Store.CountPaidInstallments(ctx, loanID)
 }
 
 // =====================================================================
@@ -527,13 +669,13 @@ func randomPomeraj() *big.Rat {
 	return big.NewRat(step, 100)
 }
 
-func generateLoanNumber() string {
+func (s *Service) generateLoanNumber() string {
 	// Loan number: timestamp-suffixed random for uniqueness +
 	// readability. Spec p.32 example shows "17629" — short numeric;
 	// we use 10 digits for headroom.
 	v, err := rand.Int(rand.Reader, big.NewInt(1_000_000_0000))
 	if err != nil {
-		return time.Now().Format("20060102150405")
+		return s.now().Format("20060102150405")
 	}
 	return fmt.Sprintf("%010d", v.Int64())
 }

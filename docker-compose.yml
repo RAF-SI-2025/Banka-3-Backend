@@ -12,6 +12,7 @@ x-service-defaults: &service-defaults
     LOG_LEVEL: "${LOG_LEVEL:-info}"
     LOG_FORMAT: "${LOG_FORMAT:-json}"
     BANK_CODE: "${BANK_CODE:-333}"
+    BANK_CVV_PEPPER: "${BANK_CVV_PEPPER:-dev-cvv-pepper-change-in-prod}"
     GRPC_PORT: "50051"
     PROBE_PORT: "8081"
 

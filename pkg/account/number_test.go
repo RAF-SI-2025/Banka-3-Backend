@@ -13,10 +13,19 @@ func TestGenerate_RoundTrip(t *testing.T) {
 		typ      Type
 		wantType string
 	}{
-		{"personal RSD", "265", "0001", TypePersonalCheckingRSD, "10"},
-		{"personal FX", "265", "0001", TypePersonalFX, "20"},
-		{"business RSD", "265", "0001", TypeBusinessCheckingRSD, "11"},
-		{"system house account", "265", "0000", TypeSystem, "99"},
+		// Tekući bucket — spec p.16.
+		{"personal standard", "333", "0001", TypePersonalChecking, "11"},
+		{"business checking", "333", "0001", TypeBusinessChecking, "12"},
+		{"savings", "333", "0001", TypeSavings, "13"},
+		{"pensioner", "333", "0001", TypePensioner, "14"},
+		{"youth", "333", "0001", TypeYouth, "15"},
+		{"student", "333", "0001", TypeStudent, "16"},
+		{"unemployed", "333", "0001", TypeUnemployed, "17"},
+		// Devizni bucket — spec p.16.
+		{"personal FX", "333", "0001", TypePersonalFX, "21"},
+		{"business FX", "333", "0001", TypeBusinessFX, "22"},
+		// System sentinel.
+		{"system house account", "333", "0000", TypeSystem, "99"},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			n, err := Generate(tc.bank, tc.branch, tc.typ)
@@ -47,7 +56,7 @@ func TestGenerate_Uniqueness(t *testing.T) {
 	// Crude collision check — 1000 numbers, expect zero collisions.
 	seen := make(map[string]struct{}, 1000)
 	for i := 0; i < 1000; i++ {
-		n, err := Generate("265", "0001", TypePersonalCheckingRSD)
+		n, err := Generate("333", "0001", TypePersonalChecking)
 		if err != nil {
 			t.Fatalf("[%d]: %v", i, err)
 		}
@@ -59,7 +68,7 @@ func TestGenerate_Uniqueness(t *testing.T) {
 }
 
 func TestValidate_BadInputs(t *testing.T) {
-	good, err := Generate("265", "0001", TypePersonalCheckingRSD)
+	good, err := Generate("333", "0001", TypePersonalChecking)
 	if err != nil {
 		t.Fatalf("setup: %v", err)
 	}
@@ -70,7 +79,7 @@ func TestValidate_BadInputs(t *testing.T) {
 		want  string
 	}{
 		{"too short", "12345", "want 18 digits"},
-		{"non-digit", "26500001A000000010", "non-digit"},
+		{"non-digit", "33300001A000000011", "non-digit"},
 		{"bad checksum (flip a digit)", flipDigit(good, 5), "checksum mismatch"},
 	}
 	for _, tc := range cases {
@@ -83,13 +92,13 @@ func TestValidate_BadInputs(t *testing.T) {
 }
 
 func TestGenerate_RejectsBadBankOrBranch(t *testing.T) {
-	if _, err := Generate("26", "0001", TypePersonalCheckingRSD); err == nil {
+	if _, err := Generate("33", "0001", TypePersonalChecking); err == nil {
 		t.Error("short bank code accepted")
 	}
-	if _, err := Generate("265", "001", TypePersonalCheckingRSD); err == nil {
+	if _, err := Generate("333", "001", TypePersonalChecking); err == nil {
 		t.Error("short branch accepted")
 	}
-	if _, err := Generate("ABC", "0001", TypePersonalCheckingRSD); err == nil {
+	if _, err := Generate("ABC", "0001", TypePersonalChecking); err == nil {
 		t.Error("non-digit bank code accepted")
 	}
 }

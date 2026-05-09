@@ -3,6 +3,7 @@ module github.com/RAF-SI-2025/Banka-3-Backend/gen
 go 1.25.0
 
 require (
+	buf.build/gen/go/bufbuild/protovalidate/protocolbuffers/go v1.36.11-20260415201107-50325440f8f2.1
 	github.com/grpc-ecosystem/grpc-gateway/v2 v2.29.0
 	google.golang.org/genproto/googleapis/api v0.0.0-20260414002931-afd174a4e478
 	google.golang.org/grpc v1.80.0

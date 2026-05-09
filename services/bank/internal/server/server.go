@@ -154,6 +154,14 @@ func (s *Server) UpdateAccountLimits(ctx context.Context, in *bankpb.UpdateAccou
 	return accountToProto(a), nil
 }
 
+func (s *Server) UpdateAccountName(ctx context.Context, in *bankpb.UpdateAccountNameRequest) (*bankpb.Account, error) {
+	a, err := s.Svc.UpdateAccountName(ctx, in.GetId(), in.GetName())
+	if err != nil {
+		return nil, err
+	}
+	return accountToProto(a), nil
+}
+
 func (s *Server) SetAccountStatus(ctx context.Context, in *bankpb.SetAccountStatusRequest) (*bankpb.Account, error) {
 	a, err := s.Svc.SetAccountStatus(ctx, in.GetId(), statusFromProto(in.GetStatus()))
 	if err != nil {
