@@ -17,6 +17,8 @@
 //	SEED_ADMIN_USERNAME  (default admin)
 //	SEED_CLIENT_EMAIL    (default klijent@banka.local)
 //	SEED_CLIENT_PASSWORD (default Klijent123!)
+//	SEED_CLIENT2_EMAIL    (default klijent2@banka.local)
+//	SEED_CLIENT2_PASSWORD (default Klijent123!)
 //	SEED_EMPLOYEE_EMAIL    (default zaposleni@banka.local)
 //	SEED_EMPLOYEE_USERNAME (default zaposleni)
 //	SEED_EMPLOYEE_PASSWORD (default Zaposleni123!)
@@ -113,13 +115,27 @@ func run() error {
 		return fmt.Errorf("seed employee: %w", err)
 	}
 
-	clientID, err := seedClient(ctx, pool)
+	clientID, err := seedClient(ctx, pool,
+		envOr("SEED_CLIENT_EMAIL", "klijent@banka.local"),
+		envOr("SEED_CLIENT_PASSWORD", "Klijent123!"),
+		"Test", "Klijent", "+381111000111")
 	if err != nil {
 		return fmt.Errorf("seed client: %w", err)
 	}
 
 	if err := seedBank(ctx, pool, clientID, adminID); err != nil {
 		return fmt.Errorf("seed bank: %w", err)
+	}
+
+	// Second client — useful for testing flows that need two distinct
+	// client logins (e.g. inter-client payments). No bank fixtures
+	// hung off them; the admin can mint accounts via the portal if
+	// needed. Idempotent on email like the first.
+	if _, err := seedClient(ctx, pool,
+		envOr("SEED_CLIENT2_EMAIL", "klijent2@banka.local"),
+		envOr("SEED_CLIENT2_PASSWORD", "Klijent123!"),
+		"Drugi", "Klijent", "+381111000222"); err != nil {
+		return fmt.Errorf("seed second client: %w", err)
 	}
 	return nil
 }
@@ -173,17 +189,15 @@ func seedEmployee(ctx context.Context, pool *pgxpool.Pool) error {
 // seedClient plants a single fully-activated client. Idempotent on
 // email. Returns the (possibly-existing) client UUID so callers can
 // hang bank fixtures off it.
-func seedClient(ctx context.Context, pool *pgxpool.Pool) (string, error) {
-	email := envOr("SEED_CLIENT_EMAIL", "klijent@banka.local")
-	password := envOr("SEED_CLIENT_PASSWORD", "Klijent123!")
+func seedClient(ctx context.Context, pool *pgxpool.Pool, email, password, firstName, lastName, phone string) (string, error) {
 	if err := passwords.ValidateComplexity(password); err != nil {
-		return "", fmt.Errorf("SEED_CLIENT_PASSWORD: %w", err)
+		return "", fmt.Errorf("password for %s: %w", email, err)
 	}
 	var existing string
 	switch err := pool.QueryRow(ctx,
 		`select id from "user".clients where lower(email) = lower($1)`, email).Scan(&existing); err {
 	case nil:
-		fmt.Printf("seed: client already exists (id=%s); skipping\n", existing)
+		fmt.Printf("seed: client already exists (id=%s, email=%s); skipping\n", existing, email)
 		return existing, nil
 	default:
 		if err.Error() != "no rows in result set" {
@@ -201,12 +215,12 @@ func seedClient(ctx context.Context, pool *pgxpool.Pool) (string, error) {
             active, permissions
         ) values (
             $1, $2,
-            'Test', 'Klijent', '1990-01-01', 'male', '+381111000111', 'Beograd',
+            $3, $4, '1990-01-01', 'male', $5, 'Beograd',
             true,
             array['client.read','account.read','card.read','card.write','payment.write','loan.read','loan.write']
         ) returning id`
 	var id string
-	if err := pool.QueryRow(ctx, q, email, hash).Scan(&id); err != nil {
+	if err := pool.QueryRow(ctx, q, email, hash, firstName, lastName, phone).Scan(&id); err != nil {
 		return "", fmt.Errorf("insert client: %w", err)
 	}
 	fmt.Printf("seed: client created (id=%s)\n  email:    %s\n  password: %s\n", id, email, password)

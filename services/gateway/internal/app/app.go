@@ -13,7 +13,6 @@ import (
 
 	pkgauth "github.com/RAF-SI-2025/Banka-3-Backend/pkg/auth"
 	"github.com/RAF-SI-2025/Banka-3-Backend/pkg/config"
-	"github.com/RAF-SI-2025/Banka-3-Backend/pkg/email"
 	pkgidem "github.com/RAF-SI-2025/Banka-3-Backend/pkg/idempotency"
 	"github.com/RAF-SI-2025/Banka-3-Backend/pkg/logger"
 	"github.com/RAF-SI-2025/Banka-3-Backend/pkg/probes"
@@ -89,25 +88,12 @@ func Run() error {
 	verifier := &pkgverif.Cache{R: rdb}
 	verifMW := gwverif.Middleware(verifier, gwverif.DefaultRules(), log)
 
-	// Mailer for verification flows that deliver the code by email
-	// (currently: card issuance). Same pattern as the user/bank
-	// services — SMTP if SMTP_HOST is set, otherwise log.
-	mailer := email.New(email.Config{
-		Host:     config.String("SMTP_HOST", ""),
-		Port:     config.Int("SMTP_PORT", 587),
-		Username: config.String("SMTP_USERNAME", ""),
-		Password: config.String("SMTP_PASSWORD", ""),
-		From:     config.String("SMTP_FROM", "no-reply@banka.local"),
-		UseTLS:   config.Bool("SMTP_TLS", false),
-	}, log)
-
 	r := &router.Router{
 		Users:          cs.User,
 		AuthMW:         authMW,
 		IdempotencyMW:  idemMW,
 		VerificationMW: verifMW,
 		Verifier:       verifier,
-		Mailer:         mailer,
 		SecureCookies:  config.Bool("SECURE_COOKIES", false),
 	}
 
