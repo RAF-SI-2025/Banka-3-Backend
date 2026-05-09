@@ -9,6 +9,7 @@ import (
 	"github.com/RAF-SI-2025/Banka-3-Backend/pkg/apperr"
 	"github.com/RAF-SI-2025/Banka-3-Backend/pkg/auth"
 	"github.com/RAF-SI-2025/Banka-3-Backend/pkg/permissions"
+	"github.com/RAF-SI-2025/Banka-3-Backend/services/trading/internal/domain"
 	"github.com/RAF-SI-2025/Banka-3-Backend/services/trading/internal/store"
 )
 
@@ -27,6 +28,16 @@ type Config struct {
 	FXCommission string
 }
 
+// RateProvider returns raw FX bid/ask between two currencies. Used by
+// the order/limit math to convert security-currency amounts into RSD
+// without going through the bank's commission-charging menjačnica.
+//
+// The adapter in services/trading/internal/app dials the exchange
+// service. Tests inject a stub.
+type RateProvider interface {
+	Quote(ctx context.Context, from, to domain.Currency) (bid, ask string, err error)
+}
+
 // Service is the trading aggregate. Sub-aggregates are split per file
 // (actuaries, exchanges, securities, listings, orders, portfolio,
 // tax) but share this struct so cross-aggregate methods (e.g. order
@@ -35,6 +46,10 @@ type Service struct {
 	Store *store.Store
 	Cfg   Config
 	Log   *slog.Logger
+	// Rates converts foreign currency amounts to RSD for the
+	// agent-limit check and capital-gains-tax math. May be nil on a
+	// minimal dev stack — callers must tolerate that.
+	Rates RateProvider
 	// Now is the wall-clock used by every time-dependent path. Tests
 	// pin it; production leaves it nil and falls through to time.Now.
 	Now func() time.Time

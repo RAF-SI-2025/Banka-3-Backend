@@ -266,11 +266,40 @@ breakdown.
 - Spec p.59 option-chain strike window — `filterStrikeWindow` returns
   the N rows above + N below + the at-the-money row.
 
+**Orders landed (2026-05-09):**
+
+- `services/trading/internal/{store,service,server}/orders.go` — full
+  CRUD: `POST /api/v1/orders`, `GET .../orders` with paging+filters,
+  `GET .../orders/{id}`, `POST .../{id}/{approve,decline,cancel}`.
+- Order shape validation per spec p.49-50: limit_price required for
+  LIMIT/STOP_LIMIT, stop_price required for STOP/STOP_LIMIT,
+  Quantity > 0, recognized direction.
+- Approval routing per spec p.50: clients/supervisors/admin auto-
+  approve. Agents with `need_approval=true` OR whose
+  `used_limit + tradeRSD > daily_limit` go to `pending` and the
+  supervisor decides via `ApproveOrder`/`DeclineOrder`. Auto-approved
+  orders stamp `approved_by`/`approved_at` on insert.
+- Settlement-date guard: futures/options whose `settlement_date` is
+  on/before today are rejected at create time.
+- Margin guard: `margin=true` requires `permissions.TradingMargin`.
+- Spec p.58 client visibility: clients can't order forex/option.
+- Cancellation halts further fills; sealed fills stay (spec p.50).
+- `service.RateProvider` adapter dials the exchange service for
+  raw bid/ask (`services/trading/internal/app/exchange_client.go`),
+  used to convert foreign-currency notionals to RSD for the agent
+  limit math (spec p.38).  Falls back to raw notional + warning
+  when `EXCHANGE_GRPC_ADDR` is unset.
+- Used-limit charge: on agent auto-approve and on supervisor approve,
+  the order's RSD-equivalent gets added to `actuary_info.used_limit`
+  via `Store.AddUsedLimit` inside an atomic tx.
+- Last-modification audit: `last_modification` is bumped on every
+  state transition (approve/decline/cancel).
+- Unit tests: `validateOrderShape` (8 cases), `assertTraderRole`
+  (6 cases), `tradeValueRSD` (RSD/foreign with rates / no rates).
+- Smoke-tested through gateway: market+limit+stop_limit creates,
+  list, get, cancel; validation rejection; auto-approval audit row.
+
 **Still to land for c3:**
-- Orders (create, list, approve/decline, cancel) — schema exists,
-  proto exists, service/server/store TBD. 4 types × buy/sell × AON ×
-  margin; approval routing for agents (`need_approval` flag + RSD
-  limit cap).
 - Order execution worker (partial fills, random sub-quantity, random
   interval per spec p.56 formula; STOP/STOP_LIMIT trigger detection;
   after-hours slow-down).

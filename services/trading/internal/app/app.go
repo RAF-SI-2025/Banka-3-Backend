@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"time"
 
+	exchangepb "github.com/RAF-SI-2025/Banka-3-Backend/gen/proto/exchange/v1"
 	tradingpb "github.com/RAF-SI-2025/Banka-3-Backend/gen/proto/trading/v1"
 	"github.com/RAF-SI-2025/Banka-3-Backend/pkg/config"
 	"github.com/RAF-SI-2025/Banka-3-Backend/pkg/grpcserver"
@@ -19,6 +20,7 @@ import (
 	"github.com/RAF-SI-2025/Banka-3-Backend/services/trading/internal/service"
 	"github.com/RAF-SI-2025/Banka-3-Backend/services/trading/internal/store"
 	"google.golang.org/grpc"
+	"google.golang.org/grpc/credentials/insecure"
 
 	"golang.org/x/sync/errgroup"
 )
@@ -54,6 +56,20 @@ func Run() error {
 		Belgrade:     belgrade,
 		FXCommission: config.String("FX_COMMISSION", "0.005"),
 	}, log)
+
+	// Exchange-rate client for foreign-currency → RSD conversions used
+	// by the agent-limit check and the capital-gains tax math. The
+	// service tolerates a nil Rates field on a minimal dev stack.
+	if exAddr := config.String("EXCHANGE_GRPC_ADDR", ""); exAddr != "" {
+		conn, err := grpc.NewClient(exAddr, grpc.WithTransportCredentials(insecure.NewCredentials()))
+		if err != nil {
+			return fmt.Errorf("dial exchange: %w", err)
+		}
+		defer conn.Close()
+		svc.Rates = &exchangeAdapter{c: exchangepb.NewExchangeServiceClient(conn)}
+	} else {
+		log.Warn("EXCHANGE_GRPC_ADDR not set; agent-limit math will use raw notional for foreign trades")
+	}
 
 	probeSrv := probes.New(fmt.Sprintf(":%d", config.Int("PROBE_PORT", 8081)))
 	probeSrv.Register("postgres", func(ctx context.Context) error { return postgres.Ping(ctx, pool) })
