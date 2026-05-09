@@ -103,6 +103,22 @@ func (s *Store) GetSystemAccount(ctx context.Context, currency domain.Currency) 
 	return out, nil
 }
 
+// GetForexBookAccount returns the bank's per-currency forex-book
+// account used as the "market" counterparty in spec p.42 forex
+// settlement. Seeded by EnsureSystemAccounts.
+func (s *Store) GetForexBookAccount(ctx context.Context, currency domain.Currency) (*domain.Account, error) {
+	const q = `select ` + accountColumns + ` from "bank".accounts
+              where kind = 'forex_book' and currency = $1`
+	out, err := scanAccount(s.Pool.QueryRow(ctx, q, string(currency)))
+	if err != nil {
+		if noRows(err) {
+			return nil, apperr.NotFound("forex book account not found for currency " + string(currency))
+		}
+		return nil, apperr.Internal("get forex book account", err)
+	}
+	return out, nil
+}
+
 // GetStateTaxAccount returns the state's RSD capital-gains tax account
 // (spec p.62). Seeded by EnsureSystemAccounts at boot.
 func (s *Store) GetStateTaxAccount(ctx context.Context) (*domain.Account, error) {

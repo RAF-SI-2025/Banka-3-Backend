@@ -15,6 +15,15 @@ const SystemOwnerID = "00000000-0000-0000-0000-000000000000"
 // menjačnica house accounts so neither path bleeds into the other.
 const StateTaxOwnerID = "00000000-0000-0000-0000-000000000010"
 
+// ForexBookOwnerID is the sentinel UUID used as owner_client_id for
+// the bank's forex-book accounts (one per supported currency). Each
+// forex pair fill (spec p.42) settles as two legs between the
+// per-currency forex_book account and the per-currency menjačnica
+// house. The forex_book represents the bank's open FX positions;
+// distinct owner UUID keeps it out of the menjačnica/state-tax
+// lookups.
+const ForexBookOwnerID = "00000000-0000-0000-0000-000000000020"
+
 // =====================================================================
 // Currency
 // =====================================================================
@@ -62,6 +71,7 @@ const (
 	KindBusinessFX          AccountKind = "business_fx"
 	KindSystem              AccountKind = "system"
 	KindStateTax            AccountKind = "state_tax"
+	KindForexBook           AccountKind = "forex_book"
 )
 
 func (k AccountKind) IsBusiness() bool {

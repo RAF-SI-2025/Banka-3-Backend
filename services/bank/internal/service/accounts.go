@@ -347,6 +347,44 @@ func (s *Service) EnsureSystemAccounts(ctx context.Context) error {
 		}
 		s.Log.Info("seeded state tax account", "number", number)
 	}
+
+	// Spec p.42 forex book — one bank-owned account per supported
+	// currency, pre-funded as the conceptual "market" counterparty for
+	// every forex fill. Held under KindForexBook so menjačnica's
+	// system-account lookups don't ever pick it up.
+	const forexBookFloat = "1000000000.0000"
+	for _, c := range domain.SupportedCurrencies() {
+		if _, err := s.Store.GetForexBookAccount(ctx, c); err == nil {
+			continue
+		} else if !isNotFound(err) {
+			return err
+		}
+		number, err := account.Generate(s.Cfg.BankCode, s.Cfg.Branch, account.TypeSystem)
+		if err != nil {
+			return err
+		}
+		_, err = s.Store.CreateAccount(ctx, &domain.Account{
+			Number:              number,
+			Name:                "Forex book (" + string(c) + ")",
+			OwnerClientID:       domain.ForexBookOwnerID,
+			CreatedByEmployeeID: domain.SystemOwnerID,
+			Kind:                domain.KindForexBook,
+			Subtype:             domain.SubtypeUnspecified,
+			Currency:            c,
+			Status:              domain.AccountActive,
+			Balance:             forexBookFloat,
+			AvailableBalance:    forexBookFloat,
+			MaintenanceFee:      "0",
+			DailyLimit:          "0",
+			MonthlyLimit:        "0",
+			DailySpent:          "0",
+			MonthlySpent:        "0",
+		})
+		if err != nil {
+			return err
+		}
+		s.Log.Info("seeded forex book account", "currency", c, "number", number)
+	}
 	return nil
 }
 

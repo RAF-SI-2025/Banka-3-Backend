@@ -63,9 +63,24 @@ func (s *Service) SettleTrade(ctx context.Context, in SettleTradeInput) (*domain
 	if err != nil {
 		return nil, err
 	}
+	// Spec p.56: zaposleni (aktuari) trguju sa bankinog računa. Refuse
+	// when an actuary-flagged settle targets a non-bank account.
+	// Both KindSystem (menjačnica house) and KindForexBook (bank's
+	// per-currency trading book) qualify as bank-owned. Picking the
+	// menjačnica house collapses to a no-op against itself, so for
+	// actuary trades we steer toward the forex_book.
+	if in.IsActuary && user.Kind != domain.KindSystem && user.Kind != domain.KindForexBook {
+		return nil, apperr.FailedPrecondition("aktuari mogu trgovati samo sa bankinog računa")
+	}
 	house, err := s.Store.GetSystemAccount(ctx, in.Currency)
 	if err != nil {
 		return nil, err
+	}
+	// Same-account trade (actuary debiting a bank account and crediting
+	// it back) collapses to a no-op; reject so we don't write zero-net
+	// transaction pairs against the menjačnica house.
+	if in.IsActuary && user.ID == house.ID {
+		return nil, apperr.Validation("aktuari moraju izabrati trading-book račun, ne menjačnicu")
 	}
 
 	// Idempotency: if a transaction with this op_id already exists,
@@ -110,6 +125,130 @@ func (s *Service) SettleTrade(ctx context.Context, in SettleTradeInput) (*domain
 			return err
 		}
 		result.Transactions = legs
+		return nil
+	})
+	if err != nil {
+		return nil, err
+	}
+	return result, nil
+}
+
+// SettleForexFillInput pairs the two cash legs of a forex pair fill
+// (spec p.42). Direction "buy" means the actuary buys the base
+// currency by paying the quote currency; "sell" reverses both legs.
+type SettleForexFillInput struct {
+	Direction    string // "buy" | "sell" of the base currency
+	BaseCurrency domain.Currency
+	BaseAmount   string // qty × contract_size, in base currency
+	QuoteCurrency domain.Currency
+	QuoteAmount  string // qty × contract_size × price, in quote currency
+	OpID         string
+	Purpose      string
+}
+
+// SettleForexFill atomically moves the two paired legs of a forex fill
+// between the bank's per-currency forex_book accounts (the "market"
+// counterparty) and the per-currency menjačnica house. We use the
+// existing executeMoneyMove engine for each leg with TxKindForex so
+// the legs are auditable as forex_fill rows in the ledger.
+//
+// On a buy: house[quote] → forex_book[quote] (bank pays quote currency
+// to the market) and forex_book[base] → house[base] (bank receives
+// base currency). Sell reverses both flows.
+//
+// Idempotent on op_id: a retry that finds existing legs returns them
+// unchanged.
+func (s *Service) SettleForexFill(ctx context.Context, in SettleForexFillInput) (*domain.PaymentResult, error) {
+	p, err := s.requirePrincipal(ctx)
+	if err != nil {
+		return nil, err
+	}
+	if !permissions.Has(p.Permissions, permissions.Admin) {
+		return nil, apperr.PermissionDenied("internal-only RPC")
+	}
+	_ = p
+
+	if in.OpID == "" {
+		return nil, apperr.Validation("op_id is required")
+	}
+	if !in.BaseCurrency.Supported() || !in.QuoteCurrency.Supported() {
+		return nil, apperr.Validation("unsupported currency in pair")
+	}
+	if in.BaseCurrency == in.QuoteCurrency {
+		return nil, apperr.Validation("forex pair currencies must differ")
+	}
+	dir := strings.ToLower(strings.TrimSpace(in.Direction))
+	if dir != "buy" && dir != "sell" {
+		return nil, apperr.Validation("direction must be 'buy' or 'sell'")
+	}
+	baseAmt, err := parsePositive(in.BaseAmount)
+	if err != nil {
+		return nil, apperr.Validation("base_amount: " + err.Error())
+	}
+	quoteAmt, err := parsePositive(in.QuoteAmount)
+	if err != nil {
+		return nil, apperr.Validation("quote_amount: " + err.Error())
+	}
+
+	if existing, err := s.Store.GetTransactionsByOpID(ctx, in.OpID); err == nil && len(existing) > 0 {
+		return &domain.PaymentResult{OpID: in.OpID, Status: domain.TxStatusRealized, Transactions: existing}, nil
+	}
+
+	houseBase, err := s.Store.GetSystemAccount(ctx, in.BaseCurrency)
+	if err != nil {
+		return nil, err
+	}
+	houseQuote, err := s.Store.GetSystemAccount(ctx, in.QuoteCurrency)
+	if err != nil {
+		return nil, err
+	}
+	bookBase, err := s.Store.GetForexBookAccount(ctx, in.BaseCurrency)
+	if err != nil {
+		return nil, err
+	}
+	bookQuote, err := s.Store.GetForexBookAccount(ctx, in.QuoteCurrency)
+	if err != nil {
+		return nil, err
+	}
+
+	// Actuary-flavored initiator → executeMoneyMove zeros FX commission
+	// (this won't matter since each leg is same-currency, but stays
+	// consistent with SettleTrade's pattern).
+	initiator := auth.Principal{
+		UserID:      "",
+		UserKind:    auth.KindEmployee,
+		Permissions: []string{permissions.Admin, permissions.Actuary},
+	}
+	purpose := in.Purpose
+	if purpose == "" {
+		purpose = "Forex fill"
+	}
+
+	// Direction wiring:
+	//   buy  base: house[quote] → book[quote]   (bank pays quote to market)
+	//             book[base]    → house[base]   (bank receives base from market)
+	//   sell base: book[quote]  → house[quote]  (bank receives quote)
+	//             house[base]   → book[base]    (bank pays base)
+	var fromQuote, toQuote, fromBase, toBase *domain.Account
+	if dir == "buy" {
+		fromQuote, toQuote = houseQuote, bookQuote
+		fromBase, toBase = bookBase, houseBase
+	} else {
+		fromQuote, toQuote = bookQuote, houseQuote
+		fromBase, toBase = houseBase, bookBase
+	}
+
+	result := &domain.PaymentResult{OpID: in.OpID, Status: domain.TxStatusRealized}
+	err = s.Store.ExecuteAtomic(ctx, func(tx pgx.Tx) error {
+		quoteLegs, err := s.executeMoneyMove(ctx, tx, fromQuote, toQuote, quoteAmt, domain.TxKindForex, in.OpID, initiator, paymentMeta{Purpose: purpose})
+		if err != nil {
+			return err
+		}
+		baseLegs, err := s.executeMoneyMove(ctx, tx, fromBase, toBase, baseAmt, domain.TxKindForex, in.OpID, initiator, paymentMeta{Purpose: purpose})
+		if err != nil {
+			return err
+		}
+		result.Transactions = append(quoteLegs, baseLegs...)
 		return nil
 	})
 	if err != nil {

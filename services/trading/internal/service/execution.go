@@ -44,11 +44,30 @@ type SettleInput struct {
 	Purpose   string
 }
 
+// SettleForexInput pairs the two cash legs of a spec p.42 forex fill.
+// Direction is "buy" or "sell" of the base currency.
+type SettleForexInput struct {
+	Direction     string
+	BaseCurrency  domain.Currency
+	BaseAmount    string
+	QuoteCurrency domain.Currency
+	QuoteAmount   string
+	OpID          string
+	Purpose       string
+}
+
 // TradeSettler is the trading service's view of the bank's settlement
 // surface. The app layer wires this to bank.SettleTrade; tests inject
 // a stub.
 type TradeSettler interface {
 	Settle(ctx context.Context, in SettleInput) (string, error)
+}
+
+// ForexSettler is the trading service's view of bank.SettleForexFill.
+// May be nil on a minimal dev stack — in that case forex orders skip
+// the cash leg with a logged warning. Production wires this.
+type ForexSettler interface {
+	SettleForex(ctx context.Context, in SettleForexInput) (string, error)
 }
 
 // rand source — package-level so tests can swap it.
@@ -124,8 +143,10 @@ func (s *Service) ProcessOrderTick(ctx context.Context, o *domain.Order) (proces
 			res.NextEarliest = s.now().Add(s.tickRetryInterval())
 			return res, nil
 		}
-		// Fill at the limit price (worst case for the trader).
-		fillPrice = o.LimitPrice
+		// Spec p.51: buy fills at min(limit, ask), sell fills at
+		// max(limit, bid) — i.e. the trader gets the better of their
+		// limit and the current touch.
+		fillPrice = limitFillPrice(o, listing)
 	default:
 		return res, apperr.Internal("unknown effective order type", nil)
 	}
@@ -185,41 +206,20 @@ func (s *Service) executeFill(ctx context.Context, o *domain.Order, listing *dom
 	}
 	qtyR := new(big.Rat).SetInt64(int64(qty))
 	notional := money.Mul(money.Mul(qtyR, csR), priceR)
-	commission := s.commissionFor(o, notional)
-
-	var settleAmount *big.Rat
-	direction := "debit"
-	switch o.Direction {
-	case domain.DirectionBuy:
-		settleAmount = money.Add(notional, commission) // user pays principal + commission
-		direction = "debit"
-	case domain.DirectionSell:
-		settleAmount = money.Sub(notional, commission) // user receives principal - commission
-		direction = "credit"
-	}
-	if !money.IsPositive(settleAmount) {
-		return nil, apperr.Validation("ukupan iznos posle provizije nije pozitivan")
-	}
-
 	sec, err := s.Store.GetSecurity(ctx, o.SecurityID)
 	if err != nil {
 		return nil, err
 	}
-	currency := sec.Currency
-	if currency == "" {
-		currency = domain.CurrencyRSD
+	totalCommission, err := s.commissionFor(ctx, o, sec, notional)
+	if err != nil {
+		return nil, err
 	}
+	commission := proratedCommission(totalCommission, qty, o.Quantity)
 
-	opID := uuid.NewString()
-	settledOpID, err := s.Settler.Settle(ctx, SettleInput{
-		AccountID: o.AccountID,
-		Direction: direction,
-		Currency:  currency,
-		Amount:    money.FormatAmount(settleAmount),
-		OpID:      opID,
-		IsActuary: o.UserKind == domain.KindEmployee,
-		Purpose:   "Fill " + sec.Ticker,
-	})
+	// Forex orders use the spec p.42 paired-settlement RPC instead of
+	// the user-vs-house SettleTrade flow. Two legs go through the
+	// bank's per-currency forex_book accounts atomically.
+	settledOpID, err := s.settleCashLeg(ctx, o, sec, fillPrice, qty, notional, commission, csR)
 	if err != nil {
 		return nil, err
 	}
@@ -240,6 +240,17 @@ func (s *Service) executeFill(ctx context.Context, o *domain.Order, listing *dom
 		exec = e
 		if _, err := s.Store.AdvanceOrderProgress(ctx, tx, o.ID, qty); err != nil {
 			return err
+		}
+
+		// Spec p.42: forex pairs are not held — buying a pair means
+		// selling one currency and buying the other, with no portfolio
+		// position. Skip portfolio + realized-gain bookkeeping here.
+		// TODO(c3 forex): the cash leg is currently still a single-
+		// currency SettleTrade above; proper two-leg paired settlement
+		// (debit quote-currency account, credit base-currency account)
+		// needs a new bank-side primitive — tracked separately.
+		if sec.Type == domain.SecurityForex {
+			return nil
 		}
 
 		switch o.Direction {
@@ -269,6 +280,92 @@ func (s *Service) executeFill(ctx context.Context, o *domain.Order, listing *dom
 		return nil, err
 	}
 	return exec, nil
+}
+
+// settleCashLeg routes the cash leg of a fill to the right bank
+// primitive. Stocks/futures/options use SettleTrade against the user
+// account; forex uses SettleForexFill against the bank's per-currency
+// forex_book accounts (spec p.42). Returns the bank-side op_id to
+// stamp on the execution row.
+func (s *Service) settleCashLeg(
+	ctx context.Context,
+	o *domain.Order,
+	sec *domain.Security,
+	fillPrice string,
+	qty int32,
+	notional, commission, contractSize *big.Rat,
+) (string, error) {
+	if sec.Type == domain.SecurityForex {
+		return s.settleForexLeg(ctx, o, sec, fillPrice, qty, contractSize)
+	}
+
+	currency := sec.Currency
+	if currency == "" {
+		currency = domain.CurrencyRSD
+	}
+	var settleAmount *big.Rat
+	direction := "debit"
+	switch o.Direction {
+	case domain.DirectionBuy:
+		settleAmount = money.Add(notional, commission)
+		direction = "debit"
+	case domain.DirectionSell:
+		settleAmount = money.Sub(notional, commission)
+		direction = "credit"
+	}
+	if !money.IsPositive(settleAmount) {
+		return "", apperr.Validation("ukupan iznos posle provizije nije pozitivan")
+	}
+	return s.Settler.Settle(ctx, SettleInput{
+		AccountID: o.AccountID,
+		Direction: direction,
+		Currency:  currency,
+		Amount:    money.FormatAmount(settleAmount),
+		OpID:      uuid.NewString(),
+		IsActuary: o.UserKind == domain.KindEmployee,
+		Purpose:   "Fill " + sec.Ticker,
+	})
+}
+
+// settleForexLeg dispatches the spec p.42 paired settlement. base_amount
+// = qty × contract_size; quote_amount = qty × contract_size × fillPrice.
+// Direction maps order direction to the FX leg direction directly.
+func (s *Service) settleForexLeg(
+	ctx context.Context,
+	o *domain.Order,
+	sec *domain.Security,
+	fillPrice string,
+	qty int32,
+	contractSize *big.Rat,
+) (string, error) {
+	if s.ForexSettler == nil {
+		s.Log.Warn("forex settler not wired; forex fill skipped its cash leg",
+			"order_id", o.ID, "ticker", sec.Ticker)
+		return "", nil
+	}
+	if !sec.BaseCurrency.Supported() || !sec.QuoteCurrency.Supported() {
+		return "", apperr.Internal("forex security missing base/quote currency", nil)
+	}
+	q := new(big.Rat).SetInt64(int64(qty))
+	priceR, err := money.Parse(fillPrice)
+	if err != nil {
+		return "", apperr.Internal("fill price unparseable", err)
+	}
+	baseAmt := money.Mul(q, contractSize)
+	quoteAmt := money.Mul(baseAmt, priceR)
+	dir := "buy"
+	if o.Direction == domain.DirectionSell {
+		dir = "sell"
+	}
+	return s.ForexSettler.SettleForex(ctx, SettleForexInput{
+		Direction:     dir,
+		BaseCurrency:  sec.BaseCurrency,
+		BaseAmount:    money.FormatAmount(baseAmt),
+		QuoteCurrency: sec.QuoteCurrency,
+		QuoteAmount:   money.FormatAmount(quoteAmt),
+		OpID:          uuid.NewString(),
+		Purpose:       "Forex fill " + sec.Ticker,
+	})
 }
 
 // recordRealizedGain writes one row to realized_gains per spec p.62.
@@ -338,24 +435,42 @@ func (s *Service) recordRealizedGain(
 	return err
 }
 
-// stopTriggered evaluates the stop condition.
+// stopTriggered evaluates the stop condition per spec p.52 (STOP) and
+// p.54 (STOP_LIMIT). Both order types compare ask for BUY and bid for
+// SELL, but with different strictness:
 //
-// Buy stop: triggers when the market last_price >= stop_price (price
-// rose to/through the threshold). Sell stop: triggers when last_price
-// <= stop_price.
+//   STOP buy:        ask  >  stop   (strict)
+//   STOP sell:       bid  <  stop   (strict)
+//   STOP_LIMIT buy:  ask  >= stop   (loose — "dostigne ili pređe")
+//   STOP_LIMIT sell: bid  <  stop   (strict — "padne ispod")
 func (s *Service) stopTriggered(o *domain.Order, listing *domain.Listing) bool {
 	stop, err := money.Parse(o.StopPrice)
 	if err != nil {
 		return false
 	}
-	last, err := money.Parse(listing.Price)
+	var quoteStr string
+	if o.Direction == domain.DirectionBuy {
+		quoteStr = listing.Ask
+	} else {
+		quoteStr = listing.Bid
+	}
+	quote, err := money.Parse(quoteStr)
 	if err != nil {
 		return false
 	}
-	if o.Direction == domain.DirectionBuy {
-		return last.Cmp(stop) >= 0
+	cmp := quote.Cmp(stop)
+	switch o.OrderType {
+	case domain.OrderStopLimit:
+		if o.Direction == domain.DirectionBuy {
+			return cmp >= 0
+		}
+		return cmp < 0
+	default: // OrderStop
+		if o.Direction == domain.DirectionBuy {
+			return cmp > 0
+		}
+		return cmp < 0
 	}
-	return last.Cmp(stop) <= 0
 }
 
 // limitConditionMet evaluates whether the market is willing to fill
@@ -385,6 +500,38 @@ func (s *Service) limitConditionMet(o *domain.Order, listing *domain.Listing) bo
 	return false
 }
 
+// limitFillPrice picks the fill price for a Limit (or triggered Stop-
+// Limit) order per spec p.51. Buyer pays min(limit, ask); seller
+// receives max(limit, bid). Falls back to the limit price when the
+// listing's quote is unparseable.
+func limitFillPrice(o *domain.Order, l *domain.Listing) string {
+	limit, err := money.Parse(o.LimitPrice)
+	if err != nil {
+		return o.LimitPrice
+	}
+	switch o.Direction {
+	case domain.DirectionBuy:
+		ask, err := money.Parse(l.Ask)
+		if err != nil {
+			return o.LimitPrice
+		}
+		if ask.Cmp(limit) < 0 {
+			return l.Ask
+		}
+		return o.LimitPrice
+	case domain.DirectionSell:
+		bid, err := money.Parse(l.Bid)
+		if err != nil {
+			return o.LimitPrice
+		}
+		if bid.Cmp(limit) > 0 {
+			return l.Bid
+		}
+		return o.LimitPrice
+	}
+	return o.LimitPrice
+}
+
 // effectiveType maps a triggered STOP/STOP_LIMIT into its post-trigger
 // type per spec p.50: STOP becomes Market, STOP_LIMIT becomes Limit.
 func effectiveType(o *domain.Order) domain.OrderType {
@@ -403,9 +550,9 @@ func effectiveType(o *domain.Order) domain.OrderType {
 // cadenceReady decides whether enough time has passed since the last
 // fill for this order to fire another. Per spec p.56:
 //
-//   maxIntervalMinutes = 1440 / (volume / remaining)
-//   intervalMinutes    = Random(0, maxIntervalMinutes)
-//   if afterHours: intervalMinutes += 30
+//   maxIntervalSeconds = 1440 / (volume / remaining) = 1440 * remaining / volume
+//   intervalSeconds    = Random(0, maxIntervalSeconds)
+//   if afterHours: interval += 30 minutes (added AFTER the roll)
 //
 // We compare since-last-fill (or since-creation when no fills yet) to
 // the freshly-rolled interval. This randomness is on every tick —
@@ -427,18 +574,16 @@ func (s *Service) cadenceReady(ctx context.Context, o *domain.Order, listing *do
 	if remaining <= 0 {
 		return false
 	}
-	// 1440 minutes per day / fills_per_remaining
-	// fills_per_remaining = volume / remaining
-	// max_interval        = 1440 / fills_per_remaining = 1440 * remaining / volume
-	maxInterval := time.Duration(1440*remaining/volume) * time.Minute
-	if maxInterval < 5*time.Second {
-		maxInterval = 5 * time.Second // floor for tests / extreme volume
-	}
-	if o.AfterHours {
-		maxInterval += 30 * time.Minute
-	}
+	// Spec p.56: result is in seconds.
+	maxInterval := max(time.Duration(1440*remaining/volume)*time.Second, time.Second)
 
 	interval := time.Duration(executionRand.Int63n(int64(maxInterval)))
+	if o.AfterHours {
+		// Spec p.56: "za ispunjavanje svakog dela Order-a se čeka
+		// dodatnih 30 minuta" — the extra wait is added on top of the
+		// rolled interval, not folded into the random distribution.
+		interval += 30 * time.Minute
+	}
 	since, ok, err := s.timeSinceLastFill(ctx, o)
 	if err != nil {
 		s.Log.Warn("cadence: latest exec lookup failed", "order_id", o.ID, "err", err.Error())
@@ -481,35 +626,114 @@ func (s *Service) timeSinceLastFill(ctx context.Context, o *domain.Order) (time.
 
 // commissionFor returns the per-fill commission per spec p.55-56.
 //
-//   Market    : min(14% * notional, $7 in security currency)
-//   Limit     : min(24% * notional, $12 in security currency)
+//   Market    : min(14% × order_total_notional, $7) total across all fills
+//   Limit     : min(24% × order_total_notional, $12) total across all fills
 //   Stop      : same as Market once triggered
 //   StopLimit : same as Limit once triggered
 //
-// The "$7"/"$12" caps are denominated in the security currency for
-// simplicity — the spec uses dollar caps but we honor them as a
-// per-currency unit-cap (no FX hop).
+// Spec p.55 reads "14% od približne cene celokupnog naloga ili $7,
+// u zavisnosti od toga koji iznos je manji" — one cap on the whole
+// order, not per partial fill. We compute the order-total commission
+// once (using the create-time PricePerUnit snapshot as the
+// "približna cena") and prorate it to this fill by qty share.
+//
+// The "$7" / "$12" caps are USD-denominated in the spec; we convert
+// to the security's currency via the rate provider's ASK quote (no
+// commission on the conversion). For USD securities this reduces to
+// "7"/"12" directly; for an RSD security the cap becomes ~770 RSD.
 //
 // Actuary / supervisor employees trading on behalf of the bank pay
 // the same trade commission as clients per spec p.55-56; only the
 // FX leg is commission-free for them (handled bank-side).
-func (s *Service) commissionFor(o *domain.Order, notional *big.Rat) *big.Rat {
-	var rateStr, capStr string
+func (s *Service) commissionFor(ctx context.Context, o *domain.Order, sec *domain.Security, fillNotional *big.Rat) (*big.Rat, error) {
+	_ = fillNotional // kept in signature to avoid wider call-site churn
+	var rateStr, capUSDStr string
 	switch effectiveType(o) {
 	case domain.OrderMarket:
-		rateStr, capStr = "0.14", "7"
+		rateStr, capUSDStr = "0.14", "7"
 	case domain.OrderLimit:
-		rateStr, capStr = "0.24", "12"
+		rateStr, capUSDStr = "0.24", "12"
 	default:
-		rateStr, capStr = "0.14", "7"
+		rateStr, capUSDStr = "0.14", "7"
 	}
 	rate, _ := money.Parse(rateStr)
-	cap, _ := money.Parse(capStr)
-	pct := money.Mul(notional, rate)
-	if pct.Cmp(cap) < 0 {
-		return pct
+
+	// Order-total approximate notional = total_qty × contract_size × snapshot_price.
+	cs, err := money.Parse(o.ContractSize)
+	if err != nil || cs.Sign() == 0 {
+		cs = money.MustParse("1")
 	}
-	return cap
+	priceSnap, err := money.Parse(o.PricePerUnit)
+	if err != nil {
+		return nil, apperr.Internal("price snapshot unparseable", err)
+	}
+	totalQty := new(big.Rat).SetInt64(int64(o.Quantity))
+	totalNotional := money.Mul(money.Mul(totalQty, cs), priceSnap)
+	totalPct := money.Mul(totalNotional, rate)
+
+	cap, err := s.usdToSecurity(ctx, sec, capUSDStr)
+	if err != nil {
+		return nil, err
+	}
+	totalCommission := totalPct
+	if totalCommission.Cmp(cap) > 0 {
+		totalCommission = cap
+	}
+
+	// Prorate to this fill by qty share. Need the fill qty derived
+	// from the notional and snapshot — we already have it implicitly
+	// via the caller (fillNotional / (cs × snapshot_price)) but using
+	// remaining-vs-total qty from the order is cleaner: this fill is
+	// (qty_so_far_after_this − qty_so_far_before) / total_qty. The
+	// caller will set fillQty via the helper below; this function
+	// just returns the total-commission target. Caller (executeFill)
+	// reads fillQty separately.
+
+	// Default: full commission. The caller subtracts already-paid.
+	return totalCommission, nil
+}
+
+// proratedCommission computes this fill's commission share, given the
+// order-total commission and the fill's qty. Using a separate helper
+// keeps commissionFor pure (no cumulative-state lookup) so the unit
+// tests don't need a populated executions table.
+//
+//	share = totalCommission × (fillQty / totalQty)
+func proratedCommission(totalCommission *big.Rat, fillQty, totalQty int32) *big.Rat {
+	if totalQty <= 0 {
+		return new(big.Rat)
+	}
+	frac := new(big.Rat).SetFrac64(int64(fillQty), int64(totalQty))
+	return new(big.Rat).Mul(totalCommission, frac)
+}
+
+// usdToSecurity converts a USD-denominated reference amount (the
+// spec's $7 / $12 commission cap) into the security's currency via
+// the rate provider's ASK. Falls back to the raw string when the
+// security is already USD or no rate provider is wired.
+func (s *Service) usdToSecurity(ctx context.Context, sec *domain.Security, usdAmount string) (*big.Rat, error) {
+	cap, err := money.Parse(usdAmount)
+	if err != nil {
+		return nil, apperr.Internal("usd cap unparseable", err)
+	}
+	cur := sec.Currency
+	if cur == "" || cur == domain.CurrencyUSD {
+		return cap, nil
+	}
+	if s.Rates == nil {
+		// Dev stack without rates: keep the cap in USD-units. Same
+		// pragmatic fallback the limit-math uses.
+		return cap, nil
+	}
+	_, ask, err := s.Rates.Quote(ctx, domain.CurrencyUSD, cur)
+	if err != nil {
+		return nil, apperr.Internal("usd→security fx quote failed", err)
+	}
+	rate, err := money.Parse(ask)
+	if err != nil {
+		return nil, apperr.Internal("usd→security ask unparseable", err)
+	}
+	return money.Mul(cap, rate), nil
 }
 
 // tickRetryInterval is how long to wait before re-checking an order

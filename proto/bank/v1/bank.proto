@@ -128,6 +128,14 @@ service BankService {
   // with admin metadata.
   rpc SettleCapitalGainsTax(SettleCapitalGainsTaxRequest) returns (SettleCapitalGainsTaxResponse);
 
+  // SettleForexFill atomically settles the two paired cash legs of a
+  // forex pair fill (spec p.42). Each leg moves the bank's per-currency
+  // forex_book account against the per-currency menjačnica house. The
+  // forex_book represents the bank's open FX positions and acts as the
+  // conceptual "market" counterparty. Idempotent on `op_id`. Internal
+  // RPC — no http annotation, callers authenticate with admin metadata.
+  rpc SettleForexFill(SettleForexFillRequest) returns (SettleForexFillResponse);
+
   // -----------------------------------------------------------------
   // Payments — Klijent → another Klijent (different owner). Spec
   // p.21 "Novo plaćanje". Same-currency intra-bank: 1 transaction
@@ -533,6 +541,24 @@ message SettleCapitalGainsTaxRequest {
 }
 
 message SettleCapitalGainsTaxResponse {
+  string                 op_id        = 1;
+  repeated Transaction   transactions = 2;
+}
+
+// SettleForexFillRequest pairs the two cash legs of a forex pair fill
+// (spec p.42). `direction` is "buy" or "sell" of the base currency.
+// Both `*_amount` strings are in their respective currency.
+message SettleForexFillRequest {
+  string   direction      = 1 [(buf.validate.field).string = {in: ["buy", "sell"]}];
+  Currency base_currency  = 2 [(buf.validate.field).enum.defined_only = true];
+  string   base_amount    = 3 [(buf.validate.field).string.min_len = 1];
+  Currency quote_currency = 4 [(buf.validate.field).enum.defined_only = true];
+  string   quote_amount   = 5 [(buf.validate.field).string.min_len = 1];
+  string   op_id          = 6 [(buf.validate.field).string.uuid = true];
+  string   purpose        = 7;
+}
+
+message SettleForexFillResponse {
   string                 op_id        = 1;
   repeated Transaction   transactions = 2;
 }

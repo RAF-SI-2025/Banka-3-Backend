@@ -13,22 +13,31 @@ func TestStopTriggered(t *testing.T) {
 	s := &Service{}
 	cases := []struct {
 		name      string
+		typ       domain.OrderType
 		direction domain.Direction
 		stop      string
-		last      string
+		ask, bid  string
 		want      bool
 	}{
-		{"buy stop hits when last >= stop", domain.DirectionBuy, "100", "100.00", true},
-		{"buy stop hits when last > stop", domain.DirectionBuy, "100", "101.00", true},
-		{"buy stop misses when last < stop", domain.DirectionBuy, "100", "99.00", false},
-		{"sell stop hits when last <= stop", domain.DirectionSell, "100", "100.00", true},
-		{"sell stop hits when last < stop", domain.DirectionSell, "100", "99.00", true},
-		{"sell stop misses when last > stop", domain.DirectionSell, "100", "101.00", false},
+		// STOP: spec p.52 strict comparison vs ask/bid.
+		{"stop buy hits when ask > stop", domain.OrderStop, domain.DirectionBuy, "100", "101", "100", true},
+		{"stop buy misses when ask == stop", domain.OrderStop, domain.DirectionBuy, "100", "100", "99", false},
+		{"stop buy misses when ask < stop", domain.OrderStop, domain.DirectionBuy, "100", "99", "98", false},
+		{"stop sell hits when bid < stop", domain.OrderStop, domain.DirectionSell, "100", "100", "99", true},
+		{"stop sell misses when bid == stop", domain.OrderStop, domain.DirectionSell, "100", "101", "100", false},
+		{"stop sell misses when bid > stop", domain.OrderStop, domain.DirectionSell, "100", "102", "101", false},
+		// STOP_LIMIT: spec p.54 — buy is loose ("dostigne ili pređe"),
+		// sell is strict ("padne ispod").
+		{"stoplimit buy hits when ask == stop", domain.OrderStopLimit, domain.DirectionBuy, "100", "100", "99", true},
+		{"stoplimit buy hits when ask > stop", domain.OrderStopLimit, domain.DirectionBuy, "100", "101", "100", true},
+		{"stoplimit buy misses when ask < stop", domain.OrderStopLimit, domain.DirectionBuy, "100", "99", "98", false},
+		{"stoplimit sell hits when bid < stop", domain.OrderStopLimit, domain.DirectionSell, "100", "100", "99", true},
+		{"stoplimit sell misses when bid == stop", domain.OrderStopLimit, domain.DirectionSell, "100", "101", "100", false},
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
-			o := &domain.Order{Direction: tc.direction, StopPrice: tc.stop}
-			l := &domain.Listing{Price: tc.last}
+			o := &domain.Order{OrderType: tc.typ, Direction: tc.direction, StopPrice: tc.stop}
+			l := &domain.Listing{Ask: tc.ask, Bid: tc.bid}
 			if got := s.stopTriggered(o, l); got != tc.want {
 				t.Fatalf("got=%v want=%v", got, tc.want)
 			}
@@ -62,6 +71,34 @@ func TestLimitConditionMet(t *testing.T) {
 	}
 }
 
+func TestLimitFillPrice(t *testing.T) {
+	cases := []struct {
+		name      string
+		direction domain.Direction
+		limit     string
+		ask, bid  string
+		want      string
+	}{
+		// Spec p.51: buy fills at min(limit, ask).
+		{"buy: ask better than limit", domain.DirectionBuy, "100", "98", "97", "98"},
+		{"buy: ask equals limit", domain.DirectionBuy, "100", "100", "99", "100"},
+		{"buy: ask worse than limit (limit binds)", domain.DirectionBuy, "100", "101", "100", "100"},
+		// Spec p.51: sell fills at max(limit, bid).
+		{"sell: bid better than limit", domain.DirectionSell, "100", "102", "101", "101"},
+		{"sell: bid equals limit", domain.DirectionSell, "100", "100", "100", "100"},
+		{"sell: bid worse than limit (limit binds)", domain.DirectionSell, "100", "100", "99", "100"},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			o := &domain.Order{Direction: tc.direction, LimitPrice: tc.limit}
+			l := &domain.Listing{Ask: tc.ask, Bid: tc.bid}
+			if got := limitFillPrice(o, l); got != tc.want {
+				t.Fatalf("got=%s want=%s", got, tc.want)
+			}
+		})
+	}
+}
+
 func TestEffectiveType(t *testing.T) {
 	cases := []struct {
 		typ       domain.OrderType
@@ -84,44 +121,129 @@ func TestEffectiveType(t *testing.T) {
 }
 
 func TestCommissionFor(t *testing.T) {
+	// commissionFor returns the WHOLE-ORDER commission, not the per-
+	// fill share. The caller prorates via proratedCommission. Order
+	// fields populated: Quantity, ContractSize, PricePerUnit.
 	s := &Service{}
+	usd := &domain.Security{Currency: domain.CurrencyUSD}
+	ctx := context.Background()
 
-	// Market: min(14%*notional, $7).
-	// Notional = 30 → 14% = 4.20 → cap (7) not hit → 4.20.
-	o := &domain.Order{OrderType: domain.OrderMarket}
-	got := s.commissionFor(o, money.MustParse("30"))
-	want := money.MustParse("4.2")
-	if got.Cmp(want) != 0 {
-		t.Fatalf("market small got=%s want=%s", got.String(), want.String())
+	mkOrder := func(t domain.OrderType, qty int32, price string) *domain.Order {
+		return &domain.Order{OrderType: t, Quantity: qty, ContractSize: "1", PricePerUnit: price}
 	}
 
-	// Notional = 100 → 14% = 14 → cap (7) hits → 7.
-	got = s.commissionFor(o, money.MustParse("100"))
-	want = money.MustParse("7")
-	if got.Cmp(want) != 0 {
-		t.Fatalf("market large got=%s want=%s", got.String(), want.String())
+	// Market: order-total notional = 1 × 1 × 30 = 30 → 14% = 4.2,
+	// well under $7 cap → 4.2.
+	got, err := s.commissionFor(ctx, mkOrder(domain.OrderMarket, 1, "30"), usd, nil)
+	if err != nil {
+		t.Fatalf("market small: %v", err)
+	}
+	if got.Cmp(money.MustParse("4.2")) != 0 {
+		t.Fatalf("market small got=%s want=4.2", got.String())
 	}
 
-	// Limit: min(24%*notional, $12).
-	o = &domain.Order{OrderType: domain.OrderLimit}
-	got = s.commissionFor(o, money.MustParse("40"))
-	want = money.MustParse("9.6")
-	if got.Cmp(want) != 0 {
-		t.Fatalf("limit small got=%s want=%s", got.String(), want.String())
-	}
-	got = s.commissionFor(o, money.MustParse("100"))
-	want = money.MustParse("12")
-	if got.Cmp(want) != 0 {
-		t.Fatalf("limit large got=%s want=%s", got.String(), want.String())
+	// Market: notional = 100 → 14% = 14, capped at $7.
+	got, _ = s.commissionFor(ctx, mkOrder(domain.OrderMarket, 1, "100"), usd, nil)
+	if got.Cmp(money.MustParse("7")) != 0 {
+		t.Fatalf("market large got=%s want=7", got.String())
 	}
 
-	// Triggered StopLimit follows the Limit table.
-	o = &domain.Order{OrderType: domain.OrderStopLimit, Triggered: true}
-	got = s.commissionFor(o, money.MustParse("30"))
-	want = money.MustParse("7.2")
-	if got.Cmp(want) != 0 {
-		t.Fatalf("stoplimit triggered got=%s want=%s", got.String(), want.String())
+	// Limit: notional = 40 → 24% = 9.6, under $12 cap.
+	got, _ = s.commissionFor(ctx, mkOrder(domain.OrderLimit, 1, "40"), usd, nil)
+	if got.Cmp(money.MustParse("9.6")) != 0 {
+		t.Fatalf("limit small got=%s want=9.6", got.String())
 	}
+
+	// Limit: notional = 100 → 24% = 24, capped at $12.
+	got, _ = s.commissionFor(ctx, mkOrder(domain.OrderLimit, 1, "100"), usd, nil)
+	if got.Cmp(money.MustParse("12")) != 0 {
+		t.Fatalf("limit large got=%s want=12", got.String())
+	}
+
+	// Triggered StopLimit uses the Limit table.
+	o := mkOrder(domain.OrderStopLimit, 1, "30")
+	o.Triggered = true
+	got, _ = s.commissionFor(ctx, o, usd, nil)
+	if got.Cmp(money.MustParse("7.2")) != 0 {
+		t.Fatalf("stoplimit triggered got=%s want=7.2", got.String())
+	}
+}
+
+// TestProratedCommission verifies the per-order cap is split across
+// fills proportional to fill quantity (spec p.55-56, fix #10).
+func TestProratedCommission(t *testing.T) {
+	// $12 total commission on a 10-share order.
+	total := money.MustParse("12")
+
+	// Two equal 5-share fills: each pays $6.
+	if got := proratedCommission(total, 5, 10); got.Cmp(money.MustParse("6")) != 0 {
+		t.Fatalf("5/10 fill got=%s want=6", got.String())
+	}
+	// 1-of-10 share fill: $1.20.
+	if got := proratedCommission(total, 1, 10); got.Cmp(money.MustParse("1.2")) != 0 {
+		t.Fatalf("1/10 fill got=%s want=1.2", got.String())
+	}
+	// Whole-order single fill: $12.
+	if got := proratedCommission(total, 10, 10); got.Cmp(money.MustParse("12")) != 0 {
+		t.Fatalf("10/10 fill got=%s want=12", got.String())
+	}
+	// Sum of two prorated fills must equal the total commission so
+	// the per-order cap is honored across the whole lifecycle.
+	a := proratedCommission(total, 3, 10)
+	b := proratedCommission(total, 7, 10)
+	sum := money.Add(a, b)
+	if sum.Cmp(total) != 0 {
+		t.Fatalf("3+7 fill sum got=%s want=12", sum.String())
+	}
+}
+
+// usdToSecurity should pass-through when sec.Currency is USD or RSD
+// quote isn't available, and convert via the rate provider otherwise.
+func TestUsdToSecurityCapConversion(t *testing.T) {
+	s := &Service{Rates: stubUSDRSDRate{}}
+	ctx := context.Background()
+
+	// USD security: $7 stays as 7.
+	usd := &domain.Security{Currency: domain.CurrencyUSD}
+	got, err := s.usdToSecurity(ctx, usd, "7")
+	if err != nil {
+		t.Fatalf("usd: %v", err)
+	}
+	if got.Cmp(money.MustParse("7")) != 0 {
+		t.Fatalf("usd cap got=%s want=7", got.String())
+	}
+
+	// RSD security: $7 × 110.50 = 773.50 RSD.
+	rsd := &domain.Security{Currency: domain.CurrencyRSD}
+	got, err = s.usdToSecurity(ctx, rsd, "7")
+	if err != nil {
+		t.Fatalf("rsd: %v", err)
+	}
+	if got.Cmp(money.MustParse("773.50")) != 0 {
+		t.Fatalf("rsd cap got=%s want=773.50", got.String())
+	}
+
+	// No rates provider: cap stays in USD-units.
+	s2 := &Service{}
+	got, err = s2.usdToSecurity(ctx, rsd, "7")
+	if err != nil {
+		t.Fatalf("no-rates: %v", err)
+	}
+	if got.Cmp(money.MustParse("7")) != 0 {
+		t.Fatalf("no-rates cap got=%s want=7", got.String())
+	}
+}
+
+type stubUSDRSDRate struct{}
+
+func (stubUSDRSDRate) Quote(_ context.Context, from, to domain.Currency) (string, string, error) {
+	if from == domain.CurrencyUSD && to == domain.CurrencyRSD {
+		return "110.20", "110.50", nil
+	}
+	if from == to {
+		return "1", "1", nil
+	}
+	return "", "", nil
 }
 
 // stubSettler captures the last Settle call for assertions.
@@ -149,16 +271,14 @@ func (s *stubSettler) Settle(_ context.Context, in SettleInput) (string, error) 
 // touch postgres.)
 
 // Sanity-check that big.Rat comparisons in cadenceReady's volume math
-// don't blow up on tiny remainders.
+// don't blow up on tiny remainders. Spec p.56: max_interval is in
+// seconds, computed as 1440 * remaining / volume.
 func TestCadenceVolumeMathSafe(t *testing.T) {
-	// max_interval := 1440 * remaining / volume
-	// volume=10000, remaining=1 → 1440/10000 = 0.144 minutes ≈ 8.6s
-	// Floor in service is 5s — should be honored.
 	rem := int64(1)
 	vol := int64(10000)
-	gotMin := 1440 * rem / vol
-	if gotMin != 0 {
-		t.Fatalf("integer math got=%d want=0", gotMin)
+	gotSec := 1440 * rem / vol
+	if gotSec != 0 {
+		t.Fatalf("integer math got=%d want=0", gotSec)
 	}
 }
 

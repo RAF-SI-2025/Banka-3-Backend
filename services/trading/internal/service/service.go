@@ -46,6 +46,22 @@ type RateProvider interface {
 	Quote(ctx context.Context, from, to domain.Currency) (bid, ask string, err error)
 }
 
+// MarginChecker reads the funding-source state needed by spec p.55
+// margin-eligibility checks: the source account's balance and (for
+// clients only) their largest active loan principal. The trading
+// service does the comparison itself; the bank-side adapter is just a
+// data accessor. Tests inject a stub.
+type MarginChecker interface {
+	// AccountAvailable returns the currency and *available* balance of
+	// the named account. Errors propagate as-is so the caller can
+	// surface NotFound / PermissionDenied to the user.
+	AccountAvailable(ctx context.Context, accountID string) (currency domain.Currency, available string, err error)
+	// ClientLargestActiveLoan returns the largest currently-active loan
+	// for the client (currency + remaining_principal). Returns ("","",nil)
+	// when the client has no active loans.
+	ClientLargestActiveLoan(ctx context.Context, clientID string) (currency domain.Currency, amount string, err error)
+}
+
 // Service is the trading aggregate. Sub-aggregates are split per file
 // (actuaries, exchanges, securities, listings, orders, portfolio,
 // tax) but share this struct so cross-aggregate methods (e.g. order
@@ -64,6 +80,15 @@ type Service struct {
 	// TaxSettler executes the bank-side debit for the capital-gains
 	// tax cron (spec p.62). Must be wired before RunTax is called.
 	TaxSettler TaxSettler
+	// MarginChecker is consulted when a margin-flagged order is
+	// created (spec p.55). May be nil on a minimal dev stack — in that
+	// case the trading service skips the balance/loan check and only
+	// enforces the permission gate. Production must wire this.
+	MarginChecker MarginChecker
+	// ForexSettler executes the paired cash legs of a forex pair fill
+	// (spec p.42). May be nil on a minimal dev stack; forex orders
+	// then skip the cash leg with a logged warning.
+	ForexSettler ForexSettler
 	// Now is the wall-clock used by every time-dependent path. Tests
 	// pin it; production leaves it nil and falls through to time.Now.
 	Now func() time.Time

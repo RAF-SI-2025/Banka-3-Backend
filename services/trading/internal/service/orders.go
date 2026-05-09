@@ -54,8 +54,23 @@ func (s *Service) CreateOrder(ctx context.Context, in CreateOrderInput) (*domain
 	if err := validateOrderShape(in); err != nil {
 		return nil, err
 	}
-	if in.Margin && !permissions.Has(p.Permissions, permissions.TradingMargin) {
-		return nil, apperr.PermissionDenied("nedovoljne permisije za margin trgovinu")
+	if in.Margin {
+		// Spec p.55: employees need permissions.TradingMargin; clients
+		// auto-qualify if they hold any approved loan ("Klijent sa
+		// odobrenim kreditom automatski dobija ovu permisiju"). We
+		// honor that here instead of mutating user.permissions on loan
+		// approval, so the JWT claim isn't load-bearing for the rule.
+		has := permissions.Has(p.Permissions, permissions.TradingMargin)
+		if !has && p.UserKind == auth.KindClient && s.MarginChecker != nil {
+			_, amt, lerr := s.MarginChecker.ClientLargestActiveLoan(ctx, p.UserID)
+			if lerr != nil {
+				return nil, lerr
+			}
+			has = amt != ""
+		}
+		if !has {
+			return nil, apperr.PermissionDenied("nedovoljne permisije za margin trgovinu")
+		}
 	}
 
 	sec, err := s.Store.GetSecurity(ctx, in.SecurityID)
@@ -97,6 +112,16 @@ func (s *Service) CreateOrder(ctx context.Context, in CreateOrderInput) (*domain
 	contractSize := listing.ContractSize
 	if contractSize == "" {
 		contractSize = "1"
+	}
+
+	// Spec p.55: margin orders must additionally satisfy
+	//   client: loan_amount > IMC OR account_balance > IMC
+	//   actuary: account_balance > IMC
+	// where IMC = 1.1 × maintenance_margin (in security currency).
+	if in.Margin {
+		if err := s.assertMarginEligible(ctx, p, in.AccountID, sec, listing, in.Quantity); err != nil {
+			return nil, err
+		}
 	}
 
 	// after_hours flag: if the security trades on an exchange, ask the
@@ -230,6 +255,22 @@ func (s *Service) ApproveOrder(ctx context.Context, id string) (*domain.Order, e
 	if cur.Status != domain.OrderStatusPending {
 		return nil, apperr.FailedPrecondition("nalog nije u stanju 'pending'")
 	}
+	// Spec p.50: "Kod hartija koje imaju settlement date, i gde je taj
+	// datum prošao, postoji samo Decline opcija." Auto-decline if the
+	// security's settlement date passed between create and approve.
+	sec, err := s.Store.GetSecurity(ctx, cur.SecurityID)
+	if err != nil {
+		return nil, err
+	}
+	if sec.SettlementDate != nil && !sec.SettlementDate.After(s.now()) {
+		declined, derr := s.Store.DeclineOrder(ctx, id, p.UserID)
+		if derr != nil {
+			return nil, derr
+		}
+		s.Log.Info("auto-declined approval — security past settlement date",
+			"order_id", id, "security_id", cur.SecurityID, "settlement", sec.SettlementDate)
+		return declined, apperr.FailedPrecondition("hartija je istekla — nalog je automatski odbijen")
+	}
 	out, err := s.Store.ApproveOrder(ctx, id, p.UserID)
 	if err != nil {
 		return nil, err
@@ -274,6 +315,122 @@ func (s *Service) CancelOrder(ctx context.Context, id string) (*domain.Order, er
 		}
 	}
 	return s.Store.CancelOrder(ctx, id)
+}
+
+// =====================================================================
+// Margin eligibility helpers (spec p.55)
+// =====================================================================
+
+// assertMarginEligible enforces the spec p.55 funding-source check.
+// Both clients and actuaries pass on (account_available > IMC).
+// Clients additionally pass on (largest_active_loan > IMC). All amounts
+// are normalised to RSD via the rate provider so cross-currency
+// accounts and loans are handled uniformly. With no MarginChecker
+// wired (minimal dev stack) the check degrades to permission-only and
+// logs a warning.
+func (s *Service) assertMarginEligible(
+	ctx context.Context,
+	p auth.Principal,
+	accountID string,
+	sec *domain.Security,
+	listing *domain.Listing,
+	qty int32,
+) error {
+	if s.MarginChecker == nil {
+		s.Log.Warn("margin checker not wired; skipping spec p.55 funding check",
+			"account_id", accountID, "security_id", sec.ID)
+		return nil
+	}
+	imcRSD, ok, err := s.initialMarginCostRSD(ctx, sec, listing, qty)
+	if err != nil {
+		return err
+	}
+	if !ok {
+		// Couldn't compute IMC (no listing/premium price) — spec implies
+		// margin shouldn't be possible without a known price. Reject.
+		return apperr.FailedPrecondition("nije moguće izračunati Initial Margin Cost za ovu hartiju")
+	}
+
+	cur, avail, err := s.MarginChecker.AccountAvailable(ctx, accountID)
+	if err != nil {
+		return err
+	}
+	availRSD, err := s.amountToRSD(ctx, cur, avail)
+	if err != nil {
+		return err
+	}
+	if availRSD.Cmp(imcRSD) > 0 {
+		return nil
+	}
+
+	if p.UserKind == auth.KindClient {
+		loanCur, loanAmt, err := s.MarginChecker.ClientLargestActiveLoan(ctx, p.UserID)
+		if err != nil {
+			return err
+		}
+		if loanAmt != "" {
+			loanRSD, err := s.amountToRSD(ctx, loanCur, loanAmt)
+			if err != nil {
+				return err
+			}
+			if loanRSD.Cmp(imcRSD) > 0 {
+				return nil
+			}
+		}
+	}
+	return apperr.FailedPrecondition("Initial Margin Cost prelazi raspoloživa sredstva i dostupne kredite")
+}
+
+// initialMarginCostRSD = qty × 1.1 × maintenance_margin, converted to
+// RSD. Returns (rsd, true) on success, (nil, false) when the security
+// has no usable price.
+func (s *Service) initialMarginCostRSD(
+	ctx context.Context,
+	sec *domain.Security,
+	listing *domain.Listing,
+	qty int32,
+) (*big.Rat, bool, error) {
+	mm, ok := computeMaintenanceMargin(sec, listing)
+	if !ok {
+		return nil, false, nil
+	}
+	imc := money.Mul(mm, money.MustParse("1.1"))
+	q := new(big.Rat).SetInt64(int64(qty))
+	imc = money.Mul(imc, q)
+	cur := sec.Currency
+	if cur == "" {
+		cur = domain.CurrencyRSD
+	}
+	rsd, err := s.amountToRSD(ctx, cur, money.FormatAmount(imc))
+	if err != nil {
+		return nil, false, err
+	}
+	return rsd, true, nil
+}
+
+// amountToRSD converts amount-in-cur to RSD via the rate provider's
+// ASK with no commission. Falls back to the raw amount when cur is
+// already RSD or when no rate provider is wired.
+func (s *Service) amountToRSD(ctx context.Context, cur domain.Currency, amount string) (*big.Rat, error) {
+	r, err := money.Parse(amount)
+	if err != nil {
+		return nil, apperr.Internal("amount unparseable", err)
+	}
+	if cur == "" || cur == domain.CurrencyRSD {
+		return r, nil
+	}
+	if s.Rates == nil {
+		return r, nil
+	}
+	_, ask, err := s.Rates.Quote(ctx, cur, domain.CurrencyRSD)
+	if err != nil {
+		return nil, apperr.Internal("fx quote failed", err)
+	}
+	rate, err := money.Parse(ask)
+	if err != nil {
+		return nil, apperr.Internal("fx ask unparseable", err)
+	}
+	return money.Mul(r, rate), nil
 }
 
 // =====================================================================

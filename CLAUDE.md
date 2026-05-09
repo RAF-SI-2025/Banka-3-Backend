@@ -211,7 +211,24 @@ c1 and c2 are feature-complete and verified end-to-end. See top-level
 `/home/user/si/CLAUDE.md` "Verification status" section for the full
 breakdown.
 
-## C3 status (in progress)
+## C3 status (backend complete, FE pending)
+
+**Spec audit + conformance pass landed 2026-05-09** — see top-level
+`CLAUDE.md` "Resolved on 2026-05-09 (c3 backend audit)" for the full
+list. Headline items: stop trigger ask/bid by direction; limit fill
+at min/max; margin balance/loan check; cadence formula in seconds;
+USD-reference commission caps; per-order commission cap prorated
+across fills; settlement-date re-check on approve; forex paired
+settlement via `bank.SettleForexFill` against per-currency
+`KindForexBook` accounts; clients with approved loan auto-qualify
+for margin. Live stack rebuilt + `task test:integration` green.
+
+Below: the original landing log from before the audit. Some of these
+notes describe behavior that has since been corrected (e.g. the
+commission-cap currency note is now obsolete); cross-reference with
+the audit log when in doubt.
+
+## C3 status (in progress, pre-audit log)
 
 **Foundation + catalog landed (2026-05-09):**
 

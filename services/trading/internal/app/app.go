@@ -84,6 +84,8 @@ func Run() error {
 		adapter := &bankSettlerAdapter{c: bankpb.NewBankServiceClient(conn)}
 		svc.Settler = adapter
 		svc.TaxSettler = adapter
+		svc.MarginChecker = adapter
+		svc.ForexSettler = adapter
 	} else {
 		log.Warn("BANK_GRPC_ADDR not set; execution worker will refuse to fill")
 	}
