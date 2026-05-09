@@ -12,13 +12,14 @@ import (
 )
 
 // Spec p.14: matični broj is 8 digits, PIB is 9 digits, šifra delatnosti
-// follows xx.xx (each side 1-2 digits — the spec example "01.9" is one
-// digit on the right). We're permissive about šifra delatnosti since
-// the table of valid codes lives outside this slice.
+// follows NN.N or NN.NN (left side always 2 digits per the official
+// register; right side 1-2 — the spec example "01.9" is one digit).
+// Mirrors the proto buf.validate.field pattern so the gateway and the
+// service layer reject the same inputs.
 var (
 	registryRe = regexp.MustCompile(`^[0-9]{8}$`)
 	taxIDRe    = regexp.MustCompile(`^[0-9]{9}$`)
-	activityRe = regexp.MustCompile(`^[0-9]{1,2}\.[0-9]{1,2}$`)
+	activityRe = regexp.MustCompile(`^[0-9]{2}\.[0-9]{1,2}$`)
 )
 
 type CreateCompanyInput struct {
