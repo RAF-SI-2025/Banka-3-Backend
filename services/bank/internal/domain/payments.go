@@ -13,6 +13,7 @@ const (
 	TxKindTransfer TransactionKind = "transfer"
 	TxKindExchange TransactionKind = "exchange"
 	TxKindFee      TransactionKind = "fee"
+	TxKindTrade    TransactionKind = "trade"
 )
 
 type TransactionStatus string

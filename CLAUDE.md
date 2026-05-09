@@ -299,17 +299,66 @@ breakdown.
 - Smoke-tested through gateway: market+limit+stop_limit creates,
   list, get, cancel; validation rejection; auto-approval audit row.
 
+**Execution worker + portfolio landed (2026-05-09):**
+
+- `services/trading/internal/store/{executions,portfolio,realized_gains}.go`
+  — InsertExecution, AdvanceOrderProgress, SetOrderTriggered,
+  ApplyBuyFill / ApplySellFill (weighted-avg cost basis), InsertRealizedGain,
+  ListExecutions / ListHoldings / ListRealizedGains.
+- `services/trading/internal/service/execution.go` — partial-fill
+  pipeline. ProcessOrderTick decides per-tick whether to fire one fill
+  (cadence + price/limit/stop conditions); executeFill settles the
+  cash leg via `TradeSettler` then atomically inserts execution +
+  advances order progress + applies portfolio change + writes a
+  realized_gain row on sells. RunExecutionTick walks every active
+  order each worker tick.
+- Cadence per spec p.56: `interval ~ Random(0, 1440 * remaining / volume)`
+  minutes; +30 min for after-hours orders. Worker runs every
+  `EXECUTION_TICK_INTERVAL` (default 10s); cadence math is stateless
+  (rolled fresh on every tick).
+- Trigger logic: STOP fires when last_price crosses `stop_price`
+  (>= for buy, <= for sell); STOP_LIMIT same trigger but acts as
+  Limit afterwards. `effectiveType` collapses triggered STOP→Market
+  and triggered STOP_LIMIT→Limit.
+- Limit conditions: buy-limit fills when ask <= limit_price; sell-limit
+  fills when bid >= limit_price.
+- Commission per spec p.55-56: Market = min(14% * notional, $7);
+  Limit = min(24% * notional, $12). Stop / Stop-Limit follow their
+  effective type post-trigger.
+- AON: forces whole-order fill on the first ready tick (no random
+  sub-quantity).
+- `bank.SettleTrade` RPC + bank service-layer + migration extending
+  `transactions.op_kind` with `'trade'`. Same-currency = single leg;
+  FX hops via menjačnica engine. `is_actuary` flag zeroes FX
+  commission per spec p.26. Idempotent on `op_id` (a retry returns
+  the existing legs without re-charging).
+- `services/trading/internal/app/bank_client.go` — TradeSettler
+  adapter dials bank's SettleTrade with admin-flavored metadata
+  (sentinel UUID; bank-side handler clears it before writing
+  initiator_client_id so transactions.initiator_client_id stays
+  NULL).
+- `services/trading/internal/service/portfolio.go` + RPC handlers —
+  `GET /api/v1/portfolio` (decorated holdings: current price,
+  market value, profit, total profit), `PATCH .../{id}/public-count`
+  (spec p.61 OTC public-count, c4-ready). Visibility: clients/agents
+  see their own holdings; supervisors/admin can filter by user.
+- Realized-gain RSD conversion uses the rate provider's ASK with no
+  commission (spec p.62); falls back to native value when not in RSD
+  and no rates are wired.
+- Unit tests: `stopTriggered` (6 cases), `limitConditionMet` (5),
+  `effectiveType` (6), `commissionFor` (5 — small/large for both
+  Market and Limit, plus triggered StopLimit), execution-cadence
+  volume math sanity.
+- Smoke-tested end-to-end: market buy 2x MSFT → 2 partial fills,
+  USD account debited $914.20 (= 2*$450.10 + 2*$7), portfolio
+  shows weighted-avg $450.10. Then sell @ $469.90 (after price bump)
+  → 2 realized_gains rows ($19.80 native, ~1994.81 RSD per share),
+  portfolio quantity → 0, account credited $939.80 - $14 = $925.80.
+
 **Still to land for c3:**
-- Order execution worker (partial fills, random sub-quantity, random
-  interval per spec p.56 formula; STOP/STOP_LIMIT trigger detection;
-  after-hours slow-down).
-- Portfolio holdings (weighted-avg cost basis on buy fills, decrement
-  on sell fills, public_count for c4 OTC).
-- Capital-gains tax (per-sell realized_gain row in security currency
-  + RSD-converted via menjačnica without commission; end-of-month
-  cron debits 15% from acquisition account to state account).
-- Bank-side `TradeMove` RPC (or reuse of `executeMoneyMove` via a new
-  internal entry point) for trade settlement.
+- Capital-gains tax cron (end-of-month debit of 15% of unpaid
+  realized_gains.gain_rsd from the acquisition account to the
+  state RSD account; supervisor manual-trigger RPC).
 - Seed for c3: a few exchanges + sample stock/future/forex/option
   rows with listings so the FE has data to render.
 

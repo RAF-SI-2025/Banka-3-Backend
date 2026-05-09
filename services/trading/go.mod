@@ -4,6 +4,7 @@ go 1.25.0
 
 require (
 	github.com/RAF-SI-2025/Banka-3-Backend/pkg v0.0.0
+	github.com/google/uuid v1.6.0
 	golang.org/x/sync v0.20.0
 	google.golang.org/grpc v1.80.0
 )

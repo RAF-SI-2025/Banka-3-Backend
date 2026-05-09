@@ -26,6 +26,14 @@ type Config struct {
 	// service does not collect it directly — the bank service does on
 	// the FX leg — but we mirror the value so unit tests pin behaviour.
 	FXCommission string
+
+	// TickRetry is how long the execution worker waits before re-checking
+	// an order that wasn't ready to fill this tick. Defaults to 5s.
+	TickRetry time.Duration
+
+	// ExecutionTickInterval is how often the worker wakes up to walk
+	// every active order. Defaults to 10s.
+	ExecutionTickInterval time.Duration
 }
 
 // RateProvider returns raw FX bid/ask between two currencies. Used by
@@ -50,6 +58,9 @@ type Service struct {
 	// agent-limit check and capital-gains-tax math. May be nil on a
 	// minimal dev stack — callers must tolerate that.
 	Rates RateProvider
+	// Settler executes the bank-side cash leg of every fill. Must be
+	// wired before the execution worker runs; tests inject a stub.
+	Settler TradeSettler
 	// Now is the wall-clock used by every time-dependent path. Tests
 	// pin it; production leaves it nil and falls through to time.Now.
 	Now func() time.Time

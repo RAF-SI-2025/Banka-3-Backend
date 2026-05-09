@@ -216,6 +216,27 @@ func (s *Store) ListTransactions(ctx context.Context, f domain.TransactionFilter
 	return out, total, rows.Err()
 }
 
+// GetTransactionsByOpID returns every leg of a single op (UX-level
+// payment / transfer / trade). Empty result is not an error — caller
+// distinguishes "not yet settled" from "no rows".
+func (s *Store) GetTransactionsByOpID(ctx context.Context, opID string) ([]*domain.Transaction, error) {
+	q := `select ` + transactionColumns + ` from "bank".transactions where op_id = $1 order by leg_index`
+	rows, err := s.Pool.Query(ctx, q, opID)
+	if err != nil {
+		return nil, apperr.Internal("transactions by op", err)
+	}
+	defer rows.Close()
+	var out []*domain.Transaction
+	for rows.Next() {
+		t, err := scanTransaction(rows)
+		if err != nil {
+			return nil, apperr.Internal("scan tx by op", err)
+		}
+		out = append(out, t)
+	}
+	return out, rows.Err()
+}
+
 // GetAccountByNumber returns the account row for an 18-digit number,
 // or NotFound. Used by payment flow to resolve the recipient.
 func (s *Store) GetAccountByNumber(ctx context.Context, number string) (*domain.Account, error) {

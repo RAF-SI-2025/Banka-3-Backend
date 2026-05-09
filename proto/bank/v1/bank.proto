@@ -111,6 +111,14 @@ service BankService {
   // hops through the bank in RSD twice).
   rpc GetSystemAccount(GetSystemAccountRequest) returns (Account);
 
+  // SettleTrade is the trading service's settlement primitive. Each
+  // partial fill (spec p.55-56) calls this to move money between the
+  // user's bank account and the bank's house account in the security's
+  // listing currency. Same-currency = single leg; FX = two legs via
+  // the menjačnica engine. Bank does no commission math here — the
+  // caller has already net-bundled commission into `amount`.
+  rpc SettleTrade(SettleTradeRequest) returns (SettleTradeResponse);
+
   // -----------------------------------------------------------------
   // Payments — Klijent → another Klijent (different owner). Spec
   // p.21 "Novo plaćanje". Same-currency intra-bank: 1 transaction
@@ -484,6 +492,27 @@ message GetSystemAccountRequest {
   Currency currency = 1;
 }
 
+// SettleTradeRequest moves money between a user's bank account and the
+// bank's house account in `currency`. Direction "debit" pulls money
+// out of the user (a buy fill); "credit" pushes money into the user
+// (a sell fill). The user's account currency may differ from
+// `currency`; the FX leg goes through the menjačnica engine. When
+// `is_actuary` is true the FX leg is commission-free per spec p.26.
+message SettleTradeRequest {
+  string   account_id = 1 [(buf.validate.field).string.uuid = true];
+  string   direction  = 2 [(buf.validate.field).string.min_len = 1];   // "debit"|"credit"
+  Currency currency   = 3 [(buf.validate.field).enum = {defined_only: true, not_in: [0]}];
+  string   amount     = 4 [(buf.validate.field).string.min_len = 1];
+  string   op_id      = 5 [(buf.validate.field).string.uuid = true];
+  bool     is_actuary = 6;
+  string   purpose    = 7;
+}
+
+message SettleTradeResponse {
+  string                 op_id        = 1;
+  repeated Transaction   transactions = 2;
+}
+
 // =====================================================================
 // Payments / transfers / transactions
 // =====================================================================
@@ -501,6 +530,7 @@ enum TransactionKind {
   TRANSACTION_KIND_TRANSFER    = 2;
   TRANSACTION_KIND_EXCHANGE    = 3; // intermediate leg in a menjačnica path
   TRANSACTION_KIND_FEE         = 4;
+  TRANSACTION_KIND_TRADE       = 5; // trading-service fill settlement
 }
 
 // Transaction is one ledger leg. UX-level operations (a payment, a

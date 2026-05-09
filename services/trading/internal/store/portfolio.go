@@ -1,0 +1,187 @@
+package store
+
+import (
+	"context"
+	"strings"
+
+	"github.com/RAF-SI-2025/Banka-3-Backend/pkg/apperr"
+	"github.com/RAF-SI-2025/Banka-3-Backend/services/trading/internal/domain"
+	"github.com/jackc/pgx/v5"
+)
+
+const holdingCols = `
+    id, user_id, user_kind, security_id, account_id,
+    quantity, weighted_avg_price::text, public_count,
+    acquired_at, updated_at`
+
+// GetHolding returns the (user, security, account) holding row or
+// NotFound. Used by the execution worker to recompute weighted-avg
+// cost basis on each fill.
+func (s *Store) GetHolding(ctx context.Context, tx pgx.Tx, userID, userKind, securityID, accountID string) (*domain.Holding, error) {
+	q := `select ` + holdingCols + `
+	      from "trading".portfolio_holdings
+	      where user_id = $1 and user_kind = $2 and security_id = $3 and account_id = $4`
+	row := tx.QueryRow(ctx, q, userID, userKind, securityID, accountID)
+	out, err := scanHolding(row)
+	if err != nil {
+		if noRows(err) {
+			return nil, apperr.NotFound("holding not found")
+		}
+		return nil, apperr.Internal("get holding", err)
+	}
+	return out, nil
+}
+
+// ApplyBuyFill upserts a holding row by adding `qty` units at
+// `pricePerUnit`. Cost basis becomes a weighted average of existing
+// + new. Runs inside the caller's tx.
+func (s *Store) ApplyBuyFill(
+	ctx context.Context, tx pgx.Tx,
+	userID, userKind, securityID, accountID string,
+	qty int32, pricePerUnit string,
+) (*domain.Holding, error) {
+	const q = `
+        insert into "trading".portfolio_holdings
+            (user_id, user_kind, security_id, account_id, quantity, weighted_avg_price)
+        values ($1, $2, $3, $4, $5, $6::numeric)
+        on conflict (user_id, security_id, account_id) do update set
+            weighted_avg_price = (
+                "trading".portfolio_holdings.weighted_avg_price * "trading".portfolio_holdings.quantity
+                + excluded.weighted_avg_price * excluded.quantity
+            ) / ("trading".portfolio_holdings.quantity + excluded.quantity),
+            quantity   = "trading".portfolio_holdings.quantity + excluded.quantity,
+            updated_at = now()
+        returning ` + holdingCols
+	row := tx.QueryRow(ctx, q, userID, userKind, securityID, accountID, qty, pricePerUnit)
+	out, err := scanHolding(row)
+	if err != nil {
+		return nil, apperr.Internal("apply buy fill", err)
+	}
+	return out, nil
+}
+
+// ApplySellFill decrements the holding's quantity by `qty`. Returns
+// the updated row plus a snapshot of the row's pre-decrement
+// weighted_avg_price so callers can compute realized gains.
+//
+// Errors with FailedPrecondition when the user doesn't own enough.
+func (s *Store) ApplySellFill(
+	ctx context.Context, tx pgx.Tx,
+	userID, userKind, securityID, accountID string,
+	qty int32,
+) (avgPrice string, updated *domain.Holding, err error) {
+	const q = `
+        update "trading".portfolio_holdings
+        set quantity   = quantity - $5,
+            updated_at = now()
+        where user_id = $1 and user_kind = $2 and security_id = $3 and account_id = $4
+          and quantity >= $5
+        returning weighted_avg_price::text, ` + holdingCols
+	var avg string
+	row := tx.QueryRow(ctx, q, userID, userKind, securityID, accountID, qty)
+	var h domain.Holding
+	var t string
+	if err := row.Scan(
+		&avg,
+		&h.ID, &h.UserID, &t, &h.SecurityID, &h.AccountID,
+		&h.Quantity, &h.WeightedAvgPrice, &h.PublicCount,
+		&h.AcquiredAt, &h.UpdatedAt,
+	); err != nil {
+		if noRows(err) {
+			return "", nil, apperr.FailedPrecondition("nedovoljna količina za prodaju")
+		}
+		return "", nil, apperr.Internal("apply sell fill", err)
+	}
+	h.UserKind = domain.UserKind(t)
+	return avg, &h, nil
+}
+
+// HoldingFilter narrows ListHoldings.
+type HoldingFilter struct {
+	UserID     string
+	UserKind   domain.UserKind
+	SecurityID string
+}
+
+// ListHoldings returns matching rows with quantity > 0. Empty filter
+// returns every holding (supervisor view); narrowed filters scope.
+func (s *Store) ListHoldings(ctx context.Context, f HoldingFilter) ([]*domain.Holding, error) {
+	var conds []string
+	var args []any
+	add := func(cond string, a any) {
+		args = append(args, a)
+		conds = append(conds, strings.ReplaceAll(cond, "?", intArg(len(args))))
+	}
+	add("quantity > ?", 0)
+	if f.UserID != "" {
+		add("user_id = ?", f.UserID)
+	}
+	if f.UserKind != "" {
+		add("user_kind = ?", string(f.UserKind))
+	}
+	if f.SecurityID != "" {
+		add("security_id = ?", f.SecurityID)
+	}
+	where := " where " + strings.Join(conds, " and ")
+	q := `select ` + holdingCols + ` from "trading".portfolio_holdings` + where + ` order by updated_at desc`
+	rows, err := s.Pool.Query(ctx, q, args...)
+	if err != nil {
+		return nil, apperr.Internal("list holdings", err)
+	}
+	defer rows.Close()
+	var out []*domain.Holding
+	for rows.Next() {
+		h, err := scanHolding(rows)
+		if err != nil {
+			return nil, apperr.Internal("scan holding", err)
+		}
+		out = append(out, h)
+	}
+	return out, rows.Err()
+}
+
+// SetPublicCount updates the spec p.61 OTC public-share count for c4.
+// Lands now so the column doesn't break later schema migrations.
+func (s *Store) SetPublicCount(ctx context.Context, holdingID string, count int32) (*domain.Holding, error) {
+	const q = `
+        update "trading".portfolio_holdings
+        set public_count = $2, updated_at = now()
+        where id = $1
+        returning ` + holdingCols
+	row := s.Pool.QueryRow(ctx, q, holdingID, count)
+	out, err := scanHolding(row)
+	if err != nil {
+		if noRows(err) {
+			return nil, apperr.NotFound("holding ne postoji")
+		}
+		return nil, apperr.Internal("set public count", err)
+	}
+	return out, nil
+}
+
+// GetHoldingByID for the SetPublicCount auth check.
+func (s *Store) GetHoldingByID(ctx context.Context, id string) (*domain.Holding, error) {
+	q := `select ` + holdingCols + ` from "trading".portfolio_holdings where id = $1`
+	out, err := scanHolding(s.Pool.QueryRow(ctx, q, id))
+	if err != nil {
+		if noRows(err) {
+			return nil, apperr.NotFound("holding ne postoji")
+		}
+		return nil, apperr.Internal("get holding", err)
+	}
+	return out, nil
+}
+
+func scanHolding(row pgx.Row) (*domain.Holding, error) {
+	var h domain.Holding
+	var t string
+	if err := row.Scan(
+		&h.ID, &h.UserID, &t, &h.SecurityID, &h.AccountID,
+		&h.Quantity, &h.WeightedAvgPrice, &h.PublicCount,
+		&h.AcquiredAt, &h.UpdatedAt,
+	); err != nil {
+		return nil, err
+	}
+	h.UserKind = domain.UserKind(t)
+	return &h, nil
+}

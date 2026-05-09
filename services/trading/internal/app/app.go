@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"time"
 
+	bankpb "github.com/RAF-SI-2025/Banka-3-Backend/gen/proto/bank/v1"
 	exchangepb "github.com/RAF-SI-2025/Banka-3-Backend/gen/proto/exchange/v1"
 	tradingpb "github.com/RAF-SI-2025/Banka-3-Backend/gen/proto/trading/v1"
 	"github.com/RAF-SI-2025/Banka-3-Backend/pkg/config"
@@ -71,6 +72,20 @@ func Run() error {
 		log.Warn("EXCHANGE_GRPC_ADDR not set; agent-limit math will use raw notional for foreign trades")
 	}
 
+	// Bank settler — the execution worker dials this on every fill to
+	// move money between user account and bank house account. Without
+	// it, fills fail. Skip wiring on a dev stack that doesn't run bank.
+	if bankAddr := config.String("BANK_GRPC_ADDR", ""); bankAddr != "" {
+		conn, err := grpc.NewClient(bankAddr, grpc.WithTransportCredentials(insecure.NewCredentials()))
+		if err != nil {
+			return fmt.Errorf("dial bank: %w", err)
+		}
+		defer conn.Close()
+		svc.Settler = &bankSettlerAdapter{c: bankpb.NewBankServiceClient(conn)}
+	} else {
+		log.Warn("BANK_GRPC_ADDR not set; execution worker will refuse to fill")
+	}
+
 	probeSrv := probes.New(fmt.Sprintf(":%d", config.Int("PROBE_PORT", 8081)))
 	probeSrv.Register("postgres", func(ctx context.Context) error { return postgres.Ping(ctx, pool) })
 	probeSrv.Register("redis", func(ctx context.Context) error { return pkgredis.Ping(ctx, rdb) })
@@ -92,6 +107,13 @@ func Run() error {
 	// during dev; this loop fires it daily.
 	g.Go(func() error {
 		return runDailyAt(gctx, log, "actuary-used-limit-reset", belgrade, 23, 59, runActuaryDailyReset(svc))
+	})
+
+	// Spec p.55-56 partial-fill worker.
+	tick := config.Duration("EXECUTION_TICK_INTERVAL", 10*time.Second)
+	svc.Cfg.ExecutionTickInterval = tick
+	g.Go(func() error {
+		return runExecutionWorker(gctx, log, svc, tick)
 	})
 
 	probeSrv.MarkReady()

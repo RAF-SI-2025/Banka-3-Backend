@@ -57,3 +57,38 @@ func runActuaryDailyReset(svc *service.Service) func(context.Context) error {
 		return err
 	}
 }
+
+// runExecutionWorker is the spec p.55-56 partial-fill loop. It wakes
+// up every interval and asks the service to walk every active order;
+// the service decides per-order whether to fire one fill on this tick
+// based on price/limit/stop conditions and the cadence formula.
+//
+// We don't drive timing per-order with goroutines — a single ticker
+// keeps the model simple and easy to reason about under restart. The
+// service-side cadence math reads listing.volume + remaining_quantity
+// to roll a random interval and compares it against time-since-last-
+// fill, so the wall-clock interval each order experiences is correct
+// even with a coarse 10-second tick.
+func runExecutionWorker(ctx context.Context, log *slog.Logger, svc *service.Service, interval time.Duration) error {
+	if interval <= 0 {
+		interval = 10 * time.Second
+	}
+	t := time.NewTicker(interval)
+	defer t.Stop()
+	log.Info("execution worker started", "interval", interval)
+	for {
+		select {
+		case <-ctx.Done():
+			return nil
+		case <-t.C:
+			fired, err := svc.RunExecutionTick(ctx)
+			if err != nil {
+				log.Warn("execution tick failed", "err", err.Error())
+				continue
+			}
+			if fired > 0 {
+				log.Info("execution tick", "fired", fired)
+			}
+		}
+	}
+}
