@@ -655,8 +655,13 @@ message CreateCardRequest {
   // Required for poslovni-with-OvlascenoLice; UUID format when set.
   string    authorized_person_id = 2 [(buf.validate.field).string.uuid = true, (buf.validate.field).ignore = IGNORE_IF_ZERO_VALUE];
   CardBrand brand                = 3 [(buf.validate.field).enum = {defined_only: true, not_in: [0]}];
-  string    name                 = 4 [(buf.validate.field).string = {min_len: 1, max_len: 64}];
-  string    card_limit           = 5 [(buf.validate.field).string.pattern = "^[0-9]+(\\.[0-9]{1,4})?$", (buf.validate.field).ignore = IGNORE_IF_ZERO_VALUE];
+  // Name is optional — service layer falls back to a sensible default
+  // ("Debit") when blank. Cap is generous; only the upper bound matters.
+  string    name                 = 4 [(buf.validate.field).string.max_len = 64];
+  // card_limit must be a positive decimal. Pattern enforces shape; the
+  // service layer additionally rejects "0" so callers can't bypass via
+  // "0.00".
+  string    card_limit           = 5 [(buf.validate.field).string.pattern = "^[0-9]+(\\.[0-9]{1,4})?$"];
 }
 
 message ListCardsRequest {

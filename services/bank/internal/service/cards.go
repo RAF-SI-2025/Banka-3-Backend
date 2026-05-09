@@ -12,6 +12,7 @@ import (
 	"github.com/RAF-SI-2025/Banka-3-Backend/pkg/auth"
 	"github.com/RAF-SI-2025/Banka-3-Backend/pkg/card"
 	"github.com/RAF-SI-2025/Banka-3-Backend/pkg/cvv"
+	"github.com/RAF-SI-2025/Banka-3-Backend/pkg/money"
 	"github.com/RAF-SI-2025/Banka-3-Backend/pkg/permissions"
 	"github.com/RAF-SI-2025/Banka-3-Backend/services/bank/internal/domain"
 )
@@ -77,7 +78,14 @@ func (s *Service) CreateCard(ctx context.Context, in CreateCardInput) (*domain.C
 
 	limit := strings.TrimSpace(in.CardLimit)
 	if limit == "" {
-		limit = "0"
+		return nil, "", apperr.Validation("limit kartice je obavezan i mora biti veći od 0")
+	}
+	limitRat, err := money.Parse(limit)
+	if err != nil {
+		return nil, "", apperr.Validation("limit kartice nije validan iznos")
+	}
+	if !money.IsPositive(limitRat) {
+		return nil, "", apperr.Validation("limit kartice mora biti veći od 0")
 	}
 	name := strings.TrimSpace(in.Name)
 	if name == "" {

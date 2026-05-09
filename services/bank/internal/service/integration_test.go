@@ -603,6 +603,7 @@ func TestIntegration_Card_Lifecycle(t *testing.T) {
 		AccountID: acc.ID,
 		Brand:     domain.BrandVisa,
 		Name:      "Lična kartica",
+		CardLimit: "100000",
 	})
 	if err != nil {
 		t.Fatalf("create: %v", err)
@@ -645,6 +646,7 @@ func TestIntegration_Card_PersonalLimit(t *testing.T) {
 			AccountID: acc.ID,
 			Brand:     domain.BrandVisa,
 			Name:      "Card",
+			CardLimit: "100000",
 		})
 		return err
 	}
@@ -1136,7 +1138,7 @@ func TestIntegration_Notify_CardBlocked(t *testing.T) {
 	clientID := uuid.NewString()
 	acc := mintAccount(t, svc, clientID, domain.KindPersonalCheckingRSD, domain.CurrencyRSD, "0")
 	c, _, err := svc.CreateCard(clientCtx(clientID), CreateCardInput{
-		AccountID: acc.ID, Brand: domain.BrandVisa, Name: "L1",
+		AccountID: acc.ID, Brand: domain.BrandVisa, Name: "L1", CardLimit: "100000",
 	})
 	if err != nil {
 		t.Fatalf("create card: %v", err)
