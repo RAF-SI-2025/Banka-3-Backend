@@ -225,18 +225,33 @@ task fmt                    # gofumpt
 Working on c1 only needs four containers running; the stubs for
 later celine stay dormant until you bump `CELINA=`.
 
-## C1 status
+## C1 + C2 status
 
-User service is implemented and verified running in docker-compose:
-auth (login/refresh/logout), employee CRUD, activation flow, password
-reset, session_version revocation, JWT middleware in the gateway.
-See top-level `/home/user/si/CLAUDE.md` "Verification status" section
-for what's verified vs. what isn't.
+c1 and c2 are feature-complete and verified end-to-end. See top-level
+`/home/user/si/CLAUDE.md` "Verification status" section for the full
+breakdown.
+
+**c1**: user service — auth (login/refresh/logout), employee CRUD,
+activation, password reset, session_version revocation, JWT middleware
+in gateway, 3-strike lockout.
+
+**c2**: bank service — companies + authorized persons; accounts (RSD
++ FX, personal + business) with per-spec maintenance fees and default
+limits; cards (lifecycle + per-account limit); payments (same-currency
++ FX through bank house); transfers; menjačnica (quote + execute);
+payment recipients; loans (request → approve → installment cron →
+variable-rate refresh). Bank emits Serbian notifications via a
+`Notifier` interface (email through `pkg/email`; `UserResolver` dials
+user-service GetClient with internal admin metadata to fetch the
+recipient address).
+
+**Tests**: bank service 31 (`integration` build tag for 23 of them),
+user service 25 integration, pkg/* unit suites all green.
 
 Next steps:
-- Seed a bootstrap admin (see "Open issues" in top-level CLAUDE.md)
-- Browser-test the FE↔BE integration end-to-end
-- Begin celina 2 (`bank` service: accounts, payments, cards, loans)
+- Begin celina 3 (`trading` service: listings, orders, portfolio, OTC,
+  capital-gains tax, SAGA orchestrator). Read spec section "Trgovina
+  hartijama sa berze" before starting.
 
 ## Locked decisions for c1
 
@@ -259,13 +274,16 @@ Next steps:
 - **Reset token TTL**: 15min (per spec).
 - **Lockout policy**: out of scope for c1 (spec marks it
   "za nadogradnju"). Track failed attempts in Redis if added later.
-- **Notification service in c1**: deferred. The user service uses
-  `pkg/email` directly so activation/reset emails work end-to-end. The
-  standalone notification service stays a stub until c2, when it gains
-  blocked-card / failed-installment / OTC counter-offer events worth
-  centralizing. When wired, the swap is local to `services/user/internal/app`
-  (replace `notifierAdapter` with a notification gRPC client; service
-  layer doesn't change).
+- **Notification service**: c1 + c2 emit emails directly via
+  `pkg/email` through service-local `Notifier` adapters (user service
+  for activation / reset / profile change; bank service for card
+  status / loan decisions / missed installments). The standalone
+  `notification` service is still a stub. Centralizing all email
+  through it is deferred until c4 OTC counter-offers — when there are
+  ~10+ event types the duplication of Serbian email templating across
+  services becomes annoying enough to justify the migration. When
+  that happens, both services swap their `notifierAdapter` for a
+  notification gRPC client; service layers don't change.
 
 Each celina's spec edge cases are documented in the top-level
 `/home/user/si/CLAUDE.md`. Re-read before starting work in that area.
