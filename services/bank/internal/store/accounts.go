@@ -4,6 +4,9 @@ import (
 	"context"
 	"fmt"
 	"strings"
+	"time"
+
+	"github.com/jackc/pgx/v5"
 
 	"github.com/RAF-SI-2025/Banka-3-Backend/pkg/apperr"
 	"github.com/RAF-SI-2025/Banka-3-Backend/services/bank/internal/domain"
@@ -17,7 +20,7 @@ const accountColumns = `
     balance::text, available_balance::text, maintenance_fee::text,
     daily_limit::text, monthly_limit::text,
     daily_spent::text, monthly_spent::text,
-    created_at, expires_at, updated_at
+    created_at, expires_at, updated_at, last_maintenance_debit
 `
 
 func scanAccount(row interface{ Scan(...any) error }) (*domain.Account, error) {
@@ -30,7 +33,7 @@ func scanAccount(row interface{ Scan(...any) error }) (*domain.Account, error) {
 		&a.Balance, &a.AvailableBalance, &a.MaintenanceFee,
 		&a.DailyLimit, &a.MonthlyLimit,
 		&a.DailySpent, &a.MonthlySpent,
-		&a.CreatedAt, &a.ExpiresAt, &a.UpdatedAt,
+		&a.CreatedAt, &a.ExpiresAt, &a.UpdatedAt, &a.LastMaintenanceDebit,
 	); err != nil {
 		return nil, err
 	}
@@ -132,6 +135,44 @@ func (s *Store) SetAccountStatus(ctx context.Context, id string, status domain.A
 		return nil, apperr.Internal("set status", err)
 	}
 	return out, nil
+}
+
+// ListAccountsDueForMaintenance returns active accounts whose monthly
+// maintenance fee should be debited today: fee > 0 and either never
+// debited or last_maintenance_debit is older than the cutoff.
+//
+// Excluded: system accounts (no fee), inactive accounts.
+func (s *Store) ListAccountsDueForMaintenance(ctx context.Context, cutoff time.Time) ([]*domain.Account, error) {
+	const q = `select ` + accountColumns + ` from "bank".accounts
+              where status = 'active' and kind <> 'system'
+                and maintenance_fee > 0
+                and (last_maintenance_debit is null or last_maintenance_debit <= $1)
+              order by created_at`
+	rows, err := s.Pool.Query(ctx, q, cutoff)
+	if err != nil {
+		return nil, apperr.Internal("list maintenance-due", err)
+	}
+	defer rows.Close()
+	var out []*domain.Account
+	for rows.Next() {
+		a, err := scanAccount(rows)
+		if err != nil {
+			return nil, apperr.Internal("scan", err)
+		}
+		out = append(out, a)
+	}
+	return out, rows.Err()
+}
+
+// MarkMaintenanceDebited stamps last_maintenance_debit = now() on the
+// account inside the supplied tx. Caller is responsible for the
+// AdjustBalance + InsertTransaction legs.
+func (s *Store) MarkMaintenanceDebited(ctx context.Context, tx pgx.Tx, accountID string) error {
+	_, err := tx.Exec(ctx, `update "bank".accounts set last_maintenance_debit = now() where id = $1`, accountID)
+	if err != nil {
+		return apperr.Internal("mark maintenance debited", err)
+	}
+	return nil
 }
 
 func (s *Store) ListAccounts(ctx context.Context, f domain.AccountFilter, page, pageSize int) ([]*domain.Account, int64, error) {

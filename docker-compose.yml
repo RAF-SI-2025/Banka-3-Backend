@@ -101,6 +101,13 @@ services:
       <<: *service-env
       EXCHANGE_GRPC_ADDR: "${EXCHANGE_GRPC_ADDR:-exchange:50051}"
       NOTIFICATION_GRPC_ADDR: "${NOTIFICATION_GRPC_ADDR:-notification:50051}"
+      USER_GRPC_ADDR: "${USER_GRPC_ADDR:-user:50051}"
+      SMTP_HOST: "${SMTP_HOST:-}"
+      SMTP_PORT: "${SMTP_PORT:-587}"
+      SMTP_USERNAME: "${SMTP_USERNAME:-}"
+      SMTP_PASSWORD: "${SMTP_PASSWORD:-}"
+      SMTP_FROM: "${SMTP_FROM:-no-reply@banka.local}"
+      SMTP_TLS: "${SMTP_TLS:-false}"
     ports:
       - "${BANK_GRPC_PORT:-50052}:50051"
       - "${BANK_PROBE_PORT:-8082}:8081"

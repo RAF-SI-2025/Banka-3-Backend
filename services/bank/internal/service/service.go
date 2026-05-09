@@ -27,6 +27,28 @@ type Service struct {
 	// during slice-1-only tests, in which case FX paths surface
 	// "exchange rate provider not configured".
 	Rates RateProvider
+	// Notifier is used for c2 user-facing notifications (card state
+	// changes, loan decisions, missed installments). Nil → events are
+	// logged only. Mirrors the user service's Notifier interface.
+	Notifier Notifier
+	// UserResolver looks up a client's email by ID. Used by Notifier-
+	// backed flows so the bank service doesn't have to keep its own
+	// copy of the email (cross-schema joins are forbidden).
+	UserResolver UserResolver
+}
+
+// Notifier is the bank service's user-notification surface. The
+// signature matches the user service's Notifier so a single email
+// adapter can satisfy both.
+type Notifier interface {
+	Send(ctx context.Context, to, subject, body string, html bool) error
+}
+
+// UserResolver resolves cross-schema client/employee details that the
+// bank service needs at notification time but doesn't own. The app
+// layer wires this to a user-service gRPC client.
+type UserResolver interface {
+	ClientEmail(ctx context.Context, clientID string) (string, error)
 }
 
 func New(st *store.Store, cfg Config, log *slog.Logger) *Service {

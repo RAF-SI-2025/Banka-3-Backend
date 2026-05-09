@@ -9,7 +9,9 @@ import (
 
 	bankpb "github.com/RAF-SI-2025/Banka-3-Backend/gen/proto/bank/v1"
 	exchangepb "github.com/RAF-SI-2025/Banka-3-Backend/gen/proto/exchange/v1"
+	userpb "github.com/RAF-SI-2025/Banka-3-Backend/gen/proto/user/v1"
 	"github.com/RAF-SI-2025/Banka-3-Backend/pkg/config"
+	"github.com/RAF-SI-2025/Banka-3-Backend/pkg/email"
 	"github.com/RAF-SI-2025/Banka-3-Backend/pkg/grpcserver"
 	"github.com/RAF-SI-2025/Banka-3-Backend/pkg/logger"
 	"github.com/RAF-SI-2025/Banka-3-Backend/pkg/postgres"
@@ -63,6 +65,32 @@ func Run() error {
 		log.Warn("EXCHANGE_GRPC_ADDR not set; FX/menjačnica paths will return error")
 	}
 
+	// User service client — needed for notification email lookups. If
+	// USER_GRPC_ADDR isn't set the bank still boots; notifications are
+	// no-ops (logged only).
+	if userAddr := config.String("USER_GRPC_ADDR", ""); userAddr != "" {
+		conn, err := grpc.NewClient(userAddr, grpc.WithTransportCredentials(insecure.NewCredentials()))
+		if err != nil {
+			return fmt.Errorf("dial user: %w", err)
+		}
+		defer conn.Close()
+		svc.UserResolver = &userResolverAdapter{c: userpb.NewUserServiceClient(conn)}
+	} else {
+		log.Warn("USER_GRPC_ADDR not set; client-email lookup disabled (notifications will be skipped)")
+	}
+
+	// Notifier wires SMTP if configured; otherwise pkg/email logs to
+	// stdout — same pattern as the user service in c1.
+	emailCfg := email.Config{
+		Host:     config.String("SMTP_HOST", ""),
+		Port:     config.Int("SMTP_PORT", 587),
+		Username: config.String("SMTP_USERNAME", ""),
+		Password: config.String("SMTP_PASSWORD", ""),
+		From:     config.String("SMTP_FROM", "no-reply@banka.local"),
+		UseTLS:   config.Bool("SMTP_TLS", false),
+	}
+	svc.Notifier = bankNotifierAdapter{sender: email.New(emailCfg, log)}
+
 	// Bring up the bank-owned house accounts before serving traffic so
 	// the FX flow can always look them up. Idempotent — only inserts
 	// missing currencies.
@@ -72,6 +100,7 @@ func Run() error {
 
 	installmentInterval := config.Duration("INSTALLMENT_JOB_INTERVAL", 24*time.Hour)
 	variableRateInterval := config.Duration("VARIABLE_RATE_JOB_INTERVAL", 30*24*time.Hour)
+	maintenanceFeeInterval := config.Duration("MAINTENANCE_FEE_JOB_INTERVAL", 24*time.Hour)
 
 	probeSrv := probes.New(fmt.Sprintf(":%d", config.Int("PROBE_PORT", 8081)))
 	probeSrv.Register("postgres", func(ctx context.Context) error { return postgres.Ping(ctx, pool) })
@@ -97,6 +126,9 @@ func Run() error {
 	}
 	if variableRateInterval > 0 {
 		g.Go(func() error { return runJobLoop(gctx, log, "variable-rate", variableRateInterval, svc.RunVariableRateJobAuto) })
+	}
+	if maintenanceFeeInterval > 0 {
+		g.Go(func() error { return runJobLoop(gctx, log, "maintenance-fee", maintenanceFeeInterval, svc.RunMaintenanceFeeJobAuto) })
 	}
 
 	probeSrv.MarkReady()

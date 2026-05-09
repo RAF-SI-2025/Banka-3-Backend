@@ -122,6 +122,7 @@ func (s *Service) DecideLoanRequest(ctx context.Context, requestID string, appro
 	if err != nil {
 		return nil, err
 	}
+	s.notifyLoanDecision(ctx, decided)
 	return decided, nil
 }
 
@@ -317,6 +318,9 @@ func (s *Service) RunInstallmentJob(ctx context.Context, dueOn time.Time) (*Inst
 		if err := s.collectOneInstallment(ctx, inst); err != nil {
 			res.Overdue++
 			s.Log.Warn("installment unpaid", "installment_id", inst.ID, "loan_id", inst.LoanID, "error", err)
+			if loan, lerr := s.Store.GetLoanByID(ctx, inst.LoanID); lerr == nil {
+				s.notifyInstallmentMissed(ctx, loan, inst)
+			}
 			continue
 		}
 		res.Paid++
@@ -426,6 +430,9 @@ func (s *Service) RunInstallmentJobAuto(ctx context.Context) error {
 	for _, inst := range due {
 		if err := s.collectOneInstallment(ctx, inst); err != nil {
 			s.Log.Warn("cron: installment unpaid", "installment_id", inst.ID, "error", err)
+			if loan, lerr := s.Store.GetLoanByID(ctx, inst.LoanID); lerr == nil {
+				s.notifyInstallmentMissed(ctx, loan, inst)
+			}
 		}
 	}
 	return nil

@@ -107,11 +107,74 @@ func setup(t *testing.T) *Service {
 		FXCommission: "0.005",
 	}, logger)
 	svc.Rates = pinnedRates{}
+	svc.Notifier = currentNotifier
+	svc.UserResolver = currentResolver
 	if err := svc.EnsureSystemAccounts(context.Background()); err != nil {
 		t.Fatalf("ensure system accounts: %v", err)
 	}
+	currentNotifier.reset()
+	currentResolver.reset()
 	return svc
 }
+
+// =====================================================================
+// Notification + user-resolver spies
+// =====================================================================
+
+type sentEmail struct{ To, Subject, Body string }
+
+type spyNotifier struct {
+	sync.Mutex
+	out []sentEmail
+}
+
+func (s *spyNotifier) Send(_ context.Context, to, subject, body string, _ bool) error {
+	s.Lock()
+	defer s.Unlock()
+	s.out = append(s.out, sentEmail{to, subject, body})
+	return nil
+}
+
+func (s *spyNotifier) reset() {
+	s.Lock()
+	defer s.Unlock()
+	s.out = s.out[:0]
+}
+
+func (s *spyNotifier) snapshot() []sentEmail {
+	s.Lock()
+	defer s.Unlock()
+	out := make([]sentEmail, len(s.out))
+	copy(out, s.out)
+	return out
+}
+
+type spyResolver struct {
+	sync.Mutex
+	emails map[string]string
+}
+
+func (s *spyResolver) ClientEmail(_ context.Context, clientID string) (string, error) {
+	s.Lock()
+	defer s.Unlock()
+	if v, ok := s.emails[clientID]; ok {
+		return v, nil
+	}
+	// Default to `<id>@example.com` so tests that don't set up
+	// specific emails still get a non-empty address.
+	return clientID + "@example.com", nil
+}
+
+func (s *spyResolver) reset() {
+	s.Lock()
+	defer s.Unlock()
+	s.emails = map[string]string{}
+}
+
+var (
+	currentNotifier = &spyNotifier{}
+	currentResolver = &spyResolver{emails: map[string]string{}}
+)
 
 func resetSchema(t *testing.T) {
 	t.Helper()
@@ -766,6 +829,190 @@ func TestIntegration_Recipients_CRUD(t *testing.T) {
 	got2, _ := svc.ListPaymentRecipients(clientCtx(clientA))
 	if len(got2) != 0 {
 		t.Errorf("after delete: %d", len(got2))
+	}
+}
+
+// =====================================================================
+// Notifications
+// =====================================================================
+
+// TestIntegration_Notify_CardBlocked: the spec p.29 has "Banka šalje
+// obaveštenje" when a card is blocked. SetCardStatus → email sent.
+func TestIntegration_Notify_CardBlocked(t *testing.T) {
+	svc := setup(t)
+	clientID := uuid.NewString()
+	acc := mintAccount(t, svc, clientID, domain.KindPersonalCheckingRSD, domain.CurrencyRSD, "0")
+	c, _, err := svc.CreateCard(clientCtx(clientID), CreateCardInput{
+		AccountID: acc.ID, Brand: domain.BrandVisa, Name: "L1",
+	})
+	if err != nil {
+		t.Fatalf("create card: %v", err)
+	}
+	currentNotifier.reset()
+
+	if _, err := svc.SetCardStatus(clientCtx(clientID), c.ID, domain.CardBlocked); err != nil {
+		t.Fatalf("block: %v", err)
+	}
+	emails := currentNotifier.snapshot()
+	if len(emails) != 1 {
+		t.Fatalf("expected 1 email on block, got %d", len(emails))
+	}
+	if !strings.Contains(emails[0].Subject, "blokirana") {
+		t.Errorf("subject: %q", emails[0].Subject)
+	}
+	if emails[0].To != clientID+"@example.com" {
+		t.Errorf("recipient: %q", emails[0].To)
+	}
+}
+
+// TestIntegration_Notify_LoanDecision: approve and reject paths each
+// emit one Serbian email.
+func TestIntegration_Notify_LoanDecision(t *testing.T) {
+	svc := setup(t)
+	for _, tc := range []struct {
+		name       string
+		approve    bool
+		reason     string
+		wantInSubj string
+		wantInBody string
+	}{
+		{"approve", true, "", "odobren", "odobren"},
+		{"reject", false, "salary too low", "odbijen", "salary too low"},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			currentNotifier.reset()
+			clientID := uuid.NewString()
+			acc := mintAccount(t, svc, clientID, domain.KindPersonalCheckingRSD, domain.CurrencyRSD, "5000000")
+			req, err := svc.SubmitLoanRequest(clientCtx(clientID), SubmitLoanRequestInput{
+				AccountID:                acc.ID,
+				LoanType:                 domain.LoanTypeCash,
+				InterestType:             domain.InterestFixed,
+				Amount:                   "100000",
+				Currency:                 domain.CurrencyRSD,
+				Purpose:                  "x",
+				MonthlySalary:            "100000",
+				EmploymentStatus:         domain.EmploymentPermanent,
+				EmploymentDurationMonths: 12,
+				InstallmentsTotal:        12,
+				ContactPhone:             "+381111222333",
+			})
+			if err != nil {
+				t.Fatalf("submit: %v", err)
+			}
+			if _, err := svc.DecideLoanRequest(employeeAdminCtx(), req.ID, tc.approve, tc.reason); err != nil {
+				t.Fatalf("decide: %v", err)
+			}
+			emails := currentNotifier.snapshot()
+			if len(emails) != 1 {
+				t.Fatalf("expected 1 email, got %d", len(emails))
+			}
+			if !strings.Contains(emails[0].Subject, tc.wantInSubj) {
+				t.Errorf("subject: %q", emails[0].Subject)
+			}
+			if !strings.Contains(emails[0].Body, tc.wantInBody) {
+				t.Errorf("body missing %q: %q", tc.wantInBody, emails[0].Body)
+			}
+		})
+	}
+}
+
+// =====================================================================
+// Maintenance fee cron
+// =====================================================================
+
+// TestIntegration_MaintenanceFee_ChargesAndStamps walks the cron path:
+// freshly-created RSD standard account → fast-forward last_maintenance
+// to >28 days ago via SQL → run job → assert balance debited 255 RSD,
+// ledger row written, last_maintenance_debit stamped to ~now.
+func TestIntegration_MaintenanceFee_ChargesAndStamps(t *testing.T) {
+	svc := setup(t)
+	ctx := context.Background()
+	clientID := uuid.NewString()
+	acc := mintAccount(t, svc, clientID, domain.KindPersonalCheckingRSD, domain.CurrencyRSD, "1000")
+	if acc.MaintenanceFee != "255.0000" {
+		t.Fatalf("default fee not applied at creation: %s", acc.MaintenanceFee)
+	}
+
+	// Pretend the account hasn't been charged in 30 days.
+	if _, err := fixPool.Exec(ctx,
+		`update bank.accounts set last_maintenance_debit = now() - interval '30 days' where id = $1`, acc.ID); err != nil {
+		t.Fatalf("backdate: %v", err)
+	}
+
+	houseBefore, _ := svc.Store.GetSystemAccount(ctx, domain.CurrencyRSD)
+
+	res, err := svc.RunMaintenanceFeeJob(employeeAdminCtx(), time.Now())
+	if err != nil {
+		t.Fatalf("run: %v", err)
+	}
+	if res.Charged != 1 {
+		t.Errorf("charged: %d, want 1", res.Charged)
+	}
+
+	accAfter, _ := svc.Store.GetAccountByID(ctx, acc.ID)
+	if accAfter.AvailableBalance != "745.0000" {
+		t.Errorf("balance after: %s, want 745.0000 (= 1000 − 255)", accAfter.AvailableBalance)
+	}
+	if accAfter.LastMaintenanceDebit == nil ||
+		time.Since(*accAfter.LastMaintenanceDebit) > time.Minute {
+		t.Errorf("last_maintenance_debit not stamped to ~now: %v", accAfter.LastMaintenanceDebit)
+	}
+
+	houseAfter, _ := svc.Store.GetSystemAccount(ctx, domain.CurrencyRSD)
+	deltaRSD := mustSub(t, houseAfter.AvailableBalance, houseBefore.AvailableBalance)
+	if deltaRSD != "255.0000" {
+		t.Errorf("RSD house delta: %s, want +255.0000", deltaRSD)
+	}
+}
+
+// TestIntegration_MaintenanceFee_Idempotent: a second run on the same
+// day must not double-charge — the just-stamped account is no longer
+// "due" for the cutoff.
+func TestIntegration_MaintenanceFee_Idempotent(t *testing.T) {
+	svc := setup(t)
+	ctx := context.Background()
+	clientID := uuid.NewString()
+	acc := mintAccount(t, svc, clientID, domain.KindPersonalCheckingRSD, domain.CurrencyRSD, "1000")
+	if _, err := fixPool.Exec(ctx,
+		`update bank.accounts set last_maintenance_debit = now() - interval '30 days' where id = $1`, acc.ID); err != nil {
+		t.Fatalf("backdate: %v", err)
+	}
+	for i := 0; i < 3; i++ {
+		if _, err := svc.RunMaintenanceFeeJob(employeeAdminCtx(), time.Now()); err != nil {
+			t.Fatalf("run %d: %v", i, err)
+		}
+	}
+	accAfter, _ := svc.Store.GetAccountByID(ctx, acc.ID)
+	if accAfter.AvailableBalance != "745.0000" {
+		t.Errorf("balance after 3 runs: %s, want 745.0000 (single charge)", accAfter.AvailableBalance)
+	}
+}
+
+// TestIntegration_MaintenanceFee_FXAccountSkipped: FX accounts have
+// fee=0 (per spec p.13 example) and must not be touched by the cron.
+func TestIntegration_MaintenanceFee_FXAccountSkipped(t *testing.T) {
+	svc := setup(t)
+	ctx := context.Background()
+	clientID := uuid.NewString()
+	acc := mintAccount(t, svc, clientID, domain.KindPersonalFX, domain.CurrencyEUR, "100")
+	if acc.MaintenanceFee != "0.0000" {
+		t.Errorf("FX fee should be 0, got %s", acc.MaintenanceFee)
+	}
+	// Backdate, run job, balance must be untouched.
+	if _, err := fixPool.Exec(ctx,
+		`update bank.accounts set last_maintenance_debit = now() - interval '30 days' where id = $1`, acc.ID); err != nil {
+		t.Fatalf("backdate: %v", err)
+	}
+	res, err := svc.RunMaintenanceFeeJob(employeeAdminCtx(), time.Now())
+	if err != nil {
+		t.Fatalf("run: %v", err)
+	}
+	if res.Charged != 0 {
+		t.Errorf("FX accounts should not be charged, got %d", res.Charged)
+	}
+	accAfter, _ := svc.Store.GetAccountByID(ctx, acc.ID)
+	if accAfter.AvailableBalance != "100.0000" {
+		t.Errorf("FX balance touched: %s", accAfter.AvailableBalance)
 	}
 }
 

@@ -21,4 +21,6 @@ if [[ -z "${DATABASE_URL:-}" ]]; then
 fi
 
 cd "${ROOT}/services/user"
-exec go run ./cmd/seed
+# Run inside the per-service module rather than the workspace so we
+# don't touch go.work.sum (which may be root-owned after a docker build).
+exec env GOWORK=off go run ./cmd/seed

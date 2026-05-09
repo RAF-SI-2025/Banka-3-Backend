@@ -72,13 +72,69 @@ func (s *Service) CreateAccount(ctx context.Context, in CreateAccountInput) (*do
 		Status:              domain.AccountActive,
 		Balance:             opening,
 		AvailableBalance:    opening,
-		MaintenanceFee:      "0",
-		DailyLimit:          "0",
-		MonthlyLimit:        "0",
+		MaintenanceFee:      DefaultMaintenanceFee(in.Kind, in.Subtype, in.Currency),
+		DailyLimit:          DefaultDailyLimit(in.Currency),
+		MonthlyLimit:        DefaultMonthlyLimit(in.Currency),
 		DailySpent:          "0",
 		MonthlySpent:        "0",
 	}
 	return s.Store.CreateAccount(ctx, a)
+}
+
+// DefaultMaintenanceFee returns the per-month fee for a freshly opened
+// account, in the account's currency. Spec p.12 example shows
+// 255.00 RSD for a standard RSD account; the FX example doesn't list a
+// "Održavanje računa" row at all, so FX accounts go in fee-free.
+//
+// The fee table below is our concrete fill-in for the gaps in the spec
+// (it only shows one example value). Common Serbian banking practice
+// is to wave the fee for student / pensioner / unemployed accounts; we
+// follow that convention.
+func DefaultMaintenanceFee(kind domain.AccountKind, subtype domain.AccountSubtype, currency domain.Currency) string {
+	// FX accounts: no monthly fee per spec p.13 (no fee row in the
+	// devizni table).
+	if currency != domain.CurrencyRSD {
+		return "0"
+	}
+	switch kind {
+	case domain.KindPersonalCheckingRSD:
+		switch subtype {
+		case domain.SubtypeStandard:
+			return "255" // matches spec p.12 example
+		case domain.SubtypePensioner:
+			return "100"
+		case domain.SubtypeYouth, domain.SubtypeStudent, domain.SubtypeUnemployed,
+			domain.SubtypeSavings:
+			return "0"
+		}
+	case domain.KindBusinessCheckingRSD:
+		switch subtype {
+		case domain.SubtypeDOO:
+			return "500"
+		case domain.SubtypeAD:
+			return "800"
+		case domain.SubtypeFoundation:
+			return "200"
+		}
+	}
+	return "0"
+}
+
+// DefaultDailyLimit / DefaultMonthlyLimit seed the per-spec "Dnevni
+// limit" / "Mesečni limit" fields with the values from spec p.12-13.
+// Employees can adjust later via UpdateAccountLimits.
+func DefaultDailyLimit(currency domain.Currency) string {
+	if currency == domain.CurrencyRSD {
+		return "250000" // 250.000,00 RSD per spec p.12
+	}
+	return "5000" // 5.000,00 X for FX (spec p.13 EUR example)
+}
+
+func DefaultMonthlyLimit(currency domain.Currency) string {
+	if currency == domain.CurrencyRSD {
+		return "1000000" // 1.000.000,00 RSD per spec p.12
+	}
+	return "20000" // 20.000,00 X for FX
 }
 
 // GetAccount returns one by ID. Clients can only fetch their own;

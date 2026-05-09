@@ -127,6 +127,7 @@ type Account struct {
 	CreatedAt             time.Time
 	ExpiresAt             *time.Time
 	UpdatedAt             time.Time
+	LastMaintenanceDebit  *time.Time // null until the first monthly cron run
 }
 
 // =====================================================================

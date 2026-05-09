@@ -215,7 +215,17 @@ func (s *Service) SetCardStatus(ctx context.Context, id string, status domain.Ca
 	default:
 		return nil, apperr.Validation("invalid card status")
 	}
-	return s.Store.SetCardStatus(ctx, id, status)
+	oldStatus := target.Status
+	updated, err := s.Store.SetCardStatus(ctx, id, status)
+	if err != nil {
+		return nil, err
+	}
+	// Notify the card's owning client. The card itself doesn't carry
+	// owner_client_id; resolve via the account.
+	if a, err := s.Store.GetAccountByID(ctx, updated.AccountID); err == nil {
+		s.notifyCardStatusChanged(ctx, updated, oldStatus, a.OwnerClientID)
+	}
+	return updated, nil
 }
 
 // generateCardCredentials returns a Luhn-clean number for brand and a
