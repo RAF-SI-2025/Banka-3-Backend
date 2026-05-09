@@ -41,6 +41,8 @@ func (s *Server) Login(ctx context.Context, in *userpb.LoginRequest) (*userpb.Lo
 		UserKind:         userKindToProto(r.UserKind),
 		UserId:           r.UserID,
 		Permissions:      r.Permissions,
+		FirstName:        r.FirstName,
+		LastName:         r.LastName,
 	}, nil
 }
 

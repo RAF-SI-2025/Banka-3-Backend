@@ -46,10 +46,8 @@ services:
       retries: 10
     networks: [banka]
 
-  # ===== celina 1 =====
   user:
     <<: *service-defaults
-    profiles: [c1, c2, c3, c4, all]
     build:
       context: .
       dockerfile: docker/Dockerfile
@@ -69,7 +67,6 @@ services:
 
   gateway:
     <<: *service-defaults
-    profiles: [c1, c2, c3, c4, all]
     build:
       context: .
       dockerfile: docker/Dockerfile
@@ -89,10 +86,8 @@ services:
       - "${GATEWAY_PROBE_PORT:-8086}:8081"
     networks: [banka]
 
-  # ===== celina 2 — bank, exchange, notification =====
   bank:
     <<: *service-defaults
-    profiles: [c2, c3, c4, all]
     build:
       context: .
       dockerfile: docker/Dockerfile
@@ -119,7 +114,6 @@ services:
 
   exchange:
     <<: *service-defaults
-    profiles: [c2, c3, c4, all]
     build:
       context: .
       dockerfile: docker/Dockerfile
@@ -139,7 +133,6 @@ services:
 
   notification:
     <<: *service-defaults
-    profiles: [c2, c3, c4, all]
     build:
       context: .
       dockerfile: docker/Dockerfile
@@ -153,10 +146,8 @@ services:
       redis:    { condition: service_healthy }
     networks: [banka]
 
-  # ===== celina 3+ =====
   trading:
     <<: *service-defaults
-    profiles: [c3, c4, all]
     build:
       context: .
       dockerfile: docker/Dockerfile

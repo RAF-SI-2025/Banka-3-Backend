@@ -6,6 +6,7 @@ import (
 	"strings"
 
 	"github.com/RAF-SI-2025/Banka-3-Backend/pkg/apperr"
+	"github.com/RAF-SI-2025/Banka-3-Backend/pkg/auth"
 	"github.com/RAF-SI-2025/Banka-3-Backend/pkg/permissions"
 	"github.com/RAF-SI-2025/Banka-3-Backend/services/bank/internal/domain"
 )
@@ -47,10 +48,20 @@ func (s *Service) CreateCompany(ctx context.Context, in CreateCompanyInput) (*do
 }
 
 func (s *Service) GetCompany(ctx context.Context, id string) (*domain.Company, error) {
+	c, err := s.Store.GetCompanyByID(ctx, id)
+	if err != nil {
+		return nil, err
+	}
+	// The company's owning client may always read it — needed for the
+	// /banking/racuni/$id Poslovni view to display "Firma" without
+	// granting clients the broader CompanyRead permission.
+	if p, ok := auth.PrincipalFrom(ctx); ok && p.UserID == c.OwnerClientID {
+		return c, nil
+	}
 	if err := s.requirePermission(ctx, permissions.CompanyRead); err != nil {
 		return nil, err
 	}
-	return s.Store.GetCompanyByID(ctx, id)
+	return c, nil
 }
 
 func (s *Service) ListCompanies(ctx context.Context, f domain.CompanyFilter, page, pageSize int) ([]*domain.Company, int64, error) {

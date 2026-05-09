@@ -54,6 +54,19 @@ func Duration(name string, def time.Duration) time.Duration {
 	return d
 }
 
+// Float parses name as a float64, or returns def.
+func Float(name string, def float64) float64 {
+	v, ok := os.LookupEnv(name)
+	if !ok {
+		return def
+	}
+	f, err := strconv.ParseFloat(v, 64)
+	if err != nil {
+		panic(fmt.Sprintf("env %s: not a float: %v", name, err))
+	}
+	return f
+}
+
 // Bool parses name as a bool. Anything other than "1", "true", "yes" is false.
 func Bool(name string, def bool) bool {
 	v, ok := os.LookupEnv(name)

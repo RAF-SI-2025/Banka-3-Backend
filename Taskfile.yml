@@ -26,22 +26,16 @@ tasks:
           cd services/{{.ITEM}} && go build -trimpath -o ../../bin/{{.ITEM}} ./cmd/{{.ITEM}}
 
   up:
-    desc: 'Bring up services for a celina (default c1): task up CELINA=c2'
-    vars:
-      CELINA: '{{.CELINA | default "c1"}}'
-    cmd: '{{.COMPOSE}} --profile {{.CELINA}} up -d --build'
-
-  up:all:
-    desc: Bring up everything (all celine + infra)
-    cmd: '{{.COMPOSE}} --profile all up -d --build'
+    desc: Bring up the full stack (infra + every service)
+    cmd: '{{.COMPOSE}} up -d --build'
 
   down:
     desc: Tear down the local stack
-    cmd: '{{.COMPOSE}} --profile all down'
+    cmd: '{{.COMPOSE}} down'
 
   down-v:
     desc: Tear down and wipe volumes (destructive)
-    cmd: '{{.COMPOSE}} --profile all down -v'
+    cmd: '{{.COMPOSE}} down -v'
 
   restart:
     desc: down then up

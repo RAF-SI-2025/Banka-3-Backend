@@ -193,37 +193,17 @@ Use `pkg/probes`, `pkg/shutdown`, `pkg/grpcserver` — don't reinvent.
 task proto                  # buf generate → gen/proto/
 task tidy                   # go mod tidy each module (populates go.sum)
 task build                  # compile all services to bin/
-task up CELINA=c1           # only postgres + redis + user + gateway
-task up CELINA=c2           # adds bank, exchange, notification
-task up:all                 # everything
-task down                   # tear down (any profile)
+task up                     # postgres + redis + every service
+task down                   # tear down
 task migrate                # apply migrations across all services
 task migrate:create SVC=user NAME=add_index
-task seed                   # load dev fixtures (pending — c1 has no seed yet)
+task seed                   # load dev fixtures
 task nuke                   # down -v + up + migrate + seed
 task test                   # unit tests with race detector
 task test:integration
 task lint                   # golangci-lint
 task fmt                    # gofumpt
 ```
-
-## Service profiles
-
-`docker-compose.yml` gates each service behind a celina profile:
-
-| Service        | Profiles            |
-|----------------|---------------------|
-| `user`         | c1, c2, c3, c4, all |
-| `gateway`      | c1, c2, c3, c4, all |
-| `bank`         | c2, c3, c4, all     |
-| `exchange`     | c2, c3, c4, all     |
-| `notification` | c2, c3, c4, all     |
-| `trading`      | c3, c4, all         |
-| `postgres`     | always              |
-| `redis`        | always              |
-
-Working on c1 only needs four containers running; the stubs for
-later celine stay dormant until you bump `CELINA=`.
 
 ## C1 + C2 status
 

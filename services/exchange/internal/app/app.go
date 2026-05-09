@@ -5,6 +5,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"time"
 
 	exchangepb "github.com/RAF-SI-2025/Banka-3-Backend/gen/proto/exchange/v1"
 	"github.com/RAF-SI-2025/Banka-3-Backend/pkg/config"
@@ -14,6 +15,7 @@ import (
 	"github.com/RAF-SI-2025/Banka-3-Backend/pkg/probes"
 	pkgredis "github.com/RAF-SI-2025/Banka-3-Backend/pkg/redis"
 	"github.com/RAF-SI-2025/Banka-3-Backend/pkg/shutdown"
+	"github.com/RAF-SI-2025/Banka-3-Backend/services/exchange/internal/feed"
 	"github.com/RAF-SI-2025/Banka-3-Backend/services/exchange/internal/server"
 	"github.com/RAF-SI-2025/Banka-3-Backend/services/exchange/internal/service"
 	"github.com/RAF-SI-2025/Banka-3-Backend/services/exchange/internal/store"
@@ -60,6 +62,23 @@ func Run() error {
 			exchangepb.RegisterExchangeServiceServer(s, server.New(svc))
 		})
 	})
+
+	// Background FX feed: periodically pulls public mid rates and
+	// upserts X→RSD pairs. Disable with FX_FEED_INTERVAL=0.
+	feedInterval := config.Duration("FX_FEED_INTERVAL", time.Hour)
+	if feedInterval > 0 {
+		feeder := &feed.Feeder{
+			Fetcher: &feed.OpenERAPI{BaseURL: config.String("FX_FEED_URL", "")},
+			Store:   st,
+			Log:     log,
+			Spread:  config.Float("FX_FEED_SPREAD", 0.01),
+		}
+		g.Go(func() error {
+			return feeder.Run(gctx, feedInterval)
+		})
+	} else {
+		log.Info("fx feed disabled (FX_FEED_INTERVAL=0)")
+	}
 
 	probeSrv.MarkReady()
 	log.Info("exchange service ready", "grpc", grpcAddr)

@@ -237,6 +237,8 @@ message LoginResponse {
   UserKind user_kind          = 5;
   string   user_id            = 6;
   repeated string permissions = 7;
+  string   first_name         = 8;
+  string   last_name          = 9;
 }
 
 message RefreshRequest {

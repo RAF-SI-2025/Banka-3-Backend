@@ -22,6 +22,8 @@ type LoginResult struct {
 	UserKind         domain.UserKind
 	UserID           string
 	Permissions      []string
+	FirstName        string
+	LastName         string
 }
 
 // Login authenticates by email + password against employees first, then
@@ -40,7 +42,7 @@ func (s *Service) Login(ctx context.Context, email, password string) (*LoginResu
 
 	emp, err := s.Store.GetEmployeeByEmail(ctx, email)
 	if err == nil {
-		return s.completeLogin(ctx, emp.ID, emp.Email, domain.KindEmployee, emp.PasswordHash, emp.Active, emp.Activated(), emp.Permissions, emp.SessionVersion, password)
+		return s.completeLogin(ctx, emp.ID, emp.Email, domain.KindEmployee, emp.PasswordHash, emp.Active, emp.Activated(), emp.Permissions, emp.SessionVersion, emp.FirstName, emp.LastName, password)
 	}
 	if !isNotFound(err) {
 		return nil, err
@@ -48,7 +50,7 @@ func (s *Service) Login(ctx context.Context, email, password string) (*LoginResu
 
 	cl, err := s.Store.GetClientByEmail(ctx, email)
 	if err == nil {
-		return s.completeLogin(ctx, cl.ID, cl.Email, domain.KindClient, cl.PasswordHash, cl.Active, cl.PasswordHash != "", cl.Permissions, cl.SessionVersion, password)
+		return s.completeLogin(ctx, cl.ID, cl.Email, domain.KindClient, cl.PasswordHash, cl.Active, cl.PasswordHash != "", cl.Permissions, cl.SessionVersion, cl.FirstName, cl.LastName, password)
 	}
 	if !isNotFound(err) {
 		return nil, err
@@ -68,6 +70,7 @@ func (s *Service) completeLogin(
 	active, activated bool,
 	perms []string,
 	sessionVersion int64,
+	firstName, lastName string,
 	password string,
 ) (*LoginResult, error) {
 	if !active {
@@ -80,7 +83,13 @@ func (s *Service) completeLogin(
 	if err != nil || !ok {
 		return nil, apperr.Unauthenticated("Neispravni kredencijali")
 	}
-	return s.issueTokens(ctx, kind, userID, perms, sessionVersion)
+	r, err := s.issueTokens(ctx, kind, userID, perms, sessionVersion)
+	if err != nil {
+		return nil, err
+	}
+	r.FirstName = firstName
+	r.LastName = lastName
+	return r, nil
 }
 
 // issueTokens signs a fresh access JWT and creates a refresh token row.

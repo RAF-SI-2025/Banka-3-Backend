@@ -25,6 +25,8 @@ type loginResponseBody struct {
 	UserID          string   `json:"userId"`
 	UserKind        string   `json:"userKind"`
 	Permissions     []string `json:"permissions"`
+	FirstName       string   `json:"firstName,omitempty"`
+	LastName        string   `json:"lastName,omitempty"`
 }
 
 // LoginHandler takes JSON {email, password}, calls user.Login, sets the
@@ -54,6 +56,8 @@ func (r *Router) LoginHandler() http.HandlerFunc {
 			UserID:          resp.GetUserId(),
 			UserKind:        userKindString(resp.GetUserKind()),
 			Permissions:     resp.GetPermissions(),
+			FirstName:       resp.GetFirstName(),
+			LastName:        resp.GetLastName(),
 		})
 	}
 }

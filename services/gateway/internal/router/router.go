@@ -7,6 +7,7 @@ import (
 	"net/http"
 
 	userpb "github.com/RAF-SI-2025/Banka-3-Backend/gen/proto/user/v1"
+	"github.com/RAF-SI-2025/Banka-3-Backend/pkg/email"
 	"github.com/RAF-SI-2025/Banka-3-Backend/pkg/verification"
 	"github.com/RAF-SI-2025/Banka-3-Backend/services/gateway/internal/auth"
 
@@ -21,6 +22,7 @@ type Router struct {
 	IdempotencyMW   func(http.Handler) http.Handler
 	VerificationMW  func(http.Handler) http.Handler
 	Verifier        verification.Verifier
+	Mailer          email.Sender
 	SecureCookies   bool
 }
 
