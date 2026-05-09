@@ -413,9 +413,45 @@ breakdown.
   `tax_op_id`. Second run-tax was a no-op
   (`users_taxed=0, total_collected_rsd=0`).
 
-**Still to land for c3:**
-- Seed for c3: a few exchanges + sample stock/future/forex/option
-  rows with listings so the FE has data to render.
+**c3 bootstrap landed (2026-05-09):**
+
+- `services/user/cmd/seed/main.go` extended with `seedTrading`. Plants
+  on every `task seed` (idempotent throughout):
+  - USD personal_fx trading account ("Trgovinski USD") on the seeded
+    klijent, opening balance 300000 USD. Match-by-currency-and-kind so
+    a hand-rolled USD account survives.
+  - Promotes `zaposleni@banka.local` to actuary agent: appends
+    `actuary` + `actuary.agent` to perms (distinct array_agg keeps it
+    idempotent), inserts `trading.actuary_info` (type=agent, daily_
+    limit=200000 RSD, need_approval=false) via on-conflict-do-nothing.
+  - Three exchanges: XNYS (NYSE / USD / America/New_York / 09:30-16:00),
+    XLON (LSE / GBP / Europe/London / 08:00-16:30), XBEL (BELEX / RSD /
+    Europe/Belgrade / 09:30-14:00). on-conflict (mic) do nothing.
+  - Stocks: AAPL, MSFT, GOOGL on XNYS; VOD on XLON; NIS on XBEL — each
+    with a listing. Helper closure inserts both rows; on-conflict
+    (ticker, type) do update returns existing id so listings dedupe via
+    on-conflict (security_id) do nothing.
+  - One future (CL / Crude Oil WTI on XNYS / +90d settlement, with
+    listing), one forex pair (EURUSD with optional listing), one option
+    (AAPL-C-190 / call / strike 190 / +60d expiry, no listing — service
+    reads premium off the security row).
+- `seedClient` augments existing rows with `trading.client` so a c2
+  klijent that pre-dates c3 picks up trading capability on the next
+  seed run; new clients already include it. Same idempotent
+  array_agg(distinct …) pattern.
+- `.env.example` documents `EXECUTION_TICK_INTERVAL` (default 10s) +
+  `FX_COMMISSION` (default 0.005).
+- `Taskfile.yml`'s `test:integration` now also runs services/bank's
+  integration suite (was user-only).
+
+Smoke-test of seed end-to-end on the live dev DB: `task seed` ran twice
+back-to-back, both runs reached "trading fixtures created" without
+error or duplicate. Re-login as `klijent@banka.local` returned a JWT
+with `trading.client` in the perms. `GET /api/v1/listings` as the
+client returned the seeded stocks + future (forex/option correctly
+filtered out per spec p.58); same endpoint as the agent additionally
+returned the forex row. `task test` and `task test:integration` both
+green.
 
 **c1**: user service — auth (login/refresh/logout), employee CRUD,
 activation, password reset, session_version revocation, JWT middleware

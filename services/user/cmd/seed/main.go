@@ -127,6 +127,10 @@ func run() error {
 		return fmt.Errorf("seed bank: %w", err)
 	}
 
+	if err := seedTrading(ctx, pool, clientID, adminID); err != nil {
+		return fmt.Errorf("seed trading: %w", err)
+	}
+
 	// Second client — useful for testing flows that need two distinct
 	// client logins (e.g. inter-client payments). No bank fixtures
 	// hung off them; the admin can mint accounts via the portal if
@@ -197,7 +201,19 @@ func seedClient(ctx context.Context, pool *pgxpool.Pool, email, password, firstN
 	switch err := pool.QueryRow(ctx,
 		`select id from "user".clients where lower(email) = lower($1)`, email).Scan(&existing); err {
 	case nil:
-		fmt.Printf("seed: client already exists (id=%s, email=%s); skipping\n", existing, email)
+		// Existing rows from before c3 may be missing `trading.client`.
+		// Append the permission idempotently so the seed promotes
+		// already-planted clients into trading-capable on every run.
+		if _, err := pool.Exec(ctx, `
+            update "user".clients
+            set permissions = (
+                select array_agg(distinct p)
+                from unnest(permissions || array['trading.client']) as p
+            )
+            where id = $1`, existing); err != nil {
+			return "", fmt.Errorf("augment client perms: %w", err)
+		}
+		fmt.Printf("seed: client already exists (id=%s, email=%s); ensured trading.client\n", existing, email)
 		return existing, nil
 	default:
 		if err.Error() != "no rows in result set" {
@@ -217,7 +233,7 @@ func seedClient(ctx context.Context, pool *pgxpool.Pool, email, password, firstN
             $1, $2,
             $3, $4, '1990-01-01', 'male', $5, 'Beograd',
             true,
-            array['client.read','account.read','card.read','card.write','payment.write','loan.read','loan.write']
+            array['client.read','account.read','card.read','card.write','payment.write','loan.read','loan.write','trading.client']
         ) returning id`
 	var id string
 	if err := pool.QueryRow(ctx, q, email, hash, firstName, lastName, phone).Scan(&id); err != nil {
@@ -516,6 +532,274 @@ func seedBank(ctx context.Context, pool *pgxpool.Pool, clientID, adminID string)
 		"  loan requests:   1 pending (cash 150000 RSD), 1 rejected (housing 5000000 RSD)\n",
 		companyID, secondCompanyID, rsdNumber, rsdID, eurNumber, eurID,
 		bizNumber, visaPAN, mastercardPAN, principal)
+	return nil
+}
+
+// seedTrading plants the c3 fixture surface so the trading portal has
+// data on first boot:
+//
+//   1. A USD personal_fx trading account for the seeded client (300k
+//      USD opening balance), so they can place orders on USD-listed
+//      stocks without first running an FX deposit.
+//   2. The seeded employee (zaposleni@banka.local) gets promoted to
+//      actuary agent: permissions augmented with `actuary` +
+//      `actuary.agent`, an `actuary_info` row planted with daily_limit
+//      = 200000 RSD and need_approval=false. The bootstrap admin gets
+//      no actuary_info row; admin is implicitly a supervisor per
+//      `requireSupervisor`.
+//   3. Three exchanges: NYSE (XNYS / USD), London (XLON / GBP), and
+//      Borsa Beograd (XBEL / RSD). Hours and IANA timezones are
+//      realistic so the after-hours math behaves under both Belgrade
+//      and US wall-clocks.
+//   4. Five stocks (AAPL/MSFT/GOOGL on NYSE, VOD on XLON, NIS on XBEL),
+//      one future (CL crude oil), one forex pair (EUR/USD), one option
+//      (AAPL call expiring +60 days). Listings for everything except
+//      the option — options read their premium directly off the
+//      security row.
+//
+// Idempotent: if any exchange row already exists, we no-op.
+//
+// Same direct-pgx convention as seedBank: cuts deps and lets the seed
+// run before the trading service is necessarily up.
+func seedTrading(ctx context.Context, pool *pgxpool.Pool, clientID, adminID string) error {
+	if clientID == "" || adminID == "" {
+		return fmt.Errorf("seedTrading: clientID and adminID are required")
+	}
+
+	bankCode := envOr("BANK_CODE", "333")
+	branch := envOr("BANK_BRANCH", "0001")
+
+	tx, err := pool.BeginTx(ctx, pgx.TxOptions{})
+	if err != nil {
+		return fmt.Errorf("begin tx: %w", err)
+	}
+	defer func() { _ = tx.Rollback(ctx) }()
+
+	// 1) USD trading account for the client (alongside the EUR one
+	// seeded by seedBank). 300k USD opening balance — enough for the
+	// MSFT-style price-points the smoke tests use without slipping into
+	// margin paths. Idempotent: if the client already has a USD
+	// personal_fx account we leave it alone (could be from a prior seed
+	// or hand-rolled).
+	var usdAccountID, usdNumber string
+	switch err := tx.QueryRow(ctx, `
+        select id, number from "bank".accounts
+        where owner_client_id = $1 and currency = 'USD' and kind = 'personal_fx'
+        limit 1`, clientID).Scan(&usdAccountID, &usdNumber); err {
+	case nil:
+		// already there
+	default:
+		if err.Error() != "no rows in result set" {
+			return fmt.Errorf("check existing usd account: %w", err)
+		}
+		usdNumber, err = account.Generate(bankCode, branch, account.TypePersonalFX)
+		if err != nil {
+			return fmt.Errorf("usd account number: %w", err)
+		}
+		if err := tx.QueryRow(ctx, `
+            insert into "bank".accounts
+                (number, name, owner_client_id, created_by_employee_id,
+                 kind, subtype, currency, status,
+                 balance, available_balance, maintenance_fee,
+                 daily_limit, monthly_limit)
+            values ($1, $2, $3, $4,
+                    'personal_fx', 'unspecified', 'USD', 'active',
+                    $5, $5, '0',
+                    '0', '0')
+            returning id`,
+			usdNumber, "Trgovinski USD", clientID, adminID, "300000",
+		).Scan(&usdAccountID); err != nil {
+			return fmt.Errorf("insert usd trading account: %w", err)
+		}
+	}
+
+	// 2) Promote zaposleni to actuary agent. seedEmployee planted them
+	// with RoleEmployeeAgent; we append the actuary perms in-place and
+	// plant the actuary_info row. Idempotent: array_append on an
+	// already-present perm is a no-op via on-conflict do-nothing on the
+	// actuary_info insert.
+	var employeeID string
+	if err := tx.QueryRow(ctx,
+		`select id from "user".employees where lower(email) = lower($1)`,
+		envOr("SEED_EMPLOYEE_EMAIL", "zaposleni@banka.local"),
+	).Scan(&employeeID); err != nil {
+		return fmt.Errorf("lookup employee: %w", err)
+	}
+	if _, err := tx.Exec(ctx, `
+        update "user".employees
+        set permissions = (
+            select array_agg(distinct p)
+            from unnest(permissions || array['actuary','actuary.agent']) as p
+        )
+        where id = $1`, employeeID); err != nil {
+		return fmt.Errorf("augment employee perms: %w", err)
+	}
+	if _, err := tx.Exec(ctx, `
+        insert into "trading".actuary_info
+            (employee_id, type, daily_limit, used_limit, need_approval)
+        values ($1, 'agent', 200000, 0, false)
+        on conflict (employee_id) do nothing`, employeeID); err != nil {
+		return fmt.Errorf("insert actuary_info: %w", err)
+	}
+
+	// 3) Exchanges. Hours are local wall-clock per spec p.39; the
+	// service's after-hours window applies the timezone shift on the
+	// fly.
+	type exch struct {
+		mic, name, acronym, polity, currency, timezone string
+		open, close                                    string
+	}
+	exchanges := []exch{
+		{"XNYS", "New York Stock Exchange", "NYSE", "USA", "USD", "America/New_York", "09:30", "16:00"},
+		{"XLON", "London Stock Exchange", "LSE", "United Kingdom", "GBP", "Europe/London", "08:00", "16:30"},
+		{"XBEL", "Beogradska berza", "BELEX", "Srbija", "RSD", "Europe/Belgrade", "09:30", "14:00"},
+	}
+	for _, e := range exchanges {
+		if _, err := tx.Exec(ctx, `
+            insert into "trading".exchanges
+                (mic, name, acronym, polity, currency, timezone, open_local, close_local)
+            values ($1, $2, $3, $4, $5, $6, $7::time, $8::time)
+            on conflict (mic) do nothing`,
+			e.mic, e.name, e.acronym, e.polity, e.currency, e.timezone, e.open, e.close,
+		); err != nil {
+			return fmt.Errorf("insert exchange %s: %w", e.mic, err)
+		}
+	}
+
+	// 4) Securities + listings. Helper closures keep the boilerplate
+	// short: insertStock returns the new uuid so the option chain can
+	// reference AAPL.
+	insertStock := func(ticker, name, mic, currency string, outstanding int64, dividend string, listing struct{ price, ask, bid string; volume int64 }) (string, error) {
+		// ON CONFLICT DO UPDATE SET <noop> so RETURNING fires whether we
+		// inserted or matched an existing (ticker, type) row. Cheap and
+		// keeps the seed re-runnable on partial state.
+		var id string
+		if err := tx.QueryRow(ctx, `
+            insert into "trading".securities
+                (ticker, name, type, exchange_mic, currency, outstanding_shares, dividend_yield)
+            values ($1, $2, 'stock', $3, $4, $5, $6::numeric)
+            on conflict (ticker, type) do update set ticker = excluded.ticker
+            returning id`,
+			ticker, name, mic, currency, outstanding, dividend,
+		).Scan(&id); err != nil {
+			return "", fmt.Errorf("insert stock %s: %w", ticker, err)
+		}
+		if _, err := tx.Exec(ctx, `
+            insert into "trading".listings
+                (security_id, exchange_mic, price, ask, bid, volume, change_amt, contract_size)
+            values ($1, $2, $3::numeric, $4::numeric, $5::numeric, $6, 0, 1)
+            on conflict (security_id) do nothing`,
+			id, mic, listing.price, listing.ask, listing.bid, listing.volume,
+		); err != nil {
+			return "", fmt.Errorf("insert listing %s: %w", ticker, err)
+		}
+		return id, nil
+	}
+	type quote struct {
+		price, ask, bid string
+		volume          int64
+	}
+
+	aaplID, err := insertStock("AAPL", "Apple Inc.", "XNYS", "USD", 15500000000, "0.005",
+		quote{"190.50", "190.55", "190.45", 50000000})
+	if err != nil {
+		return err
+	}
+	if _, err := insertStock("MSFT", "Microsoft Corporation", "XNYS", "USD", 7430000000, "0.0072",
+		quote{"450.10", "450.20", "450.00", 25000000}); err != nil {
+		return err
+	}
+	if _, err := insertStock("GOOGL", "Alphabet Inc.", "XNYS", "USD", 12500000000, "0",
+		quote{"175.30", "175.40", "175.20", 18000000}); err != nil {
+		return err
+	}
+	if _, err := insertStock("VOD", "Vodafone Group plc", "XLON", "GBP", 25700000000, "0.097",
+		quote{"68.40", "68.50", "68.30", 32000000}); err != nil {
+		return err
+	}
+	if _, err := insertStock("NIS", "Naftna industrija Srbije", "XBEL", "RSD", 163000000, "0.06",
+		quote{"850.00", "853.00", "847.00", 200000}); err != nil {
+		return err
+	}
+
+	// Future: WTI crude oil, NYMEX-listed (we use XNYS for the seed
+	// since we don't have a separate futures exchange row, and the
+	// service treats exchange as an organizational hint, not a check).
+	var futureID string
+	if err := tx.QueryRow(ctx, `
+        insert into "trading".securities
+            (ticker, name, type, exchange_mic, currency,
+             contract_size, contract_unit, settlement_date)
+        values ('CL', 'Crude Oil WTI', 'future', 'XNYS', 'USD',
+                1000, 'Barrel', current_date + interval '90 days')
+        on conflict (ticker, type) do update set ticker = excluded.ticker
+        returning id`).Scan(&futureID); err != nil {
+		return fmt.Errorf("insert future: %w", err)
+	}
+	if _, err := tx.Exec(ctx, `
+        insert into "trading".listings
+            (security_id, exchange_mic, price, ask, bid, volume, change_amt, contract_size)
+        values ($1, 'XNYS', 78.50, 78.55, 78.45, 350000, 0, 1000)
+        on conflict (security_id) do nothing`,
+		futureID,
+	); err != nil {
+		return fmt.Errorf("insert future listing: %w", err)
+	}
+
+	// Forex: EUR/USD. Listings on forex are optional per spec p.45-48
+	// (Idea 1) but we plant one so the FE has a "live rate" row to
+	// render without falling through to the exchange service.
+	var forexID string
+	if err := tx.QueryRow(ctx, `
+        insert into "trading".securities
+            (ticker, name, type, currency,
+             base_currency, quote_currency, liquidity, contract_size)
+        values ('EURUSD', 'Euro / US Dollar', 'forex', 'USD',
+                'EUR', 'USD', 'high', 1000)
+        on conflict (ticker, type) do update set ticker = excluded.ticker
+        returning id`).Scan(&forexID); err != nil {
+		return fmt.Errorf("insert forex: %w", err)
+	}
+	if _, err := tx.Exec(ctx, `
+        insert into "trading".listings
+            (security_id, price, ask, bid, volume, change_amt, contract_size)
+        values ($1, 1.0850, 1.0852, 1.0848, 0, 0, 1000)
+        on conflict (security_id) do nothing`,
+		forexID,
+	); err != nil {
+		return fmt.Errorf("insert forex listing: %w", err)
+	}
+
+	// Option: one AAPL call, ATM, expiring +60 days. No listing row —
+	// the service reads `premium` off the security for option pricing.
+	if _, err := tx.Exec(ctx, `
+        insert into "trading".securities
+            (ticker, name, type, exchange_mic, currency,
+             underlying_security_id, option_type, strike_price,
+             implied_volatility, premium, settlement_date,
+             contract_size)
+        values ('AAPL-C-190', 'Apple Call 190 USD', 'option', 'XNYS', 'USD',
+                $1, 'call', 190.00,
+                0.275, 8.50, current_date + interval '60 days',
+                100)
+        on conflict (ticker, type) do nothing`,
+		aaplID,
+	); err != nil {
+		return fmt.Errorf("insert option: %w", err)
+	}
+
+	if err := tx.Commit(ctx); err != nil {
+		return fmt.Errorf("commit trading seed: %w", err)
+	}
+	fmt.Printf("seed: trading fixtures created\n"+
+		"  usd account:  %s (id=%s, 300000 USD)\n"+
+		"  actuary:      %s promoted to agent (limit 200000 RSD)\n"+
+		"  exchanges:    XNYS, XLON, XBEL\n"+
+		"  stocks:       AAPL, MSFT, GOOGL, VOD, NIS\n"+
+		"  future:       CL (Crude Oil WTI, +90d settlement)\n"+
+		"  forex:        EUR/USD\n"+
+		"  option:       AAPL-C-190 (call, ATM, +60d expiry)\n",
+		usdNumber, usdAccountID, employeeID)
 	return nil
 }
 

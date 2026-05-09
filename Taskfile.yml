@@ -99,7 +99,7 @@ tasks:
   test:integration:
     desc: 'Integration tests (assumes `task up` running; INTEGRATION_DATABASE_URL / INTEGRATION_REDIS_ADDR override)'
     cmds:
-      - for: ['services/user']
+      - for: ['services/user', 'services/bank']
         cmd: |
           echo "==> integration {{.ITEM}}"
           cd {{.ITEM}} && go test -race -tags=integration ./...
