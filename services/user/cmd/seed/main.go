@@ -65,21 +65,17 @@ func run() error {
 	switch err := pool.QueryRow(ctx, checkQ).Scan(&existingID); err {
 	case nil:
 		fmt.Printf("seed: admin already exists (id=%s); skipping\n", existingID)
-		return nil
 	default:
 		// pgx.ErrNoRows is the expected "create me" path; any other error
 		// is fatal. Comparing strings keeps this file dep-light.
 		if err.Error() != "no rows in result set" {
 			return fmt.Errorf("check existing admin: %w", err)
 		}
-	}
-
-	hash, err := passwords.Hash(password)
-	if err != nil {
-		return fmt.Errorf("hash password: %w", err)
-	}
-
-	const insertQ = `
+		hash, err := passwords.Hash(password)
+		if err != nil {
+			return fmt.Errorf("hash password: %w", err)
+		}
+		const insertQ = `
         insert into "user".employees (
             email, username, password_hash,
             first_name, last_name, date_of_birth, gender, phone, address,
@@ -91,18 +87,20 @@ func run() error {
             array['admin','employee.read','employee.write','client.read','client.write','permission.grant']
         )
         returning id`
-	var id string
-	if err := pool.QueryRow(ctx, insertQ, email, username, hash).Scan(&id); err != nil {
-		return fmt.Errorf("insert admin: %w", err)
+		var id string
+		if err := pool.QueryRow(ctx, insertQ, email, username, hash).Scan(&id); err != nil {
+			return fmt.Errorf("insert admin: %w", err)
+		}
+		fmt.Printf("seed: admin created (id=%s)\n  email:    %s\n  username: %s\n  password: %s\n",
+			id, email, username, password)
+		fmt.Println("seed: change SEED_ADMIN_PASSWORD before any shared environment.")
 	}
-
-	fmt.Printf("seed: admin created (id=%s)\n  email:    %s\n  username: %s\n  password: %s\n",
-		id, email, username, password)
-	fmt.Println("seed: change SEED_ADMIN_PASSWORD before any shared environment.")
 
 	// Optional c2 fixture: a known client account for cypress / manual
 	// browser testing. Off by default to avoid surprising someone who
-	// only wants the admin; turn on with SEED_CLIENT=true.
+	// only wants the admin; turn on with SEED_CLIENT=true. Runs whether
+	// or not the admin was just created — re-running with SEED_CLIENT=true
+	// after the admin already exists must still plant the client.
 	if envOr("SEED_CLIENT", "") == "true" {
 		if err := seedClient(ctx, pool); err != nil {
 			return fmt.Errorf("seed client: %w", err)
