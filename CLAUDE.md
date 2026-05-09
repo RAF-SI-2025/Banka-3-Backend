@@ -420,10 +420,18 @@ breakdown.
   - USD personal_fx trading account ("Trgovinski USD") on the seeded
     klijent, opening balance 300000 USD. Match-by-currency-and-kind so
     a hand-rolled USD account survives.
-  - Promotes `zaposleni@banka.local` to actuary agent: appends
-    `actuary` + `actuary.agent` to perms (distinct array_agg keeps it
-    idempotent), inserts `trading.actuary_info` (type=agent, daily_
-    limit=200000 RSD, need_approval=false) via on-conflict-do-nothing.
+  - Two dedicated trading employees (separate from banking-only
+    `zaposleni@banka.local`): `aktuar@banka.local` (Aktuar123!) gets
+    RoleEmployeeAgent + RoleEmployeeActuaryAgent perms and an
+    `actuary_info` row (type=agent, daily_limit=200000 RSD,
+    need_approval=false); `supervizor@banka.local` (Supervizor123!)
+    gets RoleEmployeeAgent + RoleEmployeeActuarySupervisor (incl.
+    `trading.margin`) and an `actuary_info` row (type=supervisor,
+    daily_limit=0 to mirror the spec p.38 "supervizor nema limit"
+    invariant the service enforces on upsert). zaposleni stays
+    banking-only so each of the three employee profiles has a
+    distinct fixture. Idempotent: SELECT-then-INSERT for the user
+    row + on-conflict-do-nothing for `actuary_info`.
   - Three exchanges: XNYS (NYSE / USD / America/New_York / 09:30-16:00),
     XLON (LSE / GBP / Europe/London / 08:00-16:30), XBEL (BELEX / RSD /
     Europe/Belgrade / 09:30-14:00). on-conflict (mic) do nothing.

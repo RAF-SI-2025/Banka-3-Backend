@@ -613,33 +613,95 @@ func seedTrading(ctx context.Context, pool *pgxpool.Pool, clientID, adminID stri
 		}
 	}
 
-	// 2) Promote zaposleni to actuary agent. seedEmployee planted them
-	// with RoleEmployeeAgent; we append the actuary perms in-place and
-	// plant the actuary_info row. Idempotent: array_append on an
-	// already-present perm is a no-op via on-conflict do-nothing on the
-	// actuary_info insert.
-	var employeeID string
-	if err := tx.QueryRow(ctx,
-		`select id from "user".employees where lower(email) = lower($1)`,
-		envOr("SEED_EMPLOYEE_EMAIL", "zaposleni@banka.local"),
-	).Scan(&employeeID); err != nil {
-		return fmt.Errorf("lookup employee: %w", err)
+	// 2) Two dedicated trading-side employees, separate from the
+	// banking employee zaposleni: an actuary agent (subject to
+	// daily_limit) and an actuary supervisor (no limit, can approve
+	// agent orders). Keeping zaposleni unchanged means each of the
+	// three employee profiles in the spec — banking-only, actuary
+	// agent, actuary supervisor — has a distinct fixture.
+	agentPerms := dedupePerms(append(append([]string{},
+		permissions.RoleEmployeeAgent...),
+		permissions.RoleEmployeeActuaryAgent...))
+	supervisorPerms := dedupePerms(append(append([]string{},
+		permissions.RoleEmployeeAgent...),
+		permissions.RoleEmployeeActuarySupervisor...))
+
+	insertActuary := func(email, username, password, firstName, lastName, phone, position string, perms []string) (string, error) {
+		if err := passwords.ValidateComplexity(password); err != nil {
+			return "", fmt.Errorf("password for %s: %w", email, err)
+		}
+		var existing string
+		switch err := tx.QueryRow(ctx,
+			`select id from "user".employees where lower(email) = lower($1)`, email,
+		).Scan(&existing); err {
+		case nil:
+			return existing, nil
+		default:
+			if err.Error() != "no rows in result set" {
+				return "", fmt.Errorf("check existing %s: %w", email, err)
+			}
+		}
+		hash, err := passwords.Hash(password)
+		if err != nil {
+			return "", fmt.Errorf("hash %s: %w", email, err)
+		}
+		var id string
+		if err := tx.QueryRow(ctx, `
+            insert into "user".employees (
+                email, username, password_hash,
+                first_name, last_name, date_of_birth, gender, phone, address,
+                position, department, active, permissions
+            ) values (
+                $1, $2, $3,
+                $4, $5, '1990-01-01', 'male', $6, 'Beograd',
+                $7, 'Trgovina', true, $8
+            ) returning id`,
+			email, username, hash,
+			firstName, lastName, phone, position, perms,
+		).Scan(&id); err != nil {
+			return "", fmt.Errorf("insert %s: %w", email, err)
+		}
+		fmt.Printf("seed: %s created (id=%s)\n  email:    %s\n  username: %s\n  password: %s\n",
+			position, id, email, username, password)
+		return id, nil
 	}
-	if _, err := tx.Exec(ctx, `
-        update "user".employees
-        set permissions = (
-            select array_agg(distinct p)
-            from unnest(permissions || array['actuary','actuary.agent']) as p
-        )
-        where id = $1`, employeeID); err != nil {
-		return fmt.Errorf("augment employee perms: %w", err)
+
+	aktuarID, err := insertActuary(
+		envOr("SEED_ACTUARY_EMAIL", "aktuar@banka.local"),
+		envOr("SEED_ACTUARY_USERNAME", "aktuar"),
+		envOr("SEED_ACTUARY_PASSWORD", "Aktuar123!"),
+		"Marko", "Marković", "+381112233556", "Aktuar agent", agentPerms,
+	)
+	if err != nil {
+		return err
 	}
 	if _, err := tx.Exec(ctx, `
         insert into "trading".actuary_info
             (employee_id, type, daily_limit, used_limit, need_approval)
         values ($1, 'agent', 200000, 0, false)
-        on conflict (employee_id) do nothing`, employeeID); err != nil {
-		return fmt.Errorf("insert actuary_info: %w", err)
+        on conflict (employee_id) do nothing`, aktuarID); err != nil {
+		return fmt.Errorf("insert aktuar actuary_info: %w", err)
+	}
+
+	supervisorID, err := insertActuary(
+		envOr("SEED_SUPERVISOR_EMAIL", "supervizor@banka.local"),
+		envOr("SEED_SUPERVISOR_USERNAME", "supervizor"),
+		envOr("SEED_SUPERVISOR_PASSWORD", "Supervizor123!"),
+		"Jovana", "Jovanović", "+381112233557", "Aktuar supervizor", supervisorPerms,
+	)
+	if err != nil {
+		return err
+	}
+	// Spec p.38: supervisors don't have a personal limit. The trading
+	// service's upsert path forces 0/false for type='supervisor'; we
+	// match that here so the seeded row is consistent with what the
+	// service would write itself.
+	if _, err := tx.Exec(ctx, `
+        insert into "trading".actuary_info
+            (employee_id, type, daily_limit, used_limit, need_approval)
+        values ($1, 'supervisor', 0, 0, false)
+        on conflict (employee_id) do nothing`, supervisorID); err != nil {
+		return fmt.Errorf("insert supervisor actuary_info: %w", err)
 	}
 
 	// 3) Exchanges. Hours are local wall-clock per spec p.39; the
@@ -793,14 +855,34 @@ func seedTrading(ctx context.Context, pool *pgxpool.Pool, clientID, adminID stri
 	}
 	fmt.Printf("seed: trading fixtures created\n"+
 		"  usd account:  %s (id=%s, 300000 USD)\n"+
-		"  actuary:      %s promoted to agent (limit 200000 RSD)\n"+
+		"  actuary agent:      aktuar@banka.local (id=%s, limit 200000 RSD)\n"+
+		"  actuary supervisor: supervizor@banka.local (id=%s)\n"+
 		"  exchanges:    XNYS, XLON, XBEL\n"+
 		"  stocks:       AAPL, MSFT, GOOGL, VOD, NIS\n"+
 		"  future:       CL (Crude Oil WTI, +90d settlement)\n"+
 		"  forex:        EUR/USD\n"+
 		"  option:       AAPL-C-190 (call, ATM, +60d expiry)\n",
-		usdNumber, usdAccountID, employeeID)
+		usdNumber, usdAccountID, aktuarID, supervisorID)
 	return nil
+}
+
+// dedupePerms returns perms with duplicates removed, preserving first-
+// occurrence order. We compose the actuary fixtures' permission sets
+// from RoleEmployeeAgent + RoleEmployeeActuary{Agent,Supervisor},
+// which overlap on Actuary in the supervisor case; the user.employees
+// permissions column has no uniqueness guarantee but agent code paths
+// expect at-most-once entries.
+func dedupePerms(in []string) []string {
+	seen := make(map[string]struct{}, len(in))
+	out := make([]string, 0, len(in))
+	for _, p := range in {
+		if _, ok := seen[p]; ok {
+			continue
+		}
+		seen[p] = struct{}{}
+		out = append(out, p)
+	}
+	return out
 }
 
 // bizID looks up the business RSD account for the client we just
