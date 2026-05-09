@@ -233,20 +233,31 @@ breakdown.
 
 **c1**: user service — auth (login/refresh/logout), employee CRUD,
 activation, password reset, session_version revocation, JWT middleware
-in gateway, 3-strike lockout.
+in gateway.
 
 **c2**: bank service — companies + authorized persons; accounts (RSD
-+ FX, personal + business) with per-spec maintenance fees and default
-limits; cards (lifecycle + per-account limit); payments (same-currency
-+ FX through bank house); transfers; menjačnica (quote + execute);
-payment recipients; loans (request → approve → installment cron →
-variable-rate refresh). Bank emits Serbian notifications via a
-`Notifier` interface (email through `pkg/email`; `UserResolver` dials
-user-service GetClient with internal admin metadata to fetch the
-recipient address).
++ FX, personal + business) with per-spec maintenance fees, default
+limits, and `UpdateAccountName` for spec p.20 rename popup; cards
+(lifecycle + per-account limit; CVV digest is HMAC-SHA256 with
+`BANK_CVV_PEPPER`, never argon2id); payments (same-currency + FX
+through bank house, ASK on every leg per spec p.26); transfers;
+menjačnica (quote + execute); payment recipients; loans (request →
+approve → installment cron → variable-rate refresh). Bank emits
+Serbian notifications via a `Notifier` interface (email through
+`pkg/email`; `UserResolver` dials user-service GetClient with
+internal admin metadata to fetch the recipient address).
 
-**Tests**: bank service 31 (`integration` build tag for 23 of them),
-user service 25 integration, pkg/* unit suites all green.
+**Verification primitive** (`pkg/verification`, gateway middleware):
+spec p.11 verifikacioni-kod gates payments / transfers / limit
+changes / card issuance. Redis-keyed, 6-digit, 5-min TTL, 3 wrong
+attempts retire the record. Mobile app is c5; until then the gateway
+returns the code in the request response so the FE can render it.
+
+**Tests**: bank service ~50 (`integration` build tag for ~33 of them),
+user service ~30 integration, gateway middleware suites (auth +
+idempotency + verification), pkg/* unit suites (account, auth, card,
+cvv, idempotency, loans, money, passwords, permissions, verification)
+all green.
 
 Next steps:
 - Begin celina 3 (`trading` service: listings, orders, portfolio, OTC,
@@ -272,8 +283,19 @@ Next steps:
   rename.
 - **Activation token TTL**: 24h.
 - **Reset token TTL**: 15min (per spec).
-- **Lockout policy**: out of scope for c1 (spec marks it
-  "za nadogradnju"). Track failed attempts in Redis if added later.
+- **Lockout policy**: not implemented. Spec p.10 marks it
+  "za nadogradnju" — explicitly deferred. Don't add a counter without
+  a spec change.
+- **Card CVV hashing**: HMAC-SHA256 keyed by `BANK_CVV_PEPPER`
+  (`pkg/cvv`). Argon2id is wrong here — the search space is 1000 keys,
+  so per-guess work factor is meaningless. The pepper makes a stolen
+  database alone insufficient to recover any CVV.
+- **FX rate direction**: spec p.26 ("uvek prodajni kurs") — always use
+  the ASK column on every leg of a conversion, even when the bank is
+  buying foreign. The bank's profit comes from the commission, not
+  the bid/ask spread. `services/bank/.../exchange_quote.go` and
+  `loans.go` (bracket-lookup) follow this; the BID column the
+  exchange service stores is reserved for future use.
 - **Notification service**: c1 + c2 emit emails directly via
   `pkg/email` through service-local `Notifier` adapters (user service
   for activation / reset / profile change; bank service for card
