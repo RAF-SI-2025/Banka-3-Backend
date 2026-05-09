@@ -63,7 +63,7 @@ tasks:
       - for: { var: MIGRATING_SERVICES }
         cmd: |
           echo "==> migrating {{.ITEM}}"
-          migrate -path services/{{.ITEM}}/migrations -database "{{.DB_URL}}" up
+          migrate -path services/{{.ITEM}}/migrations -database "{{.DB_URL}}&x-migrations-table={{.ITEM}}_schema_migrations" up
 
   migrate:down:
     desc: Roll back N migrations across all services (default 1)
@@ -73,7 +73,7 @@ tasks:
       - for: { var: MIGRATING_SERVICES }
         cmd: |
           echo "==> rolling back {{.ITEM}} by {{.N}}"
-          migrate -path services/{{.ITEM}}/migrations -database "{{.DB_URL}}" down {{.N}}
+          migrate -path services/{{.ITEM}}/migrations -database "{{.DB_URL}}&x-migrations-table={{.ITEM}}_schema_migrations" down {{.N}}
 
   migrate:create:
     desc: 'Create a new migration pair: task migrate:create SVC=user NAME=add_index'

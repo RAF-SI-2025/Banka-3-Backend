@@ -23,3 +23,6 @@ coverage.*
 # Nix
 /result
 /.direnv/
+
+# Local Go workspace (GOPATH set by flake shellHook)
+/.go/
