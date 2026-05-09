@@ -45,6 +45,28 @@ func (a *bankSettlerAdapter) Settle(ctx context.Context, in service.SettleInput)
 	return resp.GetOpId(), nil
 }
 
+// SettleTax bridges service.TaxSettler to bank.SettleCapitalGainsTax.
+// Same admin-metadata sentinel idiom as Settle — bank's interceptor
+// rejects empty user-ids, and the bank-side handler clears the sentinel
+// before writing initiator_client_id.
+func (a *bankSettlerAdapter) SettleTax(ctx context.Context, in service.TaxSettleInput) (string, error) {
+	ctx = auth.AttachToOutgoing(ctx, auth.Principal{
+		UserID:      "00000000-0000-0000-0000-00000000fffe",
+		UserKind:    auth.KindEmployee,
+		Permissions: []string{permissions.Admin},
+	})
+	resp, err := a.c.SettleCapitalGainsTax(ctx, &bankpb.SettleCapitalGainsTaxRequest{
+		AccountId: in.AccountID,
+		AmountRsd: in.AmountRSD,
+		OpId:      in.OpID,
+		Purpose:   in.Purpose,
+	})
+	if err != nil {
+		return "", fmt.Errorf("bank.SettleCapitalGainsTax: %w", err)
+	}
+	return resp.GetOpId(), nil
+}
+
 func currencyToBankProto(c domain.Currency) bankpb.Currency {
 	switch c {
 	case domain.CurrencyRSD:

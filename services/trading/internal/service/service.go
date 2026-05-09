@@ -61,6 +61,9 @@ type Service struct {
 	// Settler executes the bank-side cash leg of every fill. Must be
 	// wired before the execution worker runs; tests inject a stub.
 	Settler TradeSettler
+	// TaxSettler executes the bank-side debit for the capital-gains
+	// tax cron (spec p.62). Must be wired before RunTax is called.
+	TaxSettler TaxSettler
 	// Now is the wall-clock used by every time-dependent path. Tests
 	// pin it; production leaves it nil and falls through to time.Now.
 	Now func() time.Time

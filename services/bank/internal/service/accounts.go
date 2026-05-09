@@ -312,6 +312,41 @@ func (s *Service) EnsureSystemAccounts(ctx context.Context) error {
 		}
 		s.Log.Info("seeded system account", "currency", c, "number", number)
 	}
+
+	// Spec p.62 capital-gains-tax destination. The state has only an
+	// RSD account; the c3 tax cron credits it from this side. Treated
+	// like a system account but kept under a separate AccountKind so
+	// it doesn't muddy the menjačnica's bank-house lookups.
+	if _, err := s.Store.GetStateTaxAccount(ctx); err != nil {
+		if !isNotFound(err) {
+			return err
+		}
+		number, err := account.Generate(s.Cfg.BankCode, s.Cfg.Branch, account.TypeSystem)
+		if err != nil {
+			return err
+		}
+		_, err = s.Store.CreateAccount(ctx, &domain.Account{
+			Number:              number,
+			Name:                "Državni račun za porez na kapitalni dobitak",
+			OwnerClientID:       domain.StateTaxOwnerID,
+			CreatedByEmployeeID: domain.SystemOwnerID,
+			Kind:                domain.KindStateTax,
+			Subtype:             domain.SubtypeUnspecified,
+			Currency:            domain.CurrencyRSD,
+			Status:              domain.AccountActive,
+			Balance:             "0.0000",
+			AvailableBalance:    "0.0000",
+			MaintenanceFee:      "0",
+			DailyLimit:          "0",
+			MonthlyLimit:        "0",
+			DailySpent:          "0",
+			MonthlySpent:        "0",
+		})
+		if err != nil {
+			return err
+		}
+		s.Log.Info("seeded state tax account", "number", number)
+	}
 	return nil
 }
 

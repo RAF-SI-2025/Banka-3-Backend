@@ -269,6 +269,8 @@ func txKindToProto(k domain.TransactionKind) bankpb.TransactionKind {
 		return bankpb.TransactionKind_TRANSACTION_KIND_FEE
 	case domain.TxKindTrade:
 		return bankpb.TransactionKind_TRANSACTION_KIND_TRADE
+	case domain.TxKindTax:
+		return bankpb.TransactionKind_TRANSACTION_KIND_TAX
 	}
 	return bankpb.TransactionKind_TRANSACTION_KIND_UNSPECIFIED
 }

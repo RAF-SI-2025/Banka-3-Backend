@@ -81,7 +81,9 @@ func Run() error {
 			return fmt.Errorf("dial bank: %w", err)
 		}
 		defer conn.Close()
-		svc.Settler = &bankSettlerAdapter{c: bankpb.NewBankServiceClient(conn)}
+		adapter := &bankSettlerAdapter{c: bankpb.NewBankServiceClient(conn)}
+		svc.Settler = adapter
+		svc.TaxSettler = adapter
 	} else {
 		log.Warn("BANK_GRPC_ADDR not set; execution worker will refuse to fill")
 	}
@@ -114,6 +116,13 @@ func Run() error {
 	svc.Cfg.ExecutionTickInterval = tick
 	g.Go(func() error {
 		return runExecutionWorker(gctx, log, svc, tick)
+	})
+
+	// Spec p.62 capital-gains tax — last day of each month at 23:55
+	// (Europe/Belgrade). Supervisor-triggered runs via the RunTax RPC
+	// share the same code path.
+	g.Go(func() error {
+		return runMonthlyTaxCron(gctx, log, svc, belgrade)
 	})
 
 	probeSrv.MarkReady()

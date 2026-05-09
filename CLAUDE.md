@@ -355,10 +355,65 @@ breakdown.
   → 2 realized_gains rows ($19.80 native, ~1994.81 RSD per share),
   portfolio quantity → 0, account credited $939.80 - $14 = $925.80.
 
+**Capital-gains tax landed (2026-05-09):**
+
+- `services/bank/migrations/0009_state_tax` — `accounts.kind` grows
+  `'state_tax'`, `transactions.op_kind` grows `'tax'`.
+- `domain.StateTaxOwnerID = 00000000-0000-0000-0000-000000000010`
+  + `domain.KindStateTax = "state_tax"`. Bank's `EnsureSystemAccounts`
+  now also seeds one RSD state-tax account ("Državni račun za porez
+  na kapitalni dobitak"). Kept under a distinct kind so the
+  menjačnica's `GetSystemAccount` lookups (kind='system') don't
+  cross-contaminate with the tax destination.
+- `bank.SettleCapitalGainsTax` RPC (internal, no http annotation) —
+  takes `account_id`, `amount_rsd`, `op_id`. Bank inverts the
+  menjačnica engine via `rateAndConvert(RSD → from.Currency, rsdAmt)`
+  to figure out how much source-currency to pull, then calls
+  `executeMoneyMove` with an actuary-flavoured initiator so the FX
+  leg's commission zeroes out (spec p.62 — conversion is commission-
+  free regardless of actor type). Idempotent on `op_id` via the
+  existing GetTransactionsByOpID lookup.
+- `services/trading/internal/store/realized_gains.go` —
+  `ListTaxAggregates` (per-user sums of unpaid + paid-YTD positive
+  gain_rsd) and `ListUnpaidGainsForUser`. Both clamp negative gains
+  to zero per row; the simple model has no carryforward.
+- `services/trading/internal/service/tax.go`:
+  - `ListTaxPositions(ctx, in)` — supervisor only; returns
+    `unpaid_tax_rsd = 15% × sum_unpaid_gain_rsd` and
+    `paid_tax_ytd_rsd = 15% × sum_taxed_this_year_gain_rsd`.
+  - `RunTax(ctx, in)` — supervisor only; with `UserID` empty walks
+    every user with positive unpaid, otherwise just that one. Per
+    user: groups unpaid rows by `account_id`, sums positive
+    `gain_rsd` per group, debits 15% of each via
+    `bank.SettleCapitalGainsTax`, then marks every row in the
+    group taxed=true (loss-only groups skip the bank call but still
+    get their rows consumed so the unpaid view doesn't recur).
+- `app/jobs.go` — monthly tax cron at 23:55 (Europe/Belgrade) on
+  the last day of each month via `nextEndOfMonthAfter` (handles
+  Feb / leap years correctly). The cron's closure stamps an admin
+  principal on ctx via `service.TaxCronContext` so RunTax's
+  `requireSupervisor` admits the call.
+- `app/bank_client.go` — `bankSettlerAdapter.SettleTax` bridges to
+  the bank RPC; same admin-metadata sentinel as Settle.
+- `gen/proto/trading/v1` — `ListTaxPositions` (`GET /api/v1/tax/positions`)
+  + `RunTax` (`POST /api/v1/tax/run`) handlers wired in
+  `services/trading/internal/server/tax.go`.
+- Tests: `taxRate=0.15` constant pin, `TaxCronContext` admin stamp,
+  RunTax + ListTaxPositions auth gates (client → 403),
+  `nextEndOfMonthAfter` table (mid-month / past-slot rollover /
+  Feb non-leap / Feb leap).
+- Smoke-tested through gateway: realized_gains seeded by the c3
+  execution-worker smoke (2 rows, gain_rsd ≈ 1994.81 each).
+  `GET /tax/positions` returned `unpaid_tax_rsd=598.4437`,
+  `paid_tax_ytd_rsd=0`. `POST /tax/run` returned
+  `users_taxed=1, total_collected_rsd=598.4437`. Two ledger legs
+  written: USD 5.94 (user→bank house) and RSD 598.4437 (bank
+  house→state). State-tax balance went from 0 → 598.4437; both
+  realized_gains rows flipped to `taxed=true` with the same
+  `tax_op_id`. Second run-tax was a no-op
+  (`users_taxed=0, total_collected_rsd=0`).
+
 **Still to land for c3:**
-- Capital-gains tax cron (end-of-month debit of 15% of unpaid
-  realized_gains.gain_rsd from the acquisition account to the
-  state RSD account; supervisor manual-trigger RPC).
 - Seed for c3: a few exchanges + sample stock/future/forex/option
   rows with listings so the FE has data to render.
 

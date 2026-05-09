@@ -58,6 +58,52 @@ func runActuaryDailyReset(svc *service.Service) func(context.Context) error {
 	}
 }
 
+// runMonthlyTaxCron schedules the spec p.62 capital-gains-tax debit at
+// 23:55 (Europe/Belgrade) on the last day of every month. We use a
+// per-iteration loop instead of cron's day-of-month string because
+// "last day" varies across months — easier to compute than to encode.
+//
+// The fn closure attaches an admin principal to ctx so RunTax's
+// requireSupervisor admits the cron without a real user session.
+func runMonthlyTaxCron(ctx context.Context, log *slog.Logger, svc *service.Service, loc *time.Location) error {
+	for {
+		next := nextEndOfMonthAfter(time.Now().In(loc), 23, 55)
+		wait := time.Until(next)
+		log.Info("monthly tax cron scheduled", "next", next.Format(time.RFC3339))
+
+		t := time.NewTimer(wait)
+		select {
+		case <-ctx.Done():
+			t.Stop()
+			return nil
+		case <-t.C:
+			cronCtx := service.TaxCronContext(ctx)
+			res, err := svc.RunTax(cronCtx, service.RunTaxInput{})
+			if err != nil {
+				log.Warn("monthly tax cron failed", "err", err.Error())
+				continue
+			}
+			log.Info("monthly tax cron ran",
+				"users_taxed", res.UsersTaxed,
+				"total_rsd", res.TotalCollectedRSD)
+		}
+	}
+}
+
+// nextEndOfMonthAfter returns the next instant strictly after `now`
+// whose wall-clock is the last day of a month at hour:minute. Lives in
+// app/ rather than service/ because it's purely a scheduling helper —
+// the service's own copy is exported for unit tests.
+func nextEndOfMonthAfter(now time.Time, hour, minute int) time.Time {
+	loc := now.Location()
+	year, month, _ := now.Date()
+	candidate := time.Date(year, month+1, 0, hour, minute, 0, 0, loc)
+	if !candidate.After(now) {
+		candidate = time.Date(year, month+2, 0, hour, minute, 0, 0, loc)
+	}
+	return candidate
+}
+
 // runExecutionWorker is the spec p.55-56 partial-fill loop. It wakes
 // up every interval and asks the service to walk every active order;
 // the service decides per-order whether to fire one fill on this tick

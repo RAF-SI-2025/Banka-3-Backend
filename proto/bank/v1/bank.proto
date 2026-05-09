@@ -119,6 +119,15 @@ service BankService {
   // caller has already net-bundled commission into `amount`.
   rpc SettleTrade(SettleTradeRequest) returns (SettleTradeResponse);
 
+  // SettleCapitalGainsTax debits the user's trading account and credits
+  // the state's RSD account by `amount_rsd` (spec p.62). The RPC takes
+  // the RSD figure directly; bank inverts the menjačnica engine to
+  // pull the matching source-currency amount from the user's account
+  // (commission-free per spec p.62, regardless of actor type). Idempotent
+  // on `op_id`. Internal RPC — no http annotation, callers authenticate
+  // with admin metadata.
+  rpc SettleCapitalGainsTax(SettleCapitalGainsTaxRequest) returns (SettleCapitalGainsTaxResponse);
+
   // -----------------------------------------------------------------
   // Payments — Klijent → another Klijent (different owner). Spec
   // p.21 "Novo plaćanje". Same-currency intra-bank: 1 transaction
@@ -513,6 +522,21 @@ message SettleTradeResponse {
   repeated Transaction   transactions = 2;
 }
 
+// SettleCapitalGainsTaxRequest debits an `amount_rsd` worth of money
+// from the user's `account_id` (in any currency — bank inverts the
+// menjačnica engine if needed) and credits the state's RSD account.
+message SettleCapitalGainsTaxRequest {
+  string account_id = 1 [(buf.validate.field).string.uuid = true];
+  string amount_rsd = 2 [(buf.validate.field).string.min_len = 1];
+  string op_id      = 3 [(buf.validate.field).string.uuid = true];
+  string purpose    = 4;
+}
+
+message SettleCapitalGainsTaxResponse {
+  string                 op_id        = 1;
+  repeated Transaction   transactions = 2;
+}
+
 // =====================================================================
 // Payments / transfers / transactions
 // =====================================================================
@@ -531,6 +555,7 @@ enum TransactionKind {
   TRANSACTION_KIND_EXCHANGE    = 3; // intermediate leg in a menjačnica path
   TRANSACTION_KIND_FEE         = 4;
   TRANSACTION_KIND_TRADE       = 5; // trading-service fill settlement
+  TRANSACTION_KIND_TAX         = 6; // capital-gains tax debit (spec p.62)
 }
 
 // Transaction is one ledger leg. UX-level operations (a payment, a

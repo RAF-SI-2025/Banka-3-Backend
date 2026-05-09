@@ -9,6 +9,12 @@ import "time"
 // convention; readers strip rows where owner == this.
 const SystemOwnerID = "00000000-0000-0000-0000-000000000000"
 
+// StateTaxOwnerID is the sentinel UUID used as owner_client_id for the
+// state's capital-gains tax RSD account (spec p.62). The end-of-month
+// tax cron credits this account; we keep it distinct from the
+// menjačnica house accounts so neither path bleeds into the other.
+const StateTaxOwnerID = "00000000-0000-0000-0000-000000000010"
+
 // =====================================================================
 // Currency
 // =====================================================================
@@ -55,6 +61,7 @@ const (
 	KindBusinessCheckingRSD AccountKind = "business_checking_rsd"
 	KindBusinessFX          AccountKind = "business_fx"
 	KindSystem              AccountKind = "system"
+	KindStateTax            AccountKind = "state_tax"
 )
 
 func (k AccountKind) IsBusiness() bool {

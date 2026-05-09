@@ -103,6 +103,21 @@ func (s *Store) GetSystemAccount(ctx context.Context, currency domain.Currency) 
 	return out, nil
 }
 
+// GetStateTaxAccount returns the state's RSD capital-gains tax account
+// (spec p.62). Seeded by EnsureSystemAccounts at boot.
+func (s *Store) GetStateTaxAccount(ctx context.Context) (*domain.Account, error) {
+	const q = `select ` + accountColumns + ` from "bank".accounts
+              where kind = 'state_tax' and currency = 'RSD'`
+	out, err := scanAccount(s.Pool.QueryRow(ctx, q))
+	if err != nil {
+		if noRows(err) {
+			return nil, apperr.NotFound("state tax account not found")
+		}
+		return nil, apperr.Internal("get state tax account", err)
+	}
+	return out, nil
+}
+
 func (s *Store) UpdateAccountLimits(ctx context.Context, id, daily, monthly string) (*domain.Account, error) {
 	// Only update fields that were provided; an empty string means "no change".
 	const q = `
