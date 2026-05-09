@@ -157,9 +157,15 @@ func (s *Service) UpdateEmployee(ctx context.Context, in UpdateEmployeeInput) (*
 // are revoked and session_version is bumped so existing access tokens
 // are rejected on next request — including invalidating the gateway's
 // Redis cache so revocation is immediate, not bounded by the cache TTL.
+// Self-deactivation is rejected (an admin cannot lock themselves out).
 func (s *Service) SetEmployeeActive(ctx context.Context, id string, active bool) (*domain.Employee, error) {
 	if err := s.requirePermission(ctx, permissions.EmployeeWrite); err != nil {
 		return nil, err
+	}
+	if !active {
+		if err := s.guardSelf(ctx, id, "deaktivaciju"); err != nil {
+			return nil, err
+		}
 	}
 	target, err := s.Store.GetEmployeeByID(ctx, id)
 	if err != nil {
@@ -189,8 +195,12 @@ func (s *Service) SetEmployeeActive(ctx context.Context, id string, active bool)
 // session_version (handled by store) so existing tokens revalidate;
 // invalidates the gateway's session cache for immediate effect.
 // Requires PermissionGrant; granting admin additionally requires Admin.
+// Self-edit is rejected — see guardSelf.
 func (s *Service) SetEmployeePermissions(ctx context.Context, id string, perms []string) (*domain.Employee, error) {
 	if err := s.requirePermission(ctx, permissions.PermissionGrant); err != nil {
+		return nil, err
+	}
+	if err := s.guardSelf(ctx, id, "permisije"); err != nil {
 		return nil, err
 	}
 	if permissions.Has(perms, permissions.Admin) {
@@ -224,6 +234,21 @@ func (s *Service) invalidateSessionCache(ctx context.Context, kind domain.UserKi
 	if err := s.Redis.Del(ctx, "usv:"+string(kind)+":"+id).Err(); err != nil {
 		s.Log.Warn("invalidate session cache", "user_id", id, "error", err)
 	}
+}
+
+// guardSelf rejects an action that targets the caller. Used to keep
+// admins from locking themselves out by stripping their own permissions
+// or deactivating their own account — there's nobody else to undo it
+// since admin is sole-maintainer (CLAUDE.md).
+func (s *Service) guardSelf(ctx context.Context, targetID, action string) error {
+	p, ok := auth.PrincipalFrom(ctx)
+	if !ok {
+		return apperr.Unauthenticated("not authenticated")
+	}
+	if p.UserID == targetID {
+		return apperr.PermissionDenied("ne možete promeniti " + action + " sopstvenog naloga")
+	}
+	return nil
 }
 
 // guardAdminOnAdmin rejects edits to another admin (spec scenario 15).

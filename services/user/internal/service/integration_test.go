@@ -494,6 +494,30 @@ func TestIntegration_AdminOnAdminGuard(t *testing.T) {
 	}
 }
 
+// Self-edit guard: an admin must not be able to deactivate their own
+// account or strip their own permissions. Admin is sole-maintainer, so
+// stripping the only admin would lock everyone out — UI hides the
+// controls, server enforces it for defense in depth.
+func TestIntegration_SelfDeactivateAndSelfPermsRejected(t *testing.T) {
+	svc, _ := setup(t)
+	admin := makeAdmin(t, svc)
+
+	if _, err := svc.SetEmployeeActive(adminCtx(admin.ID), admin.ID, false); !isApperr(err, apperr.KindPermissionDenied) {
+		t.Errorf("self-deactivate: want PermissionDenied, got %v", err)
+	}
+	if _, err := svc.SetEmployeePermissions(adminCtx(admin.ID), admin.ID, []string{permissions.EmployeeRead}); !isApperr(err, apperr.KindPermissionDenied) {
+		t.Errorf("self-perms: want PermissionDenied, got %v", err)
+	}
+	// Reactivation of self is still allowed (no lockout risk) and
+	// profile self-edit must still work.
+	if _, err := svc.SetEmployeeActive(adminCtx(admin.ID), admin.ID, true); err != nil {
+		t.Errorf("self-reactivate must be allowed: %v", err)
+	}
+	if _, err := svc.UpdateEmployee(adminCtx(admin.ID), UpdateEmployeeInput{ID: admin.ID, Phone: "+381"}); err != nil {
+		t.Errorf("self profile-edit must be allowed: %v", err)
+	}
+}
+
 func TestIntegration_UpdateEmployeeSendsDiffEmail(t *testing.T) {
 	svc, notif := setup(t)
 	admin := makeAdmin(t, svc)
