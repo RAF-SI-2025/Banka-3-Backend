@@ -1,0 +1,269 @@
+// Package domain holds the trading service's value types. No I/O.
+//
+// All money/quantity columns are decimal strings; the service layer
+// uses pkg/money.Parse to do exact arithmetic and pkg/money.FormatAmount
+// to render output. Wire types in the proto layer mirror the strings
+// 1:1.
+package domain
+
+import "time"
+
+// Currency mirrors the proto Currency enum tail; values match the DB
+// check constraints in trading.* and bank.* schemas.
+type Currency string
+
+const (
+	CurrencyRSD Currency = "RSD"
+	CurrencyEUR Currency = "EUR"
+	CurrencyCHF Currency = "CHF"
+	CurrencyUSD Currency = "USD"
+	CurrencyGBP Currency = "GBP"
+	CurrencyJPY Currency = "JPY"
+	CurrencyCAD Currency = "CAD"
+	CurrencyAUD Currency = "AUD"
+)
+
+// Supported reports whether c is one of the system's supported currencies.
+func (c Currency) Supported() bool {
+	switch c {
+	case CurrencyRSD, CurrencyEUR, CurrencyCHF, CurrencyUSD,
+		CurrencyGBP, CurrencyJPY, CurrencyCAD, CurrencyAUD:
+		return true
+	}
+	return false
+}
+
+// UserKind discriminates an order/holding owner. Matches the auth
+// pkg's UserKind values.
+type UserKind string
+
+const (
+	KindClient   UserKind = "client"
+	KindEmployee UserKind = "employee"
+)
+
+// ActuaryType maps to the proto enum + DB check constraint.
+type ActuaryType string
+
+const (
+	ActuarySupervisor ActuaryType = "supervisor"
+	ActuaryAgent      ActuaryType = "agent"
+)
+
+// SecurityType.
+type SecurityType string
+
+const (
+	SecurityStock  SecurityType = "stock"
+	SecurityFuture SecurityType = "future"
+	SecurityForex  SecurityType = "forex"
+	SecurityOption SecurityType = "option"
+)
+
+// OrderType.
+type OrderType string
+
+const (
+	OrderMarket    OrderType = "market"
+	OrderLimit     OrderType = "limit"
+	OrderStop      OrderType = "stop"
+	OrderStopLimit OrderType = "stop_limit"
+)
+
+// Direction.
+type Direction string
+
+const (
+	DirectionBuy  Direction = "buy"
+	DirectionSell Direction = "sell"
+)
+
+// OrderStatus.
+type OrderStatus string
+
+const (
+	OrderStatusPending  OrderStatus = "pending"
+	OrderStatusApproved OrderStatus = "approved"
+	OrderStatusDeclined OrderStatus = "declined"
+)
+
+// OptionType.
+type OptionType string
+
+const (
+	OptionCall OptionType = "call"
+	OptionPut  OptionType = "put"
+)
+
+// =====================================================================
+// Entities
+// =====================================================================
+
+// ActuaryInfo extends user.users (employee) with trading-specific
+// state. Populated only for employees who hold actuary.* permissions.
+// daily_limit / used_limit are stored in RSD; per spec p.38 the
+// limit applies to the running RSD-equivalent of all approved trades.
+type ActuaryInfo struct {
+	EmployeeID   string
+	Type         ActuaryType
+	DailyLimit   string
+	UsedLimit    string
+	NeedApproval bool
+	CreatedAt    time.Time
+	UpdatedAt    time.Time
+}
+
+// Exchange is one venue (NYSE, NASDAQ, …). override_open is a tri-
+// state: nil → follow schedule, *true → forced open, *false → forced
+// closed. The "is_open" / "is_after_hours" flags exposed at the proto
+// boundary are computed from these fields plus the wall clock.
+type Exchange struct {
+	MIC          string
+	Name         string
+	Acronym      string
+	Polity       string
+	Currency     Currency
+	Timezone     string
+	OpenLocal    string // "HH:MM"
+	CloseLocal   string
+	OverrideOpen *bool
+	UpdatedAt    time.Time
+}
+
+// Security is the polymorphic instrument type (stock / future / forex
+// / option). Per-type fields are populated only when relevant.
+type Security struct {
+	ID                   string
+	Ticker               string
+	Name                 string
+	Type                 SecurityType
+	ExchangeMIC          string
+	Currency             Currency
+
+	// Stock
+	OutstandingShares int64
+	DividendYield     string
+
+	// Future / forex
+	ContractSize   string
+	ContractUnit   string
+	SettlementDate *time.Time
+
+	// Forex
+	BaseCurrency  Currency
+	QuoteCurrency Currency
+	Liquidity     string
+
+	// Option
+	UnderlyingSecurityID string
+	OptionType           OptionType
+	StrikePrice          string
+	ImpliedVolatility    string
+	Premium              string
+	OpenInterest         int64
+
+	CreatedAt time.Time
+	UpdatedAt time.Time
+}
+
+// Listing is the live-price snapshot per security (and optionally
+// exchange). Spec p.45 entity.
+type Listing struct {
+	ID           string
+	SecurityID   string
+	ExchangeMIC  string
+	Price        string
+	Ask          string
+	Bid          string
+	Volume       int64
+	ChangeAmt    string
+	ContractSize string
+	LastRefresh  time.Time
+	CreatedAt    time.Time
+}
+
+// ListingDailyPrice is one historical row per spec p.45.
+type ListingDailyPrice struct {
+	ListingID string
+	Date      time.Time
+	Price     string
+	Ask       string
+	Bid       string
+	ChangeAmt string
+	Volume    int64
+}
+
+// Order is one submitted nalog. Spec p.49.
+type Order struct {
+	ID                 string
+	UserID             string
+	UserKind           UserKind
+	SecurityID         string
+	OrderType          OrderType
+	Direction          Direction
+	Quantity           int32
+	ContractSize       string
+	PricePerUnit       string
+	LimitPrice         string
+	StopPrice          string
+	AllOrNone          bool
+	Margin             bool
+	AccountID          string
+	Status             OrderStatus
+	ApprovedBy         string
+	ApprovalRequired   bool
+	ApprovedAt         *time.Time
+	IsDone             bool
+	Cancelled          bool
+	Triggered          bool
+	AfterHours         bool
+	RemainingQuantity  int32
+	LastModification   time.Time
+	CreatedAt          time.Time
+}
+
+// OrderExecution is one partial fill. Spec p.55-56.
+type OrderExecution struct {
+	ID            string
+	OrderID       string
+	Quantity      int32
+	PricePerUnit  string
+	TotalAmount   string
+	CommissionAmt string
+	BankOpID      string
+	ExecutedAt    time.Time
+}
+
+// Holding is one row in a user's portfolio.
+type Holding struct {
+	ID               string
+	UserID           string
+	UserKind         UserKind
+	SecurityID       string
+	AccountID        string
+	Quantity         int32
+	WeightedAvgPrice string
+	PublicCount      int32
+	AcquiredAt       time.Time
+	UpdatedAt        time.Time
+}
+
+// RealizedGain records one closing sell-execution for capital-gains
+// tax. Spec p.62.
+type RealizedGain struct {
+	ID            string
+	UserID        string
+	UserKind      UserKind
+	SecurityID    string
+	AccountID     string
+	Quantity      int32
+	CostBasisAmt  string
+	ProceedsAmt   string
+	Currency      Currency
+	GainNative    string
+	GainRSD       string
+	RealizedAt    time.Time
+	Taxed         bool
+	TaxedAt       *time.Time
+	TaxOpID       string
+}

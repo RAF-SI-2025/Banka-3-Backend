@@ -59,7 +59,11 @@ func TestRoleBundlesContent(t *testing.T) {
 		{"employee-basic", RoleEmployeeBasic, []string{EmployeeRead, ClientRead, AccountRead, CompanyRead, CardRead, LoanRead}},
 		{"employee-agent", RoleEmployeeAgent, []string{ClientRead, ClientWrite, AccountRead, AccountWrite, CompanyRead, CompanyWrite, CardRead, CardWrite, LoanRead, LoanWrite}},
 		{"employee-supervisor", RoleEmployeeSupervisor, []string{EmployeeRead, ClientRead, ClientWrite, AccountRead, AccountWrite, CompanyRead, CompanyWrite, CardRead, CardWrite, LoanRead, LoanWrite}},
-		{"employee-admin", RoleEmployeeAdmin, []string{Admin, EmployeeRead, EmployeeWrite, ClientRead, ClientWrite, CompanyRead, CompanyWrite, AccountRead, AccountWrite, CardRead, CardWrite, LoanRead, LoanWrite, PaymentWrite, ExchangeWrite, PermissionGrant}},
+		{"employee-admin", RoleEmployeeAdmin, []string{Admin, EmployeeRead, EmployeeWrite, ClientRead, ClientWrite, CompanyRead, CompanyWrite, AccountRead, AccountWrite, CardRead, CardWrite, LoanRead, LoanWrite, PaymentWrite, ExchangeWrite, PermissionGrant, Actuary, ActuarySupervisor, TradingMargin}},
+
+		{"client-trading", RoleClientTrading, []string{ClientRead, AccountRead, CardRead, CardWrite, PaymentWrite, LoanRead, LoanWrite, TradingClient}},
+		{"actuary-supervisor", RoleEmployeeActuarySupervisor, []string{Actuary, ActuarySupervisor, TradingMargin}},
+		{"actuary-agent", RoleEmployeeActuaryAgent, []string{Actuary, ActuaryAgent}},
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {

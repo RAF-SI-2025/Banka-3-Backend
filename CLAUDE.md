@@ -211,6 +211,79 @@ c1 and c2 are feature-complete and verified end-to-end. See top-level
 `/home/user/si/CLAUDE.md` "Verification status" section for the full
 breakdown.
 
+## C3 status (in progress)
+
+**Foundation + catalog landed (2026-05-09):**
+
+- `services/trading/migrations/0002_c3.up.sql` — full c3 schema
+  (`actuary_info`, `exchanges`, `securities`, `listings`,
+  `listing_daily_price_info`, `orders`, `order_executions`,
+  `portfolio_holdings`, `realized_gains`, `saga_executions`).
+  Polymorphic `securities` table with type-discriminated columns +
+  per-type required check constraints.
+- Permissions extended: `actuary.supervisor`, `actuary.agent`,
+  `trading.client`, `trading.margin`. Role bundles
+  `RoleEmployeeActuarySupervisor`, `RoleEmployeeActuaryAgent`, and
+  the existing `RoleClientTrading` updated.
+- Proto contract `proto/trading/v1/trading.proto` defines the full c3
+  surface (actuary, exchanges, securities, listings, option chain,
+  orders, portfolio, tax). Generated stubs live in
+  `gen/proto/trading/v1/`.
+- Trading service wired into `app.go` with daily 23:59 (Belgrade)
+  used-limit reset cron. Gateway dials trading and registers the
+  REST handler.
+- Implemented + smoke-tested via curl through the gateway:
+  - actuary CRUD (`GET/PUT /api/v1/actuaries/{id}`, `PATCH .../limit`,
+    `POST .../used-limit/reset`, `PATCH .../need-approval`,
+    `POST /api/v1/actuaries/reset-job`),
+  - exchanges (`GET/PUT /api/v1/exchanges`, `PATCH /api/v1/exchanges/{mic}/override`),
+  - securities (`PUT/GET /api/v1/securities`, `GET /api/v1/securities`,
+    `GET /api/v1/securities/{id}`, `GET /api/v1/securities/{stock}/option-chain`),
+  - listings (`PUT /api/v1/listings`, `GET/PUT /api/v1/listings`,
+    `GET /api/v1/listings/{id}/history`).
+- Unit tests: actuary auth gating, market-state resolver (override,
+  weekday/weekend, after-hours window), HH:MM parsing, maintenance-
+  margin formula per security type, option-chain strike-window
+  filter, security validation, daily-cron next-occurrence logic.
+
+**Spec edge cases handled in this slice:**
+- Spec p.38 "Admin -> supervizor" — `requireSupervisor` accepts both.
+- Spec p.38 "Supervizor nema limit" — supervisors are forced to
+  `daily_limit=0, need_approval=false` on upsert; updating the limit
+  on a supervisor row is a `FailedPrecondition`.
+- Spec p.39 "dugme koje uključuje/isključuje vreme berze" — exchange
+  rows carry a tri-state `override_open` (NULL=schedule / true=forced
+  open / false=forced closed); the resolver short-circuits to the
+  override when set.
+- Spec p.46-48 derived-data formulas (maintenance margin per type,
+  initial margin cost = 1.1 × maintenance margin) computed in
+  `service.computeMaintenanceMargin`.
+- Spec p.56 after-hours window — within 4h of close on a weekday
+  (weekend returns IsOpen=false, IsAfterHours=false).
+- Spec p.58 client visibility — clients can only list stocks +
+  futures; the listings/securities endpoints filter forex and option
+  rows out for client principals.
+- Spec p.59 option-chain strike window — `filterStrikeWindow` returns
+  the N rows above + N below + the at-the-money row.
+
+**Still to land for c3:**
+- Orders (create, list, approve/decline, cancel) — schema exists,
+  proto exists, service/server/store TBD. 4 types × buy/sell × AON ×
+  margin; approval routing for agents (`need_approval` flag + RSD
+  limit cap).
+- Order execution worker (partial fills, random sub-quantity, random
+  interval per spec p.56 formula; STOP/STOP_LIMIT trigger detection;
+  after-hours slow-down).
+- Portfolio holdings (weighted-avg cost basis on buy fills, decrement
+  on sell fills, public_count for c4 OTC).
+- Capital-gains tax (per-sell realized_gain row in security currency
+  + RSD-converted via menjačnica without commission; end-of-month
+  cron debits 15% from acquisition account to state account).
+- Bank-side `TradeMove` RPC (or reuse of `executeMoneyMove` via a new
+  internal entry point) for trade settlement.
+- Seed for c3: a few exchanges + sample stock/future/forex/option
+  rows with listings so the FE has data to render.
+
 **c1**: user service — auth (login/refresh/logout), employee CRUD,
 activation, password reset, session_version revocation, JWT middleware
 in gateway.

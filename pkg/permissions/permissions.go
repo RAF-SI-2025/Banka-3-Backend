@@ -63,6 +63,27 @@ const (
 	LoanWrite = "loan.write"
 )
 
+// Celina 3 — trading.
+//
+// Two distinct axes:
+//
+//   - Actuary role (employees only): supervisor vs agent. Both bundle
+//     the [Actuary] marker so the FX-commission branch zeroes out for
+//     trades on behalf of the bank. Supervisors approve orders, manage
+//     agents, and run the capital-gains tax cron. Agents are subject
+//     to a daily RSD limit.
+//   - Client trading (clients only): clients with [TradingClient] see
+//     stocks + futures (not options) and may submit orders that auto-
+//     approve. [TradingMargin] is granted to clients with an approved
+//     loan and to employees who have been explicitly enabled.
+const (
+	ActuarySupervisor = "actuary.supervisor"
+	ActuaryAgent      = "actuary.agent"
+
+	TradingClient = "trading.client"
+	TradingMargin = "trading.margin"
+)
+
 // Role bundles. The spec frames users in terms of roles; the system
 // stores and checks permissions. These bundles are applied at user
 // creation; later admin actions can add or remove individual permissions.
@@ -72,7 +93,7 @@ var (
 	// — opening a new account is an employee action per spec p.11
 	// ("Račun kreira Zaposleni").
 	RoleClientBasic   = []string{ClientRead, AccountRead, CardRead, CardWrite, PaymentWrite, LoanRead, LoanWrite}
-	RoleClientTrading = append([]string{}, RoleClientBasic...) // c3 will append trading perms
+	RoleClientTrading = append(append([]string{}, RoleClientBasic...), TradingClient)
 
 	// Employees:
 	//   basic — read-only on people and accounts; legacy from c1.
@@ -101,7 +122,22 @@ var (
 		PaymentWrite,
 		ExchangeWrite,
 		PermissionGrant,
+
+		// Spec p.38: every admin is implicitly a supervisor on the
+		// trading side. We carry the marker permission too so the
+		// FX-commission branch and "is on behalf of the bank" check
+		// short-circuit even before the supervisor opens the trading
+		// portal for the first time.
+		Actuary, ActuarySupervisor,
+		TradingMargin,
 	}
+
+	// RoleEmployeeActuarySupervisor and RoleEmployeeActuaryAgent are
+	// applied on top of an existing employee bundle when an admin
+	// promotes a user to actuary status. The trading service expects a
+	// matching trading.actuary_info row with the same `type`.
+	RoleEmployeeActuarySupervisor = []string{Actuary, ActuarySupervisor, TradingMargin}
+	RoleEmployeeActuaryAgent      = []string{Actuary, ActuaryAgent}
 )
 
 // Has reports whether the holder set contains target.

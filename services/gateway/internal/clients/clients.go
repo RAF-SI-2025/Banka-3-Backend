@@ -7,6 +7,7 @@ import (
 
 	bankpb "github.com/RAF-SI-2025/Banka-3-Backend/gen/proto/bank/v1"
 	exchangepb "github.com/RAF-SI-2025/Banka-3-Backend/gen/proto/exchange/v1"
+	tradingpb "github.com/RAF-SI-2025/Banka-3-Backend/gen/proto/trading/v1"
 	userpb "github.com/RAF-SI-2025/Banka-3-Backend/gen/proto/user/v1"
 
 	"google.golang.org/grpc"
@@ -19,10 +20,12 @@ type Set struct {
 	User     userpb.UserServiceClient
 	Bank     bankpb.BankServiceClient
 	Exchange exchangepb.ExchangeServiceClient
+	Trading  tradingpb.TradingServiceClient
 
 	UserConn     *grpc.ClientConn
 	BankConn     *grpc.ClientConn
 	ExchangeConn *grpc.ClientConn
+	TradingConn  *grpc.ClientConn
 
 	conns []*grpc.ClientConn
 }
@@ -57,6 +60,16 @@ func Dial(addrs Addrs) (*Set, error) {
 		}
 		s.ExchangeConn = c
 		s.Exchange = exchangepb.NewExchangeServiceClient(c)
+		s.conns = append(s.conns, c)
+	}
+
+	if addrs.Trading != "" {
+		c, err := dial(addrs.Trading)
+		if err != nil {
+			return nil, fmt.Errorf("dial trading: %w", err)
+		}
+		s.TradingConn = c
+		s.Trading = tradingpb.NewTradingServiceClient(c)
 		s.conns = append(s.conns, c)
 	}
 

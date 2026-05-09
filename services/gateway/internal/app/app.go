@@ -23,6 +23,7 @@ import (
 
 	bankpb "github.com/RAF-SI-2025/Banka-3-Backend/gen/proto/bank/v1"
 	exchangepb "github.com/RAF-SI-2025/Banka-3-Backend/gen/proto/exchange/v1"
+	tradingpb "github.com/RAF-SI-2025/Banka-3-Backend/gen/proto/trading/v1"
 	userpb "github.com/RAF-SI-2025/Banka-3-Backend/gen/proto/user/v1"
 	"github.com/RAF-SI-2025/Banka-3-Backend/services/gateway/internal/auth"
 	"github.com/RAF-SI-2025/Banka-3-Backend/services/gateway/internal/clients"
@@ -132,6 +133,11 @@ func Run() error {
 		}
 		if cs.ExchangeConn != nil {
 			if err := exchangepb.RegisterExchangeServiceHandler(ctx, mux, cs.ExchangeConn); err != nil {
+				return err
+			}
+		}
+		if cs.TradingConn != nil {
+			if err := tradingpb.RegisterTradingServiceHandler(ctx, mux, cs.TradingConn); err != nil {
 				return err
 			}
 		}

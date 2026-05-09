@@ -1,0 +1,10 @@
+drop table if exists "trading".saga_executions;
+drop table if exists "trading".realized_gains;
+drop table if exists "trading".portfolio_holdings;
+drop table if exists "trading".order_executions;
+drop table if exists "trading".orders;
+drop table if exists "trading".listing_daily_price_info;
+drop table if exists "trading".listings;
+drop table if exists "trading".securities;
+drop table if exists "trading".exchanges;
+drop table if exists "trading".actuary_info;

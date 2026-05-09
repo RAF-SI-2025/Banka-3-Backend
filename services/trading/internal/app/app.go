@@ -5,7 +5,9 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"time"
 
+	tradingpb "github.com/RAF-SI-2025/Banka-3-Backend/gen/proto/trading/v1"
 	"github.com/RAF-SI-2025/Banka-3-Backend/pkg/config"
 	"github.com/RAF-SI-2025/Banka-3-Backend/pkg/grpcserver"
 	"github.com/RAF-SI-2025/Banka-3-Backend/pkg/logger"
@@ -13,6 +15,9 @@ import (
 	"github.com/RAF-SI-2025/Banka-3-Backend/pkg/probes"
 	pkgredis "github.com/RAF-SI-2025/Banka-3-Backend/pkg/redis"
 	"github.com/RAF-SI-2025/Banka-3-Backend/pkg/shutdown"
+	"github.com/RAF-SI-2025/Banka-3-Backend/services/trading/internal/server"
+	"github.com/RAF-SI-2025/Banka-3-Backend/services/trading/internal/service"
+	"github.com/RAF-SI-2025/Banka-3-Backend/services/trading/internal/store"
 	"google.golang.org/grpc"
 
 	"golang.org/x/sync/errgroup"
@@ -38,6 +43,18 @@ func Run() error {
 	}
 	defer rdb.Close()
 
+	belgrade, err := time.LoadLocation("Europe/Belgrade")
+	if err != nil {
+		log.Warn("Europe/Belgrade timezone unavailable, falling back to UTC", "error", err)
+		belgrade = time.UTC
+	}
+
+	st := store.New(pool)
+	svc := service.New(st, service.Config{
+		Belgrade:     belgrade,
+		FXCommission: config.String("FX_COMMISSION", "0.005"),
+	}, log)
+
 	probeSrv := probes.New(fmt.Sprintf(":%d", config.Int("PROBE_PORT", 8081)))
 	probeSrv.Register("postgres", func(ctx context.Context) error { return postgres.Ping(ctx, pool) })
 	probeSrv.Register("redis", func(ctx context.Context) error { return pkgredis.Ping(ctx, rdb) })
@@ -50,8 +67,15 @@ func Run() error {
 	})
 	g.Go(func() error {
 		return grpcserver.Run(gctx, log, grpcAddr, func(s *grpc.Server) {
-			// TODO: register UserService once celina 1 work begins
+			tradingpb.RegisterTradingServiceServer(s, server.New(svc))
 		})
+	})
+
+	// Spec p.38: agents' used_limit resets at 23:59 (Europe/Belgrade).
+	// The supervisor RPC exposes the same operation for manual reruns
+	// during dev; this loop fires it daily.
+	g.Go(func() error {
+		return runDailyAt(gctx, log, "actuary-used-limit-reset", belgrade, 23, 59, runActuaryDailyReset(svc))
 	})
 
 	probeSrv.MarkReady()
