@@ -35,7 +35,10 @@ package main
 import (
 	"context"
 	"fmt"
+	"hash/fnv"
+	"math/rand/v2"
 	"os"
+	"strconv"
 	"time"
 
 	"github.com/jackc/pgx/v5"
@@ -798,8 +801,99 @@ func seedTrading(ctx context.Context, pool *pgxpool.Pool, clientID, adminID stri
 		quote{"68.40", "68.50", "68.30", 32000000}); err != nil {
 		return err
 	}
-	if _, err := insertStock("NIS", "Naftna industrija Srbije", "XBEL", "RSD", 163000000, "0.06",
-		quote{"850.00", "853.00", "847.00", 200000}); err != nil {
+	nisID, err := insertStock("NIS", "Naftna industrija Srbije", "XBEL", "RSD", 163000000, "0.06",
+		quote{"850.00", "853.00", "847.00", 200000})
+	if err != nil {
+		return err
+	}
+
+	// seedSyntheticHistory plants ~60 business days of random-walk price
+	// history into trading.listing_daily_price_info. Used for:
+	//   - NIS (Alpha Vantage doesn't cover BELEX)
+	//   - CL  (futures, seed-only per spec p.41)
+	//   - EURUSD (AV ships only spot for forex via the wired
+	//     CURRENCY_EXCHANGE_RATE endpoint; FX_DAILY isn't wired)
+	// The walk is deterministic in the listing UUID — re-runs of the
+	// seed (or fresh DBs that happen to mint the same UUIDs) produce
+	// the same chart shape. ON CONFLICT (listing_id, date) DO NOTHING
+	// leaves any row already written by today's AV refresh untouched.
+	// AV-covered stocks (AAPL/MSFT/GOOGL/VOD) are intentionally skipped:
+	// their daily refresh accumulates real history naturally and mixing
+	// real today + synthetic past would lie about the chart.
+	seedSyntheticHistory := func(securityID string, days int) error {
+		var (
+			listingID string
+			priceStr  string
+			volume    int64
+		)
+		if err := tx.QueryRow(ctx, `
+            select id, price::text, volume from "trading".listings where security_id = $1
+        `, securityID).Scan(&listingID, &priceStr, &volume); err != nil {
+			return fmt.Errorf("lookup listing for synthetic history (%s): %w", securityID, err)
+		}
+		basePrice, err := strconv.ParseFloat(priceStr, 64)
+		if err != nil {
+			return fmt.Errorf("parse seed price %q: %w", priceStr, err)
+		}
+
+		h := fnv.New64a()
+		_, _ = h.Write([]byte(listingID))
+		seed := h.Sum64()
+		rng := rand.New(rand.NewPCG(seed, seed^0x9e3779b97f4a7c15))
+
+		// Build the price series chronologically: prices[days] is today
+		// (the listing's current price); each earlier index is derived
+		// from the next by an inverse multiplicative step so the walk
+		// terminates exactly on the seed price.
+		prices := make([]float64, days+1)
+		prices[days] = basePrice
+		for i := days - 1; i >= 0; i-- {
+			step := 1.0 + (rng.Float64()*0.04 - 0.02) // ±2% daily
+			prices[i] = prices[i+1] / step
+		}
+
+		loc, locErr := time.LoadLocation("Europe/Belgrade")
+		if locErr != nil {
+			loc = time.UTC
+		}
+		now := time.Now().In(loc)
+		today := time.Date(now.Year(), now.Month(), now.Day(), 0, 0, 0, 0, loc)
+
+		// Skip i=days (today) — owned by the live listing row + today's
+		// refresh. Walk i=0..days-1 = days-back to 1-day-back.
+		for i := 0; i < days; i++ {
+			d := today.AddDate(0, 0, -(days - i))
+			if wd := d.Weekday(); wd == time.Saturday || wd == time.Sunday {
+				continue
+			}
+			p := prices[i]
+			prev := p
+			if i > 0 {
+				prev = prices[i-1]
+			}
+			change := p - prev
+			bid := p * 0.999
+			ask := p * 1.001
+			vol := int64(float64(volume) * (0.5 + rng.Float64()))
+			if _, err := tx.Exec(ctx, `
+                insert into "trading".listing_daily_price_info
+                    (listing_id, date, price, ask, bid, change_amt, volume)
+                values ($1, $2, $3::numeric, $4::numeric, $5::numeric, $6::numeric, $7)
+                on conflict (listing_id, date) do nothing`,
+				listingID, d,
+				fmt.Sprintf("%.4f", p),
+				fmt.Sprintf("%.4f", ask),
+				fmt.Sprintf("%.4f", bid),
+				fmt.Sprintf("%.4f", change),
+				vol,
+			); err != nil {
+				return fmt.Errorf("insert daily history (%s): %w", listingID, err)
+			}
+		}
+		return nil
+	}
+
+	if err := seedSyntheticHistory(nisID, 60); err != nil {
 		return err
 	}
 
@@ -826,6 +920,9 @@ func seedTrading(ctx context.Context, pool *pgxpool.Pool, clientID, adminID stri
 	); err != nil {
 		return fmt.Errorf("insert future listing: %w", err)
 	}
+	if err := seedSyntheticHistory(futureID, 60); err != nil {
+		return err
+	}
 
 	// Forex: EUR/USD. Listings on forex are optional per spec p.45-48
 	// (Idea 1) but we plant one so the FE has a "live rate" row to
@@ -849,6 +946,9 @@ func seedTrading(ctx context.Context, pool *pgxpool.Pool, clientID, adminID stri
 		forexID,
 	); err != nil {
 		return fmt.Errorf("insert forex listing: %w", err)
+	}
+	if err := seedSyntheticHistory(forexID, 60); err != nil {
+		return err
 	}
 
 	// Options: a small AAPL chain with strikes 180 / 190 / 200 at the
