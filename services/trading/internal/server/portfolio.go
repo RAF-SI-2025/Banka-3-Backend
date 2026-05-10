@@ -36,6 +36,24 @@ func (s *Server) SetPublicCount(ctx context.Context, in *tradingpb.SetPublicCoun
 	return holdingToProto(h, nil), nil
 }
 
+func (s *Server) ExerciseOption(ctx context.Context, in *tradingpb.ExerciseOptionRequest) (*tradingpb.ExerciseOptionResponse, error) {
+	res, err := s.Svc.ExerciseOption(ctx, service.ExerciseOptionInput{
+		HoldingID: in.GetHoldingId(),
+		Quantity:  in.GetQuantity(),
+	})
+	if err != nil {
+		return nil, err
+	}
+	return &tradingpb.ExerciseOptionResponse{
+		OptionHolding:        holdingToProto(res.OptionHolding, nil),
+		UnderlyingHolding:    holdingToProto(res.UnderlyingHolding, nil),
+		BankOpId:             res.BankOpID,
+		RealizedGainNative:   res.RealizedGainNative,
+		RealizedGainRsd:      res.RealizedGainRSD,
+		RealizedGainCurrency: currencyToProto(res.RealizedGainCurrency),
+	}, nil
+}
+
 func holdingDecoratedToProto(d *service.HoldingDecorated) *tradingpb.Holding {
 	if d == nil || d.Holding == nil {
 		return nil

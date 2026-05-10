@@ -280,6 +280,7 @@ func resetSchema(t *testing.T) {
 	t.Helper()
 	_, err := fixPool.Exec(context.Background(), `
         truncate
+            "trading".option_exercises,
             "trading".realized_gains,
             "trading".portfolio_holdings,
             "trading".order_executions,
@@ -1725,4 +1726,243 @@ func writeRealizedGain(t *testing.T, svc *Service, userID, secID, accID, gainRSD
 		return err
 	}
 	return tx.Commit(context.Background())
+}
+
+// =====================================================================
+// Option exercise (FE-4) — spec p.61.d
+// =====================================================================
+
+// seedOption inserts an option security pointing at an existing
+// underlying. No listing row — the service falls back to security.premium
+// for the option's own quoting, but exercise reads the *underlying*
+// listing for the ITM check, so the underlying still needs prices.
+func seedOption(
+	t *testing.T,
+	svc *Service,
+	ticker string,
+	underlying *domain.Security,
+	optType domain.OptionType,
+	strike string,
+	contractSize string,
+	settles time.Time,
+) *domain.Security {
+	t.Helper()
+	sec, err := svc.Store.UpsertSecurity(context.Background(), &domain.Security{
+		Ticker:               ticker,
+		Name:                 ticker,
+		Type:                 domain.SecurityOption,
+		ExchangeMIC:          underlying.ExchangeMIC,
+		Currency:             underlying.Currency,
+		ContractSize:         contractSize,
+		SettlementDate:       &settles,
+		UnderlyingSecurityID: underlying.ID,
+		OptionType:           optType,
+		StrikePrice:          strike,
+		Premium:              "0.50",
+		ImpliedVolatility:    "0.25",
+	})
+	if err != nil {
+		t.Fatalf("UpsertSecurity option: %v", err)
+	}
+	return sec
+}
+
+// seedHolding writes a portfolio_holdings row directly. Used to skip
+// the order/fill pipeline and land the test at the post-state we need.
+func seedHolding(
+	t *testing.T,
+	svc *Service,
+	userID string,
+	kind domain.UserKind,
+	secID, accID string,
+	qty int32,
+	weightedAvgPrice string,
+) *domain.Holding {
+	t.Helper()
+	ctx := context.Background()
+	tx, err := fixPool.Begin(ctx)
+	if err != nil {
+		t.Fatalf("begin: %v", err)
+	}
+	defer tx.Rollback(ctx)
+	h, err := svc.Store.ApplyBuyFill(ctx, tx, userID, string(kind), secID, accID, qty, weightedAvgPrice)
+	if err != nil {
+		t.Fatalf("seedHolding ApplyBuyFill: %v", err)
+	}
+	if err := tx.Commit(ctx); err != nil {
+		t.Fatalf("commit seedHolding: %v", err)
+	}
+	return h
+}
+
+// TestIntegration_ExerciseOption_PutSpecExample walks the spec p.61.d
+// worked example end-to-end: actuary holds 300 MSFT @ $20 and 2 PUT
+// contracts @ strike $19 (contract size 100); MSFT spot has fallen
+// to $15. Exercising both PUTs sells 200 MSFT at the strike, credits
+// the actuary's account, leaves 100 MSFT in the holding, and writes a
+// realized_gain row in the underlying's currency.
+func TestIntegration_ExerciseOption_PutSpecExample(t *testing.T) {
+	svc := setup(t)
+	ex := seedExchange(t, svc, "XNYS", domain.CurrencyUSD)
+	stock, _ := seedStock(t, svc, "MSFT", ex, "15", "15", "15", 1_000_000)
+	put := seedOption(t, svc, "MSFT-P-19", stock, domain.OptionPut, "19", "100", time.Now().Add(7*24*time.Hour))
+
+	agentID := uuid.NewString()
+	accID := uuid.NewString()
+	seedActuary(t, svc, agentID, domain.ActuaryAgent, "10000000", false)
+	seedHolding(t, svc, agentID, domain.KindEmployee, stock.ID, accID, 300, "20")
+	optionHolding := seedHolding(t, svc, agentID, domain.KindEmployee, put.ID, accID, 2, "0.50")
+
+	res, err := svc.ExerciseOption(agentCtx(agentID), ExerciseOptionInput{
+		HoldingID: optionHolding.ID,
+		Quantity:  2,
+	})
+	if err != nil {
+		t.Fatalf("ExerciseOption: %v", err)
+	}
+	if res.OptionHolding.Quantity != 0 {
+		t.Fatalf("option holding qty after exercise = %d, want 0", res.OptionHolding.Quantity)
+	}
+	if res.UnderlyingHolding.Quantity != 100 {
+		t.Fatalf("underlying qty = %d, want 100 (300 − 2*100)", res.UnderlyingHolding.Quantity)
+	}
+
+	calls := currentSettler.settles()
+	if len(calls) != 1 {
+		t.Fatalf("settle calls = %d, want 1", len(calls))
+	}
+	c := calls[0]
+	if c.Direction != "credit" {
+		t.Fatalf("PUT exercise must credit (sell at strike); got %q", c.Direction)
+	}
+	if c.Currency != domain.CurrencyUSD {
+		t.Fatalf("settle currency = %s, want USD", c.Currency)
+	}
+	if !numericEq(c.Amount, "3800") {
+		t.Fatalf("settle amount = %s, want 3800 (200 × 19)", c.Amount)
+	}
+	if c.AccountID != accID {
+		t.Fatalf("settle account = %s, want %s", c.AccountID, accID)
+	}
+	if !c.IsActuary {
+		t.Fatalf("expected IsActuary=true on actuary exercise")
+	}
+
+	// Realized loss native = (19 − 20) × 200 = −200; RSD via pinned
+	// USD/RSD ASK 110.50 = −22100.
+	if !numericEq(res.RealizedGainNative, "-200") {
+		t.Fatalf("native gain = %s, want -200", res.RealizedGainNative)
+	}
+	if !numericEq(res.RealizedGainRSD, "-22100") {
+		t.Fatalf("rsd gain = %s, want -22100 (-200 × 110.50)", res.RealizedGainRSD)
+	}
+
+	// One realized_gain row landed.
+	gains, err := svc.Store.ListRealizedGains(context.Background(), store.RealizedGainFilter{UserID: agentID})
+	if err != nil {
+		t.Fatalf("ListRealizedGains: %v", err)
+	}
+	if len(gains) != 1 {
+		t.Fatalf("realized gain rows = %d, want 1", len(gains))
+	}
+	g := gains[0]
+	if g.SecurityID != stock.ID {
+		t.Fatalf("realized gain securityID = %s, want underlying %s", g.SecurityID, stock.ID)
+	}
+	if g.Quantity != 200 {
+		t.Fatalf("realized gain qty = %d, want 200 shares", g.Quantity)
+	}
+}
+
+// TestIntegration_ExerciseOption_CallBuysUnderlying covers the CALL
+// path: actuary buys `qty × cs` shares at strike from the bank's house
+// counterparty; weighted-avg cost basis on the new shares = strike;
+// no realized_gain row.
+func TestIntegration_ExerciseOption_CallBuysUnderlying(t *testing.T) {
+	svc := setup(t)
+	ex := seedExchange(t, svc, "XNYS", domain.CurrencyUSD)
+	stock, _ := seedStock(t, svc, "AAPL", ex, "210", "210", "210", 1_000_000)
+	call := seedOption(t, svc, "AAPL-C-190", stock, domain.OptionCall, "190", "100", time.Now().Add(60*24*time.Hour))
+
+	agentID := uuid.NewString()
+	accID := uuid.NewString()
+	seedActuary(t, svc, agentID, domain.ActuaryAgent, "10000000", false)
+	optionHolding := seedHolding(t, svc, agentID, domain.KindEmployee, call.ID, accID, 1, "8.50")
+
+	res, err := svc.ExerciseOption(agentCtx(agentID), ExerciseOptionInput{
+		HoldingID: optionHolding.ID,
+		Quantity:  1,
+	})
+	if err != nil {
+		t.Fatalf("ExerciseOption: %v", err)
+	}
+	if res.OptionHolding.Quantity != 0 {
+		t.Fatalf("option holding after exercise = %d, want 0", res.OptionHolding.Quantity)
+	}
+	if res.UnderlyingHolding == nil || res.UnderlyingHolding.Quantity != 100 {
+		t.Fatalf("underlying qty = %v, want 100 fresh shares", res.UnderlyingHolding)
+	}
+	if !numericEq(res.UnderlyingHolding.WeightedAvgPrice, "190") {
+		t.Fatalf("underlying avg cost = %s, want 190 (strike)", res.UnderlyingHolding.WeightedAvgPrice)
+	}
+	calls := currentSettler.settles()
+	if len(calls) != 1 || calls[0].Direction != "debit" {
+		t.Fatalf("CALL exercise must debit; got %+v", calls)
+	}
+	if !numericEq(calls[0].Amount, "19000") {
+		t.Fatalf("debit amount = %s, want 19000 (100 × 190)", calls[0].Amount)
+	}
+	if res.RealizedGainNative != "" {
+		t.Fatalf("CALL exercise must not record a realized gain; got %q", res.RealizedGainNative)
+	}
+}
+
+// TestIntegration_ExerciseOption_OutOfMoney refuses an exercise when
+// the option is OOM at the time of the request — even if the actuary
+// owns the contract and settlement is in the future.
+func TestIntegration_ExerciseOption_OutOfMoney(t *testing.T) {
+	svc := setup(t)
+	ex := seedExchange(t, svc, "XNYS", domain.CurrencyUSD)
+	stock, _ := seedStock(t, svc, "MSFT", ex, "25", "25", "25", 1_000_000)
+	put := seedOption(t, svc, "MSFT-P-19", stock, domain.OptionPut, "19", "100", time.Now().Add(7*24*time.Hour))
+
+	agentID := uuid.NewString()
+	accID := uuid.NewString()
+	seedActuary(t, svc, agentID, domain.ActuaryAgent, "10000000", false)
+	seedHolding(t, svc, agentID, domain.KindEmployee, stock.ID, accID, 300, "20")
+	optionHolding := seedHolding(t, svc, agentID, domain.KindEmployee, put.ID, accID, 2, "0.50")
+
+	_, err := svc.ExerciseOption(agentCtx(agentID), ExerciseOptionInput{
+		HoldingID: optionHolding.ID,
+		Quantity:  2,
+	})
+	if !isApperr(err, apperr.KindFailedPrecondition) {
+		t.Fatalf("expected FailedPrecondition for OOM exercise; got %v", err)
+	}
+	if len(currentSettler.settles()) != 0 {
+		t.Fatalf("OOM rejection must not have hit the bank; got %d settle calls", len(currentSettler.settles()))
+	}
+}
+
+// TestIntegration_ExerciseOption_RequiresActuary refuses a client
+// principal even when they own the option holding (spec p.61.d:
+// "samo Aktuari").
+func TestIntegration_ExerciseOption_RequiresActuary(t *testing.T) {
+	svc := setup(t)
+	ex := seedExchange(t, svc, "XNYS", domain.CurrencyUSD)
+	stock, _ := seedStock(t, svc, "MSFT", ex, "15", "15", "15", 1_000_000)
+	put := seedOption(t, svc, "MSFT-P-19", stock, domain.OptionPut, "19", "100", time.Now().Add(7*24*time.Hour))
+
+	clientID := uuid.NewString()
+	accID := uuid.NewString()
+	seedHolding(t, svc, clientID, domain.KindClient, stock.ID, accID, 300, "20")
+	optionHolding := seedHolding(t, svc, clientID, domain.KindClient, put.ID, accID, 2, "0.50")
+
+	_, err := svc.ExerciseOption(clientCtx(clientID), ExerciseOptionInput{
+		HoldingID: optionHolding.ID,
+		Quantity:  2,
+	})
+	if !isApperr(err, apperr.KindPermissionDenied) {
+		t.Fatalf("expected PermissionDenied; got %v", err)
+	}
 }

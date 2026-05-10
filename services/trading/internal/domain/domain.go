@@ -259,6 +259,31 @@ type Holding struct {
 	UpdatedAt        time.Time
 }
 
+// OptionExercise records an actuary's option-exercise event. Two-phase
+// like OrderExecution (pending → settled): the pending UUID is the
+// op_id for the bank settle, so a retry after a partial failure is
+// idempotent at the bank layer.
+type OptionExercise struct {
+	ID                   string
+	OptionHoldingID      string
+	UserID               string
+	UserKind             UserKind
+	OptionSecurityID     string
+	UnderlyingSecurityID string
+	AccountID            string
+	OptionType           OptionType
+	Quantity             int32
+	ContractSize         string
+	StrikePrice          string
+	NotionalAmt          string
+	Currency             Currency
+	BankOpID             string
+	RealizedGainID       string
+	Status               string
+	CreatedAt            time.Time
+	UpdatedAt            time.Time
+}
+
 // RealizedGain records one closing sell-execution for capital-gains
 // tax. Spec p.62.
 type RealizedGain struct {

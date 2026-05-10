@@ -212,6 +212,16 @@ service TradingService {
     };
   }
 
+  // ExerciseOption is spec p.61.d — actuaries may exercise an in-the-
+  // money option before settlementDate. Result tells the FE the
+  // remaining option position + the underlying-side effect.
+  rpc ExerciseOption(ExerciseOptionRequest) returns (ExerciseOptionResponse) {
+    option (google.api.http) = {
+      post: "/api/v1/portfolio/{holding_id}/exercise"
+      body: "*"
+    };
+  }
+
   rpc ListTaxPositions(ListTaxPositionsRequest) returns (ListTaxPositionsResponse) {
     option (google.api.http) = {
       get: "/api/v1/tax/positions"
@@ -733,6 +743,30 @@ message ListHoldingsResponse {
 message SetPublicCountRequest {
   string id           = 1 [(buf.validate.field).string.uuid = true];
   int32  public_count = 2 [(buf.validate.field).int32.gte = 0];
+}
+
+message ExerciseOptionRequest {
+  string holding_id = 1 [(buf.validate.field).string.uuid = true];
+  // Number of option contracts to exercise. Must be ≥ 1 and
+  // ≤ holding.quantity.
+  int32  quantity   = 2 [(buf.validate.field).int32.gt = 0];
+}
+
+message ExerciseOptionResponse {
+  // Updated option holding after the exercise. Quantity may be 0;
+  // the row is left in place for audit (FE filters quantity > 0).
+  Holding option_holding = 1;
+  // Updated underlying holding after the exercise — increased on a
+  // CALL, decreased on a PUT.
+  Holding underlying_holding = 2;
+  // Bank-side op_id of the cash leg, for ops correlation.
+  string  bank_op_id = 3;
+  // PUT only — realized gain on the underlying shares sold at strike.
+  // Both fields are zero for a CALL exercise (cost-basis update via
+  // weighted-avg, no realisation event).
+  string   realized_gain_native = 4;
+  string   realized_gain_rsd    = 5;
+  Currency realized_gain_currency = 6;
 }
 
 // =====================================================================
