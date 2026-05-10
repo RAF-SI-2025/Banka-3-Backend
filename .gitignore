@@ -8,6 +8,10 @@
 *.test
 *.out
 coverage.*
+# Ad-hoc binaries from `go build ./cmd/<x>` inside a service dir. The
+# canonical build is `task build` → /bin/, but it's easy to drop a
+# stray binary at the service root while iterating.
+/services/*/seed
 
 # Generated proto stubs (keep gen/go.mod, ignore generated code)
 /gen/proto/
