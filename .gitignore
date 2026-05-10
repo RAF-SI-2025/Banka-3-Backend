@@ -13,11 +13,6 @@ coverage.*
 # stray binary at the service root while iterating.
 /services/*/seed
 
-# Generated proto stubs (keep gen/go.mod, ignore generated code)
-/gen/proto/
-/gen/openapi/
-/gen/go.sum
-
 # Editor / OS
 .DS_Store
 .idea/

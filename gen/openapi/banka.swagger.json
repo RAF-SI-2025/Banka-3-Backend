@@ -1,0 +1,6049 @@
+{
+  "swagger": "2.0",
+  "info": {
+    "title": "bank/v1/bank.proto",
+    "version": "version not set"
+  },
+  "tags": [
+    {
+      "name": "BankService"
+    },
+    {
+      "name": "ExchangeService"
+    },
+    {
+      "name": "NotificationService"
+    },
+    {
+      "name": "TradingService"
+    },
+    {
+      "name": "UserService"
+    }
+  ],
+  "consumes": [
+    "application/json"
+  ],
+  "produces": [
+    "application/json"
+  ],
+  "paths": {
+    "/api/v1/accounts": {
+      "get": {
+        "operationId": "BankService_ListAccounts",
+        "responses": {
+          "200": {
+            "description": "A successful response.",
+            "schema": {
+              "$ref": "#/definitions/v1ListAccountsResponse"
+            }
+          },
+          "default": {
+            "description": "An unexpected error response.",
+            "schema": {
+              "$ref": "#/definitions/rpcStatus"
+            }
+          }
+        },
+        "parameters": [
+          {
+            "name": "ownerClientId",
+            "in": "query",
+            "required": false,
+            "type": "string"
+          },
+          {
+            "name": "kind",
+            "description": " - ACCOUNT_KIND_PERSONAL_CHECKING_RSD: lični tekući RSD  (TT=11/13/14/15/16/17 by subtype)\n - ACCOUNT_KIND_PERSONAL_FX: lični devizni     (TT=21)\n - ACCOUNT_KIND_BUSINESS_CHECKING_RSD: poslovni tekući   (TT=12)\n - ACCOUNT_KIND_BUSINESS_FX: poslovni devizni  (TT=22)\n - ACCOUNT_KIND_SYSTEM: bank-owned house  (TT=99, internal)",
+            "in": "query",
+            "required": false,
+            "type": "string",
+            "enum": [
+              "ACCOUNT_KIND_UNSPECIFIED",
+              "ACCOUNT_KIND_PERSONAL_CHECKING_RSD",
+              "ACCOUNT_KIND_PERSONAL_FX",
+              "ACCOUNT_KIND_BUSINESS_CHECKING_RSD",
+              "ACCOUNT_KIND_BUSINESS_FX",
+              "ACCOUNT_KIND_SYSTEM"
+            ],
+            "default": "ACCOUNT_KIND_UNSPECIFIED"
+          },
+          {
+            "name": "currency",
+            "in": "query",
+            "required": false,
+            "type": "string",
+            "enum": [
+              "CURRENCY_UNSPECIFIED",
+              "CURRENCY_RSD",
+              "CURRENCY_EUR",
+              "CURRENCY_CHF",
+              "CURRENCY_USD",
+              "CURRENCY_GBP",
+              "CURRENCY_JPY",
+              "CURRENCY_CAD",
+              "CURRENCY_AUD"
+            ],
+            "default": "CURRENCY_UNSPECIFIED"
+          },
+          {
+            "name": "status",
+            "in": "query",
+            "required": false,
+            "type": "string",
+            "enum": [
+              "ACCOUNT_STATUS_UNSPECIFIED",
+              "ACCOUNT_STATUS_ACTIVE",
+              "ACCOUNT_STATUS_INACTIVE"
+            ],
+            "default": "ACCOUNT_STATUS_UNSPECIFIED"
+          },
+          {
+            "name": "page",
+            "in": "query",
+            "required": false,
+            "type": "integer",
+            "format": "int32"
+          },
+          {
+            "name": "pageSize",
+            "in": "query",
+            "required": false,
+            "type": "integer",
+            "format": "int32"
+          }
+        ],
+        "tags": [
+          "BankService"
+        ]
+      },
+      "post": {
+        "operationId": "BankService_CreateAccount",
+        "responses": {
+          "200": {
+            "description": "A successful response.",
+            "schema": {
+              "$ref": "#/definitions/v1Account"
+            }
+          },
+          "default": {
+            "description": "An unexpected error response.",
+            "schema": {
+              "$ref": "#/definitions/rpcStatus"
+            }
+          }
+        },
+        "parameters": [
+          {
+            "name": "body",
+            "in": "body",
+            "required": true,
+            "schema": {
+              "$ref": "#/definitions/v1CreateAccountRequest"
+            }
+          }
+        ],
+        "tags": [
+          "BankService"
+        ]
+      }
+    },
+    "/api/v1/accounts/{id}": {
+      "get": {
+        "operationId": "BankService_GetAccount",
+        "responses": {
+          "200": {
+            "description": "A successful response.",
+            "schema": {
+              "$ref": "#/definitions/v1Account"
+            }
+          },
+          "default": {
+            "description": "An unexpected error response.",
+            "schema": {
+              "$ref": "#/definitions/rpcStatus"
+            }
+          }
+        },
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "type": "string"
+          }
+        ],
+        "tags": [
+          "BankService"
+        ]
+      }
+    },
+    "/api/v1/accounts/{id}/limits": {
+      "patch": {
+        "operationId": "BankService_UpdateAccountLimits",
+        "responses": {
+          "200": {
+            "description": "A successful response.",
+            "schema": {
+              "$ref": "#/definitions/v1Account"
+            }
+          },
+          "default": {
+            "description": "An unexpected error response.",
+            "schema": {
+              "$ref": "#/definitions/rpcStatus"
+            }
+          }
+        },
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "type": "string"
+          },
+          {
+            "name": "body",
+            "in": "body",
+            "required": true,
+            "schema": {
+              "$ref": "#/definitions/BankServiceUpdateAccountLimitsBody"
+            }
+          }
+        ],
+        "tags": [
+          "BankService"
+        ]
+      }
+    },
+    "/api/v1/accounts/{id}/name": {
+      "patch": {
+        "summary": "UpdateAccountName implements spec p.20 \"Promena naziva računa\".\nOnly the account owner may rename. The new name must differ from\nthe current name and must not collide with another active account\nowned by the same client. No verification gate — renaming doesn't\nmove money, and the spec p.20 popup doesn't require a code (only\nlimit changes do).",
+        "operationId": "BankService_UpdateAccountName",
+        "responses": {
+          "200": {
+            "description": "A successful response.",
+            "schema": {
+              "$ref": "#/definitions/v1Account"
+            }
+          },
+          "default": {
+            "description": "An unexpected error response.",
+            "schema": {
+              "$ref": "#/definitions/rpcStatus"
+            }
+          }
+        },
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "type": "string"
+          },
+          {
+            "name": "body",
+            "in": "body",
+            "required": true,
+            "schema": {
+              "$ref": "#/definitions/BankServiceUpdateAccountNameBody"
+            }
+          }
+        ],
+        "tags": [
+          "BankService"
+        ]
+      }
+    },
+    "/api/v1/accounts/{id}/status": {
+      "post": {
+        "operationId": "BankService_SetAccountStatus",
+        "responses": {
+          "200": {
+            "description": "A successful response.",
+            "schema": {
+              "$ref": "#/definitions/v1Account"
+            }
+          },
+          "default": {
+            "description": "An unexpected error response.",
+            "schema": {
+              "$ref": "#/definitions/rpcStatus"
+            }
+          }
+        },
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "type": "string"
+          },
+          {
+            "name": "body",
+            "in": "body",
+            "required": true,
+            "schema": {
+              "$ref": "#/definitions/BankServiceSetAccountStatusBody"
+            }
+          }
+        ],
+        "tags": [
+          "BankService"
+        ]
+      }
+    },
+    "/api/v1/actuaries": {
+      "get": {
+        "operationId": "TradingService_ListActuaries",
+        "responses": {
+          "200": {
+            "description": "A successful response.",
+            "schema": {
+              "$ref": "#/definitions/v1ListActuariesResponse"
+            }
+          },
+          "default": {
+            "description": "An unexpected error response.",
+            "schema": {
+              "$ref": "#/definitions/rpcStatus"
+            }
+          }
+        },
+        "parameters": [
+          {
+            "name": "emailQuery",
+            "in": "query",
+            "required": false,
+            "type": "string"
+          },
+          {
+            "name": "nameQuery",
+            "in": "query",
+            "required": false,
+            "type": "string"
+          },
+          {
+            "name": "type",
+            "in": "query",
+            "required": false,
+            "type": "string",
+            "enum": [
+              "ACTUARY_TYPE_UNSPECIFIED",
+              "ACTUARY_TYPE_SUPERVISOR",
+              "ACTUARY_TYPE_AGENT"
+            ],
+            "default": "ACTUARY_TYPE_UNSPECIFIED"
+          },
+          {
+            "name": "page",
+            "in": "query",
+            "required": false,
+            "type": "integer",
+            "format": "int32"
+          },
+          {
+            "name": "pageSize",
+            "in": "query",
+            "required": false,
+            "type": "integer",
+            "format": "int32"
+          }
+        ],
+        "tags": [
+          "TradingService"
+        ]
+      }
+    },
+    "/api/v1/actuaries/reset-job": {
+      "post": {
+        "summary": "RunDailyResetActuaries is exposed for manual triggers; the same\ncodepath runs nightly at 23:59 (Belgrade) via the trading cron.",
+        "operationId": "TradingService_RunDailyResetActuaries",
+        "responses": {
+          "200": {
+            "description": "A successful response.",
+            "schema": {
+              "$ref": "#/definitions/v1RunDailyResetActuariesResponse"
+            }
+          },
+          "default": {
+            "description": "An unexpected error response.",
+            "schema": {
+              "$ref": "#/definitions/rpcStatus"
+            }
+          }
+        },
+        "parameters": [
+          {
+            "name": "body",
+            "in": "body",
+            "required": true,
+            "schema": {
+              "type": "object",
+              "properties": {}
+            }
+          }
+        ],
+        "tags": [
+          "TradingService"
+        ]
+      }
+    },
+    "/api/v1/actuaries/{employeeId}": {
+      "get": {
+        "operationId": "TradingService_GetActuaryInfo",
+        "responses": {
+          "200": {
+            "description": "A successful response.",
+            "schema": {
+              "$ref": "#/definitions/v1ActuaryInfo"
+            }
+          },
+          "default": {
+            "description": "An unexpected error response.",
+            "schema": {
+              "$ref": "#/definitions/rpcStatus"
+            }
+          }
+        },
+        "parameters": [
+          {
+            "name": "employeeId",
+            "in": "path",
+            "required": true,
+            "type": "string"
+          }
+        ],
+        "tags": [
+          "TradingService"
+        ]
+      },
+      "put": {
+        "operationId": "TradingService_UpsertActuaryInfo",
+        "responses": {
+          "200": {
+            "description": "A successful response.",
+            "schema": {
+              "$ref": "#/definitions/v1ActuaryInfo"
+            }
+          },
+          "default": {
+            "description": "An unexpected error response.",
+            "schema": {
+              "$ref": "#/definitions/rpcStatus"
+            }
+          }
+        },
+        "parameters": [
+          {
+            "name": "employeeId",
+            "in": "path",
+            "required": true,
+            "type": "string"
+          },
+          {
+            "name": "body",
+            "in": "body",
+            "required": true,
+            "schema": {
+              "$ref": "#/definitions/TradingServiceUpsertActuaryInfoBody"
+            }
+          }
+        ],
+        "tags": [
+          "TradingService"
+        ]
+      }
+    },
+    "/api/v1/actuaries/{employeeId}/limit": {
+      "patch": {
+        "operationId": "TradingService_UpdateActuaryLimit",
+        "responses": {
+          "200": {
+            "description": "A successful response.",
+            "schema": {
+              "$ref": "#/definitions/v1ActuaryInfo"
+            }
+          },
+          "default": {
+            "description": "An unexpected error response.",
+            "schema": {
+              "$ref": "#/definitions/rpcStatus"
+            }
+          }
+        },
+        "parameters": [
+          {
+            "name": "employeeId",
+            "in": "path",
+            "required": true,
+            "type": "string"
+          },
+          {
+            "name": "body",
+            "in": "body",
+            "required": true,
+            "schema": {
+              "$ref": "#/definitions/TradingServiceUpdateActuaryLimitBody"
+            }
+          }
+        ],
+        "tags": [
+          "TradingService"
+        ]
+      }
+    },
+    "/api/v1/actuaries/{employeeId}/need-approval": {
+      "patch": {
+        "operationId": "TradingService_SetActuaryNeedApproval",
+        "responses": {
+          "200": {
+            "description": "A successful response.",
+            "schema": {
+              "$ref": "#/definitions/v1ActuaryInfo"
+            }
+          },
+          "default": {
+            "description": "An unexpected error response.",
+            "schema": {
+              "$ref": "#/definitions/rpcStatus"
+            }
+          }
+        },
+        "parameters": [
+          {
+            "name": "employeeId",
+            "in": "path",
+            "required": true,
+            "type": "string"
+          },
+          {
+            "name": "body",
+            "in": "body",
+            "required": true,
+            "schema": {
+              "$ref": "#/definitions/TradingServiceSetActuaryNeedApprovalBody"
+            }
+          }
+        ],
+        "tags": [
+          "TradingService"
+        ]
+      }
+    },
+    "/api/v1/actuaries/{employeeId}/used-limit/reset": {
+      "post": {
+        "operationId": "TradingService_ResetActuaryUsedLimit",
+        "responses": {
+          "200": {
+            "description": "A successful response.",
+            "schema": {
+              "$ref": "#/definitions/v1ActuaryInfo"
+            }
+          },
+          "default": {
+            "description": "An unexpected error response.",
+            "schema": {
+              "$ref": "#/definitions/rpcStatus"
+            }
+          }
+        },
+        "parameters": [
+          {
+            "name": "employeeId",
+            "in": "path",
+            "required": true,
+            "type": "string"
+          },
+          {
+            "name": "body",
+            "in": "body",
+            "required": true,
+            "schema": {
+              "$ref": "#/definitions/TradingServiceResetActuaryUsedLimitBody"
+            }
+          }
+        ],
+        "tags": [
+          "TradingService"
+        ]
+      }
+    },
+    "/api/v1/auth/activate": {
+      "post": {
+        "operationId": "UserService_ActivateAccount",
+        "responses": {
+          "200": {
+            "description": "A successful response.",
+            "schema": {
+              "type": "object",
+              "properties": {}
+            }
+          },
+          "default": {
+            "description": "An unexpected error response.",
+            "schema": {
+              "$ref": "#/definitions/rpcStatus"
+            }
+          }
+        },
+        "parameters": [
+          {
+            "name": "body",
+            "in": "body",
+            "required": true,
+            "schema": {
+              "$ref": "#/definitions/v1ActivateAccountRequest"
+            }
+          }
+        ],
+        "tags": [
+          "UserService"
+        ]
+      }
+    },
+    "/api/v1/auth/activate/resend": {
+      "post": {
+        "operationId": "UserService_ResendActivation",
+        "responses": {
+          "200": {
+            "description": "A successful response.",
+            "schema": {
+              "type": "object",
+              "properties": {}
+            }
+          },
+          "default": {
+            "description": "An unexpected error response.",
+            "schema": {
+              "$ref": "#/definitions/rpcStatus"
+            }
+          }
+        },
+        "parameters": [
+          {
+            "name": "body",
+            "in": "body",
+            "required": true,
+            "schema": {
+              "$ref": "#/definitions/v1ResendActivationRequest"
+            }
+          }
+        ],
+        "tags": [
+          "UserService"
+        ]
+      }
+    },
+    "/api/v1/auth/login": {
+      "post": {
+        "operationId": "UserService_Login",
+        "responses": {
+          "200": {
+            "description": "A successful response.",
+            "schema": {
+              "$ref": "#/definitions/v1LoginResponse"
+            }
+          },
+          "default": {
+            "description": "An unexpected error response.",
+            "schema": {
+              "$ref": "#/definitions/rpcStatus"
+            }
+          }
+        },
+        "parameters": [
+          {
+            "name": "body",
+            "in": "body",
+            "required": true,
+            "schema": {
+              "$ref": "#/definitions/v1LoginRequest"
+            }
+          }
+        ],
+        "tags": [
+          "UserService"
+        ]
+      }
+    },
+    "/api/v1/auth/logout": {
+      "post": {
+        "operationId": "UserService_Logout",
+        "responses": {
+          "200": {
+            "description": "A successful response.",
+            "schema": {
+              "type": "object",
+              "properties": {}
+            }
+          },
+          "default": {
+            "description": "An unexpected error response.",
+            "schema": {
+              "$ref": "#/definitions/rpcStatus"
+            }
+          }
+        },
+        "parameters": [
+          {
+            "name": "body",
+            "in": "body",
+            "required": true,
+            "schema": {
+              "$ref": "#/definitions/v1LogoutRequest"
+            }
+          }
+        ],
+        "tags": [
+          "UserService"
+        ]
+      }
+    },
+    "/api/v1/auth/me": {
+      "get": {
+        "operationId": "UserService_Me",
+        "responses": {
+          "200": {
+            "description": "A successful response.",
+            "schema": {
+              "$ref": "#/definitions/v1MeResponse"
+            }
+          },
+          "default": {
+            "description": "An unexpected error response.",
+            "schema": {
+              "$ref": "#/definitions/rpcStatus"
+            }
+          }
+        },
+        "tags": [
+          "UserService"
+        ]
+      }
+    },
+    "/api/v1/auth/password-reset/confirm": {
+      "post": {
+        "operationId": "UserService_ConfirmPasswordReset",
+        "responses": {
+          "200": {
+            "description": "A successful response.",
+            "schema": {
+              "type": "object",
+              "properties": {}
+            }
+          },
+          "default": {
+            "description": "An unexpected error response.",
+            "schema": {
+              "$ref": "#/definitions/rpcStatus"
+            }
+          }
+        },
+        "parameters": [
+          {
+            "name": "body",
+            "in": "body",
+            "required": true,
+            "schema": {
+              "$ref": "#/definitions/v1ConfirmPasswordResetRequest"
+            }
+          }
+        ],
+        "tags": [
+          "UserService"
+        ]
+      }
+    },
+    "/api/v1/auth/password-reset/request": {
+      "post": {
+        "operationId": "UserService_RequestPasswordReset",
+        "responses": {
+          "200": {
+            "description": "A successful response.",
+            "schema": {
+              "type": "object",
+              "properties": {}
+            }
+          },
+          "default": {
+            "description": "An unexpected error response.",
+            "schema": {
+              "$ref": "#/definitions/rpcStatus"
+            }
+          }
+        },
+        "parameters": [
+          {
+            "name": "body",
+            "in": "body",
+            "required": true,
+            "schema": {
+              "$ref": "#/definitions/v1RequestPasswordResetRequest"
+            }
+          }
+        ],
+        "tags": [
+          "UserService"
+        ]
+      }
+    },
+    "/api/v1/auth/refresh": {
+      "post": {
+        "operationId": "UserService_Refresh",
+        "responses": {
+          "200": {
+            "description": "A successful response.",
+            "schema": {
+              "$ref": "#/definitions/v1RefreshResponse"
+            }
+          },
+          "default": {
+            "description": "An unexpected error response.",
+            "schema": {
+              "$ref": "#/definitions/rpcStatus"
+            }
+          }
+        },
+        "parameters": [
+          {
+            "name": "body",
+            "in": "body",
+            "required": true,
+            "schema": {
+              "$ref": "#/definitions/v1RefreshRequest"
+            }
+          }
+        ],
+        "tags": [
+          "UserService"
+        ]
+      }
+    },
+    "/api/v1/authorized-persons": {
+      "get": {
+        "operationId": "BankService_ListAuthorizedPersons",
+        "responses": {
+          "200": {
+            "description": "A successful response.",
+            "schema": {
+              "$ref": "#/definitions/v1ListAuthorizedPersonsResponse"
+            }
+          },
+          "default": {
+            "description": "An unexpected error response.",
+            "schema": {
+              "$ref": "#/definitions/rpcStatus"
+            }
+          }
+        },
+        "parameters": [
+          {
+            "name": "companyId",
+            "in": "query",
+            "required": false,
+            "type": "string"
+          }
+        ],
+        "tags": [
+          "BankService"
+        ]
+      },
+      "post": {
+        "operationId": "BankService_CreateAuthorizedPerson",
+        "responses": {
+          "200": {
+            "description": "A successful response.",
+            "schema": {
+              "$ref": "#/definitions/v1AuthorizedPerson"
+            }
+          },
+          "default": {
+            "description": "An unexpected error response.",
+            "schema": {
+              "$ref": "#/definitions/rpcStatus"
+            }
+          }
+        },
+        "parameters": [
+          {
+            "name": "body",
+            "in": "body",
+            "required": true,
+            "schema": {
+              "$ref": "#/definitions/v1CreateAuthorizedPersonRequest"
+            }
+          }
+        ],
+        "tags": [
+          "BankService"
+        ]
+      }
+    },
+    "/api/v1/cards": {
+      "get": {
+        "operationId": "BankService_ListCards",
+        "responses": {
+          "200": {
+            "description": "A successful response.",
+            "schema": {
+              "$ref": "#/definitions/v1ListCardsResponse"
+            }
+          },
+          "default": {
+            "description": "An unexpected error response.",
+            "schema": {
+              "$ref": "#/definitions/rpcStatus"
+            }
+          }
+        },
+        "parameters": [
+          {
+            "name": "accountId",
+            "in": "query",
+            "required": false,
+            "type": "string"
+          }
+        ],
+        "tags": [
+          "BankService"
+        ]
+      },
+      "post": {
+        "operationId": "BankService_CreateCard",
+        "responses": {
+          "200": {
+            "description": "A successful response.",
+            "schema": {
+              "$ref": "#/definitions/v1Card"
+            }
+          },
+          "default": {
+            "description": "An unexpected error response.",
+            "schema": {
+              "$ref": "#/definitions/rpcStatus"
+            }
+          }
+        },
+        "parameters": [
+          {
+            "name": "body",
+            "in": "body",
+            "required": true,
+            "schema": {
+              "$ref": "#/definitions/v1CreateCardRequest"
+            }
+          }
+        ],
+        "tags": [
+          "BankService"
+        ]
+      }
+    },
+    "/api/v1/cards/{id}/limit": {
+      "patch": {
+        "summary": "UpdateCardLimit changes a card's per-card spending limit (flow.pdf\nP6 \"Klijent menja limit kartice\"). Verification-gated by the\ngateway middleware — same policy as account-limit changes.",
+        "operationId": "BankService_UpdateCardLimit",
+        "responses": {
+          "200": {
+            "description": "A successful response.",
+            "schema": {
+              "$ref": "#/definitions/v1Card"
+            }
+          },
+          "default": {
+            "description": "An unexpected error response.",
+            "schema": {
+              "$ref": "#/definitions/rpcStatus"
+            }
+          }
+        },
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "type": "string"
+          },
+          {
+            "name": "body",
+            "in": "body",
+            "required": true,
+            "schema": {
+              "$ref": "#/definitions/BankServiceUpdateCardLimitBody"
+            }
+          }
+        ],
+        "tags": [
+          "BankService"
+        ]
+      }
+    },
+    "/api/v1/cards/{id}/status": {
+      "post": {
+        "operationId": "BankService_SetCardStatus",
+        "responses": {
+          "200": {
+            "description": "A successful response.",
+            "schema": {
+              "$ref": "#/definitions/v1Card"
+            }
+          },
+          "default": {
+            "description": "An unexpected error response.",
+            "schema": {
+              "$ref": "#/definitions/rpcStatus"
+            }
+          }
+        },
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "type": "string"
+          },
+          {
+            "name": "body",
+            "in": "body",
+            "required": true,
+            "schema": {
+              "$ref": "#/definitions/BankServiceSetCardStatusBody"
+            }
+          }
+        ],
+        "tags": [
+          "BankService"
+        ]
+      }
+    },
+    "/api/v1/clients": {
+      "get": {
+        "operationId": "UserService_ListClients",
+        "responses": {
+          "200": {
+            "description": "A successful response.",
+            "schema": {
+              "$ref": "#/definitions/v1ListClientsResponse"
+            }
+          },
+          "default": {
+            "description": "An unexpected error response.",
+            "schema": {
+              "$ref": "#/definitions/rpcStatus"
+            }
+          }
+        },
+        "parameters": [
+          {
+            "name": "emailQuery",
+            "in": "query",
+            "required": false,
+            "type": "string"
+          },
+          {
+            "name": "nameQuery",
+            "in": "query",
+            "required": false,
+            "type": "string"
+          },
+          {
+            "name": "page",
+            "in": "query",
+            "required": false,
+            "type": "integer",
+            "format": "int32"
+          },
+          {
+            "name": "pageSize",
+            "in": "query",
+            "required": false,
+            "type": "integer",
+            "format": "int32"
+          }
+        ],
+        "tags": [
+          "UserService"
+        ]
+      },
+      "post": {
+        "summary": "CreateClient is the entry point used by the bank's account-creation\nflow (spec p.9 footnote: \"Zaposleni kreira Klijenta prilikom\nkreiranja računa\"). The activation email reuses the employee path:\nthe new client gets a link to set their initial password.",
+        "operationId": "UserService_CreateClient",
+        "responses": {
+          "200": {
+            "description": "A successful response.",
+            "schema": {
+              "$ref": "#/definitions/v1Client"
+            }
+          },
+          "default": {
+            "description": "An unexpected error response.",
+            "schema": {
+              "$ref": "#/definitions/rpcStatus"
+            }
+          }
+        },
+        "parameters": [
+          {
+            "name": "body",
+            "in": "body",
+            "required": true,
+            "schema": {
+              "$ref": "#/definitions/v1CreateClientRequest"
+            }
+          }
+        ],
+        "tags": [
+          "UserService"
+        ]
+      }
+    },
+    "/api/v1/clients/{id}": {
+      "get": {
+        "operationId": "UserService_GetClient",
+        "responses": {
+          "200": {
+            "description": "A successful response.",
+            "schema": {
+              "$ref": "#/definitions/v1Client"
+            }
+          },
+          "default": {
+            "description": "An unexpected error response.",
+            "schema": {
+              "$ref": "#/definitions/rpcStatus"
+            }
+          }
+        },
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "type": "string"
+          }
+        ],
+        "tags": [
+          "UserService"
+        ]
+      },
+      "patch": {
+        "operationId": "UserService_UpdateClient",
+        "responses": {
+          "200": {
+            "description": "A successful response.",
+            "schema": {
+              "$ref": "#/definitions/v1Client"
+            }
+          },
+          "default": {
+            "description": "An unexpected error response.",
+            "schema": {
+              "$ref": "#/definitions/rpcStatus"
+            }
+          }
+        },
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "type": "string"
+          },
+          {
+            "name": "body",
+            "in": "body",
+            "required": true,
+            "schema": {
+              "$ref": "#/definitions/UserServiceUpdateClientBody"
+            }
+          }
+        ],
+        "tags": [
+          "UserService"
+        ]
+      }
+    },
+    "/api/v1/companies": {
+      "get": {
+        "operationId": "BankService_ListCompanies",
+        "responses": {
+          "200": {
+            "description": "A successful response.",
+            "schema": {
+              "$ref": "#/definitions/v1ListCompaniesResponse"
+            }
+          },
+          "default": {
+            "description": "An unexpected error response.",
+            "schema": {
+              "$ref": "#/definitions/rpcStatus"
+            }
+          }
+        },
+        "parameters": [
+          {
+            "name": "nameQuery",
+            "in": "query",
+            "required": false,
+            "type": "string"
+          },
+          {
+            "name": "registryIdQuery",
+            "in": "query",
+            "required": false,
+            "type": "string"
+          },
+          {
+            "name": "page",
+            "in": "query",
+            "required": false,
+            "type": "integer",
+            "format": "int32"
+          },
+          {
+            "name": "pageSize",
+            "in": "query",
+            "required": false,
+            "type": "integer",
+            "format": "int32"
+          }
+        ],
+        "tags": [
+          "BankService"
+        ]
+      },
+      "post": {
+        "operationId": "BankService_CreateCompany",
+        "responses": {
+          "200": {
+            "description": "A successful response.",
+            "schema": {
+              "$ref": "#/definitions/v1Company"
+            }
+          },
+          "default": {
+            "description": "An unexpected error response.",
+            "schema": {
+              "$ref": "#/definitions/rpcStatus"
+            }
+          }
+        },
+        "parameters": [
+          {
+            "name": "body",
+            "in": "body",
+            "required": true,
+            "schema": {
+              "$ref": "#/definitions/v1CreateCompanyRequest"
+            }
+          }
+        ],
+        "tags": [
+          "BankService"
+        ]
+      }
+    },
+    "/api/v1/companies/{id}": {
+      "get": {
+        "operationId": "BankService_GetCompany",
+        "responses": {
+          "200": {
+            "description": "A successful response.",
+            "schema": {
+              "$ref": "#/definitions/v1Company"
+            }
+          },
+          "default": {
+            "description": "An unexpected error response.",
+            "schema": {
+              "$ref": "#/definitions/rpcStatus"
+            }
+          }
+        },
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "type": "string"
+          }
+        ],
+        "tags": [
+          "BankService"
+        ]
+      },
+      "patch": {
+        "operationId": "BankService_UpdateCompany",
+        "responses": {
+          "200": {
+            "description": "A successful response.",
+            "schema": {
+              "$ref": "#/definitions/v1Company"
+            }
+          },
+          "default": {
+            "description": "An unexpected error response.",
+            "schema": {
+              "$ref": "#/definitions/rpcStatus"
+            }
+          }
+        },
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "type": "string"
+          },
+          {
+            "name": "body",
+            "in": "body",
+            "required": true,
+            "schema": {
+              "$ref": "#/definitions/BankServiceUpdateCompanyBody"
+            }
+          }
+        ],
+        "tags": [
+          "BankService"
+        ]
+      }
+    },
+    "/api/v1/employees": {
+      "get": {
+        "operationId": "UserService_ListEmployees",
+        "responses": {
+          "200": {
+            "description": "A successful response.",
+            "schema": {
+              "$ref": "#/definitions/v1ListEmployeesResponse"
+            }
+          },
+          "default": {
+            "description": "An unexpected error response.",
+            "schema": {
+              "$ref": "#/definitions/rpcStatus"
+            }
+          }
+        },
+        "parameters": [
+          {
+            "name": "emailQuery",
+            "in": "query",
+            "required": false,
+            "type": "string"
+          },
+          {
+            "name": "nameQuery",
+            "in": "query",
+            "required": false,
+            "type": "string"
+          },
+          {
+            "name": "positionQuery",
+            "in": "query",
+            "required": false,
+            "type": "string"
+          },
+          {
+            "name": "page",
+            "description": "1-indexed; 0 → 1",
+            "in": "query",
+            "required": false,
+            "type": "integer",
+            "format": "int32"
+          },
+          {
+            "name": "pageSize",
+            "description": "default 50, max 200",
+            "in": "query",
+            "required": false,
+            "type": "integer",
+            "format": "int32"
+          }
+        ],
+        "tags": [
+          "UserService"
+        ]
+      },
+      "post": {
+        "operationId": "UserService_CreateEmployee",
+        "responses": {
+          "200": {
+            "description": "A successful response.",
+            "schema": {
+              "$ref": "#/definitions/v1Employee"
+            }
+          },
+          "default": {
+            "description": "An unexpected error response.",
+            "schema": {
+              "$ref": "#/definitions/rpcStatus"
+            }
+          }
+        },
+        "parameters": [
+          {
+            "name": "body",
+            "in": "body",
+            "required": true,
+            "schema": {
+              "$ref": "#/definitions/v1CreateEmployeeRequest"
+            }
+          }
+        ],
+        "tags": [
+          "UserService"
+        ]
+      }
+    },
+    "/api/v1/employees/{id}": {
+      "get": {
+        "operationId": "UserService_GetEmployee",
+        "responses": {
+          "200": {
+            "description": "A successful response.",
+            "schema": {
+              "$ref": "#/definitions/v1Employee"
+            }
+          },
+          "default": {
+            "description": "An unexpected error response.",
+            "schema": {
+              "$ref": "#/definitions/rpcStatus"
+            }
+          }
+        },
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "type": "string"
+          }
+        ],
+        "tags": [
+          "UserService"
+        ]
+      },
+      "patch": {
+        "operationId": "UserService_UpdateEmployee",
+        "responses": {
+          "200": {
+            "description": "A successful response.",
+            "schema": {
+              "$ref": "#/definitions/v1Employee"
+            }
+          },
+          "default": {
+            "description": "An unexpected error response.",
+            "schema": {
+              "$ref": "#/definitions/rpcStatus"
+            }
+          }
+        },
+        "parameters": [
+          {
+            "name": "id",
+            "description": "Empty = no change for every field except id. We use IGNORE_IF_ZERO_VALUE\nso the format checks fire only when the caller actually populates the\nfield.",
+            "in": "path",
+            "required": true,
+            "type": "string"
+          },
+          {
+            "name": "body",
+            "in": "body",
+            "required": true,
+            "schema": {
+              "$ref": "#/definitions/UserServiceUpdateEmployeeBody"
+            }
+          }
+        ],
+        "tags": [
+          "UserService"
+        ]
+      }
+    },
+    "/api/v1/employees/{id}/active": {
+      "post": {
+        "operationId": "UserService_SetEmployeeActive",
+        "responses": {
+          "200": {
+            "description": "A successful response.",
+            "schema": {
+              "$ref": "#/definitions/v1Employee"
+            }
+          },
+          "default": {
+            "description": "An unexpected error response.",
+            "schema": {
+              "$ref": "#/definitions/rpcStatus"
+            }
+          }
+        },
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "type": "string"
+          },
+          {
+            "name": "body",
+            "in": "body",
+            "required": true,
+            "schema": {
+              "$ref": "#/definitions/UserServiceSetEmployeeActiveBody"
+            }
+          }
+        ],
+        "tags": [
+          "UserService"
+        ]
+      }
+    },
+    "/api/v1/employees/{id}/permissions": {
+      "put": {
+        "operationId": "UserService_SetEmployeePermissions",
+        "responses": {
+          "200": {
+            "description": "A successful response.",
+            "schema": {
+              "$ref": "#/definitions/v1Employee"
+            }
+          },
+          "default": {
+            "description": "An unexpected error response.",
+            "schema": {
+              "$ref": "#/definitions/rpcStatus"
+            }
+          }
+        },
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "type": "string"
+          },
+          {
+            "name": "body",
+            "in": "body",
+            "required": true,
+            "schema": {
+              "$ref": "#/definitions/UserServiceSetEmployeePermissionsBody"
+            }
+          }
+        ],
+        "tags": [
+          "UserService"
+        ]
+      }
+    },
+    "/api/v1/exchange/rates": {
+      "get": {
+        "operationId": "ExchangeService_ListRates",
+        "responses": {
+          "200": {
+            "description": "A successful response.",
+            "schema": {
+              "$ref": "#/definitions/v1ListRatesResponse"
+            }
+          },
+          "default": {
+            "description": "An unexpected error response.",
+            "schema": {
+              "$ref": "#/definitions/rpcStatus"
+            }
+          }
+        },
+        "parameters": [
+          {
+            "name": "from",
+            "description": "When set, only the rows for that base currency are returned (e.g.\nRSD → * for the menjačnica board).",
+            "in": "query",
+            "required": false,
+            "type": "string",
+            "enum": [
+              "CURRENCY_UNSPECIFIED",
+              "CURRENCY_RSD",
+              "CURRENCY_EUR",
+              "CURRENCY_CHF",
+              "CURRENCY_USD",
+              "CURRENCY_GBP",
+              "CURRENCY_JPY",
+              "CURRENCY_CAD",
+              "CURRENCY_AUD"
+            ],
+            "default": "CURRENCY_UNSPECIFIED"
+          }
+        ],
+        "tags": [
+          "ExchangeService"
+        ]
+      },
+      "put": {
+        "operationId": "ExchangeService_UpsertRate",
+        "responses": {
+          "200": {
+            "description": "A successful response.",
+            "schema": {
+              "$ref": "#/definitions/v1Rate"
+            }
+          },
+          "default": {
+            "description": "An unexpected error response.",
+            "schema": {
+              "$ref": "#/definitions/rpcStatus"
+            }
+          }
+        },
+        "parameters": [
+          {
+            "name": "body",
+            "in": "body",
+            "required": true,
+            "schema": {
+              "$ref": "#/definitions/v1UpsertRateRequest"
+            }
+          }
+        ],
+        "tags": [
+          "ExchangeService"
+        ]
+      }
+    },
+    "/api/v1/exchanges": {
+      "get": {
+        "operationId": "TradingService_ListExchanges",
+        "responses": {
+          "200": {
+            "description": "A successful response.",
+            "schema": {
+              "$ref": "#/definitions/v1ListExchangesResponse"
+            }
+          },
+          "default": {
+            "description": "An unexpected error response.",
+            "schema": {
+              "$ref": "#/definitions/rpcStatus"
+            }
+          }
+        },
+        "tags": [
+          "TradingService"
+        ]
+      }
+    },
+    "/api/v1/exchanges/{mic}": {
+      "put": {
+        "operationId": "TradingService_UpsertExchange",
+        "responses": {
+          "200": {
+            "description": "A successful response.",
+            "schema": {
+              "$ref": "#/definitions/v1Exchange"
+            }
+          },
+          "default": {
+            "description": "An unexpected error response.",
+            "schema": {
+              "$ref": "#/definitions/rpcStatus"
+            }
+          }
+        },
+        "parameters": [
+          {
+            "name": "mic",
+            "in": "path",
+            "required": true,
+            "type": "string"
+          },
+          {
+            "name": "body",
+            "in": "body",
+            "required": true,
+            "schema": {
+              "$ref": "#/definitions/TradingServiceUpsertExchangeBody"
+            }
+          }
+        ],
+        "tags": [
+          "TradingService"
+        ]
+      }
+    },
+    "/api/v1/exchanges/{mic}/override": {
+      "patch": {
+        "operationId": "TradingService_SetExchangeOverride",
+        "responses": {
+          "200": {
+            "description": "A successful response.",
+            "schema": {
+              "$ref": "#/definitions/v1Exchange"
+            }
+          },
+          "default": {
+            "description": "An unexpected error response.",
+            "schema": {
+              "$ref": "#/definitions/rpcStatus"
+            }
+          }
+        },
+        "parameters": [
+          {
+            "name": "mic",
+            "in": "path",
+            "required": true,
+            "type": "string"
+          },
+          {
+            "name": "body",
+            "in": "body",
+            "required": true,
+            "schema": {
+              "$ref": "#/definitions/TradingServiceSetExchangeOverrideBody"
+            }
+          }
+        ],
+        "tags": [
+          "TradingService"
+        ]
+      }
+    },
+    "/api/v1/listings": {
+      "get": {
+        "operationId": "TradingService_ListListings",
+        "responses": {
+          "200": {
+            "description": "A successful response.",
+            "schema": {
+              "$ref": "#/definitions/v1ListListingsResponse"
+            }
+          },
+          "default": {
+            "description": "An unexpected error response.",
+            "schema": {
+              "$ref": "#/definitions/rpcStatus"
+            }
+          }
+        },
+        "parameters": [
+          {
+            "name": "type",
+            "in": "query",
+            "required": false,
+            "type": "string",
+            "enum": [
+              "SECURITY_TYPE_UNSPECIFIED",
+              "SECURITY_TYPE_STOCK",
+              "SECURITY_TYPE_FUTURE",
+              "SECURITY_TYPE_FOREX",
+              "SECURITY_TYPE_OPTION"
+            ],
+            "default": "SECURITY_TYPE_UNSPECIFIED"
+          },
+          {
+            "name": "exchangeMic",
+            "in": "query",
+            "required": false,
+            "type": "string"
+          },
+          {
+            "name": "search",
+            "in": "query",
+            "required": false,
+            "type": "string"
+          },
+          {
+            "name": "sortBy",
+            "description": "\"price\" / \"volume\" / \"maintenance_margin\"",
+            "in": "query",
+            "required": false,
+            "type": "string"
+          },
+          {
+            "name": "sortDesc",
+            "in": "query",
+            "required": false,
+            "type": "boolean"
+          },
+          {
+            "name": "page",
+            "in": "query",
+            "required": false,
+            "type": "integer",
+            "format": "int32"
+          },
+          {
+            "name": "pageSize",
+            "in": "query",
+            "required": false,
+            "type": "integer",
+            "format": "int32"
+          }
+        ],
+        "tags": [
+          "TradingService"
+        ]
+      },
+      "put": {
+        "operationId": "TradingService_UpsertListing",
+        "responses": {
+          "200": {
+            "description": "A successful response.",
+            "schema": {
+              "$ref": "#/definitions/v1Listing"
+            }
+          },
+          "default": {
+            "description": "An unexpected error response.",
+            "schema": {
+              "$ref": "#/definitions/rpcStatus"
+            }
+          }
+        },
+        "parameters": [
+          {
+            "name": "body",
+            "in": "body",
+            "required": true,
+            "schema": {
+              "$ref": "#/definitions/v1UpsertListingRequest"
+            }
+          }
+        ],
+        "tags": [
+          "TradingService"
+        ]
+      }
+    },
+    "/api/v1/listings/{id}": {
+      "get": {
+        "operationId": "TradingService_GetListing",
+        "responses": {
+          "200": {
+            "description": "A successful response.",
+            "schema": {
+              "$ref": "#/definitions/v1Listing"
+            }
+          },
+          "default": {
+            "description": "An unexpected error response.",
+            "schema": {
+              "$ref": "#/definitions/rpcStatus"
+            }
+          }
+        },
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "type": "string"
+          }
+        ],
+        "tags": [
+          "TradingService"
+        ]
+      }
+    },
+    "/api/v1/listings/{listingId}/history": {
+      "get": {
+        "operationId": "TradingService_GetListingDailyHistory",
+        "responses": {
+          "200": {
+            "description": "A successful response.",
+            "schema": {
+              "$ref": "#/definitions/v1GetListingDailyHistoryResponse"
+            }
+          },
+          "default": {
+            "description": "An unexpected error response.",
+            "schema": {
+              "$ref": "#/definitions/rpcStatus"
+            }
+          }
+        },
+        "parameters": [
+          {
+            "name": "listingId",
+            "in": "path",
+            "required": true,
+            "type": "string"
+          },
+          {
+            "name": "from",
+            "in": "query",
+            "required": false,
+            "type": "string",
+            "format": "date-time"
+          },
+          {
+            "name": "to",
+            "in": "query",
+            "required": false,
+            "type": "string",
+            "format": "date-time"
+          }
+        ],
+        "tags": [
+          "TradingService"
+        ]
+      }
+    },
+    "/api/v1/loan-requests": {
+      "get": {
+        "operationId": "BankService_ListLoanRequests",
+        "responses": {
+          "200": {
+            "description": "A successful response.",
+            "schema": {
+              "$ref": "#/definitions/v1ListLoanRequestsResponse"
+            }
+          },
+          "default": {
+            "description": "An unexpected error response.",
+            "schema": {
+              "$ref": "#/definitions/rpcStatus"
+            }
+          }
+        },
+        "parameters": [
+          {
+            "name": "status",
+            "in": "query",
+            "required": false,
+            "type": "string",
+            "enum": [
+              "LOAN_REQUEST_STATUS_UNSPECIFIED",
+              "LOAN_REQUEST_STATUS_PENDING",
+              "LOAN_REQUEST_STATUS_APPROVED",
+              "LOAN_REQUEST_STATUS_REJECTED"
+            ],
+            "default": "LOAN_REQUEST_STATUS_UNSPECIFIED"
+          },
+          {
+            "name": "loanType",
+            "description": " - LOAN_TYPE_CASH: gotovinski / keš\n - LOAN_TYPE_HOUSING: stambeni\n - LOAN_TYPE_AUTO: auto\n - LOAN_TYPE_REFINANCE: refinansirajući\n - LOAN_TYPE_STUDENT: studentski",
+            "in": "query",
+            "required": false,
+            "type": "string",
+            "enum": [
+              "LOAN_TYPE_UNSPECIFIED",
+              "LOAN_TYPE_CASH",
+              "LOAN_TYPE_HOUSING",
+              "LOAN_TYPE_AUTO",
+              "LOAN_TYPE_REFINANCE",
+              "LOAN_TYPE_STUDENT"
+            ],
+            "default": "LOAN_TYPE_UNSPECIFIED"
+          },
+          {
+            "name": "accountId",
+            "in": "query",
+            "required": false,
+            "type": "string"
+          },
+          {
+            "name": "page",
+            "in": "query",
+            "required": false,
+            "type": "integer",
+            "format": "int32"
+          },
+          {
+            "name": "pageSize",
+            "in": "query",
+            "required": false,
+            "type": "integer",
+            "format": "int32"
+          }
+        ],
+        "tags": [
+          "BankService"
+        ]
+      },
+      "post": {
+        "operationId": "BankService_SubmitLoanRequest",
+        "responses": {
+          "200": {
+            "description": "A successful response.",
+            "schema": {
+              "$ref": "#/definitions/v1LoanRequest"
+            }
+          },
+          "default": {
+            "description": "An unexpected error response.",
+            "schema": {
+              "$ref": "#/definitions/rpcStatus"
+            }
+          }
+        },
+        "parameters": [
+          {
+            "name": "body",
+            "in": "body",
+            "required": true,
+            "schema": {
+              "$ref": "#/definitions/v1SubmitLoanRequestRequest"
+            }
+          }
+        ],
+        "tags": [
+          "BankService"
+        ]
+      }
+    },
+    "/api/v1/loan-requests/{id}/decide": {
+      "post": {
+        "operationId": "BankService_DecideLoanRequest",
+        "responses": {
+          "200": {
+            "description": "A successful response.",
+            "schema": {
+              "$ref": "#/definitions/v1LoanRequest"
+            }
+          },
+          "default": {
+            "description": "An unexpected error response.",
+            "schema": {
+              "$ref": "#/definitions/rpcStatus"
+            }
+          }
+        },
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "type": "string"
+          },
+          {
+            "name": "body",
+            "in": "body",
+            "required": true,
+            "schema": {
+              "$ref": "#/definitions/BankServiceDecideLoanRequestBody"
+            }
+          }
+        ],
+        "tags": [
+          "BankService"
+        ]
+      }
+    },
+    "/api/v1/loans": {
+      "get": {
+        "operationId": "BankService_ListLoans",
+        "responses": {
+          "200": {
+            "description": "A successful response.",
+            "schema": {
+              "$ref": "#/definitions/v1ListLoansResponse"
+            }
+          },
+          "default": {
+            "description": "An unexpected error response.",
+            "schema": {
+              "$ref": "#/definitions/rpcStatus"
+            }
+          }
+        },
+        "parameters": [
+          {
+            "name": "clientId",
+            "in": "query",
+            "required": false,
+            "type": "string"
+          },
+          {
+            "name": "accountId",
+            "in": "query",
+            "required": false,
+            "type": "string"
+          },
+          {
+            "name": "loanType",
+            "description": " - LOAN_TYPE_CASH: gotovinski / keš\n - LOAN_TYPE_HOUSING: stambeni\n - LOAN_TYPE_AUTO: auto\n - LOAN_TYPE_REFINANCE: refinansirajući\n - LOAN_TYPE_STUDENT: studentski",
+            "in": "query",
+            "required": false,
+            "type": "string",
+            "enum": [
+              "LOAN_TYPE_UNSPECIFIED",
+              "LOAN_TYPE_CASH",
+              "LOAN_TYPE_HOUSING",
+              "LOAN_TYPE_AUTO",
+              "LOAN_TYPE_REFINANCE",
+              "LOAN_TYPE_STUDENT"
+            ],
+            "default": "LOAN_TYPE_UNSPECIFIED"
+          },
+          {
+            "name": "status",
+            "in": "query",
+            "required": false,
+            "type": "string",
+            "enum": [
+              "LOAN_STATUS_UNSPECIFIED",
+              "LOAN_STATUS_APPROVED",
+              "LOAN_STATUS_REJECTED",
+              "LOAN_STATUS_PAID_OFF",
+              "LOAN_STATUS_OVERDUE"
+            ],
+            "default": "LOAN_STATUS_UNSPECIFIED"
+          },
+          {
+            "name": "page",
+            "in": "query",
+            "required": false,
+            "type": "integer",
+            "format": "int32"
+          },
+          {
+            "name": "pageSize",
+            "in": "query",
+            "required": false,
+            "type": "integer",
+            "format": "int32"
+          }
+        ],
+        "tags": [
+          "BankService"
+        ]
+      }
+    },
+    "/api/v1/loans/run-installment-job": {
+      "post": {
+        "summary": "RunInstallmentJob debits any installments that are due today.\nNormally driven by the daily cron; exposed as an RPC so tests and\nops can fire it on demand. Admin-only.",
+        "operationId": "BankService_RunInstallmentJob",
+        "responses": {
+          "200": {
+            "description": "A successful response.",
+            "schema": {
+              "$ref": "#/definitions/v1RunInstallmentJobResponse"
+            }
+          },
+          "default": {
+            "description": "An unexpected error response.",
+            "schema": {
+              "$ref": "#/definitions/rpcStatus"
+            }
+          }
+        },
+        "parameters": [
+          {
+            "name": "body",
+            "in": "body",
+            "required": true,
+            "schema": {
+              "$ref": "#/definitions/v1RunInstallmentJobRequest"
+            }
+          }
+        ],
+        "tags": [
+          "BankService"
+        ]
+      }
+    },
+    "/api/v1/loans/run-variable-rate-job": {
+      "post": {
+        "summary": "RunVariableRateJob refreshes the random pomeraj for every active\nvariable-rate loan and recomputes its installment amount. Admin-only.",
+        "operationId": "BankService_RunVariableRateJob",
+        "responses": {
+          "200": {
+            "description": "A successful response.",
+            "schema": {
+              "$ref": "#/definitions/v1RunVariableRateJobResponse"
+            }
+          },
+          "default": {
+            "description": "An unexpected error response.",
+            "schema": {
+              "$ref": "#/definitions/rpcStatus"
+            }
+          }
+        },
+        "parameters": [
+          {
+            "name": "body",
+            "in": "body",
+            "required": true,
+            "schema": {
+              "$ref": "#/definitions/v1RunVariableRateJobRequest"
+            }
+          }
+        ],
+        "tags": [
+          "BankService"
+        ]
+      }
+    },
+    "/api/v1/loans/{id}": {
+      "get": {
+        "operationId": "BankService_GetLoan",
+        "responses": {
+          "200": {
+            "description": "A successful response.",
+            "schema": {
+              "$ref": "#/definitions/v1LoanWithInstallments"
+            }
+          },
+          "default": {
+            "description": "An unexpected error response.",
+            "schema": {
+              "$ref": "#/definitions/rpcStatus"
+            }
+          }
+        },
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "type": "string"
+          }
+        ],
+        "tags": [
+          "BankService"
+        ]
+      }
+    },
+    "/api/v1/menjacnica/quote": {
+      "post": {
+        "summary": "QuoteExchange returns the converted-amount preview for a\nmenjačnica or FX payment, including commission. The FE uses this\nto render the transfer-confirmation screen before the user clicks\nPotvrdi.",
+        "operationId": "BankService_QuoteExchange",
+        "responses": {
+          "200": {
+            "description": "A successful response.",
+            "schema": {
+              "$ref": "#/definitions/v1QuoteExchangeResponse"
+            }
+          },
+          "default": {
+            "description": "An unexpected error response.",
+            "schema": {
+              "$ref": "#/definitions/rpcStatus"
+            }
+          }
+        },
+        "parameters": [
+          {
+            "name": "body",
+            "in": "body",
+            "required": true,
+            "schema": {
+              "$ref": "#/definitions/v1QuoteExchangeRequest"
+            }
+          }
+        ],
+        "tags": [
+          "BankService"
+        ]
+      }
+    },
+    "/api/v1/orders": {
+      "get": {
+        "operationId": "TradingService_ListOrders",
+        "responses": {
+          "200": {
+            "description": "A successful response.",
+            "schema": {
+              "$ref": "#/definitions/v1ListOrdersResponse"
+            }
+          },
+          "default": {
+            "description": "An unexpected error response.",
+            "schema": {
+              "$ref": "#/definitions/rpcStatus"
+            }
+          }
+        },
+        "parameters": [
+          {
+            "name": "status",
+            "description": "status: \"all\", \"pending\", \"approved\", \"declined\", \"done\".",
+            "in": "query",
+            "required": false,
+            "type": "string"
+          },
+          {
+            "name": "userKind",
+            "description": "employee/client filter (supervisor view)",
+            "in": "query",
+            "required": false,
+            "type": "string",
+            "enum": [
+              "USER_KIND_UNSPECIFIED",
+              "USER_KIND_CLIENT",
+              "USER_KIND_EMPLOYEE"
+            ],
+            "default": "USER_KIND_UNSPECIFIED"
+          },
+          {
+            "name": "userId",
+            "description": "narrow to a single trader",
+            "in": "query",
+            "required": false,
+            "type": "string"
+          },
+          {
+            "name": "securityId",
+            "in": "query",
+            "required": false,
+            "type": "string"
+          },
+          {
+            "name": "page",
+            "in": "query",
+            "required": false,
+            "type": "integer",
+            "format": "int32"
+          },
+          {
+            "name": "pageSize",
+            "in": "query",
+            "required": false,
+            "type": "integer",
+            "format": "int32"
+          }
+        ],
+        "tags": [
+          "TradingService"
+        ]
+      },
+      "post": {
+        "operationId": "TradingService_CreateOrder",
+        "responses": {
+          "200": {
+            "description": "A successful response.",
+            "schema": {
+              "$ref": "#/definitions/v1CreateOrderResponse"
+            }
+          },
+          "default": {
+            "description": "An unexpected error response.",
+            "schema": {
+              "$ref": "#/definitions/rpcStatus"
+            }
+          }
+        },
+        "parameters": [
+          {
+            "name": "body",
+            "in": "body",
+            "required": true,
+            "schema": {
+              "$ref": "#/definitions/v1CreateOrderRequest"
+            }
+          }
+        ],
+        "tags": [
+          "TradingService"
+        ]
+      }
+    },
+    "/api/v1/orders/{id}": {
+      "get": {
+        "operationId": "TradingService_GetOrder",
+        "responses": {
+          "200": {
+            "description": "A successful response.",
+            "schema": {
+              "$ref": "#/definitions/v1Order"
+            }
+          },
+          "default": {
+            "description": "An unexpected error response.",
+            "schema": {
+              "$ref": "#/definitions/rpcStatus"
+            }
+          }
+        },
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "type": "string"
+          }
+        ],
+        "tags": [
+          "TradingService"
+        ]
+      }
+    },
+    "/api/v1/orders/{id}/approve": {
+      "post": {
+        "operationId": "TradingService_ApproveOrder",
+        "responses": {
+          "200": {
+            "description": "A successful response.",
+            "schema": {
+              "$ref": "#/definitions/v1Order"
+            }
+          },
+          "default": {
+            "description": "An unexpected error response.",
+            "schema": {
+              "$ref": "#/definitions/rpcStatus"
+            }
+          }
+        },
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "type": "string"
+          },
+          {
+            "name": "body",
+            "in": "body",
+            "required": true,
+            "schema": {
+              "$ref": "#/definitions/TradingServiceApproveOrderBody"
+            }
+          }
+        ],
+        "tags": [
+          "TradingService"
+        ]
+      }
+    },
+    "/api/v1/orders/{id}/cancel": {
+      "post": {
+        "operationId": "TradingService_CancelOrder",
+        "responses": {
+          "200": {
+            "description": "A successful response.",
+            "schema": {
+              "$ref": "#/definitions/v1Order"
+            }
+          },
+          "default": {
+            "description": "An unexpected error response.",
+            "schema": {
+              "$ref": "#/definitions/rpcStatus"
+            }
+          }
+        },
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "type": "string"
+          },
+          {
+            "name": "body",
+            "in": "body",
+            "required": true,
+            "schema": {
+              "$ref": "#/definitions/TradingServiceCancelOrderBody"
+            }
+          }
+        ],
+        "tags": [
+          "TradingService"
+        ]
+      }
+    },
+    "/api/v1/orders/{id}/decline": {
+      "post": {
+        "operationId": "TradingService_DeclineOrder",
+        "responses": {
+          "200": {
+            "description": "A successful response.",
+            "schema": {
+              "$ref": "#/definitions/v1Order"
+            }
+          },
+          "default": {
+            "description": "An unexpected error response.",
+            "schema": {
+              "$ref": "#/definitions/rpcStatus"
+            }
+          }
+        },
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "type": "string"
+          },
+          {
+            "name": "body",
+            "in": "body",
+            "required": true,
+            "schema": {
+              "$ref": "#/definitions/TradingServiceDeclineOrderBody"
+            }
+          }
+        ],
+        "tags": [
+          "TradingService"
+        ]
+      }
+    },
+    "/api/v1/payment-recipients": {
+      "get": {
+        "operationId": "BankService_ListPaymentRecipients",
+        "responses": {
+          "200": {
+            "description": "A successful response.",
+            "schema": {
+              "$ref": "#/definitions/v1ListPaymentRecipientsResponse"
+            }
+          },
+          "default": {
+            "description": "An unexpected error response.",
+            "schema": {
+              "$ref": "#/definitions/rpcStatus"
+            }
+          }
+        },
+        "tags": [
+          "BankService"
+        ]
+      },
+      "post": {
+        "operationId": "BankService_CreatePaymentRecipient",
+        "responses": {
+          "200": {
+            "description": "A successful response.",
+            "schema": {
+              "$ref": "#/definitions/v1PaymentRecipient"
+            }
+          },
+          "default": {
+            "description": "An unexpected error response.",
+            "schema": {
+              "$ref": "#/definitions/rpcStatus"
+            }
+          }
+        },
+        "parameters": [
+          {
+            "name": "body",
+            "in": "body",
+            "required": true,
+            "schema": {
+              "$ref": "#/definitions/v1CreatePaymentRecipientRequest"
+            }
+          }
+        ],
+        "tags": [
+          "BankService"
+        ]
+      }
+    },
+    "/api/v1/payment-recipients/{id}": {
+      "delete": {
+        "operationId": "BankService_DeletePaymentRecipient",
+        "responses": {
+          "200": {
+            "description": "A successful response.",
+            "schema": {
+              "type": "object",
+              "properties": {}
+            }
+          },
+          "default": {
+            "description": "An unexpected error response.",
+            "schema": {
+              "$ref": "#/definitions/rpcStatus"
+            }
+          }
+        },
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "type": "string"
+          }
+        ],
+        "tags": [
+          "BankService"
+        ]
+      },
+      "patch": {
+        "operationId": "BankService_UpdatePaymentRecipient",
+        "responses": {
+          "200": {
+            "description": "A successful response.",
+            "schema": {
+              "$ref": "#/definitions/v1PaymentRecipient"
+            }
+          },
+          "default": {
+            "description": "An unexpected error response.",
+            "schema": {
+              "$ref": "#/definitions/rpcStatus"
+            }
+          }
+        },
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "type": "string"
+          },
+          {
+            "name": "body",
+            "in": "body",
+            "required": true,
+            "schema": {
+              "$ref": "#/definitions/BankServiceUpdatePaymentRecipientBody"
+            }
+          }
+        ],
+        "tags": [
+          "BankService"
+        ]
+      }
+    },
+    "/api/v1/payments": {
+      "post": {
+        "operationId": "BankService_CreatePayment",
+        "responses": {
+          "200": {
+            "description": "A successful response.",
+            "schema": {
+              "$ref": "#/definitions/v1PaymentResult"
+            }
+          },
+          "default": {
+            "description": "An unexpected error response.",
+            "schema": {
+              "$ref": "#/definitions/rpcStatus"
+            }
+          }
+        },
+        "parameters": [
+          {
+            "name": "body",
+            "in": "body",
+            "required": true,
+            "schema": {
+              "$ref": "#/definitions/v1CreatePaymentRequest"
+            }
+          }
+        ],
+        "tags": [
+          "BankService"
+        ]
+      }
+    },
+    "/api/v1/portfolio": {
+      "get": {
+        "operationId": "TradingService_ListHoldings",
+        "responses": {
+          "200": {
+            "description": "A successful response.",
+            "schema": {
+              "$ref": "#/definitions/v1ListHoldingsResponse"
+            }
+          },
+          "default": {
+            "description": "An unexpected error response.",
+            "schema": {
+              "$ref": "#/definitions/rpcStatus"
+            }
+          }
+        },
+        "parameters": [
+          {
+            "name": "userId",
+            "description": "For supervisor view; clients/agents see only their own.",
+            "in": "query",
+            "required": false,
+            "type": "string"
+          },
+          {
+            "name": "userKind",
+            "in": "query",
+            "required": false,
+            "type": "string",
+            "enum": [
+              "USER_KIND_UNSPECIFIED",
+              "USER_KIND_CLIENT",
+              "USER_KIND_EMPLOYEE"
+            ],
+            "default": "USER_KIND_UNSPECIFIED"
+          },
+          {
+            "name": "type",
+            "in": "query",
+            "required": false,
+            "type": "string",
+            "enum": [
+              "SECURITY_TYPE_UNSPECIFIED",
+              "SECURITY_TYPE_STOCK",
+              "SECURITY_TYPE_FUTURE",
+              "SECURITY_TYPE_FOREX",
+              "SECURITY_TYPE_OPTION"
+            ],
+            "default": "SECURITY_TYPE_UNSPECIFIED"
+          }
+        ],
+        "tags": [
+          "TradingService"
+        ]
+      }
+    },
+    "/api/v1/portfolio/{holdingId}/exercise": {
+      "post": {
+        "summary": "ExerciseOption is spec p.61.d — actuaries may exercise an in-the-\nmoney option before settlementDate. Result tells the FE the\nremaining option position + the underlying-side effect.",
+        "operationId": "TradingService_ExerciseOption",
+        "responses": {
+          "200": {
+            "description": "A successful response.",
+            "schema": {
+              "$ref": "#/definitions/v1ExerciseOptionResponse"
+            }
+          },
+          "default": {
+            "description": "An unexpected error response.",
+            "schema": {
+              "$ref": "#/definitions/rpcStatus"
+            }
+          }
+        },
+        "parameters": [
+          {
+            "name": "holdingId",
+            "in": "path",
+            "required": true,
+            "type": "string"
+          },
+          {
+            "name": "body",
+            "in": "body",
+            "required": true,
+            "schema": {
+              "$ref": "#/definitions/TradingServiceExerciseOptionBody"
+            }
+          }
+        ],
+        "tags": [
+          "TradingService"
+        ]
+      }
+    },
+    "/api/v1/portfolio/{id}/public-count": {
+      "patch": {
+        "operationId": "TradingService_SetPublicCount",
+        "responses": {
+          "200": {
+            "description": "A successful response.",
+            "schema": {
+              "$ref": "#/definitions/v1Holding"
+            }
+          },
+          "default": {
+            "description": "An unexpected error response.",
+            "schema": {
+              "$ref": "#/definitions/rpcStatus"
+            }
+          }
+        },
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "type": "string"
+          },
+          {
+            "name": "body",
+            "in": "body",
+            "required": true,
+            "schema": {
+              "$ref": "#/definitions/TradingServiceSetPublicCountBody"
+            }
+          }
+        ],
+        "tags": [
+          "TradingService"
+        ]
+      }
+    },
+    "/api/v1/securities": {
+      "get": {
+        "operationId": "TradingService_ListSecurities",
+        "responses": {
+          "200": {
+            "description": "A successful response.",
+            "schema": {
+              "$ref": "#/definitions/v1ListSecuritiesResponse"
+            }
+          },
+          "default": {
+            "description": "An unexpected error response.",
+            "schema": {
+              "$ref": "#/definitions/rpcStatus"
+            }
+          }
+        },
+        "parameters": [
+          {
+            "name": "type",
+            "in": "query",
+            "required": false,
+            "type": "string",
+            "enum": [
+              "SECURITY_TYPE_UNSPECIFIED",
+              "SECURITY_TYPE_STOCK",
+              "SECURITY_TYPE_FUTURE",
+              "SECURITY_TYPE_FOREX",
+              "SECURITY_TYPE_OPTION"
+            ],
+            "default": "SECURITY_TYPE_UNSPECIFIED"
+          },
+          {
+            "name": "search",
+            "description": "ticker/name substring",
+            "in": "query",
+            "required": false,
+            "type": "string"
+          },
+          {
+            "name": "exchangeMic",
+            "in": "query",
+            "required": false,
+            "type": "string"
+          },
+          {
+            "name": "minPrice",
+            "description": "Optional range filters; empty strings mean unbounded.",
+            "in": "query",
+            "required": false,
+            "type": "string"
+          },
+          {
+            "name": "maxPrice",
+            "in": "query",
+            "required": false,
+            "type": "string"
+          },
+          {
+            "name": "minAsk",
+            "in": "query",
+            "required": false,
+            "type": "string"
+          },
+          {
+            "name": "maxAsk",
+            "in": "query",
+            "required": false,
+            "type": "string"
+          },
+          {
+            "name": "minBid",
+            "in": "query",
+            "required": false,
+            "type": "string"
+          },
+          {
+            "name": "maxBid",
+            "in": "query",
+            "required": false,
+            "type": "string"
+          },
+          {
+            "name": "minVolume",
+            "in": "query",
+            "required": false,
+            "type": "string"
+          },
+          {
+            "name": "maxVolume",
+            "in": "query",
+            "required": false,
+            "type": "string"
+          },
+          {
+            "name": "minSettlement",
+            "description": "For futures/options: settlement-date range.",
+            "in": "query",
+            "required": false,
+            "type": "string",
+            "format": "date-time"
+          },
+          {
+            "name": "maxSettlement",
+            "in": "query",
+            "required": false,
+            "type": "string",
+            "format": "date-time"
+          },
+          {
+            "name": "sortBy",
+            "description": "Sort by \"price\", \"volume\", \"maintenance_margin\".",
+            "in": "query",
+            "required": false,
+            "type": "string"
+          },
+          {
+            "name": "sortDesc",
+            "in": "query",
+            "required": false,
+            "type": "boolean"
+          },
+          {
+            "name": "page",
+            "in": "query",
+            "required": false,
+            "type": "integer",
+            "format": "int32"
+          },
+          {
+            "name": "pageSize",
+            "in": "query",
+            "required": false,
+            "type": "integer",
+            "format": "int32"
+          }
+        ],
+        "tags": [
+          "TradingService"
+        ]
+      },
+      "put": {
+        "operationId": "TradingService_UpsertSecurity",
+        "responses": {
+          "200": {
+            "description": "A successful response.",
+            "schema": {
+              "$ref": "#/definitions/v1Security"
+            }
+          },
+          "default": {
+            "description": "An unexpected error response.",
+            "schema": {
+              "$ref": "#/definitions/rpcStatus"
+            }
+          }
+        },
+        "parameters": [
+          {
+            "name": "body",
+            "in": "body",
+            "required": true,
+            "schema": {
+              "$ref": "#/definitions/v1UpsertSecurityRequest"
+            }
+          }
+        ],
+        "tags": [
+          "TradingService"
+        ]
+      }
+    },
+    "/api/v1/securities/{id}": {
+      "get": {
+        "operationId": "TradingService_GetSecurity",
+        "responses": {
+          "200": {
+            "description": "A successful response.",
+            "schema": {
+              "$ref": "#/definitions/v1SecurityWithListing"
+            }
+          },
+          "default": {
+            "description": "An unexpected error response.",
+            "schema": {
+              "$ref": "#/definitions/rpcStatus"
+            }
+          }
+        },
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "type": "string"
+          }
+        ],
+        "tags": [
+          "TradingService"
+        ]
+      }
+    },
+    "/api/v1/securities/{stockId}/option-chain": {
+      "get": {
+        "summary": "GetOptionChain returns the option chain for a stock — call/put\npairs grouped by strike, filtered to the N rows nearest the\nshared (current) price per spec p.59.",
+        "operationId": "TradingService_GetOptionChain",
+        "responses": {
+          "200": {
+            "description": "A successful response.",
+            "schema": {
+              "$ref": "#/definitions/v1GetOptionChainResponse"
+            }
+          },
+          "default": {
+            "description": "An unexpected error response.",
+            "schema": {
+              "$ref": "#/definitions/rpcStatus"
+            }
+          }
+        },
+        "parameters": [
+          {
+            "name": "stockId",
+            "in": "path",
+            "required": true,
+            "type": "string"
+          },
+          {
+            "name": "settlementDate",
+            "description": "Settlement date filter; if unset, returns all chains.",
+            "in": "query",
+            "required": false,
+            "type": "string",
+            "format": "date-time"
+          },
+          {
+            "name": "strikesWindow",
+            "description": "strikes_window: number of strike rows above and below the at-the-\nmoney strike to return (spec p.59 \"filter po broju strike-ova\").",
+            "in": "query",
+            "required": false,
+            "type": "integer",
+            "format": "int32"
+          }
+        ],
+        "tags": [
+          "TradingService"
+        ]
+      }
+    },
+    "/api/v1/tax/positions": {
+      "get": {
+        "operationId": "TradingService_ListTaxPositions",
+        "responses": {
+          "200": {
+            "description": "A successful response.",
+            "schema": {
+              "$ref": "#/definitions/v1ListTaxPositionsResponse"
+            }
+          },
+          "default": {
+            "description": "An unexpected error response.",
+            "schema": {
+              "$ref": "#/definitions/rpcStatus"
+            }
+          }
+        },
+        "parameters": [
+          {
+            "name": "userKind",
+            "in": "query",
+            "required": false,
+            "type": "string",
+            "enum": [
+              "USER_KIND_UNSPECIFIED",
+              "USER_KIND_CLIENT",
+              "USER_KIND_EMPLOYEE"
+            ],
+            "default": "USER_KIND_UNSPECIFIED"
+          },
+          {
+            "name": "nameQuery",
+            "in": "query",
+            "required": false,
+            "type": "string"
+          }
+        ],
+        "tags": [
+          "TradingService"
+        ]
+      }
+    },
+    "/api/v1/tax/realized": {
+      "get": {
+        "operationId": "TradingService_ListRealizedPnL",
+        "responses": {
+          "200": {
+            "description": "A successful response.",
+            "schema": {
+              "$ref": "#/definitions/v1ListRealizedPnLResponse"
+            }
+          },
+          "default": {
+            "description": "An unexpected error response.",
+            "schema": {
+              "$ref": "#/definitions/rpcStatus"
+            }
+          }
+        },
+        "parameters": [
+          {
+            "name": "userId",
+            "in": "query",
+            "required": false,
+            "type": "string"
+          },
+          {
+            "name": "userKind",
+            "in": "query",
+            "required": false,
+            "type": "string",
+            "enum": [
+              "USER_KIND_UNSPECIFIED",
+              "USER_KIND_CLIENT",
+              "USER_KIND_EMPLOYEE"
+            ],
+            "default": "USER_KIND_UNSPECIFIED"
+          },
+          {
+            "name": "from",
+            "in": "query",
+            "required": false,
+            "type": "string",
+            "format": "date-time"
+          },
+          {
+            "name": "to",
+            "in": "query",
+            "required": false,
+            "type": "string",
+            "format": "date-time"
+          }
+        ],
+        "tags": [
+          "TradingService"
+        ]
+      }
+    },
+    "/api/v1/tax/run": {
+      "post": {
+        "operationId": "TradingService_RunTax",
+        "responses": {
+          "200": {
+            "description": "A successful response.",
+            "schema": {
+              "$ref": "#/definitions/v1RunTaxResponse"
+            }
+          },
+          "default": {
+            "description": "An unexpected error response.",
+            "schema": {
+              "$ref": "#/definitions/rpcStatus"
+            }
+          }
+        },
+        "parameters": [
+          {
+            "name": "body",
+            "in": "body",
+            "required": true,
+            "schema": {
+              "$ref": "#/definitions/v1RunTaxRequest"
+            }
+          }
+        ],
+        "tags": [
+          "TradingService"
+        ]
+      }
+    },
+    "/api/v1/transactions": {
+      "get": {
+        "operationId": "BankService_ListTransactions",
+        "responses": {
+          "200": {
+            "description": "A successful response.",
+            "schema": {
+              "$ref": "#/definitions/v1ListTransactionsResponse"
+            }
+          },
+          "default": {
+            "description": "An unexpected error response.",
+            "schema": {
+              "$ref": "#/definitions/rpcStatus"
+            }
+          }
+        },
+        "parameters": [
+          {
+            "name": "accountId",
+            "description": "account_id filters to legs that touch this account on either side.\nEmpty + employee → see-everything; empty + client → all of caller's\naccounts.",
+            "in": "query",
+            "required": false,
+            "type": "string"
+          },
+          {
+            "name": "opKind",
+            "description": "'payment' | 'transfer' | 'exchange' | 'fee' — keep loose, server enforces.",
+            "in": "query",
+            "required": false,
+            "type": "string"
+          },
+          {
+            "name": "status",
+            "in": "query",
+            "required": false,
+            "type": "string"
+          },
+          {
+            "name": "page",
+            "in": "query",
+            "required": false,
+            "type": "integer",
+            "format": "int32"
+          },
+          {
+            "name": "pageSize",
+            "in": "query",
+            "required": false,
+            "type": "integer",
+            "format": "int32"
+          }
+        ],
+        "tags": [
+          "BankService"
+        ]
+      }
+    },
+    "/api/v1/transfers": {
+      "post": {
+        "operationId": "BankService_CreateTransfer",
+        "responses": {
+          "200": {
+            "description": "A successful response.",
+            "schema": {
+              "$ref": "#/definitions/v1PaymentResult"
+            }
+          },
+          "default": {
+            "description": "An unexpected error response.",
+            "schema": {
+              "$ref": "#/definitions/rpcStatus"
+            }
+          }
+        },
+        "parameters": [
+          {
+            "name": "body",
+            "in": "body",
+            "required": true,
+            "schema": {
+              "$ref": "#/definitions/v1CreateTransferRequest"
+            }
+          }
+        ],
+        "tags": [
+          "BankService"
+        ]
+      }
+    }
+  },
+  "definitions": {
+    "BankServiceDecideLoanRequestBody": {
+      "type": "object",
+      "properties": {
+        "approve": {
+          "type": "boolean"
+        },
+        "reason": {
+          "type": "string",
+          "title": "when approve=false"
+        }
+      }
+    },
+    "BankServiceSetAccountStatusBody": {
+      "type": "object",
+      "properties": {
+        "status": {
+          "$ref": "#/definitions/v1AccountStatus"
+        }
+      }
+    },
+    "BankServiceSetCardStatusBody": {
+      "type": "object",
+      "properties": {
+        "status": {
+          "$ref": "#/definitions/v1CardStatus"
+        }
+      }
+    },
+    "BankServiceUpdateAccountLimitsBody": {
+      "type": "object",
+      "properties": {
+        "dailyLimit": {
+          "type": "string"
+        },
+        "monthlyLimit": {
+          "type": "string"
+        }
+      }
+    },
+    "BankServiceUpdateAccountNameBody": {
+      "type": "object",
+      "properties": {
+        "name": {
+          "type": "string",
+          "description": "Spec p.20 doesn't pin a length; we cap at 64 to keep the column\nbounded and the UI tidy. Min 1 because empty would defeat the\n\"must differ from current\" rule."
+        }
+      }
+    },
+    "BankServiceUpdateCardLimitBody": {
+      "type": "object",
+      "properties": {
+        "cardLimit": {
+          "type": "string",
+          "description": "card_limit must be a positive decimal up to 4 fractional digits."
+        }
+      }
+    },
+    "BankServiceUpdateCompanyBody": {
+      "type": "object",
+      "properties": {
+        "name": {
+          "type": "string"
+        },
+        "activityCode": {
+          "type": "string"
+        },
+        "address": {
+          "type": "string"
+        },
+        "ownerClientId": {
+          "type": "string"
+        }
+      }
+    },
+    "BankServiceUpdatePaymentRecipientBody": {
+      "type": "object",
+      "properties": {
+        "name": {
+          "type": "string"
+        },
+        "accountNumber": {
+          "type": "string"
+        }
+      }
+    },
+    "TradingServiceApproveOrderBody": {
+      "type": "object"
+    },
+    "TradingServiceCancelOrderBody": {
+      "type": "object"
+    },
+    "TradingServiceDeclineOrderBody": {
+      "type": "object",
+      "properties": {
+        "reason": {
+          "type": "string"
+        }
+      }
+    },
+    "TradingServiceExerciseOptionBody": {
+      "type": "object",
+      "properties": {
+        "quantity": {
+          "type": "integer",
+          "format": "int32",
+          "description": "Number of option contracts to exercise. Must be ≥ 1 and\n≤ holding.quantity."
+        }
+      }
+    },
+    "TradingServiceResetActuaryUsedLimitBody": {
+      "type": "object"
+    },
+    "TradingServiceSetActuaryNeedApprovalBody": {
+      "type": "object",
+      "properties": {
+        "needApproval": {
+          "type": "boolean"
+        }
+      }
+    },
+    "TradingServiceSetExchangeOverrideBody": {
+      "type": "object",
+      "properties": {
+        "state": {
+          "type": "string",
+          "description": "state is one of \"open\" / \"closed\" / \"after_hours\". An empty\nstring clears the override and falls back to the schedule."
+        }
+      }
+    },
+    "TradingServiceSetPublicCountBody": {
+      "type": "object",
+      "properties": {
+        "publicCount": {
+          "type": "integer",
+          "format": "int32"
+        }
+      }
+    },
+    "TradingServiceUpdateActuaryLimitBody": {
+      "type": "object",
+      "properties": {
+        "dailyLimit": {
+          "type": "string"
+        }
+      }
+    },
+    "TradingServiceUpsertActuaryInfoBody": {
+      "type": "object",
+      "properties": {
+        "type": {
+          "$ref": "#/definitions/v1ActuaryType"
+        },
+        "dailyLimit": {
+          "type": "string"
+        },
+        "needApproval": {
+          "type": "boolean"
+        }
+      }
+    },
+    "TradingServiceUpsertExchangeBody": {
+      "type": "object",
+      "properties": {
+        "name": {
+          "type": "string"
+        },
+        "acronym": {
+          "type": "string"
+        },
+        "polity": {
+          "type": "string"
+        },
+        "currency": {
+          "$ref": "#/definitions/bankaTradingV1Currency"
+        },
+        "timezone": {
+          "type": "string"
+        },
+        "openLocal": {
+          "type": "string"
+        },
+        "closeLocal": {
+          "type": "string"
+        }
+      }
+    },
+    "UserServiceSetEmployeeActiveBody": {
+      "type": "object",
+      "properties": {
+        "active": {
+          "type": "boolean"
+        }
+      }
+    },
+    "UserServiceSetEmployeePermissionsBody": {
+      "type": "object",
+      "properties": {
+        "permissions": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "description": "Permissions list is bounded; max 64 covers admin's full set with\nheadroom for c3+ growth."
+        }
+      }
+    },
+    "UserServiceUpdateClientBody": {
+      "type": "object",
+      "properties": {
+        "email": {
+          "type": "string"
+        },
+        "firstName": {
+          "type": "string"
+        },
+        "lastName": {
+          "type": "string"
+        },
+        "dateOfBirth": {
+          "type": "string"
+        },
+        "gender": {
+          "$ref": "#/definitions/bankaUserV1Gender"
+        },
+        "phone": {
+          "type": "string"
+        },
+        "address": {
+          "type": "string"
+        }
+      }
+    },
+    "UserServiceUpdateEmployeeBody": {
+      "type": "object",
+      "properties": {
+        "email": {
+          "type": "string"
+        },
+        "username": {
+          "type": "string"
+        },
+        "firstName": {
+          "type": "string"
+        },
+        "lastName": {
+          "type": "string"
+        },
+        "dateOfBirth": {
+          "type": "string"
+        },
+        "gender": {
+          "$ref": "#/definitions/bankaUserV1Gender"
+        },
+        "phone": {
+          "type": "string"
+        },
+        "address": {
+          "type": "string"
+        },
+        "position": {
+          "type": "string"
+        },
+        "department": {
+          "type": "string"
+        }
+      }
+    },
+    "bankaBankV1Currency": {
+      "type": "string",
+      "enum": [
+        "CURRENCY_UNSPECIFIED",
+        "CURRENCY_RSD",
+        "CURRENCY_EUR",
+        "CURRENCY_CHF",
+        "CURRENCY_USD",
+        "CURRENCY_GBP",
+        "CURRENCY_JPY",
+        "CURRENCY_CAD",
+        "CURRENCY_AUD"
+      ],
+      "default": "CURRENCY_UNSPECIFIED"
+    },
+    "bankaBankV1Gender": {
+      "type": "string",
+      "enum": [
+        "GENDER_UNSPECIFIED",
+        "GENDER_MALE",
+        "GENDER_FEMALE",
+        "GENDER_OTHER"
+      ],
+      "default": "GENDER_UNSPECIFIED"
+    },
+    "bankaExchangeV1Currency": {
+      "type": "string",
+      "enum": [
+        "CURRENCY_UNSPECIFIED",
+        "CURRENCY_RSD",
+        "CURRENCY_EUR",
+        "CURRENCY_CHF",
+        "CURRENCY_USD",
+        "CURRENCY_GBP",
+        "CURRENCY_JPY",
+        "CURRENCY_CAD",
+        "CURRENCY_AUD"
+      ],
+      "default": "CURRENCY_UNSPECIFIED"
+    },
+    "bankaTradingV1Currency": {
+      "type": "string",
+      "enum": [
+        "CURRENCY_UNSPECIFIED",
+        "CURRENCY_RSD",
+        "CURRENCY_EUR",
+        "CURRENCY_CHF",
+        "CURRENCY_USD",
+        "CURRENCY_GBP",
+        "CURRENCY_JPY",
+        "CURRENCY_CAD",
+        "CURRENCY_AUD"
+      ],
+      "default": "CURRENCY_UNSPECIFIED"
+    },
+    "bankaTradingV1UserKind": {
+      "type": "string",
+      "enum": [
+        "USER_KIND_UNSPECIFIED",
+        "USER_KIND_CLIENT",
+        "USER_KIND_EMPLOYEE"
+      ],
+      "default": "USER_KIND_UNSPECIFIED"
+    },
+    "bankaUserV1Gender": {
+      "type": "string",
+      "enum": [
+        "GENDER_UNSPECIFIED",
+        "GENDER_MALE",
+        "GENDER_FEMALE",
+        "GENDER_OTHER"
+      ],
+      "default": "GENDER_UNSPECIFIED"
+    },
+    "bankaUserV1UserKind": {
+      "type": "string",
+      "enum": [
+        "USER_KIND_UNSPECIFIED",
+        "USER_KIND_EMPLOYEE",
+        "USER_KIND_CLIENT"
+      ],
+      "default": "USER_KIND_UNSPECIFIED"
+    },
+    "protobufAny": {
+      "type": "object",
+      "properties": {
+        "@type": {
+          "type": "string"
+        }
+      },
+      "additionalProperties": {}
+    },
+    "rpcStatus": {
+      "type": "object",
+      "properties": {
+        "code": {
+          "type": "integer",
+          "format": "int32"
+        },
+        "message": {
+          "type": "string"
+        },
+        "details": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "$ref": "#/definitions/protobufAny"
+          }
+        }
+      }
+    },
+    "v1Account": {
+      "type": "object",
+      "properties": {
+        "id": {
+          "type": "string"
+        },
+        "number": {
+          "type": "string",
+          "title": "18-digit account number"
+        },
+        "name": {
+          "type": "string",
+          "title": "Naziv računa"
+        },
+        "ownerClientId": {
+          "type": "string",
+          "title": "Klijent (always present)"
+        },
+        "companyId": {
+          "type": "string",
+          "title": "set when poslovni"
+        },
+        "createdByEmployeeId": {
+          "type": "string"
+        },
+        "kind": {
+          "$ref": "#/definitions/v1AccountKind"
+        },
+        "subtype": {
+          "$ref": "#/definitions/v1AccountSubtype"
+        },
+        "currency": {
+          "$ref": "#/definitions/bankaBankV1Currency"
+        },
+        "status": {
+          "$ref": "#/definitions/v1AccountStatus"
+        },
+        "balance": {
+          "type": "string",
+          "title": "Stanje"
+        },
+        "availableBalance": {
+          "type": "string",
+          "title": "Raspoloživo stanje"
+        },
+        "maintenanceFee": {
+          "type": "string",
+          "title": "Održavanje računa (monthly)"
+        },
+        "dailyLimit": {
+          "type": "string"
+        },
+        "monthlyLimit": {
+          "type": "string"
+        },
+        "dailySpent": {
+          "type": "string"
+        },
+        "monthlySpent": {
+          "type": "string"
+        },
+        "createdAt": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "expiresAt": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "updatedAt": {
+          "type": "string",
+          "format": "date-time"
+        }
+      },
+      "description": "Account mirrors spec p.12-13 fields. Money is encoded as a decimal\nstring (e.g. \"180.00\") so we don't lose precision over JSON; the\nbank service stores it as numeric(20,4)."
+    },
+    "v1AccountKind": {
+      "type": "string",
+      "enum": [
+        "ACCOUNT_KIND_UNSPECIFIED",
+        "ACCOUNT_KIND_PERSONAL_CHECKING_RSD",
+        "ACCOUNT_KIND_PERSONAL_FX",
+        "ACCOUNT_KIND_BUSINESS_CHECKING_RSD",
+        "ACCOUNT_KIND_BUSINESS_FX",
+        "ACCOUNT_KIND_SYSTEM"
+      ],
+      "default": "ACCOUNT_KIND_UNSPECIFIED",
+      "description": "AccountKind picks the broad bucket; the trailing TT in the 18-digit\naccount number depends on (kind, subtype) per spec p.16. See\npkg/account.Type for the exact mapping.\n\n - ACCOUNT_KIND_PERSONAL_CHECKING_RSD: lični tekući RSD  (TT=11/13/14/15/16/17 by subtype)\n - ACCOUNT_KIND_PERSONAL_FX: lični devizni     (TT=21)\n - ACCOUNT_KIND_BUSINESS_CHECKING_RSD: poslovni tekući   (TT=12)\n - ACCOUNT_KIND_BUSINESS_FX: poslovni devizni  (TT=22)\n - ACCOUNT_KIND_SYSTEM: bank-owned house  (TT=99, internal)"
+    },
+    "v1AccountStatus": {
+      "type": "string",
+      "enum": [
+        "ACCOUNT_STATUS_UNSPECIFIED",
+        "ACCOUNT_STATUS_ACTIVE",
+        "ACCOUNT_STATUS_INACTIVE"
+      ],
+      "default": "ACCOUNT_STATUS_UNSPECIFIED"
+    },
+    "v1AccountSubtype": {
+      "type": "string",
+      "enum": [
+        "ACCOUNT_SUBTYPE_UNSPECIFIED",
+        "ACCOUNT_SUBTYPE_STANDARD",
+        "ACCOUNT_SUBTYPE_SAVINGS",
+        "ACCOUNT_SUBTYPE_PENSIONER",
+        "ACCOUNT_SUBTYPE_YOUTH",
+        "ACCOUNT_SUBTYPE_STUDENT",
+        "ACCOUNT_SUBTYPE_UNEMPLOYED",
+        "ACCOUNT_SUBTYPE_DOO",
+        "ACCOUNT_SUBTYPE_AD",
+        "ACCOUNT_SUBTYPE_FOUNDATION"
+      ],
+      "default": "ACCOUNT_SUBTYPE_UNSPECIFIED",
+      "description": "AccountSubtype only applies to Lični Tekući RSD per spec p.12; the\nother kinds leave it UNSPECIFIED. New subtypes append.\n\n - ACCOUNT_SUBTYPE_SAVINGS: štedni\n - ACCOUNT_SUBTYPE_PENSIONER: penzionerski\n - ACCOUNT_SUBTYPE_YOUTH: za mlade\n - ACCOUNT_SUBTYPE_STUDENT: za studente\n - ACCOUNT_SUBTYPE_UNEMPLOYED: za nezaposlene\n - ACCOUNT_SUBTYPE_DOO: Business subtypes (apply to Poslovni Tekući RSD).\n - ACCOUNT_SUBTYPE_FOUNDATION: fondacija"
+    },
+    "v1ActivateAccountRequest": {
+      "type": "object",
+      "properties": {
+        "token": {
+          "type": "string",
+          "description": "The activation token is a 32-byte URL-safe random string (43 chars\nbase64url, no padding). Be lenient on length but reject obvious\ngarbage so it can't reach the user service unparsed."
+        },
+        "newPassword": {
+          "type": "string",
+          "description": "Password complexity is enforced server-side in pkg/passwords; the\nproto-level rule is just the spec p.10 length window."
+        }
+      }
+    },
+    "v1ActuaryInfo": {
+      "type": "object",
+      "properties": {
+        "employeeId": {
+          "type": "string"
+        },
+        "type": {
+          "$ref": "#/definitions/v1ActuaryType"
+        },
+        "dailyLimit": {
+          "type": "string",
+          "title": "RSD, decimal"
+        },
+        "usedLimit": {
+          "type": "string",
+          "title": "RSD, decimal"
+        },
+        "needApproval": {
+          "type": "boolean"
+        },
+        "createdAt": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "updatedAt": {
+          "type": "string",
+          "format": "date-time"
+        }
+      }
+    },
+    "v1ActuaryType": {
+      "type": "string",
+      "enum": [
+        "ACTUARY_TYPE_UNSPECIFIED",
+        "ACTUARY_TYPE_SUPERVISOR",
+        "ACTUARY_TYPE_AGENT"
+      ],
+      "default": "ACTUARY_TYPE_UNSPECIFIED"
+    },
+    "v1AuthorizedPerson": {
+      "type": "object",
+      "properties": {
+        "id": {
+          "type": "string"
+        },
+        "companyId": {
+          "type": "string"
+        },
+        "firstName": {
+          "type": "string"
+        },
+        "lastName": {
+          "type": "string"
+        },
+        "dateOfBirth": {
+          "type": "string",
+          "title": "YYYY-MM-DD"
+        },
+        "gender": {
+          "$ref": "#/definitions/bankaBankV1Gender"
+        },
+        "email": {
+          "type": "string"
+        },
+        "phone": {
+          "type": "string"
+        },
+        "address": {
+          "type": "string"
+        },
+        "createdAt": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "updatedAt": {
+          "type": "string",
+          "format": "date-time"
+        }
+      }
+    },
+    "v1Card": {
+      "type": "object",
+      "properties": {
+        "id": {
+          "type": "string"
+        },
+        "number": {
+          "type": "string",
+          "description": "Number is returned masked (\"4111********1111\") when the caller is\na client; employees with card.write see the full number."
+        },
+        "brand": {
+          "$ref": "#/definitions/v1CardBrand"
+        },
+        "name": {
+          "type": "string"
+        },
+        "accountId": {
+          "type": "string"
+        },
+        "authorizedPersonId": {
+          "type": "string",
+          "title": "empty for personal cards"
+        },
+        "cardLimit": {
+          "type": "string"
+        },
+        "status": {
+          "$ref": "#/definitions/v1CardStatus"
+        },
+        "expiresAt": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "createdAt": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "updatedAt": {
+          "type": "string",
+          "format": "date-time"
+        }
+      }
+    },
+    "v1CardBrand": {
+      "type": "string",
+      "enum": [
+        "CARD_BRAND_UNSPECIFIED",
+        "CARD_BRAND_VISA",
+        "CARD_BRAND_MASTERCARD",
+        "CARD_BRAND_DINACARD",
+        "CARD_BRAND_AMEX"
+      ],
+      "default": "CARD_BRAND_UNSPECIFIED"
+    },
+    "v1CardStatus": {
+      "type": "string",
+      "enum": [
+        "CARD_STATUS_UNSPECIFIED",
+        "CARD_STATUS_ACTIVE",
+        "CARD_STATUS_BLOCKED",
+        "CARD_STATUS_DEACTIVATED"
+      ],
+      "default": "CARD_STATUS_UNSPECIFIED"
+    },
+    "v1Client": {
+      "type": "object",
+      "properties": {
+        "id": {
+          "type": "string"
+        },
+        "email": {
+          "type": "string"
+        },
+        "firstName": {
+          "type": "string"
+        },
+        "lastName": {
+          "type": "string"
+        },
+        "dateOfBirth": {
+          "type": "string"
+        },
+        "gender": {
+          "$ref": "#/definitions/bankaUserV1Gender"
+        },
+        "phone": {
+          "type": "string"
+        },
+        "address": {
+          "type": "string"
+        },
+        "active": {
+          "type": "boolean"
+        },
+        "permissions": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "createdAt": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "updatedAt": {
+          "type": "string",
+          "format": "date-time"
+        }
+      }
+    },
+    "v1Company": {
+      "type": "object",
+      "properties": {
+        "id": {
+          "type": "string"
+        },
+        "name": {
+          "type": "string",
+          "title": "Naziv firme"
+        },
+        "registryId": {
+          "type": "string",
+          "title": "Matični broj firme"
+        },
+        "taxId": {
+          "type": "string",
+          "title": "Poreski broj firme (PIB)"
+        },
+        "activityCode": {
+          "type": "string",
+          "title": "Šifra delatnosti (xx.xx)"
+        },
+        "address": {
+          "type": "string"
+        },
+        "ownerClientId": {
+          "type": "string",
+          "title": "Vlasnik (Klijent)"
+        },
+        "createdAt": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "updatedAt": {
+          "type": "string",
+          "format": "date-time"
+        }
+      }
+    },
+    "v1ConfirmPasswordResetRequest": {
+      "type": "object",
+      "properties": {
+        "token": {
+          "type": "string"
+        },
+        "newPassword": {
+          "type": "string"
+        }
+      }
+    },
+    "v1CreateAccountRequest": {
+      "type": "object",
+      "properties": {
+        "ownerClientId": {
+          "type": "string"
+        },
+        "companyId": {
+          "type": "string",
+          "description": "Required for ACCOUNT_KIND_BUSINESS_*; UUID format when set."
+        },
+        "kind": {
+          "$ref": "#/definitions/v1AccountKind",
+          "title": "forbid UNSPECIFIED + SYSTEM"
+        },
+        "subtype": {
+          "$ref": "#/definitions/v1AccountSubtype"
+        },
+        "currency": {
+          "$ref": "#/definitions/bankaBankV1Currency"
+        },
+        "name": {
+          "type": "string"
+        },
+        "openingBalance": {
+          "type": "string",
+          "description": "Decimal string with up to 4 fraction digits; \"0\" if absent. Match\nthe storage scale so we don't quietly truncate."
+        },
+        "createCard": {
+          "type": "boolean"
+        }
+      }
+    },
+    "v1CreateAuthorizedPersonRequest": {
+      "type": "object",
+      "properties": {
+        "companyId": {
+          "type": "string"
+        },
+        "firstName": {
+          "type": "string"
+        },
+        "lastName": {
+          "type": "string"
+        },
+        "dateOfBirth": {
+          "type": "string"
+        },
+        "gender": {
+          "$ref": "#/definitions/bankaBankV1Gender"
+        },
+        "email": {
+          "type": "string"
+        },
+        "phone": {
+          "type": "string"
+        },
+        "address": {
+          "type": "string"
+        }
+      }
+    },
+    "v1CreateCardRequest": {
+      "type": "object",
+      "properties": {
+        "accountId": {
+          "type": "string"
+        },
+        "authorizedPersonId": {
+          "type": "string",
+          "description": "Required for poslovni-with-OvlascenoLice; UUID format when set."
+        },
+        "brand": {
+          "$ref": "#/definitions/v1CardBrand"
+        },
+        "name": {
+          "type": "string",
+          "description": "Name is optional — service layer falls back to a sensible default\n(\"Debit\") when blank. Cap is generous; only the upper bound matters."
+        },
+        "cardLimit": {
+          "type": "string",
+          "description": "card_limit must be a positive decimal. Pattern enforces shape; the\nservice layer additionally rejects \"0\" so callers can't bypass via\n\"0.00\"."
+        }
+      }
+    },
+    "v1CreateClientRequest": {
+      "type": "object",
+      "properties": {
+        "email": {
+          "type": "string"
+        },
+        "firstName": {
+          "type": "string"
+        },
+        "lastName": {
+          "type": "string"
+        },
+        "dateOfBirth": {
+          "type": "string"
+        },
+        "gender": {
+          "$ref": "#/definitions/bankaUserV1Gender"
+        },
+        "phone": {
+          "type": "string"
+        },
+        "address": {
+          "type": "string"
+        }
+      }
+    },
+    "v1CreateCompanyRequest": {
+      "type": "object",
+      "properties": {
+        "name": {
+          "type": "string"
+        },
+        "registryId": {
+          "type": "string",
+          "description": "Matični broj is exactly 8 digits per Serbian APR."
+        },
+        "taxId": {
+          "type": "string",
+          "description": "PIB is exactly 9 digits."
+        },
+        "activityCode": {
+          "type": "string",
+          "description": "Šifra delatnosti is \"xx.xx\" or \"xx.x\" (spec p.14)."
+        },
+        "address": {
+          "type": "string"
+        },
+        "ownerClientId": {
+          "type": "string"
+        }
+      }
+    },
+    "v1CreateEmployeeRequest": {
+      "type": "object",
+      "properties": {
+        "email": {
+          "type": "string"
+        },
+        "username": {
+          "type": "string"
+        },
+        "firstName": {
+          "type": "string"
+        },
+        "lastName": {
+          "type": "string"
+        },
+        "dateOfBirth": {
+          "type": "string",
+          "description": "YYYY-MM-DD per spec p.8."
+        },
+        "gender": {
+          "$ref": "#/definitions/bankaUserV1Gender"
+        },
+        "phone": {
+          "type": "string"
+        },
+        "address": {
+          "type": "string"
+        },
+        "position": {
+          "type": "string"
+        },
+        "department": {
+          "type": "string"
+        },
+        "active": {
+          "type": "boolean",
+          "description": "Optional so the server can distinguish \"absent\" (→ default true per\nspec p.10: \"Po default-u se podrazumeva da je korisnik aktivan\")\nfrom an explicit false. Generated as `*bool` in Go."
+        },
+        "role": {
+          "type": "string",
+          "description": "Initial role bundle, applied as a permission set; later admin\nactions can amend via SetEmployeePermissions."
+        }
+      }
+    },
+    "v1CreateOrderRequest": {
+      "type": "object",
+      "properties": {
+        "securityId": {
+          "type": "string"
+        },
+        "orderType": {
+          "$ref": "#/definitions/v1OrderType"
+        },
+        "direction": {
+          "$ref": "#/definitions/v1Direction"
+        },
+        "quantity": {
+          "type": "integer",
+          "format": "int32"
+        },
+        "limitPrice": {
+          "type": "string",
+          "title": "optional for LIMIT/STOP_LIMIT"
+        },
+        "stopPrice": {
+          "type": "string",
+          "title": "optional for STOP/STOP_LIMIT"
+        },
+        "allOrNone": {
+          "type": "boolean"
+        },
+        "margin": {
+          "type": "boolean"
+        },
+        "accountId": {
+          "type": "string"
+        }
+      }
+    },
+    "v1CreateOrderResponse": {
+      "type": "object",
+      "properties": {
+        "order": {
+          "$ref": "#/definitions/v1Order"
+        },
+        "exchangeClosed": {
+          "type": "boolean"
+        }
+      },
+      "description": "CreateOrderResponse wraps the created Order plus advisory flags. Spec\np.57 — *\"Obavestiti korisnika ako je berza zatvorena\"*: the order\nstill gets placed, but the FE renders a notice when the security's\nexchange is currently closed (not open and not in the after-hours\nwindow). For exchanges without a calendar (forex, options) the flag\nis always false."
+    },
+    "v1CreatePaymentRecipientRequest": {
+      "type": "object",
+      "properties": {
+        "name": {
+          "type": "string"
+        },
+        "accountNumber": {
+          "type": "string"
+        }
+      }
+    },
+    "v1CreatePaymentRequest": {
+      "type": "object",
+      "properties": {
+        "fromAccountId": {
+          "type": "string"
+        },
+        "toAccountNumber": {
+          "type": "string",
+          "description": "The recipient account is the spec's 18-digit \"Račun primaoca\". The\nmod-11 checksum is verified server-side; here we only enforce the\nshape so obviously-invalid input is rejected at the gateway."
+        },
+        "amount": {
+          "type": "string",
+          "description": "Positive decimal in from-account currency, up to 4 fraction digits\n(matching the numeric(20,4) storage)."
+        },
+        "recipientName": {
+          "type": "string"
+        },
+        "paymentCode": {
+          "type": "string",
+          "description": "Spec p.21: 3 digits, first one \"1\" (gotovinska) or \"2\" (bezgotovinska);\nonline plaćanja uses 2xx. Default 289 is filled in server-side if empty."
+        },
+        "referenceNumber": {
+          "type": "string"
+        },
+        "purpose": {
+          "type": "string"
+        },
+        "saveRecipient": {
+          "type": "boolean"
+        }
+      }
+    },
+    "v1CreateTransferRequest": {
+      "type": "object",
+      "properties": {
+        "fromAccountId": {
+          "type": "string"
+        },
+        "toAccountId": {
+          "type": "string"
+        },
+        "amount": {
+          "type": "string"
+        },
+        "purpose": {
+          "type": "string"
+        }
+      }
+    },
+    "v1Direction": {
+      "type": "string",
+      "enum": [
+        "DIRECTION_UNSPECIFIED",
+        "DIRECTION_BUY",
+        "DIRECTION_SELL"
+      ],
+      "default": "DIRECTION_UNSPECIFIED"
+    },
+    "v1Employee": {
+      "type": "object",
+      "properties": {
+        "id": {
+          "type": "string"
+        },
+        "email": {
+          "type": "string"
+        },
+        "username": {
+          "type": "string"
+        },
+        "firstName": {
+          "type": "string"
+        },
+        "lastName": {
+          "type": "string"
+        },
+        "dateOfBirth": {
+          "type": "string",
+          "title": "YYYY-MM-DD"
+        },
+        "gender": {
+          "$ref": "#/definitions/bankaUserV1Gender"
+        },
+        "phone": {
+          "type": "string"
+        },
+        "address": {
+          "type": "string"
+        },
+        "position": {
+          "type": "string"
+        },
+        "department": {
+          "type": "string"
+        },
+        "active": {
+          "type": "boolean"
+        },
+        "activated": {
+          "type": "boolean",
+          "title": "false until employee sets initial password"
+        },
+        "permissions": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "createdAt": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "updatedAt": {
+          "type": "string",
+          "format": "date-time"
+        }
+      }
+    },
+    "v1EmploymentStatus": {
+      "type": "string",
+      "enum": [
+        "EMPLOYMENT_STATUS_UNSPECIFIED",
+        "EMPLOYMENT_STATUS_PERMANENT",
+        "EMPLOYMENT_STATUS_TEMPORARY",
+        "EMPLOYMENT_STATUS_UNEMPLOYED"
+      ],
+      "default": "EMPLOYMENT_STATUS_UNSPECIFIED"
+    },
+    "v1Exchange": {
+      "type": "object",
+      "properties": {
+        "mic": {
+          "type": "string"
+        },
+        "name": {
+          "type": "string"
+        },
+        "acronym": {
+          "type": "string"
+        },
+        "polity": {
+          "type": "string"
+        },
+        "currency": {
+          "$ref": "#/definitions/bankaTradingV1Currency"
+        },
+        "timezone": {
+          "type": "string",
+          "title": "IANA tz id"
+        },
+        "openLocal": {
+          "type": "string",
+          "title": "\"HH:MM\""
+        },
+        "closeLocal": {
+          "type": "string",
+          "title": "\"HH:MM\""
+        },
+        "isOpen": {
+          "type": "boolean",
+          "description": "is_open is the resolved state at the time of read: applies the\noverride if set, otherwise computes from local hours + timezone."
+        },
+        "isAfterHours": {
+          "type": "boolean",
+          "description": "is_after_hours is true within 4h of close per spec p.56."
+        },
+        "overrideState": {
+          "type": "string",
+          "description": "override_state carries the admin toggle. Empty string means \"no\noverride, follow schedule\"; otherwise one of \"open\" / \"closed\" /\n\"after_hours\". The \"after_hours\" mode forces is_open=false and\nis_after_hours=true at any wall-clock so admins can drive the\nspec p.56 cadence path during testing."
+        },
+        "updatedAt": {
+          "type": "string",
+          "format": "date-time"
+        }
+      }
+    },
+    "v1ExerciseOptionResponse": {
+      "type": "object",
+      "properties": {
+        "optionHolding": {
+          "$ref": "#/definitions/v1Holding",
+          "description": "Updated option holding after the exercise. Quantity may be 0;\nthe row is left in place for audit (FE filters quantity \u003e 0)."
+        },
+        "underlyingHolding": {
+          "$ref": "#/definitions/v1Holding",
+          "description": "Updated underlying holding after the exercise — increased on a\nCALL, decreased on a PUT."
+        },
+        "bankOpId": {
+          "type": "string",
+          "description": "Bank-side op_id of the cash leg, for ops correlation."
+        },
+        "realizedGainNative": {
+          "type": "string",
+          "description": "PUT only — realized gain on the underlying shares sold at strike.\nBoth fields are zero for a CALL exercise (cost-basis update via\nweighted-avg, no realisation event)."
+        },
+        "realizedGainRsd": {
+          "type": "string"
+        },
+        "realizedGainCurrency": {
+          "$ref": "#/definitions/bankaTradingV1Currency"
+        }
+      }
+    },
+    "v1GetListingDailyHistoryResponse": {
+      "type": "object",
+      "properties": {
+        "rows": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "$ref": "#/definitions/v1ListingDailyPrice"
+          }
+        }
+      }
+    },
+    "v1GetOptionChainResponse": {
+      "type": "object",
+      "properties": {
+        "groups": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "$ref": "#/definitions/v1OptionChainGroup"
+          }
+        }
+      }
+    },
+    "v1Holding": {
+      "type": "object",
+      "properties": {
+        "id": {
+          "type": "string"
+        },
+        "userId": {
+          "type": "string"
+        },
+        "userKind": {
+          "$ref": "#/definitions/bankaTradingV1UserKind"
+        },
+        "security": {
+          "$ref": "#/definitions/v1Security"
+        },
+        "accountId": {
+          "type": "string"
+        },
+        "quantity": {
+          "type": "integer",
+          "format": "int32"
+        },
+        "weightedAvgPrice": {
+          "type": "string"
+        },
+        "publicCount": {
+          "type": "integer",
+          "format": "int32"
+        },
+        "currentPrice": {
+          "type": "string",
+          "description": "Computed market metrics."
+        },
+        "marketValue": {
+          "type": "string"
+        },
+        "profit": {
+          "type": "string"
+        },
+        "acquiredAt": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "updatedAt": {
+          "type": "string",
+          "format": "date-time"
+        }
+      }
+    },
+    "v1InstallmentStatus": {
+      "type": "string",
+      "enum": [
+        "INSTALLMENT_STATUS_UNSPECIFIED",
+        "INSTALLMENT_STATUS_PAID",
+        "INSTALLMENT_STATUS_UNPAID",
+        "INSTALLMENT_STATUS_OVERDUE"
+      ],
+      "default": "INSTALLMENT_STATUS_UNSPECIFIED"
+    },
+    "v1InterestType": {
+      "type": "string",
+      "enum": [
+        "INTEREST_TYPE_UNSPECIFIED",
+        "INTEREST_TYPE_FIXED",
+        "INTEREST_TYPE_VARIABLE"
+      ],
+      "default": "INTEREST_TYPE_UNSPECIFIED"
+    },
+    "v1ListAccountsResponse": {
+      "type": "object",
+      "properties": {
+        "accounts": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "$ref": "#/definitions/v1Account"
+          }
+        },
+        "page": {
+          "type": "integer",
+          "format": "int32"
+        },
+        "pageSize": {
+          "type": "integer",
+          "format": "int32"
+        },
+        "total": {
+          "type": "string",
+          "format": "int64"
+        }
+      }
+    },
+    "v1ListActuariesResponse": {
+      "type": "object",
+      "properties": {
+        "actuaries": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "$ref": "#/definitions/v1ActuaryInfo"
+          }
+        },
+        "page": {
+          "type": "integer",
+          "format": "int32"
+        },
+        "pageSize": {
+          "type": "integer",
+          "format": "int32"
+        },
+        "total": {
+          "type": "string",
+          "format": "int64"
+        }
+      }
+    },
+    "v1ListAuthorizedPersonsResponse": {
+      "type": "object",
+      "properties": {
+        "authorizedPersons": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "$ref": "#/definitions/v1AuthorizedPerson"
+          }
+        }
+      }
+    },
+    "v1ListCardsResponse": {
+      "type": "object",
+      "properties": {
+        "cards": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "$ref": "#/definitions/v1Card"
+          }
+        }
+      }
+    },
+    "v1ListClientsResponse": {
+      "type": "object",
+      "properties": {
+        "clients": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "$ref": "#/definitions/v1Client"
+          }
+        },
+        "page": {
+          "type": "integer",
+          "format": "int32"
+        },
+        "pageSize": {
+          "type": "integer",
+          "format": "int32"
+        },
+        "total": {
+          "type": "string",
+          "format": "int64"
+        }
+      }
+    },
+    "v1ListCompaniesResponse": {
+      "type": "object",
+      "properties": {
+        "companies": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "$ref": "#/definitions/v1Company"
+          }
+        },
+        "page": {
+          "type": "integer",
+          "format": "int32"
+        },
+        "pageSize": {
+          "type": "integer",
+          "format": "int32"
+        },
+        "total": {
+          "type": "string",
+          "format": "int64"
+        }
+      }
+    },
+    "v1ListEmployeesResponse": {
+      "type": "object",
+      "properties": {
+        "employees": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "$ref": "#/definitions/v1Employee"
+          }
+        },
+        "page": {
+          "type": "integer",
+          "format": "int32"
+        },
+        "pageSize": {
+          "type": "integer",
+          "format": "int32"
+        },
+        "total": {
+          "type": "string",
+          "format": "int64"
+        }
+      }
+    },
+    "v1ListExchangesResponse": {
+      "type": "object",
+      "properties": {
+        "exchanges": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "$ref": "#/definitions/v1Exchange"
+          }
+        }
+      }
+    },
+    "v1ListHoldingsResponse": {
+      "type": "object",
+      "properties": {
+        "holdings": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "$ref": "#/definitions/v1Holding"
+          }
+        },
+        "totalProfit": {
+          "type": "string",
+          "title": "user-currency-mixed; FE renders separately"
+        }
+      }
+    },
+    "v1ListListingsResponse": {
+      "type": "object",
+      "properties": {
+        "items": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "$ref": "#/definitions/v1SecurityWithListing"
+          }
+        },
+        "page": {
+          "type": "integer",
+          "format": "int32"
+        },
+        "pageSize": {
+          "type": "integer",
+          "format": "int32"
+        },
+        "total": {
+          "type": "string",
+          "format": "int64"
+        }
+      }
+    },
+    "v1ListLoanRequestsResponse": {
+      "type": "object",
+      "properties": {
+        "requests": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "$ref": "#/definitions/v1LoanRequest"
+          }
+        },
+        "page": {
+          "type": "integer",
+          "format": "int32"
+        },
+        "pageSize": {
+          "type": "integer",
+          "format": "int32"
+        },
+        "total": {
+          "type": "string",
+          "format": "int64"
+        }
+      }
+    },
+    "v1ListLoansResponse": {
+      "type": "object",
+      "properties": {
+        "loans": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "$ref": "#/definitions/v1Loan"
+          }
+        },
+        "page": {
+          "type": "integer",
+          "format": "int32"
+        },
+        "pageSize": {
+          "type": "integer",
+          "format": "int32"
+        },
+        "total": {
+          "type": "string",
+          "format": "int64"
+        }
+      }
+    },
+    "v1ListOrdersResponse": {
+      "type": "object",
+      "properties": {
+        "orders": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "$ref": "#/definitions/v1Order"
+          }
+        },
+        "page": {
+          "type": "integer",
+          "format": "int32"
+        },
+        "pageSize": {
+          "type": "integer",
+          "format": "int32"
+        },
+        "total": {
+          "type": "string",
+          "format": "int64"
+        }
+      }
+    },
+    "v1ListPaymentRecipientsResponse": {
+      "type": "object",
+      "properties": {
+        "recipients": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "$ref": "#/definitions/v1PaymentRecipient"
+          }
+        }
+      }
+    },
+    "v1ListRatesResponse": {
+      "type": "object",
+      "properties": {
+        "rates": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "$ref": "#/definitions/v1Rate"
+          }
+        }
+      }
+    },
+    "v1ListRealizedPnLResponse": {
+      "type": "object",
+      "properties": {
+        "rows": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "$ref": "#/definitions/v1RealizedPnLRow"
+          }
+        }
+      }
+    },
+    "v1ListSecuritiesResponse": {
+      "type": "object",
+      "properties": {
+        "items": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "$ref": "#/definitions/v1SecurityWithListing"
+          }
+        },
+        "page": {
+          "type": "integer",
+          "format": "int32"
+        },
+        "pageSize": {
+          "type": "integer",
+          "format": "int32"
+        },
+        "total": {
+          "type": "string",
+          "format": "int64"
+        }
+      }
+    },
+    "v1ListTaxPositionsResponse": {
+      "type": "object",
+      "properties": {
+        "positions": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "$ref": "#/definitions/v1TaxPosition"
+          }
+        }
+      }
+    },
+    "v1ListTransactionsResponse": {
+      "type": "object",
+      "properties": {
+        "transactions": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "$ref": "#/definitions/v1Transaction"
+          }
+        },
+        "page": {
+          "type": "integer",
+          "format": "int32"
+        },
+        "pageSize": {
+          "type": "integer",
+          "format": "int32"
+        },
+        "total": {
+          "type": "string",
+          "format": "int64"
+        }
+      }
+    },
+    "v1Listing": {
+      "type": "object",
+      "properties": {
+        "id": {
+          "type": "string"
+        },
+        "securityId": {
+          "type": "string"
+        },
+        "exchangeMic": {
+          "type": "string"
+        },
+        "price": {
+          "type": "string"
+        },
+        "ask": {
+          "type": "string"
+        },
+        "bid": {
+          "type": "string"
+        },
+        "volume": {
+          "type": "string",
+          "format": "int64"
+        },
+        "changeAmt": {
+          "type": "string"
+        },
+        "contractSize": {
+          "type": "string"
+        },
+        "lastRefresh": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "createdAt": {
+          "type": "string",
+          "format": "date-time"
+        }
+      }
+    },
+    "v1ListingDailyPrice": {
+      "type": "object",
+      "properties": {
+        "date": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "price": {
+          "type": "string"
+        },
+        "ask": {
+          "type": "string"
+        },
+        "bid": {
+          "type": "string"
+        },
+        "changeAmt": {
+          "type": "string"
+        },
+        "volume": {
+          "type": "string",
+          "format": "int64"
+        }
+      }
+    },
+    "v1Loan": {
+      "type": "object",
+      "properties": {
+        "id": {
+          "type": "string"
+        },
+        "loanNumber": {
+          "type": "string"
+        },
+        "requestId": {
+          "type": "string"
+        },
+        "clientId": {
+          "type": "string"
+        },
+        "accountId": {
+          "type": "string"
+        },
+        "loanType": {
+          "$ref": "#/definitions/v1LoanType"
+        },
+        "interestType": {
+          "$ref": "#/definitions/v1InterestType"
+        },
+        "principal": {
+          "type": "string"
+        },
+        "currency": {
+          "$ref": "#/definitions/bankaBankV1Currency"
+        },
+        "baseRate": {
+          "type": "string",
+          "title": "annual %, decimal string"
+        },
+        "margin": {
+          "type": "string"
+        },
+        "currentOffset": {
+          "type": "string"
+        },
+        "effectiveRate": {
+          "type": "string",
+          "description": "effective_rate is base + offset + margin (annual %)."
+        },
+        "installmentsTotal": {
+          "type": "integer",
+          "format": "int32"
+        },
+        "installmentAmount": {
+          "type": "string"
+        },
+        "remainingPrincipal": {
+          "type": "string"
+        },
+        "nextInstallmentDate": {
+          "type": "string",
+          "title": "YYYY-MM-DD"
+        },
+        "nextInstallmentAmount": {
+          "type": "string"
+        },
+        "status": {
+          "$ref": "#/definitions/v1LoanStatus"
+        },
+        "contractedAt": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "maturesAt": {
+          "type": "string",
+          "title": "YYYY-MM-DD"
+        }
+      }
+    },
+    "v1LoanInstallment": {
+      "type": "object",
+      "properties": {
+        "id": {
+          "type": "string"
+        },
+        "loanId": {
+          "type": "string"
+        },
+        "sequenceNumber": {
+          "type": "integer",
+          "format": "int32"
+        },
+        "amount": {
+          "type": "string"
+        },
+        "interestRateAtDue": {
+          "type": "string",
+          "title": "annual %"
+        },
+        "currency": {
+          "$ref": "#/definitions/bankaBankV1Currency"
+        },
+        "expectedDueDate": {
+          "type": "string",
+          "title": "YYYY-MM-DD"
+        },
+        "actualPaidAt": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "status": {
+          "$ref": "#/definitions/v1InstallmentStatus"
+        }
+      }
+    },
+    "v1LoanRequest": {
+      "type": "object",
+      "properties": {
+        "id": {
+          "type": "string"
+        },
+        "clientId": {
+          "type": "string"
+        },
+        "accountId": {
+          "type": "string"
+        },
+        "loanType": {
+          "$ref": "#/definitions/v1LoanType"
+        },
+        "interestType": {
+          "$ref": "#/definitions/v1InterestType"
+        },
+        "amount": {
+          "type": "string"
+        },
+        "currency": {
+          "$ref": "#/definitions/bankaBankV1Currency"
+        },
+        "purpose": {
+          "type": "string"
+        },
+        "monthlySalary": {
+          "type": "string"
+        },
+        "employmentStatus": {
+          "$ref": "#/definitions/v1EmploymentStatus"
+        },
+        "employmentDurationMonths": {
+          "type": "integer",
+          "format": "int32"
+        },
+        "installmentsTotal": {
+          "type": "integer",
+          "format": "int32"
+        },
+        "contactPhone": {
+          "type": "string"
+        },
+        "status": {
+          "$ref": "#/definitions/v1LoanRequestStatus"
+        },
+        "rejectionReason": {
+          "type": "string"
+        },
+        "decidedAt": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "decidedByEmployeeId": {
+          "type": "string"
+        },
+        "createdAt": {
+          "type": "string",
+          "format": "date-time"
+        }
+      }
+    },
+    "v1LoanRequestStatus": {
+      "type": "string",
+      "enum": [
+        "LOAN_REQUEST_STATUS_UNSPECIFIED",
+        "LOAN_REQUEST_STATUS_PENDING",
+        "LOAN_REQUEST_STATUS_APPROVED",
+        "LOAN_REQUEST_STATUS_REJECTED"
+      ],
+      "default": "LOAN_REQUEST_STATUS_UNSPECIFIED"
+    },
+    "v1LoanStatus": {
+      "type": "string",
+      "enum": [
+        "LOAN_STATUS_UNSPECIFIED",
+        "LOAN_STATUS_APPROVED",
+        "LOAN_STATUS_REJECTED",
+        "LOAN_STATUS_PAID_OFF",
+        "LOAN_STATUS_OVERDUE"
+      ],
+      "default": "LOAN_STATUS_UNSPECIFIED"
+    },
+    "v1LoanType": {
+      "type": "string",
+      "enum": [
+        "LOAN_TYPE_UNSPECIFIED",
+        "LOAN_TYPE_CASH",
+        "LOAN_TYPE_HOUSING",
+        "LOAN_TYPE_AUTO",
+        "LOAN_TYPE_REFINANCE",
+        "LOAN_TYPE_STUDENT"
+      ],
+      "default": "LOAN_TYPE_UNSPECIFIED",
+      "title": "- LOAN_TYPE_CASH: gotovinski / keš\n - LOAN_TYPE_HOUSING: stambeni\n - LOAN_TYPE_AUTO: auto\n - LOAN_TYPE_REFINANCE: refinansirajući\n - LOAN_TYPE_STUDENT: studentski"
+    },
+    "v1LoanWithInstallments": {
+      "type": "object",
+      "properties": {
+        "loan": {
+          "$ref": "#/definitions/v1Loan"
+        },
+        "installments": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "$ref": "#/definitions/v1LoanInstallment"
+          }
+        }
+      }
+    },
+    "v1LoginRequest": {
+      "type": "object",
+      "properties": {
+        "email": {
+          "type": "string"
+        },
+        "password": {
+          "type": "string"
+        }
+      }
+    },
+    "v1LoginResponse": {
+      "type": "object",
+      "properties": {
+        "accessToken": {
+          "type": "string"
+        },
+        "refreshToken": {
+          "type": "string"
+        },
+        "accessExpiresIn": {
+          "type": "string",
+          "format": "int64",
+          "title": "seconds"
+        },
+        "refreshExpiresIn": {
+          "type": "string",
+          "format": "int64"
+        },
+        "userKind": {
+          "$ref": "#/definitions/bankaUserV1UserKind"
+        },
+        "userId": {
+          "type": "string"
+        },
+        "permissions": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "firstName": {
+          "type": "string"
+        },
+        "lastName": {
+          "type": "string"
+        }
+      }
+    },
+    "v1LogoutRequest": {
+      "type": "object",
+      "properties": {
+        "refreshToken": {
+          "type": "string"
+        }
+      }
+    },
+    "v1MeResponse": {
+      "type": "object",
+      "properties": {
+        "employee": {
+          "$ref": "#/definitions/v1Employee"
+        },
+        "client": {
+          "$ref": "#/definitions/v1Client"
+        }
+      }
+    },
+    "v1OptionChainGroup": {
+      "type": "object",
+      "properties": {
+        "settlementDate": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "sharedPrice": {
+          "type": "string"
+        },
+        "rows": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "$ref": "#/definitions/v1OptionChainRow"
+          }
+        }
+      }
+    },
+    "v1OptionChainRow": {
+      "type": "object",
+      "properties": {
+        "strikePrice": {
+          "type": "string"
+        },
+        "call": {
+          "$ref": "#/definitions/v1Security"
+        },
+        "put": {
+          "$ref": "#/definitions/v1Security"
+        }
+      }
+    },
+    "v1OptionType": {
+      "type": "string",
+      "enum": [
+        "OPTION_TYPE_UNSPECIFIED",
+        "OPTION_TYPE_CALL",
+        "OPTION_TYPE_PUT"
+      ],
+      "default": "OPTION_TYPE_UNSPECIFIED"
+    },
+    "v1Order": {
+      "type": "object",
+      "properties": {
+        "id": {
+          "type": "string"
+        },
+        "userId": {
+          "type": "string"
+        },
+        "userKind": {
+          "$ref": "#/definitions/bankaTradingV1UserKind"
+        },
+        "securityId": {
+          "type": "string"
+        },
+        "orderType": {
+          "$ref": "#/definitions/v1OrderType"
+        },
+        "direction": {
+          "$ref": "#/definitions/v1Direction"
+        },
+        "quantity": {
+          "type": "integer",
+          "format": "int32"
+        },
+        "contractSize": {
+          "type": "string"
+        },
+        "pricePerUnit": {
+          "type": "string"
+        },
+        "limitPrice": {
+          "type": "string"
+        },
+        "stopPrice": {
+          "type": "string"
+        },
+        "allOrNone": {
+          "type": "boolean"
+        },
+        "margin": {
+          "type": "boolean"
+        },
+        "accountId": {
+          "type": "string"
+        },
+        "status": {
+          "$ref": "#/definitions/v1OrderStatus"
+        },
+        "approvedBy": {
+          "type": "string"
+        },
+        "approvalRequired": {
+          "type": "boolean"
+        },
+        "approvedAt": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "isDone": {
+          "type": "boolean"
+        },
+        "cancelled": {
+          "type": "boolean"
+        },
+        "triggered": {
+          "type": "boolean"
+        },
+        "afterHours": {
+          "type": "boolean"
+        },
+        "remainingQuantity": {
+          "type": "integer",
+          "format": "int32"
+        },
+        "lastModification": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "createdAt": {
+          "type": "string",
+          "format": "date-time"
+        }
+      }
+    },
+    "v1OrderStatus": {
+      "type": "string",
+      "enum": [
+        "ORDER_STATUS_UNSPECIFIED",
+        "ORDER_STATUS_PENDING",
+        "ORDER_STATUS_APPROVED",
+        "ORDER_STATUS_DECLINED"
+      ],
+      "default": "ORDER_STATUS_UNSPECIFIED"
+    },
+    "v1OrderType": {
+      "type": "string",
+      "enum": [
+        "ORDER_TYPE_UNSPECIFIED",
+        "ORDER_TYPE_MARKET",
+        "ORDER_TYPE_LIMIT",
+        "ORDER_TYPE_STOP",
+        "ORDER_TYPE_STOP_LIMIT"
+      ],
+      "default": "ORDER_TYPE_UNSPECIFIED"
+    },
+    "v1PaymentRecipient": {
+      "type": "object",
+      "properties": {
+        "id": {
+          "type": "string"
+        },
+        "clientId": {
+          "type": "string"
+        },
+        "name": {
+          "type": "string"
+        },
+        "accountNumber": {
+          "type": "string"
+        },
+        "createdAt": {
+          "type": "string",
+          "format": "date-time"
+        }
+      }
+    },
+    "v1PaymentResult": {
+      "type": "object",
+      "properties": {
+        "opId": {
+          "type": "string",
+          "description": "op_id groups the transactions; ListTransactions can filter on it\nto render a single grouped row in pregled plaćanja."
+        },
+        "transactions": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "$ref": "#/definitions/v1Transaction"
+          }
+        },
+        "status": {
+          "$ref": "#/definitions/v1TransactionStatus"
+        }
+      }
+    },
+    "v1QuoteExchangeRequest": {
+      "type": "object",
+      "properties": {
+        "from": {
+          "$ref": "#/definitions/bankaBankV1Currency"
+        },
+        "to": {
+          "$ref": "#/definitions/bankaBankV1Currency"
+        },
+        "amount": {
+          "type": "string"
+        },
+        "includeCommission": {
+          "type": "boolean",
+          "description": "include_commission: when true the response factors the bank's\nmenjačnica commission. Set to false for the rates calculator\npage where we just want the raw equivalent."
+        }
+      }
+    },
+    "v1QuoteExchangeResponse": {
+      "type": "object",
+      "properties": {
+        "fromAmount": {
+          "type": "string",
+          "title": "echoes the request, normalized"
+        },
+        "toAmount": {
+          "type": "string",
+          "title": "what the destination account receives"
+        },
+        "rate": {
+          "type": "string",
+          "title": "composite rate (one-leg or two-leg)"
+        },
+        "commission": {
+          "type": "string",
+          "title": "RSD commission, \"0\" when same currency"
+        }
+      }
+    },
+    "v1Rate": {
+      "type": "object",
+      "properties": {
+        "from": {
+          "$ref": "#/definitions/bankaExchangeV1Currency"
+        },
+        "to": {
+          "$ref": "#/definitions/bankaExchangeV1Currency"
+        },
+        "bid": {
+          "type": "string",
+          "title": "bank buys X at this rate (sell-side for client)"
+        },
+        "ask": {
+          "type": "string",
+          "title": "bank sells X at this rate (buy-side for client)"
+        },
+        "updatedAt": {
+          "type": "string",
+          "format": "date-time"
+        }
+      },
+      "description": "Rate is one row of the FX table. base/quote are decimal strings to\npreserve precision. The pair is directional: from RSD to EUR is a\ndifferent row than from EUR to RSD. The menjačnica formula uses\n(1 ± margin) on the mid; we store the resolved bid/ask so the bank\nservice doesn't need to know the spread policy."
+    },
+    "v1RealizedPnLRow": {
+      "type": "object",
+      "properties": {
+        "id": {
+          "type": "string"
+        },
+        "saleAt": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "securityId": {
+          "type": "string"
+        },
+        "ticker": {
+          "type": "string"
+        },
+        "quantity": {
+          "type": "integer",
+          "format": "int32"
+        },
+        "costBasisAmt": {
+          "type": "string",
+          "title": "native currency"
+        },
+        "proceedsAmt": {
+          "type": "string",
+          "title": "native currency"
+        },
+        "currency": {
+          "$ref": "#/definitions/bankaTradingV1Currency",
+          "title": "native currency"
+        },
+        "profitNative": {
+          "type": "string",
+          "title": "proceeds - cost_basis (native)"
+        },
+        "profitRsd": {
+          "type": "string",
+          "title": "RSD-equivalent (no commission, spec p.62)"
+        },
+        "taxAmountRsd": {
+          "type": "string",
+          "title": "15% of max(profit_rsd, 0)"
+        },
+        "taxed": {
+          "type": "boolean"
+        },
+        "taxedAt": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "taxOpId": {
+          "type": "string"
+        },
+        "accountId": {
+          "type": "string"
+        }
+      },
+      "description": "RealizedPnLRow is one closing-sell row, decorated with the security\nticker for display. tax_amount_rsd is 15% of max(profit_rsd, 0) per\nspec p.62 (losses don't generate tax under the simple model)."
+    },
+    "v1RefreshRequest": {
+      "type": "object",
+      "properties": {
+        "refreshToken": {
+          "type": "string"
+        }
+      }
+    },
+    "v1RefreshResponse": {
+      "type": "object",
+      "properties": {
+        "accessToken": {
+          "type": "string"
+        },
+        "refreshToken": {
+          "type": "string"
+        },
+        "accessExpiresIn": {
+          "type": "string",
+          "format": "int64"
+        },
+        "refreshExpiresIn": {
+          "type": "string",
+          "format": "int64"
+        }
+      }
+    },
+    "v1RequestPasswordResetRequest": {
+      "type": "object",
+      "properties": {
+        "email": {
+          "type": "string"
+        }
+      }
+    },
+    "v1ResendActivationRequest": {
+      "type": "object",
+      "properties": {
+        "employeeId": {
+          "type": "string"
+        }
+      }
+    },
+    "v1RunDailyResetActuariesResponse": {
+      "type": "object",
+      "properties": {
+        "affected": {
+          "type": "integer",
+          "format": "int32"
+        }
+      }
+    },
+    "v1RunInstallmentJobRequest": {
+      "type": "object",
+      "properties": {
+        "dueOn": {
+          "type": "string",
+          "description": "due_on lets the caller process a specific date (YYYY-MM-DD) for\ntesting. Empty → today."
+        }
+      }
+    },
+    "v1RunInstallmentJobResponse": {
+      "type": "object",
+      "properties": {
+        "processed": {
+          "type": "integer",
+          "format": "int32"
+        },
+        "paid": {
+          "type": "integer",
+          "format": "int32"
+        },
+        "overdue": {
+          "type": "integer",
+          "format": "int32"
+        }
+      }
+    },
+    "v1RunTaxRequest": {
+      "type": "object",
+      "properties": {
+        "userId": {
+          "type": "string",
+          "description": "user_id empty = run for everyone with a non-zero unpaid tax."
+        },
+        "userKind": {
+          "$ref": "#/definitions/bankaTradingV1UserKind"
+        }
+      }
+    },
+    "v1RunTaxResponse": {
+      "type": "object",
+      "properties": {
+        "usersTaxed": {
+          "type": "integer",
+          "format": "int32"
+        },
+        "totalCollectedRsd": {
+          "type": "string"
+        }
+      }
+    },
+    "v1RunVariableRateJobRequest": {
+      "type": "object"
+    },
+    "v1RunVariableRateJobResponse": {
+      "type": "object",
+      "properties": {
+        "updated": {
+          "type": "integer",
+          "format": "int32"
+        }
+      }
+    },
+    "v1Security": {
+      "type": "object",
+      "properties": {
+        "id": {
+          "type": "string"
+        },
+        "ticker": {
+          "type": "string"
+        },
+        "name": {
+          "type": "string"
+        },
+        "type": {
+          "$ref": "#/definitions/v1SecurityType"
+        },
+        "exchangeMic": {
+          "type": "string"
+        },
+        "currency": {
+          "$ref": "#/definitions/bankaTradingV1Currency"
+        },
+        "outstandingShares": {
+          "type": "string",
+          "format": "int64",
+          "description": "Stock fields."
+        },
+        "dividendYield": {
+          "type": "string",
+          "title": "decimal e.g. \"0.052\""
+        },
+        "marketCap": {
+          "type": "string",
+          "title": "outstanding_shares * price (computed)"
+        },
+        "contractSize": {
+          "type": "string",
+          "description": "Future fields (also reused for forex contract size)."
+        },
+        "contractUnit": {
+          "type": "string"
+        },
+        "settlementDate": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "baseCurrency": {
+          "$ref": "#/definitions/bankaTradingV1Currency",
+          "description": "Forex fields."
+        },
+        "quoteCurrency": {
+          "$ref": "#/definitions/bankaTradingV1Currency"
+        },
+        "liquidity": {
+          "type": "string",
+          "title": "\"high\"/\"medium\"/\"low\""
+        },
+        "underlyingSecurityId": {
+          "type": "string",
+          "description": "Option fields."
+        },
+        "optionType": {
+          "$ref": "#/definitions/v1OptionType"
+        },
+        "strikePrice": {
+          "type": "string"
+        },
+        "impliedVolatility": {
+          "type": "string"
+        },
+        "premium": {
+          "type": "string"
+        },
+        "openInterest": {
+          "type": "string",
+          "format": "int64"
+        },
+        "createdAt": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "updatedAt": {
+          "type": "string",
+          "format": "date-time"
+        }
+      },
+      "description": "Security carries the union of every type's attribute bag. Per-type\nfields are populated only when relevant; consumers pick by `type`."
+    },
+    "v1SecurityType": {
+      "type": "string",
+      "enum": [
+        "SECURITY_TYPE_UNSPECIFIED",
+        "SECURITY_TYPE_STOCK",
+        "SECURITY_TYPE_FUTURE",
+        "SECURITY_TYPE_FOREX",
+        "SECURITY_TYPE_OPTION"
+      ],
+      "default": "SECURITY_TYPE_UNSPECIFIED"
+    },
+    "v1SecurityWithListing": {
+      "type": "object",
+      "properties": {
+        "security": {
+          "$ref": "#/definitions/v1Security"
+        },
+        "listing": {
+          "$ref": "#/definitions/v1Listing"
+        },
+        "maintenanceMargin": {
+          "type": "string",
+          "description": "Computed; spec p.46 derived data."
+        },
+        "initialMarginCost": {
+          "type": "string"
+        }
+      },
+      "description": "SecurityWithListing collapses (security, listing) for the catalog\nportal so the FE doesn't need to round-trip per row."
+    },
+    "v1SubmitLoanRequestRequest": {
+      "type": "object",
+      "properties": {
+        "accountId": {
+          "type": "string"
+        },
+        "loanType": {
+          "$ref": "#/definitions/v1LoanType"
+        },
+        "interestType": {
+          "$ref": "#/definitions/v1InterestType"
+        },
+        "amount": {
+          "type": "string"
+        },
+        "currency": {
+          "$ref": "#/definitions/bankaBankV1Currency"
+        },
+        "purpose": {
+          "type": "string"
+        },
+        "monthlySalary": {
+          "type": "string"
+        },
+        "employmentStatus": {
+          "$ref": "#/definitions/v1EmploymentStatus"
+        },
+        "employmentDurationMonths": {
+          "type": "integer",
+          "format": "int32"
+        },
+        "installmentsTotal": {
+          "type": "integer",
+          "format": "int32",
+          "description": "Spec p.31: discrete tenor counts; the service-layer further checks\nthe value against the loan type (housing 60–360, others 12–84)."
+        },
+        "contactPhone": {
+          "type": "string"
+        }
+      }
+    },
+    "v1TaxPosition": {
+      "type": "object",
+      "properties": {
+        "userId": {
+          "type": "string"
+        },
+        "userKind": {
+          "$ref": "#/definitions/bankaTradingV1UserKind"
+        },
+        "displayName": {
+          "type": "string"
+        },
+        "unpaidTaxRsd": {
+          "type": "string",
+          "title": "tax owed for the current month (15% of pending gains)"
+        },
+        "paidTaxYtdRsd": {
+          "type": "string"
+        }
+      }
+    },
+    "v1Transaction": {
+      "type": "object",
+      "properties": {
+        "id": {
+          "type": "string"
+        },
+        "opId": {
+          "type": "string"
+        },
+        "kind": {
+          "$ref": "#/definitions/v1TransactionKind"
+        },
+        "legIndex": {
+          "type": "integer",
+          "format": "int32"
+        },
+        "fromAccountId": {
+          "type": "string"
+        },
+        "toAccountId": {
+          "type": "string"
+        },
+        "fromAmount": {
+          "type": "string",
+          "title": "decimal string"
+        },
+        "toAmount": {
+          "type": "string"
+        },
+        "rate": {
+          "type": "string",
+          "title": "decimal string; \"\" when same currency"
+        },
+        "recipientName": {
+          "type": "string"
+        },
+        "paymentCode": {
+          "type": "string"
+        },
+        "referenceNumber": {
+          "type": "string"
+        },
+        "purpose": {
+          "type": "string"
+        },
+        "initiatorClientId": {
+          "type": "string"
+        },
+        "status": {
+          "$ref": "#/definitions/v1TransactionStatus"
+        },
+        "createdAt": {
+          "type": "string",
+          "format": "date-time"
+        }
+      },
+      "description": "Transaction is one ledger leg. UX-level operations (a payment, a\ntransfer) are reconstructed by grouping on op_id."
+    },
+    "v1TransactionKind": {
+      "type": "string",
+      "enum": [
+        "TRANSACTION_KIND_UNSPECIFIED",
+        "TRANSACTION_KIND_PAYMENT",
+        "TRANSACTION_KIND_TRANSFER",
+        "TRANSACTION_KIND_EXCHANGE",
+        "TRANSACTION_KIND_FEE",
+        "TRANSACTION_KIND_TRADE",
+        "TRANSACTION_KIND_TAX"
+      ],
+      "default": "TRANSACTION_KIND_UNSPECIFIED",
+      "title": "- TRANSACTION_KIND_EXCHANGE: intermediate leg in a menjačnica path\n - TRANSACTION_KIND_TRADE: trading-service fill settlement\n - TRANSACTION_KIND_TAX: capital-gains tax debit (spec p.62)"
+    },
+    "v1TransactionStatus": {
+      "type": "string",
+      "enum": [
+        "TRANSACTION_STATUS_UNSPECIFIED",
+        "TRANSACTION_STATUS_REALIZED",
+        "TRANSACTION_STATUS_REJECTED",
+        "TRANSACTION_STATUS_PROCESSING"
+      ],
+      "default": "TRANSACTION_STATUS_UNSPECIFIED"
+    },
+    "v1UpsertListingRequest": {
+      "type": "object",
+      "properties": {
+        "securityId": {
+          "type": "string"
+        },
+        "exchangeMic": {
+          "type": "string"
+        },
+        "price": {
+          "type": "string"
+        },
+        "ask": {
+          "type": "string"
+        },
+        "bid": {
+          "type": "string"
+        },
+        "volume": {
+          "type": "string",
+          "format": "int64"
+        },
+        "changeAmt": {
+          "type": "string"
+        },
+        "contractSize": {
+          "type": "string"
+        }
+      }
+    },
+    "v1UpsertRateRequest": {
+      "type": "object",
+      "properties": {
+        "from": {
+          "$ref": "#/definitions/bankaExchangeV1Currency"
+        },
+        "to": {
+          "$ref": "#/definitions/bankaExchangeV1Currency"
+        },
+        "bid": {
+          "type": "string"
+        },
+        "ask": {
+          "type": "string"
+        }
+      }
+    },
+    "v1UpsertSecurityRequest": {
+      "type": "object",
+      "properties": {
+        "id": {
+          "type": "string",
+          "description": "For new securities, leave id empty; for updates, supply it."
+        },
+        "ticker": {
+          "type": "string"
+        },
+        "name": {
+          "type": "string"
+        },
+        "type": {
+          "$ref": "#/definitions/v1SecurityType"
+        },
+        "exchangeMic": {
+          "type": "string"
+        },
+        "currency": {
+          "$ref": "#/definitions/bankaTradingV1Currency"
+        },
+        "outstandingShares": {
+          "type": "string",
+          "format": "int64"
+        },
+        "dividendYield": {
+          "type": "string"
+        },
+        "contractSize": {
+          "type": "string"
+        },
+        "contractUnit": {
+          "type": "string"
+        },
+        "settlementDate": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "baseCurrency": {
+          "$ref": "#/definitions/bankaTradingV1Currency"
+        },
+        "quoteCurrency": {
+          "$ref": "#/definitions/bankaTradingV1Currency"
+        },
+        "liquidity": {
+          "type": "string"
+        },
+        "underlyingSecurityId": {
+          "type": "string"
+        },
+        "optionType": {
+          "$ref": "#/definitions/v1OptionType"
+        },
+        "strikePrice": {
+          "type": "string"
+        },
+        "impliedVolatility": {
+          "type": "string"
+        },
+        "premium": {
+          "type": "string"
+        },
+        "openInterest": {
+          "type": "string",
+          "format": "int64"
+        }
+      }
+    }
+  }
+}

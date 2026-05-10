@@ -27,6 +27,7 @@ tasks:
 
   up:
     desc: Bring up the full stack (infra + every service)
+    deps: [proto]
     cmd: '{{.COMPOSE}} up -d --build'
 
   down:
