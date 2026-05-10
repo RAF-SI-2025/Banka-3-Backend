@@ -119,9 +119,6 @@ services:
       dockerfile: docker/Dockerfile
       args:
         SERVICE: exchange
-    environment:
-      <<: *service-env
-      EXCHANGE_RATE_API_KEY: "${EXCHANGE_RATE_API_KEY}"
     ports:
       - "${EXCHANGE_GRPC_PORT:-50054}:50051"
       - "${EXCHANGE_PROBE_PORT:-8084}:8081"
