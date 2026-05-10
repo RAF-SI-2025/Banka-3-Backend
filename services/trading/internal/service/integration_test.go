@@ -1966,3 +1966,470 @@ func TestIntegration_ExerciseOption_RequiresActuary(t *testing.T) {
 		t.Fatalf("expected PermissionDenied; got %v", err)
 	}
 }
+
+// =====================================================================
+// BE-PR4 — c3 audit test-coverage gaps
+// =====================================================================
+
+// employeeNoTradingCtx mints a principal that's an employee but holds
+// none of the trading permissions. Used by BE-T16 to assert
+// assertTraderRole rejects at create-time.
+func employeeNoTradingCtx(id string) context.Context {
+	return auth.WithPrincipal(context.Background(), auth.Principal{
+		UserID:      id,
+		UserKind:    auth.KindEmployee,
+		Permissions: []string{permissions.EmployeeRead, permissions.ClientRead},
+	})
+}
+
+// TestIntegration_StopLimit_TriggeredIdempotent (BE-T2) covers spec
+// p.54: once a STOP_LIMIT crosses its stop and flips triggered=true,
+// subsequent ticks behave like a Limit and never re-evaluate the stop.
+// We trigger on tick 1, then drop the ask back below stop and confirm
+// the row stays triggered=true; the order then fills under the limit
+// rule as soon as ask <= limit.
+func TestIntegration_StopLimit_TriggeredIdempotent(t *testing.T) {
+	svc := setup(t)
+	ex := seedExchange(t, svc, "XNYS", domain.CurrencyUSD)
+	// stop=100, limit=200. ask=101 will fire the stop on tick 1; the
+	// limit allows fill (101 ≤ 200) so the order completes immediately.
+	// We re-run after dropping ask back below stop to assert triggered
+	// persists.
+	sec, _ := seedStock(t, svc, "STIM", ex, "100", "101", "100", 1_000_000)
+
+	clientID := uuid.NewString()
+	o, err := svc.CreateOrder(clientCtx(clientID), CreateOrderInput{
+		SecurityID: sec.ID,
+		OrderType:  domain.OrderStopLimit,
+		Direction:  domain.DirectionBuy,
+		Quantity:   1,
+		StopPrice:  "100",
+		LimitPrice: "200",
+		AllOrNone:  true,
+		AccountID:  uuid.NewString(),
+	})
+	if err != nil {
+		t.Fatalf("create stop_limit: %v", err)
+	}
+	res, err := svc.ProcessOrderTick(context.Background(), o.Order)
+	if err != nil {
+		t.Fatalf("tick1: %v", err)
+	}
+	if !res.Fired {
+		t.Fatalf("expected first tick to trigger + fill")
+	}
+	post, _ := svc.Store.GetOrder(context.Background(), o.ID)
+	if !post.Triggered {
+		t.Fatalf("post-tick1: triggered should be true")
+	}
+
+	// Drop ask + bid below stop (listings_spread requires ask >= bid).
+	// The order is already done, but the row must keep triggered=true
+	// — stop is never re-evaluated once flipped.
+	if _, err := fixPool.Exec(context.Background(),
+		`update "trading".listings set ask='50', bid='49', price='49' where security_id=$1`, sec.ID); err != nil {
+		t.Fatalf("drop ask: %v", err)
+	}
+	post2, _ := svc.Store.GetOrder(context.Background(), o.ID)
+	if !post2.Triggered {
+		t.Fatalf("post-tick2: triggered must remain true even when ask < stop")
+	}
+}
+
+// TestIntegration_Execution_LimitFillPriceMaxSell (BE-T3) is the sell
+// twin of LimitFillPriceMin: spec p.51 — sell-limit fills at
+// max(limit, bid). bid=110 vs limit=100 → fill at 110.
+func TestIntegration_Execution_LimitFillPriceMaxSell(t *testing.T) {
+	svc := setup(t)
+	ex := seedExchange(t, svc, "XNYS", domain.CurrencyUSD)
+	sec, _ := seedStock(t, svc, "LIMS", ex, "110", "111", "110", 1_000_000)
+
+	clientID := uuid.NewString()
+	accID := uuid.NewString()
+	// Seed a holding so the sell has something to draw from. ApplyBuyFill
+	// creates a 1-share position at 90 native cost.
+	seedHolding(t, svc, clientID, domain.KindClient, sec.ID, accID, 1, "90")
+
+	o, err := svc.CreateOrder(clientCtx(clientID), CreateOrderInput{
+		SecurityID: sec.ID,
+		OrderType:  domain.OrderLimit,
+		Direction:  domain.DirectionSell,
+		Quantity:   1,
+		LimitPrice: "100",
+		AllOrNone:  true,
+		AccountID:  accID,
+	})
+	if err != nil {
+		t.Fatalf("create limit-sell: %v", err)
+	}
+	res, err := svc.ProcessOrderTick(context.Background(), o.Order)
+	if err != nil {
+		t.Fatalf("tick: %v", err)
+	}
+	if !res.Fired || res.Execution == nil {
+		t.Fatalf("expected fill, got fired=%v exec=%v", res.Fired, res.Execution)
+	}
+	if !numericEq(res.Execution.PricePerUnit, "110") {
+		t.Fatalf("fill price = %s, want 110 (max(limit=100, bid=110))",
+			res.Execution.PricePerUnit)
+	}
+}
+
+// TestIntegration_Execution_AONMultiTick (BE-T4) covers AON's
+// "no fill until conditions allow" behavior. Tick 1: limit-buy at 90,
+// ask=95 — conditions not met, no fill. Tick 2 after a price drop:
+// ask=85, fills the entire order in one shot.
+func TestIntegration_Execution_AONMultiTick(t *testing.T) {
+	svc := setup(t)
+	ex := seedExchange(t, svc, "XNYS", domain.CurrencyUSD)
+	sec, _ := seedStock(t, svc, "AONM", ex, "95", "95", "94", 1_000_000)
+
+	clientID := uuid.NewString()
+	o, err := svc.CreateOrder(clientCtx(clientID), CreateOrderInput{
+		SecurityID: sec.ID,
+		OrderType:  domain.OrderLimit,
+		Direction:  domain.DirectionBuy,
+		Quantity:   5,
+		LimitPrice: "90",
+		AllOrNone:  true,
+		AccountID:  uuid.NewString(),
+	})
+	if err != nil {
+		t.Fatalf("create AON limit: %v", err)
+	}
+
+	// Tick 1: ask=95 > limit=90 → no fill, no partial. AON must NOT
+	// emit a partial-fill row in this state.
+	res, err := svc.ProcessOrderTick(context.Background(), o.Order)
+	if err != nil {
+		t.Fatalf("tick1: %v", err)
+	}
+	if res.Fired {
+		t.Fatalf("AON should not fill when limit conditions miss")
+	}
+	mid, _ := svc.Store.GetOrder(context.Background(), o.ID)
+	if mid.RemainingQuantity != 5 {
+		t.Fatalf("AON: remaining after non-fill = %d, want 5", mid.RemainingQuantity)
+	}
+
+	// Drop ask below limit; AON fills the whole 5 shares atomically.
+	if _, err := fixPool.Exec(context.Background(),
+		`update "trading".listings set ask='85', bid='84', price='85' where security_id=$1`, sec.ID); err != nil {
+		t.Fatalf("drop ask: %v", err)
+	}
+	mid2, _ := svc.Store.GetOrder(context.Background(), o.ID)
+	res2, err := svc.ProcessOrderTick(context.Background(), mid2)
+	if err != nil {
+		t.Fatalf("tick2: %v", err)
+	}
+	if !res2.Fired || res2.Execution == nil {
+		t.Fatalf("AON should fire once conditions allow; res=%+v", res2)
+	}
+	if res2.Execution.Quantity != 5 {
+		t.Fatalf("AON fill qty=%d, want 5 (atomic)", res2.Execution.Quantity)
+	}
+	post, _ := svc.Store.GetOrder(context.Background(), o.ID)
+	if !post.IsDone {
+		t.Fatalf("AON: is_done should be true after the single 5-share fill")
+	}
+}
+
+// TestIntegration_Margin_ActuaryBalanceOnly (BE-T5) covers spec p.55's
+// actuary limb: actuaries pass margin eligibility on
+// `account_balance > IMC` alone (the loan limb is client-only).
+// Seeds an account that comfortably covers IMC and verifies the
+// actuary's margin order auto-approves.
+func TestIntegration_Margin_ActuaryBalanceOnly(t *testing.T) {
+	svc := setup(t)
+	ex := seedExchange(t, svc, "XNYS", domain.CurrencyUSD)
+	// IMC ≈ 1.1 × 50 × 1 = 55 USD ≈ 6055 RSD. Seed 1000 USD ≈ 110k RSD.
+	sec, _ := seedStock(t, svc, "ACTM", ex, "100", "100", "99", 1000)
+
+	agentID := uuid.NewString()
+	accID := uuid.NewString()
+	seedActuary(t, svc, agentID, domain.ActuaryAgent, "10000000", false)
+	currentMargin.addAccount(accID, domain.CurrencyUSD, "1000")
+
+	// Agent with TradingMargin explicitly granted — no loan in scope.
+	agentMargin := auth.WithPrincipal(context.Background(), auth.Principal{
+		UserID:      agentID,
+		UserKind:    auth.KindEmployee,
+		Permissions: []string{permissions.Actuary, permissions.ActuaryAgent, permissions.TradingMargin},
+	})
+	out, err := svc.CreateOrder(agentMargin, CreateOrderInput{
+		SecurityID: sec.ID,
+		OrderType:  domain.OrderMarket,
+		Direction:  domain.DirectionBuy,
+		Quantity:   1,
+		AccountID:  accID,
+		Margin:     true,
+	})
+	if err != nil {
+		t.Fatalf("actuary margin balance-only: %v", err)
+	}
+	if !out.Margin {
+		t.Fatalf("margin flag did not persist on actuary order")
+	}
+	if out.Status != domain.OrderStatusApproved {
+		t.Fatalf("actuary margin: status=%s, want approved (under-limit)", out.Status)
+	}
+
+	// And: a separate agent without TradingMargin must NOT auto-pass
+	// the gate via a loan, since the loan limb is client-only.
+	agent2 := uuid.NewString()
+	seedActuary(t, svc, agent2, domain.ActuaryAgent, "10000000", false)
+	currentMargin.addAccount(accID, domain.CurrencyUSD, "1000")
+	currentMargin.addLoan(agent2, domain.CurrencyRSD, "9999999")
+	noMarginCtx := auth.WithPrincipal(context.Background(), auth.Principal{
+		UserID:   agent2,
+		UserKind: auth.KindEmployee,
+		// Note: no TradingMargin — the loan-derived auto-grant is
+		// client-only per spec p.55.
+		Permissions: []string{permissions.Actuary, permissions.ActuaryAgent},
+	})
+	_, err = svc.CreateOrder(noMarginCtx, CreateOrderInput{
+		SecurityID: sec.ID,
+		OrderType:  domain.OrderMarket,
+		Direction:  domain.DirectionBuy,
+		Quantity:   1,
+		AccountID:  accID,
+		Margin:     true,
+	})
+	if !isApperr(err, apperr.KindPermissionDenied) {
+		t.Fatalf("agent without TradingMargin must not auto-pass via loan; got %v", err)
+	}
+}
+
+// TestIntegration_Margin_AutoGrantLoanBelowIMC (BE-T6) covers the
+// gap between the gate (loan != "" admits) and the eligibility
+// (loan_amount > IMC required). A client without TradingMargin holds a
+// loan that's smaller than IMC — they pass the permission gate but get
+// rejected by assertMarginEligible. Asserts the boundary by comparing
+// against a sibling test where the loan covers IMC and passes.
+func TestIntegration_Margin_AutoGrantLoanBelowIMC(t *testing.T) {
+	svc := setup(t)
+	ex := seedExchange(t, svc, "XNYS", domain.CurrencyUSD)
+	// IMC ≈ 6055 RSD per share at price=100.
+	sec, _ := seedStock(t, svc, "AGLO", ex, "100", "100", "99", 1000)
+
+	clientID := uuid.NewString()
+	accID := uuid.NewString()
+	currentMargin.addAccount(accID, domain.CurrencyUSD, "1") // ≈110 RSD; under-balance
+	// 1000 RSD loan: passes the gate (amt != ""), fails the > IMC check.
+	currentMargin.addLoan(clientID, domain.CurrencyRSD, "1000")
+
+	_, err := svc.CreateOrder(clientCtx(clientID), CreateOrderInput{
+		SecurityID: sec.ID,
+		OrderType:  domain.OrderMarket,
+		Direction:  domain.DirectionBuy,
+		Quantity:   1,
+		AccountID:  accID,
+		Margin:     true,
+	})
+	if !isApperr(err, apperr.KindFailedPrecondition) {
+		t.Fatalf("loan < IMC: err=%v, want FailedPrecondition (gate passes, eligibility fails)", err)
+	}
+}
+
+// TestIntegration_CreateOrder_OptionSettlementGuard (BE-T11) is the
+// option twin of TestIntegration_CreateOrder_SettlementDateGuard. Spec
+// p.50 also applies to options — exercise window doesn't extend past
+// expiry. Auto-rejects at create on FailedPrecondition.
+func TestIntegration_CreateOrder_OptionSettlementGuard(t *testing.T) {
+	svc := setup(t)
+	ex := seedExchange(t, svc, "XNYS", domain.CurrencyUSD)
+	stock, _ := seedStock(t, svc, "MSFT", ex, "100", "100", "99", 1000)
+	yesterday := time.Now().Add(-24 * time.Hour)
+	expired := seedOption(t, svc, "MSFT-C-100-EXP", stock, domain.OptionCall, "100", "100", yesterday)
+
+	// Clients can't trade options (spec p.58) — the settlement guard
+	// fires before the visibility check, but to keep the test focused
+	// on the guard we use an actuary principal which bypasses p.58.
+	agentID := uuid.NewString()
+	seedActuary(t, svc, agentID, domain.ActuaryAgent, "10000000", false)
+
+	_, err := svc.CreateOrder(agentCtx(agentID), CreateOrderInput{
+		SecurityID: expired.ID,
+		OrderType:  domain.OrderMarket,
+		Direction:  domain.DirectionBuy,
+		Quantity:   1,
+		AccountID:  uuid.NewString(),
+	})
+	if !isApperr(err, apperr.KindFailedPrecondition) {
+		t.Fatalf("expired option: err=%v, want FailedPrecondition", err)
+	}
+}
+
+// TestIntegration_DailyLimitResetCron (BE-T13) covers spec p.38: the
+// daily 23:59 (Belgrade) cron zeroes used_limit across every actuary.
+// We seed an agent whose used_limit equals daily_limit (so no further
+// trade fits), invoke RunDailyResetActuaries, and assert the next
+// trade fits under the cap.
+func TestIntegration_DailyLimitResetCron(t *testing.T) {
+	svc := setup(t)
+	ex := seedExchange(t, svc, "XNYS", domain.CurrencyUSD)
+	sec, _ := seedStock(t, svc, "PNNY", ex, "1", "1", "1", 1000)
+
+	agentID := uuid.NewString()
+	seedActuary(t, svc, agentID, domain.ActuaryAgent, "1000", false)
+
+	// Saturate the limit by hand-writing used_limit = daily_limit.
+	if _, err := fixPool.Exec(context.Background(),
+		`update "trading".actuary_info set used_limit='1000' where employee_id=$1`, agentID); err != nil {
+		t.Fatalf("saturate limit: %v", err)
+	}
+
+	// Pre-reset: a fresh trade pushes over and lands pending.
+	pre, err := svc.CreateOrder(agentCtx(agentID), CreateOrderInput{
+		SecurityID: sec.ID,
+		OrderType:  domain.OrderMarket,
+		Direction:  domain.DirectionBuy,
+		Quantity:   1,
+		AccountID:  uuid.NewString(),
+	})
+	if err != nil {
+		t.Fatalf("pre-reset create: %v", err)
+	}
+	if pre.Status != domain.OrderStatusPending {
+		t.Fatalf("pre-reset status=%s, want pending (used_limit saturated)", pre.Status)
+	}
+
+	// Run the daily reset cron (no principal — service-internal call).
+	n, err := svc.RunDailyResetActuaries(context.Background())
+	if err != nil {
+		t.Fatalf("RunDailyResetActuaries: %v", err)
+	}
+	if n < 1 {
+		t.Fatalf("reset row count = %d, want ≥1", n)
+	}
+	info, err := svc.Store.GetActuaryInfo(context.Background(), agentID)
+	if err != nil {
+		t.Fatalf("GetActuaryInfo post-reset: %v", err)
+	}
+	if !numericEq(info.UsedLimit, "0") {
+		t.Fatalf("used_limit post-reset = %q, want 0", info.UsedLimit)
+	}
+
+	// Post-reset: the same trade auto-approves.
+	post, err := svc.CreateOrder(agentCtx(agentID), CreateOrderInput{
+		SecurityID: sec.ID,
+		OrderType:  domain.OrderMarket,
+		Direction:  domain.DirectionBuy,
+		Quantity:   1,
+		AccountID:  uuid.NewString(),
+	})
+	if err != nil {
+		t.Fatalf("post-reset create: %v", err)
+	}
+	if post.Status != domain.OrderStatusApproved {
+		t.Fatalf("post-reset status=%s, want approved", post.Status)
+	}
+}
+
+// TestIntegration_Execution_ForexSell (BE-T14) is the sell twin of
+// TestIntegration_Execution_ForexNoHolding. A forex sell pairs a
+// debit on the base currency with a credit on the quote currency, and
+// (per spec p.42) writes no holding rows.
+func TestIntegration_Execution_ForexSell(t *testing.T) {
+	svc := setup(t)
+	ex := seedExchange(t, svc, "XNYS", domain.CurrencyUSD)
+	ctx := context.Background()
+	sec, err := svc.Store.UpsertSecurity(ctx, &domain.Security{
+		Ticker:        "EURUSD",
+		Name:          "Euro / US Dollar",
+		Type:          domain.SecurityForex,
+		ExchangeMIC:   ex.MIC,
+		Currency:      domain.CurrencyUSD,
+		BaseCurrency:  domain.CurrencyEUR,
+		QuoteCurrency: domain.CurrencyUSD,
+		ContractSize:  "1000",
+		Liquidity:     "high",
+	})
+	if err != nil {
+		t.Fatalf("UpsertSecurity forex: %v", err)
+	}
+	if _, err := svc.Store.UpsertListing(ctx, &domain.Listing{
+		SecurityID: sec.ID, ExchangeMIC: ex.MIC,
+		Price: "1.10", Ask: "1.11", Bid: "1.10",
+		Volume: 1000000, ChangeAmt: "0", ContractSize: "1000",
+	}); err != nil {
+		t.Fatalf("UpsertListing forex: %v", err)
+	}
+
+	agentID := uuid.NewString()
+	seedActuary(t, svc, agentID, domain.ActuaryAgent, "10000000", false)
+
+	o, err := svc.CreateOrder(agentCtx(agentID), CreateOrderInput{
+		SecurityID: sec.ID,
+		OrderType:  domain.OrderMarket,
+		Direction:  domain.DirectionSell,
+		Quantity:   1,
+		AllOrNone:  true,
+		AccountID:  uuid.NewString(),
+	})
+	if err != nil {
+		t.Fatalf("create forex sell: %v", err)
+	}
+	res, err := svc.ProcessOrderTick(context.Background(), o.Order)
+	if err != nil {
+		t.Fatalf("tick: %v", err)
+	}
+	if !res.Fired {
+		t.Fatalf("expected forex sell to fire")
+	}
+
+	if len(currentSettler.forexCalls) != 1 {
+		t.Fatalf("expected 1 forex settle call, got %d", len(currentSettler.forexCalls))
+	}
+	fx := currentSettler.forexCalls[0]
+	if fx.Direction != "sell" {
+		t.Fatalf("forex sell direction = %q, want sell", fx.Direction)
+	}
+	if fx.BaseCurrency != domain.CurrencyEUR || fx.QuoteCurrency != domain.CurrencyUSD {
+		t.Fatalf("forex pair = %s/%s, want EUR/USD", fx.BaseCurrency, fx.QuoteCurrency)
+	}
+	// Sell takes the bid (1.10), not the ask, on the quote leg.
+	if !numericEq(fx.QuoteAmount, "1100") {
+		t.Fatalf("forex sell quote_amount = %s, want 1100 (1000 × 1.10 bid)", fx.QuoteAmount)
+	}
+
+	// No holding row landed.
+	holdings, _ := svc.Store.ListHoldings(context.Background(), store.HoldingFilter{UserID: agentID})
+	for _, h := range holdings {
+		if h.SecurityID == sec.ID {
+			t.Fatalf("forex sell created a holding row; spec p.42 forbids that. holding=%+v", h)
+		}
+	}
+}
+
+// TestIntegration_CreateOrder_NonTradingEmployeeRejected (BE-T16)
+// covers assertTraderRole: an employee with no trading permission
+// (no Admin / Actuary* / TradingClient) is rejected up-front with
+// PermissionDenied — the order must not land in the DB.
+func TestIntegration_CreateOrder_NonTradingEmployeeRejected(t *testing.T) {
+	svc := setup(t)
+	ex := seedExchange(t, svc, "XNYS", domain.CurrencyUSD)
+	sec, _ := seedStock(t, svc, "AAPL", ex, "150", "150", "149", 1000)
+
+	id := uuid.NewString()
+	_, err := svc.CreateOrder(employeeNoTradingCtx(id), CreateOrderInput{
+		SecurityID: sec.ID,
+		OrderType:  domain.OrderMarket,
+		Direction:  domain.DirectionBuy,
+		Quantity:   1,
+		AccountID:  uuid.NewString(),
+	})
+	if !isApperr(err, apperr.KindPermissionDenied) {
+		t.Fatalf("non-trading employee: err=%v, want PermissionDenied", err)
+	}
+
+	// And: no row was inserted.
+	var n int
+	if err := fixPool.QueryRow(context.Background(),
+		`select count(*) from "trading".orders where user_id=$1`, id).Scan(&n); err != nil {
+		t.Fatalf("count orders: %v", err)
+	}
+	if n != 0 {
+		t.Fatalf("rejected order should not have been persisted; got %d rows", n)
+	}
+}

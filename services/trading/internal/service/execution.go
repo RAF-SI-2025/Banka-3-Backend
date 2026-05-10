@@ -673,14 +673,7 @@ func (s *Service) cadenceReady(ctx context.Context, o *domain.Order, listing *do
 		return false
 	}
 	maxInterval := cadenceMaxInterval(remaining, volume)
-
-	interval := time.Duration(executionRand.Int63n(int64(maxInterval)))
-	if o.AfterHours {
-		// Spec p.56: "za ispunjavanje svakog dela Order-a se čeka
-		// dodatnih 30 minuta" — the extra wait is added on top of the
-		// rolled interval, not folded into the random distribution.
-		interval += 30 * time.Minute
-	}
+	interval := rolledFillInterval(maxInterval, o.AfterHours)
 	since, ok, err := s.timeSinceLastFill(ctx, o)
 	if err != nil {
 		s.Log.Warn("cadence: latest exec lookup failed", "order_id", o.ID, "err", err.Error())
@@ -695,6 +688,19 @@ func (s *Service) cadenceReady(ctx context.Context, o *domain.Order, listing *do
 		since = s.now().Sub(anchor)
 	}
 	return since >= interval
+}
+
+// rolledFillInterval rolls a per-tick cadence interval. Spec p.56:
+// the random component is uniform on [0, maxInterval); after-hours
+// orders add a flat 30 min on top of the roll, NOT folded into the
+// uniform distribution. Extracted so the +30min branch is unit-
+// testable without driving cadenceReady's store-side timing.
+func rolledFillInterval(maxInterval time.Duration, afterHours bool) time.Duration {
+	interval := time.Duration(executionRand.Int63n(int64(maxInterval)))
+	if afterHours {
+		interval += 30 * time.Minute
+	}
+	return interval
 }
 
 // cadenceMaxInterval is the spec p.56 random-cap formula

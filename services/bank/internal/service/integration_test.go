@@ -289,6 +289,80 @@ func TestIntegration_EnsureSystemAccounts(t *testing.T) {
 	}
 }
 
+// TestIntegration_EnsureSystemAccounts_StateTaxAndForexBook (BE-T12)
+// pins the documented opening balances for the c3 system accounts:
+//
+//   - KindStateTax: one RSD account, balance starts at 0 (it accumulates
+//     from the monthly tax cron — spec p.62).
+//   - KindForexBook: one account per supported currency, pre-funded
+//     with 10⁹ so spec p.42 paired settlement has a working
+//     counterparty without underflowing the bank's >= 0 invariant.
+//
+// EnsureSystemAccounts is idempotent; the regular setup() path runs it
+// at startup, so we only assert the post-state.
+func TestIntegration_EnsureSystemAccounts_StateTaxAndForexBook(t *testing.T) {
+	svc := setup(t)
+	ctx := context.Background()
+
+	// State-tax account.
+	stateAcc, err := svc.Store.GetStateTaxAccount(ctx)
+	if err != nil {
+		t.Fatalf("missing state-tax account: %v", err)
+	}
+	if stateAcc.Kind != domain.KindStateTax {
+		t.Errorf("state-tax kind=%q, want %q", stateAcc.Kind, domain.KindStateTax)
+	}
+	if stateAcc.OwnerClientID != domain.StateTaxOwnerID {
+		t.Errorf("state-tax owner=%q, want StateTaxOwnerID", stateAcc.OwnerClientID)
+	}
+	if stateAcc.Currency != domain.CurrencyRSD {
+		t.Errorf("state-tax currency=%s, want RSD", stateAcc.Currency)
+	}
+	// Spec p.62: state tax starts at 0 — credits arrive from the
+	// monthly tax cron, not from a pre-fund.
+	if stateAcc.Balance != "0.0000" {
+		t.Errorf("state-tax opening balance=%s, want 0.0000", stateAcc.Balance)
+	}
+	if stateAcc.AvailableBalance != "0.0000" {
+		t.Errorf("state-tax opening available=%s, want 0.0000", stateAcc.AvailableBalance)
+	}
+
+	// Forex-book accounts: one per currency, each pre-funded at 10⁹.
+	const forexBookFloat = "1000000000.0000"
+	for _, c := range domain.SupportedCurrencies() {
+		acc, err := svc.Store.GetForexBookAccount(ctx, c)
+		if err != nil {
+			t.Errorf("missing forex-book account for %s: %v", c, err)
+			continue
+		}
+		if acc.Kind != domain.KindForexBook {
+			t.Errorf("%s forex-book kind=%q, want %q", c, acc.Kind, domain.KindForexBook)
+		}
+		if acc.OwnerClientID != domain.ForexBookOwnerID {
+			t.Errorf("%s forex-book owner=%q, want ForexBookOwnerID", c, acc.OwnerClientID)
+		}
+		if acc.Balance != forexBookFloat {
+			t.Errorf("%s forex-book balance=%s, want %s", c, acc.Balance, forexBookFloat)
+		}
+		if acc.AvailableBalance != forexBookFloat {
+			t.Errorf("%s forex-book available=%s, want %s", c, acc.AvailableBalance, forexBookFloat)
+		}
+	}
+
+	// Idempotency: a second EnsureSystemAccounts call must NOT
+	// duplicate or re-fund the rows.
+	if err := svc.EnsureSystemAccounts(ctx); err != nil {
+		t.Fatalf("re-ensure: %v", err)
+	}
+	stateAfter, _ := svc.Store.GetStateTaxAccount(ctx)
+	if stateAfter.ID != stateAcc.ID {
+		t.Errorf("state-tax account replaced on re-ensure (id %s → %s)", stateAcc.ID, stateAfter.ID)
+	}
+	if stateAfter.Balance != stateAcc.Balance {
+		t.Errorf("state-tax balance changed on re-ensure: %s → %s", stateAcc.Balance, stateAfter.Balance)
+	}
+}
+
 // TestIntegration_CreateAccount_RSDChecking mints a personal RSD
 // account, verifies the 18-digit checksum and that opening balance
 // flows through to balance + available_balance.

@@ -3,6 +3,7 @@ package service
 import (
 	"context"
 	"math/big"
+	"math/rand"
 	"testing"
 	"time"
 
@@ -304,6 +305,66 @@ func TestCadenceMaxInterval(t *testing.T) {
 	thin := cadenceMaxInterval(5, 50)
 	if thick >= thin {
 		t.Fatalf("expected thick(%s) < thin(%s)", thick, thin)
+	}
+}
+
+// TestRolledFillInterval pins the spec p.56 cadence-roll contract:
+// regular orders pick a uniform interval on [0, maxInterval); after-
+// hours orders add a flat 30 min on top of that roll. We swap out
+// executionRand for a deterministic source so the random component is
+// pinned and the +30min branch is the only difference.
+func TestRolledFillInterval(t *testing.T) {
+	orig := executionRand
+	t.Cleanup(func() { executionRand = orig })
+
+	// Seeded with 0; for a 1h cap, the first roll lands at a fixed
+	// duration. We don't need to know the exact value — only that the
+	// after-hours leg is exactly 30 min more than the regular leg
+	// when both are rolled from the same seed.
+	maxInterval := time.Hour
+
+	executionRand = rand.New(rand.NewSource(0))
+	regular := rolledFillInterval(maxInterval, false)
+
+	executionRand = rand.New(rand.NewSource(0))
+	afterHours := rolledFillInterval(maxInterval, true)
+
+	if got, want := afterHours-regular, 30*time.Minute; got != want {
+		t.Fatalf("afterHours - regular = %s, want exactly 30m", got)
+	}
+
+	// And the regular roll must land within [0, maxInterval).
+	if regular < 0 || regular >= maxInterval {
+		t.Fatalf("regular roll %s outside [0, %s)", regular, maxInterval)
+	}
+}
+
+// TestProratedCommission_NPartialFills extends TestProratedCommission
+// to a 3-fill split and asserts the per-order cap survives. Spec p.55-56:
+// the cap is one per-order figure, prorated across fills.
+func TestProratedCommission_NPartialFills(t *testing.T) {
+	total := money.MustParse("12")
+
+	// 10 shares, three fills of 3 + 3 + 4 — the proration rounds at
+	// each fill, so the sum has to come out exactly to 12 (no
+	// rounding leak).
+	a := proratedCommission(total, 3, 10)
+	b := proratedCommission(total, 3, 10)
+	c := proratedCommission(total, 4, 10)
+	sum := money.Add(money.Add(a, b), c)
+	if sum.Cmp(total) != 0 {
+		t.Fatalf("3+3+4 fill sum=%s, want 12", sum.String())
+	}
+
+	// Ten 1-share fills (the worst case for accumulating rounding
+	// drift).
+	one := proratedCommission(total, 1, 10)
+	rolling := money.MustParse("0")
+	for i := 0; i < 10; i++ {
+		rolling = money.Add(rolling, one)
+	}
+	if rolling.Cmp(total) != 0 {
+		t.Fatalf("10 × 1/10 fills sum=%s, want 12", rolling.String())
 	}
 }
 
