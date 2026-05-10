@@ -335,6 +335,8 @@ enum AccountKind {
   ACCOUNT_KIND_BUSINESS_CHECKING_RSD  = 3; // poslovni tekući   (TT=12)
   ACCOUNT_KIND_BUSINESS_FX            = 4; // poslovni devizni  (TT=22)
   ACCOUNT_KIND_SYSTEM                 = 5; // bank-owned house  (TT=99, internal)
+  ACCOUNT_KIND_FOREX_BOOK             = 6; // bank's per-currency FX inventory book (internal, addressable for actuary trading)
+  ACCOUNT_KIND_STATE_TAX              = 7; // RSD destination for capital-gains tax remittance (internal)
 }
 
 // AccountSubtype only applies to Lični Tekući RSD per spec p.12; the
@@ -454,7 +456,7 @@ message CreateAccountRequest {
   string         owner_client_id = 1 [(buf.validate.field).string.uuid = true];
   // Required for ACCOUNT_KIND_BUSINESS_*; UUID format when set.
   string         company_id      = 2 [(buf.validate.field).string.uuid = true, (buf.validate.field).ignore = IGNORE_IF_ZERO_VALUE];
-  AccountKind    kind            = 3 [(buf.validate.field).enum = {defined_only: true, not_in: [0, 5]}]; // forbid UNSPECIFIED + SYSTEM
+  AccountKind    kind            = 3 [(buf.validate.field).enum = {defined_only: true, not_in: [0, 5, 6, 7]}]; // forbid UNSPECIFIED + SYSTEM/FOREX_BOOK/STATE_TAX (internal-only)
   AccountSubtype subtype         = 4 [(buf.validate.field).enum.defined_only = true];
   Currency       currency        = 5 [(buf.validate.field).enum = {defined_only: true, not_in: [0]}];
   string         name            = 6 [(buf.validate.field).string.max_len = 100];

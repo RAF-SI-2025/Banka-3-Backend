@@ -54,7 +54,7 @@
           },
           {
             "name": "kind",
-            "description": " - ACCOUNT_KIND_PERSONAL_CHECKING_RSD: lični tekući RSD  (TT=11/13/14/15/16/17 by subtype)\n - ACCOUNT_KIND_PERSONAL_FX: lični devizni     (TT=21)\n - ACCOUNT_KIND_BUSINESS_CHECKING_RSD: poslovni tekući   (TT=12)\n - ACCOUNT_KIND_BUSINESS_FX: poslovni devizni  (TT=22)\n - ACCOUNT_KIND_SYSTEM: bank-owned house  (TT=99, internal)",
+            "description": " - ACCOUNT_KIND_PERSONAL_CHECKING_RSD: lični tekući RSD  (TT=11/13/14/15/16/17 by subtype)\n - ACCOUNT_KIND_PERSONAL_FX: lični devizni     (TT=21)\n - ACCOUNT_KIND_BUSINESS_CHECKING_RSD: poslovni tekući   (TT=12)\n - ACCOUNT_KIND_BUSINESS_FX: poslovni devizni  (TT=22)\n - ACCOUNT_KIND_SYSTEM: bank-owned house  (TT=99, internal)\n - ACCOUNT_KIND_FOREX_BOOK: bank's per-currency FX inventory book (internal, addressable for actuary trading)\n - ACCOUNT_KIND_STATE_TAX: RSD destination for capital-gains tax remittance (internal)",
             "in": "query",
             "required": false,
             "type": "string",
@@ -64,7 +64,9 @@
               "ACCOUNT_KIND_PERSONAL_FX",
               "ACCOUNT_KIND_BUSINESS_CHECKING_RSD",
               "ACCOUNT_KIND_BUSINESS_FX",
-              "ACCOUNT_KIND_SYSTEM"
+              "ACCOUNT_KIND_SYSTEM",
+              "ACCOUNT_KIND_FOREX_BOOK",
+              "ACCOUNT_KIND_STATE_TAX"
             ],
             "default": "ACCOUNT_KIND_UNSPECIFIED"
           },
@@ -3706,10 +3708,12 @@
         "ACCOUNT_KIND_PERSONAL_FX",
         "ACCOUNT_KIND_BUSINESS_CHECKING_RSD",
         "ACCOUNT_KIND_BUSINESS_FX",
-        "ACCOUNT_KIND_SYSTEM"
+        "ACCOUNT_KIND_SYSTEM",
+        "ACCOUNT_KIND_FOREX_BOOK",
+        "ACCOUNT_KIND_STATE_TAX"
       ],
       "default": "ACCOUNT_KIND_UNSPECIFIED",
-      "description": "AccountKind picks the broad bucket; the trailing TT in the 18-digit\naccount number depends on (kind, subtype) per spec p.16. See\npkg/account.Type for the exact mapping.\n\n - ACCOUNT_KIND_PERSONAL_CHECKING_RSD: lični tekući RSD  (TT=11/13/14/15/16/17 by subtype)\n - ACCOUNT_KIND_PERSONAL_FX: lični devizni     (TT=21)\n - ACCOUNT_KIND_BUSINESS_CHECKING_RSD: poslovni tekući   (TT=12)\n - ACCOUNT_KIND_BUSINESS_FX: poslovni devizni  (TT=22)\n - ACCOUNT_KIND_SYSTEM: bank-owned house  (TT=99, internal)"
+      "description": "AccountKind picks the broad bucket; the trailing TT in the 18-digit\naccount number depends on (kind, subtype) per spec p.16. See\npkg/account.Type for the exact mapping.\n\n - ACCOUNT_KIND_PERSONAL_CHECKING_RSD: lični tekući RSD  (TT=11/13/14/15/16/17 by subtype)\n - ACCOUNT_KIND_PERSONAL_FX: lični devizni     (TT=21)\n - ACCOUNT_KIND_BUSINESS_CHECKING_RSD: poslovni tekući   (TT=12)\n - ACCOUNT_KIND_BUSINESS_FX: poslovni devizni  (TT=22)\n - ACCOUNT_KIND_SYSTEM: bank-owned house  (TT=99, internal)\n - ACCOUNT_KIND_FOREX_BOOK: bank's per-currency FX inventory book (internal, addressable for actuary trading)\n - ACCOUNT_KIND_STATE_TAX: RSD destination for capital-gains tax remittance (internal)"
     },
     "v1AccountStatus": {
       "type": "string",
@@ -4002,7 +4006,7 @@
         },
         "kind": {
           "$ref": "#/definitions/v1AccountKind",
-          "title": "forbid UNSPECIFIED + SYSTEM"
+          "title": "forbid UNSPECIFIED + SYSTEM/FOREX_BOOK/STATE_TAX (internal-only)"
         },
         "subtype": {
           "$ref": "#/definitions/v1AccountSubtype"

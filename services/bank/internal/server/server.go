@@ -240,6 +240,10 @@ func kindToProto(k domain.AccountKind) bankpb.AccountKind {
 		return bankpb.AccountKind_ACCOUNT_KIND_BUSINESS_FX
 	case domain.KindSystem:
 		return bankpb.AccountKind_ACCOUNT_KIND_SYSTEM
+	case domain.KindForexBook:
+		return bankpb.AccountKind_ACCOUNT_KIND_FOREX_BOOK
+	case domain.KindStateTax:
+		return bankpb.AccountKind_ACCOUNT_KIND_STATE_TAX
 	}
 	return bankpb.AccountKind_ACCOUNT_KIND_UNSPECIFIED
 }
@@ -256,6 +260,10 @@ func kindFromProto(k bankpb.AccountKind) domain.AccountKind {
 		return domain.KindBusinessFX
 	case bankpb.AccountKind_ACCOUNT_KIND_SYSTEM:
 		return domain.KindSystem
+	case bankpb.AccountKind_ACCOUNT_KIND_FOREX_BOOK:
+		return domain.KindForexBook
+	case bankpb.AccountKind_ACCOUNT_KIND_STATE_TAX:
+		return domain.KindStateTax
 	}
 	return ""
 }

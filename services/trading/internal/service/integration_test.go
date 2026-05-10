@@ -681,6 +681,77 @@ func TestIntegration_CreateOrder_SettlementDateGuard(t *testing.T) {
 	}
 }
 
+// TestIntegration_CreateOrder_SellExceedsHoldings covers
+// spec/C3-tests.pdf S37: "Korisnik ne može prodati više hartija nego
+// što poseduje." The service-edge guard rejects before the order is
+// queued so the supervisor's pending list doesn't fill up with orders
+// the worker can't possibly fill.
+func TestIntegration_CreateOrder_SellExceedsHoldings(t *testing.T) {
+	svc := setup(t)
+	ex := seedExchange(t, svc, "XNYS", domain.CurrencyUSD)
+	sec, _ := seedStock(t, svc, "AAPL", ex, "150", "150", "149", 100_000)
+
+	clientID := uuid.NewString()
+	accID := uuid.NewString()
+	seedHolding(t, svc, clientID, domain.KindClient, sec.ID, accID, 10, "150")
+
+	_, err := svc.CreateOrder(clientCtx(clientID), CreateOrderInput{
+		SecurityID: sec.ID,
+		OrderType:  domain.OrderMarket,
+		Direction:  domain.DirectionSell,
+		Quantity:   15, // > 10 held
+		AccountID:  accID,
+	})
+	if !isApperr(err, apperr.KindFailedPrecondition) {
+		t.Fatalf("sell-exceeds-holdings: err=%v, want FailedPrecondition", err)
+	}
+}
+
+// TestIntegration_CreateOrder_SellExactHoldings covers
+// spec/C3-tests.pdf S38: selling exactly the held qty is fine.
+func TestIntegration_CreateOrder_SellExactHoldings(t *testing.T) {
+	svc := setup(t)
+	ex := seedExchange(t, svc, "XNYS", domain.CurrencyUSD)
+	sec, _ := seedStock(t, svc, "AAPL", ex, "150", "150", "149", 100_000)
+
+	clientID := uuid.NewString()
+	accID := uuid.NewString()
+	seedHolding(t, svc, clientID, domain.KindClient, sec.ID, accID, 10, "150")
+
+	out, err := svc.CreateOrder(clientCtx(clientID), CreateOrderInput{
+		SecurityID: sec.ID,
+		OrderType:  domain.OrderMarket,
+		Direction:  domain.DirectionSell,
+		Quantity:   10,
+		AccountID:  accID,
+	})
+	if err != nil {
+		t.Fatalf("sell-exact-holdings: %v", err)
+	}
+	if out.Status != domain.OrderStatusApproved {
+		t.Fatalf("status=%s, want approved", out.Status)
+	}
+}
+
+// TestIntegration_CreateOrder_SellNoHoldings covers the boundary —
+// a SELL against a security the user doesn't hold at all.
+func TestIntegration_CreateOrder_SellNoHoldings(t *testing.T) {
+	svc := setup(t)
+	ex := seedExchange(t, svc, "XNYS", domain.CurrencyUSD)
+	sec, _ := seedStock(t, svc, "AAPL", ex, "150", "150", "149", 100_000)
+
+	_, err := svc.CreateOrder(clientCtx(uuid.NewString()), CreateOrderInput{
+		SecurityID: sec.ID,
+		OrderType:  domain.OrderMarket,
+		Direction:  domain.DirectionSell,
+		Quantity:   1,
+		AccountID:  uuid.NewString(),
+	})
+	if !isApperr(err, apperr.KindFailedPrecondition) {
+		t.Fatalf("sell-no-holdings: err=%v, want FailedPrecondition", err)
+	}
+}
+
 // TestIntegration_Margin_BlockedByBalance covers spec p.55: a margin
 // order whose Initial Margin Cost exceeds available balance and the
 // client has no loan should be rejected.

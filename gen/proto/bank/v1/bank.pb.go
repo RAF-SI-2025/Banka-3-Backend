@@ -104,6 +104,8 @@ const (
 	AccountKind_ACCOUNT_KIND_BUSINESS_CHECKING_RSD AccountKind = 3 // poslovni tekući   (TT=12)
 	AccountKind_ACCOUNT_KIND_BUSINESS_FX           AccountKind = 4 // poslovni devizni  (TT=22)
 	AccountKind_ACCOUNT_KIND_SYSTEM                AccountKind = 5 // bank-owned house  (TT=99, internal)
+	AccountKind_ACCOUNT_KIND_FOREX_BOOK            AccountKind = 6 // bank's per-currency FX inventory book (internal, addressable for actuary trading)
+	AccountKind_ACCOUNT_KIND_STATE_TAX             AccountKind = 7 // RSD destination for capital-gains tax remittance (internal)
 )
 
 // Enum value maps for AccountKind.
@@ -115,6 +117,8 @@ var (
 		3: "ACCOUNT_KIND_BUSINESS_CHECKING_RSD",
 		4: "ACCOUNT_KIND_BUSINESS_FX",
 		5: "ACCOUNT_KIND_SYSTEM",
+		6: "ACCOUNT_KIND_FOREX_BOOK",
+		7: "ACCOUNT_KIND_STATE_TAX",
 	}
 	AccountKind_value = map[string]int32{
 		"ACCOUNT_KIND_UNSPECIFIED":           0,
@@ -123,6 +127,8 @@ var (
 		"ACCOUNT_KIND_BUSINESS_CHECKING_RSD": 3,
 		"ACCOUNT_KIND_BUSINESS_FX":           4,
 		"ACCOUNT_KIND_SYSTEM":                5,
+		"ACCOUNT_KIND_FOREX_BOOK":            6,
+		"ACCOUNT_KIND_STATE_TAX":             7,
 	}
 )
 
@@ -1520,7 +1526,7 @@ type CreateAccountRequest struct {
 	OwnerClientId string                 `protobuf:"bytes,1,opt,name=owner_client_id,json=ownerClientId,proto3" json:"owner_client_id,omitempty"`
 	// Required for ACCOUNT_KIND_BUSINESS_*; UUID format when set.
 	CompanyId string         `protobuf:"bytes,2,opt,name=company_id,json=companyId,proto3" json:"company_id,omitempty"`
-	Kind      AccountKind    `protobuf:"varint,3,opt,name=kind,proto3,enum=banka.bank.v1.AccountKind" json:"kind,omitempty"` // forbid UNSPECIFIED + SYSTEM
+	Kind      AccountKind    `protobuf:"varint,3,opt,name=kind,proto3,enum=banka.bank.v1.AccountKind" json:"kind,omitempty"` // forbid UNSPECIFIED + SYSTEM/FOREX_BOOK/STATE_TAX (internal-only)
 	Subtype   AccountSubtype `protobuf:"varint,4,opt,name=subtype,proto3,enum=banka.bank.v1.AccountSubtype" json:"subtype,omitempty"`
 	Currency  Currency       `protobuf:"varint,5,opt,name=currency,proto3,enum=banka.bank.v1.Currency" json:"currency,omitempty"`
 	Name      string         `protobuf:"bytes,6,opt,name=name,proto3" json:"name,omitempty"`
@@ -5494,12 +5500,13 @@ const file_bank_v1_bank_proto_rawDesc = "" +
 	"\x04name\x18\x02 \x01(\tB\b\xbaH\x05r\x03\x18\xc8\x01R\x04name\x12E\n" +
 	"\ractivity_code\x18\x03 \x01(\tB \xbaH\x1d\xd8\x01\x01r\x182\x16^[0-9]{2}\\.[0-9]{1,2}$R\factivityCode\x12\"\n" +
 	"\aaddress\x18\x04 \x01(\tB\b\xbaH\x05r\x03\x18\xc8\x01R\aaddress\x123\n" +
-	"\x0fowner_client_id\x18\x05 \x01(\tB\v\xbaH\b\xd8\x01\x01r\x03\xb0\x01\x01R\rownerClientId\"\xc0\x03\n" +
+	"\x0fowner_client_id\x18\x05 \x01(\tB\v\xbaH\b\xd8\x01\x01r\x03\xb0\x01\x01R\rownerClientId\"\xc4\x03\n" +
 	"\x14CreateAccountRequest\x120\n" +
 	"\x0fowner_client_id\x18\x01 \x01(\tB\b\xbaH\x05r\x03\xb0\x01\x01R\rownerClientId\x12*\n" +
 	"\n" +
-	"company_id\x18\x02 \x01(\tB\v\xbaH\b\xd8\x01\x01r\x03\xb0\x01\x01R\tcompanyId\x12<\n" +
-	"\x04kind\x18\x03 \x01(\x0e2\x1a.banka.bank.v1.AccountKindB\f\xbaH\t\x82\x01\x06\x10\x01 \x00 \x05R\x04kind\x12A\n" +
+	"company_id\x18\x02 \x01(\tB\v\xbaH\b\xd8\x01\x01r\x03\xb0\x01\x01R\tcompanyId\x12@\n" +
+	"\x04kind\x18\x03 \x01(\x0e2\x1a.banka.bank.v1.AccountKindB\x10\xbaH\r\x82\x01\n" +
+	"\x10\x01 \x00 \x05 \x06 \aR\x04kind\x12A\n" +
 	"\asubtype\x18\x04 \x01(\x0e2\x1d.banka.bank.v1.AccountSubtypeB\b\xbaH\x05\x82\x01\x02\x10\x01R\asubtype\x12?\n" +
 	"\bcurrency\x18\x05 \x01(\x0e2\x17.banka.bank.v1.CurrencyB\n" +
 	"\xbaH\a\x82\x01\x04\x10\x01 \x00R\bcurrency\x12\x1b\n" +
@@ -5869,14 +5876,16 @@ const file_bank_v1_bank_proto_rawDesc = "" +
 	"\fCURRENCY_GBP\x10\x05\x12\x10\n" +
 	"\fCURRENCY_JPY\x10\x06\x12\x10\n" +
 	"\fCURRENCY_CAD\x10\a\x12\x10\n" +
-	"\fCURRENCY_AUD\x10\b*\xd0\x01\n" +
+	"\fCURRENCY_AUD\x10\b*\x89\x02\n" +
 	"\vAccountKind\x12\x1c\n" +
 	"\x18ACCOUNT_KIND_UNSPECIFIED\x10\x00\x12&\n" +
 	"\"ACCOUNT_KIND_PERSONAL_CHECKING_RSD\x10\x01\x12\x1c\n" +
 	"\x18ACCOUNT_KIND_PERSONAL_FX\x10\x02\x12&\n" +
 	"\"ACCOUNT_KIND_BUSINESS_CHECKING_RSD\x10\x03\x12\x1c\n" +
 	"\x18ACCOUNT_KIND_BUSINESS_FX\x10\x04\x12\x17\n" +
-	"\x13ACCOUNT_KIND_SYSTEM\x10\x05*\xb4\x02\n" +
+	"\x13ACCOUNT_KIND_SYSTEM\x10\x05\x12\x1b\n" +
+	"\x17ACCOUNT_KIND_FOREX_BOOK\x10\x06\x12\x1a\n" +
+	"\x16ACCOUNT_KIND_STATE_TAX\x10\a*\xb4\x02\n" +
 	"\x0eAccountSubtype\x12\x1f\n" +
 	"\x1bACCOUNT_SUBTYPE_UNSPECIFIED\x10\x00\x12\x1c\n" +
 	"\x18ACCOUNT_SUBTYPE_STANDARD\x10\x01\x12\x1b\n" +

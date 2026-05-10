@@ -17,6 +17,13 @@ const listingCols = `id, security_id, exchange_mic,
 
 // UpsertListing writes the live-price row keyed by security_id.
 func (s *Store) UpsertListing(ctx context.Context, l *domain.Listing) (*domain.Listing, error) {
+	// volume preserves the existing row's value when the caller passes
+	// zero. The admin price-override dialog only ships (price, ask, bid)
+	// and would otherwise zero out the listing's volume — which then
+	// makes the cadence formula clamp to its 1-tick floor (still fine
+	// in expectation) but loses the AV refresh's daily volume snapshot.
+	// AV/refresh paths always pass a real volume so the COALESCE only
+	// fires on the manual-edit path.
 	const q = `
         insert into "trading".listings
             (security_id, exchange_mic, price, ask, bid, volume, change_amt, contract_size, last_refresh)
@@ -26,7 +33,9 @@ func (s *Store) UpsertListing(ctx context.Context, l *domain.Listing) (*domain.L
             price         = excluded.price,
             ask           = excluded.ask,
             bid           = excluded.bid,
-            volume        = excluded.volume,
+            volume        = case when excluded.volume = 0
+                                 then "trading".listings.volume
+                                 else excluded.volume end,
             change_amt    = excluded.change_amt,
             contract_size = excluded.contract_size,
             last_refresh  = now()

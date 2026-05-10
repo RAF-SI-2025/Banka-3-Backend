@@ -125,6 +125,18 @@ func (s *Service) CreateOrder(ctx context.Context, in CreateOrderInput) (*Create
 		contractSize = "1"
 	}
 
+	// Spec C3-tests S37: SELLs may not exceed current holdings.
+	// Forex skips — there is no holding row (spec p.42 paired
+	// settlement). Margin SELLs are short positions and would
+	// require their own short-inventory machinery; the current
+	// FE doesn't expose a margin SELL flow, so disallow at the
+	// service edge rather than half-implement.
+	if in.Direction == domain.DirectionSell && sec.Type != domain.SecurityForex && !in.Margin {
+		if err := s.assertHoldingAvailable(ctx, p, in.AccountID, sec, in.Quantity); err != nil {
+			return nil, err
+		}
+	}
+
 	// Spec p.55: margin orders must additionally satisfy
 	//   client: loan_amount > IMC OR account_balance > IMC
 	//   actuary: account_balance > IMC
@@ -476,6 +488,42 @@ func (s *Service) assertFundsAvailable(
 	}
 	if availRSD.Cmp(notionalRSD) < 0 {
 		return apperr.FailedPrecondition("nedovoljna sredstva na računu za ovaj nalog")
+	}
+	return nil
+}
+
+// assertHoldingAvailable enforces "ne mozeš prodati više nego što
+// poseduješ" (spec C3-tests S37). Inventory is keyed by
+// (user_id, security_id, account_id) so a user with the same security
+// across two accounts must SELL from the right one. Open SELLs already
+// in flight aren't subtracted: at-most-once exec means partial fills
+// settle in order, and a follow-up SELL whose total exceeds the
+// remaining real qty will be caught by ApplySellFill at fill time
+// (returns NotFound). The pre-check prevents the simple "user
+// fat-fingers 15 instead of 5" path that the spec calls out.
+func (s *Service) assertHoldingAvailable(
+	ctx context.Context,
+	p auth.Principal,
+	accountID string,
+	sec *domain.Security,
+	qty int32,
+) error {
+	hs, err := s.Store.ListHoldings(ctx, store.HoldingFilter{
+		UserID:     p.UserID,
+		UserKind:   domain.UserKind(p.UserKind),
+		SecurityID: sec.ID,
+	})
+	if err != nil {
+		return err
+	}
+	var have int32
+	for _, h := range hs {
+		if h.AccountID == accountID {
+			have += h.Quantity
+		}
+	}
+	if have < qty {
+		return apperr.FailedPrecondition("ne možete prodati više hartija nego što posedujete")
 	}
 	return nil
 }
