@@ -136,7 +136,9 @@ var (
 	// applied on top of an existing employee bundle when an admin
 	// promotes a user to actuary status. The trading service expects a
 	// matching trading.actuary_info row with the same `type`.
-	RoleEmployeeActuarySupervisor = []string{Actuary, ActuarySupervisor, TradingMargin}
+	// Spec p.38: a supervisor manages agents — needs to read employee
+	// rows to render their name/email/position on the actuari portal.
+	RoleEmployeeActuarySupervisor = []string{Actuary, ActuarySupervisor, TradingMargin, EmployeeRead}
 	RoleEmployeeActuaryAgent      = []string{Actuary, ActuaryAgent}
 )
 

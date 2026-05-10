@@ -27,6 +27,9 @@ func (s *Service) UpsertListing(ctx context.Context, in *domain.Listing) (*domai
 	if in.ContractSize == "" {
 		in.ContractSize = "1"
 	}
+	if in.ChangeAmt == "" {
+		in.ChangeAmt = "0"
+	}
 	if _, err := s.Store.GetSecurity(ctx, in.SecurityID); err != nil {
 		return nil, err
 	}

@@ -141,6 +141,25 @@ func run() error {
 		"Drugi", "Klijent", "+381111000222"); err != nil {
 		return fmt.Errorf("seed second client: %w", err)
 	}
+
+	// Third client — non-trading. Drives the banking-trading-gate
+	// cypress spec which asserts a client without `trading.client`
+	// sees no Portfolio / Trgovina nav or tile. seedClient always
+	// promotes its return to trading.client for c3 dev ergonomics,
+	// so we strip the perm right after via direct SQL.
+	nonTradingID, err := seedClient(ctx, pool,
+		envOr("SEED_CLIENT3_EMAIL", "klijent3@banka.local"),
+		envOr("SEED_CLIENT3_PASSWORD", "Klijent123!"),
+		"Treci", "Klijent", "+381111000333")
+	if err != nil {
+		return fmt.Errorf("seed third client: %w", err)
+	}
+	if _, err := pool.Exec(ctx, `
+        update "user".clients
+        set permissions = array(select unnest(permissions) except select 'trading.client')
+        where id = $1`, nonTradingID); err != nil {
+		return fmt.Errorf("strip trading.client from third client: %w", err)
+	}
 	return nil
 }
 
@@ -832,24 +851,57 @@ func seedTrading(ctx context.Context, pool *pgxpool.Pool, clientID, adminID stri
 		return fmt.Errorf("insert forex listing: %w", err)
 	}
 
-	// Option: one AAPL call, ATM, expiring +60 days. No listing row —
-	// the service reads `premium` off the security for option pricing.
-	var optionID string
-	if err := tx.QueryRow(ctx, `
-        insert into "trading".securities
-            (ticker, name, type, exchange_mic, currency,
-             underlying_security_id, option_type, strike_price,
-             implied_volatility, premium, settlement_date,
-             contract_size)
-        values ('AAPL-C-190', 'Apple Call 190 USD', 'option', 'XNYS', 'USD',
-                $1, 'call', 190.00,
-                0.275, 8.50, current_date + interval '60 days',
-                100)
-        on conflict (ticker, type) do update set ticker = excluded.ticker
-        returning id`,
-		aaplID,
-	).Scan(&optionID); err != nil {
-		return fmt.Errorf("insert option: %w", err)
+	// Options: a small AAPL chain with strikes 180 / 190 / 200 at the
+	// same +60d expiry plus an OTM-call strike 200 at +120d so the
+	// chain UI has more than one settlement date to switch between.
+	// All read their `premium` straight off the security row (no
+	// listings). Spot 190.50 ⇒ strike 180 CALL is ITM / PUT OOM,
+	// strike 190 is ATM, strike 200 CALL is OOM / PUT ITM. The
+	// strike-180 PUT (OOM) doubles as the fixture for the spec
+	// p.61.d "out-of-the-money" exercise gate test.
+	insertOption := func(ticker, name, optType, strike, vol, premium, expiryInterval string) (string, error) {
+		var id string
+		if err := tx.QueryRow(ctx, `
+            insert into "trading".securities
+                (ticker, name, type, exchange_mic, currency,
+                 underlying_security_id, option_type, strike_price,
+                 implied_volatility, premium, settlement_date,
+                 contract_size)
+            values ($1, $2, 'option', 'XNYS', 'USD',
+                    $3, $4, $5::numeric,
+                    $6::numeric, $7::numeric, current_date + $8::interval,
+                    100)
+            on conflict (ticker, type) do update set ticker = excluded.ticker
+            returning id`,
+			ticker, name, aaplID, optType, strike, vol, premium, expiryInterval,
+		).Scan(&id); err != nil {
+			return "", fmt.Errorf("insert option %s: %w", ticker, err)
+		}
+		return id, nil
+	}
+
+	optionID, err := insertOption("AAPL-C-190", "Apple Call 190 USD", "call", "190.00", "0.275", "8.50", "60 days")
+	if err != nil {
+		return err
+	}
+	if _, err := insertOption("AAPL-P-190", "Apple Put 190 USD", "put", "190.00", "0.275", "8.00", "60 days"); err != nil {
+		return err
+	}
+	if _, err := insertOption("AAPL-C-180", "Apple Call 180 USD", "call", "180.00", "0.270", "12.00", "60 days"); err != nil {
+		return err
+	}
+	oomPutID, err := insertOption("AAPL-P-180", "Apple Put 180 USD", "put", "180.00", "0.270", "2.00", "60 days")
+	if err != nil {
+		return err
+	}
+	if _, err := insertOption("AAPL-C-200", "Apple Call 200 USD", "call", "200.00", "0.280", "3.00", "60 days"); err != nil {
+		return err
+	}
+	if _, err := insertOption("AAPL-P-200", "Apple Put 200 USD", "put", "200.00", "0.280", "11.00", "60 days"); err != nil {
+		return err
+	}
+	if _, err := insertOption("AAPL-C-200-Q", "Apple Call 200 USD (Q)", "call", "200.00", "0.300", "5.50", "120 days"); err != nil {
+		return err
 	}
 
 	// Plant an option holding for the actuary agent so the FE
@@ -880,6 +932,78 @@ func seedTrading(ctx context.Context, pool *pgxpool.Pool, clientID, adminID stri
 		aktuarID, optionID, bankUSDAcctID,
 	); err != nil {
 		return fmt.Errorf("insert agent option holding: %w", err)
+	}
+	// OOM PUT holding (strike 180, spot 190.50 ⇒ underlying > strike,
+	// so the put is out of the money). Drives the spec p.61.d
+	// "Potvrdi disabled when OOM" exercise-gate test.
+	if _, err := tx.Exec(ctx, `
+        insert into "trading".portfolio_holdings
+            (user_id, user_kind, security_id, account_id,
+             quantity, weighted_avg_price)
+        values ($1, 'employee', $2, $3, 2, 2.00)
+        on conflict (user_id, security_id, account_id) do nothing`,
+		aktuarID, oomPutID, bankUSDAcctID,
+	); err != nil {
+		return fmt.Errorf("insert agent OOM put holding: %w", err)
+	}
+
+	// Client portfolio: 10 AAPL @ $170 cost basis (current $190.50 ⇒
+	// ~$200 market profit) + 2 CL future @ $70 cost basis (current
+	// $78.50). Account references the client's seeded USD trading
+	// account. Drives the /banking/portfolio + sell-deeplink tests
+	// without needing the execution worker to fill an order first.
+	var clFutID string
+	if err := tx.QueryRow(ctx,
+		`select id from "trading".securities where ticker='CL' and type='future' limit 1`,
+	).Scan(&clFutID); err != nil {
+		return fmt.Errorf("lookup CL future id: %w", err)
+	}
+	if _, err := tx.Exec(ctx, `
+        insert into "trading".portfolio_holdings
+            (user_id, user_kind, security_id, account_id,
+             quantity, weighted_avg_price)
+        values
+            ($1, 'client', $2, $3, 10, 170.00),
+            ($1, 'client', $4, $3, 2, 70.00)
+        on conflict (user_id, security_id, account_id) do nothing`,
+		clientID, aaplID, usdAccountID, clFutID,
+	); err != nil {
+		return fmt.Errorf("insert client holdings: %w", err)
+	}
+
+	// Realized-gain ledger entries: one positive ($99.50 ≈ ~10000 RSD,
+	// taxed=false ⇒ unpaid 15% ≈ 1500 RSD) and one loss row (-$40,
+	// taxed=false ⇒ doesn't add tax). Drives the /portal/porez board
+	// with a non-zero "Neplaćeno" column and a loss-row in the per-
+	// user detail. Skipped if any realized_gains row already exists
+	// for this client (idempotent re-runs).
+	var rgCount int
+	if err := tx.QueryRow(ctx,
+		`select count(*) from "trading".realized_gains where user_id = $1`, clientID,
+	).Scan(&rgCount); err != nil {
+		return fmt.Errorf("count realized_gains: %w", err)
+	}
+	if rgCount == 0 {
+		var msftID string
+		if err := tx.QueryRow(ctx,
+			`select id from "trading".securities where ticker='MSFT' and type='stock' limit 1`,
+		).Scan(&msftID); err != nil {
+			return fmt.Errorf("lookup MSFT id: %w", err)
+		}
+		if _, err := tx.Exec(ctx, `
+            insert into "trading".realized_gains
+                (user_id, user_kind, security_id, account_id,
+                 quantity, cost_basis_amt, proceeds_amt, currency,
+                 gain_native, gain_rsd, realized_at, taxed)
+            values
+                ($1, 'client', $2, $3, 5,  450.10, 469.99, 'USD',
+                 99.45,  10018.00, now() - interval '1 day', false),
+                ($1, 'client', $2, $3, 2,  500.00, 480.00, 'USD',
+                 -40.00, -4030.32, now() - interval '2 days', false)
+            `, clientID, msftID, usdAccountID,
+		); err != nil {
+			return fmt.Errorf("insert realized_gains: %w", err)
+		}
 	}
 
 	if err := tx.Commit(ctx); err != nil {
