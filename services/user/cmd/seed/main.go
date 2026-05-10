@@ -834,7 +834,8 @@ func seedTrading(ctx context.Context, pool *pgxpool.Pool, clientID, adminID stri
 
 	// Option: one AAPL call, ATM, expiring +60 days. No listing row —
 	// the service reads `premium` off the security for option pricing.
-	if _, err := tx.Exec(ctx, `
+	var optionID string
+	if err := tx.QueryRow(ctx, `
         insert into "trading".securities
             (ticker, name, type, exchange_mic, currency,
              underlying_security_id, option_type, strike_price,
@@ -844,10 +845,41 @@ func seedTrading(ctx context.Context, pool *pgxpool.Pool, clientID, adminID stri
                 $1, 'call', 190.00,
                 0.275, 8.50, current_date + interval '60 days',
                 100)
-        on conflict (ticker, type) do nothing`,
+        on conflict (ticker, type) do update set ticker = excluded.ticker
+        returning id`,
 		aaplID,
-	); err != nil {
+	).Scan(&optionID); err != nil {
 		return fmt.Errorf("insert option: %w", err)
+	}
+
+	// Plant an option holding for the actuary agent so the FE
+	// option-exercise flow (spec p.61.d) has a fixture to drive
+	// against without first running an OTC negotiation. Account
+	// references the bank's USD forex_book account: actuary settles
+	// must target a bank-owned account (KindSystem ∪ KindForexBook),
+	// and the trade-settle layer rejects the menjačnica house itself
+	// (KindSystem) on the actuary path because that collapses to a
+	// no-op pair (spec p.56 + 2026-05-09 audit). The forex_book is
+	// the bank's per-currency trading-book counterparty. AAPL spot
+	// 190.50 > strike 190.00 ⇒ ITM, so the FE dialog renders "In
+	// the money" and Potvrdi is clickable.
+	var bankUSDAcctID string
+	if err := tx.QueryRow(ctx, `
+        select id from "bank".accounts
+         where kind = 'forex_book'
+           and currency = 'USD'
+         limit 1`).Scan(&bankUSDAcctID); err != nil {
+		return fmt.Errorf("lookup bank USD forex_book account: %w", err)
+	}
+	if _, err := tx.Exec(ctx, `
+        insert into "trading".portfolio_holdings
+            (user_id, user_kind, security_id, account_id,
+             quantity, weighted_avg_price)
+        values ($1, 'employee', $2, $3, 5, 8.50)
+        on conflict (user_id, security_id, account_id) do nothing`,
+		aktuarID, optionID, bankUSDAcctID,
+	); err != nil {
+		return fmt.Errorf("insert agent option holding: %w", err)
 	}
 
 	if err := tx.Commit(ctx); err != nil {
