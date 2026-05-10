@@ -566,6 +566,63 @@ func TestIntegration_CreateOrder_AgentUnderLimit(t *testing.T) {
 	}
 }
 
+// TestIntegration_CreateOrder_AgentZeroLimit covers spec p.38: for an
+// agent (not a supervisor) daily_limit=0 means zero capacity, not
+// unlimited. The order should land in pending so the supervisor can
+// decide.
+func TestIntegration_CreateOrder_AgentZeroLimit(t *testing.T) {
+	svc := setup(t)
+	ex := seedExchange(t, svc, "XNYS", domain.CurrencyUSD)
+	sec, _ := seedStock(t, svc, "AAPL", ex, "150", "150", "149", 1000)
+
+	agentID := uuid.NewString()
+	seedActuary(t, svc, agentID, domain.ActuaryAgent, "0", false /* needApproval */)
+
+	out, err := svc.CreateOrder(agentCtx(agentID), CreateOrderInput{
+		SecurityID: sec.ID,
+		OrderType:  domain.OrderMarket,
+		Direction:  domain.DirectionBuy,
+		Quantity:   1,
+		AccountID:  uuid.NewString(),
+	})
+	if err != nil {
+		t.Fatalf("CreateOrder: %v", err)
+	}
+	if out.Status != domain.OrderStatusPending {
+		t.Fatalf("zero-limit agent: status=%s, want pending", out.Status)
+	}
+	if !out.ApprovalRequired {
+		t.Fatalf("approval_required should be true for zero-limit agent")
+	}
+}
+
+// TestIntegration_CreateOrder_AgentMissingInfo covers spec p.38: an
+// employee with the agent permission but no actuary_info row is a
+// misconfiguration — refuse rather than queueing arbitrarily large
+// pending orders for the supervisor.
+func TestIntegration_CreateOrder_AgentMissingInfo(t *testing.T) {
+	svc := setup(t)
+	ex := seedExchange(t, svc, "XNYS", domain.CurrencyUSD)
+	sec, _ := seedStock(t, svc, "AAPL", ex, "150", "150", "149", 1000)
+
+	agentID := uuid.NewString() // no seedActuary call
+
+	_, err := svc.CreateOrder(agentCtx(agentID), CreateOrderInput{
+		SecurityID: sec.ID,
+		OrderType:  domain.OrderMarket,
+		Direction:  domain.DirectionBuy,
+		Quantity:   1,
+		AccountID:  uuid.NewString(),
+	})
+	if err == nil {
+		t.Fatalf("CreateOrder: expected FailedPrecondition, got nil")
+	}
+	var ae *apperr.Error
+	if !errors.As(err, &ae) || ae.Kind != apperr.KindFailedPrecondition {
+		t.Fatalf("CreateOrder: kind=%v want=FailedPrecondition (err=%v)", ae, err)
+	}
+}
+
 // TestIntegration_CreateOrder_Client_ForexBlocked covers spec p.58:
 // clients can't trade forex.
 func TestIntegration_CreateOrder_Client_ForexBlocked(t *testing.T) {

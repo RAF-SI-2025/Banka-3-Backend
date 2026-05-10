@@ -14,13 +14,18 @@ type Store struct {
 
 func New(pool *pgxpool.Pool) *Store { return &Store{Pool: pool} }
 
-func isUniqueViolation(err error) bool {
+// IsUniqueViolation reports whether err is a Postgres unique-constraint
+// violation. Exported so the service layer can detect conflict-on-retry
+// when an idempotency key races (op_id + leg_index unique index).
+func IsUniqueViolation(err error) bool {
 	type pgErr interface {
 		SQLState() string
 	}
 	var pe pgErr
 	return errors.As(err, &pe) && pe.SQLState() == "23505"
 }
+
+func isUniqueViolation(err error) bool { return IsUniqueViolation(err) }
 
 func isCheckViolation(err error) bool {
 	type pgErr interface {

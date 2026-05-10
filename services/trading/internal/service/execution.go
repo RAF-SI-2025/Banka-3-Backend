@@ -574,8 +574,7 @@ func (s *Service) cadenceReady(ctx context.Context, o *domain.Order, listing *do
 	if remaining <= 0 {
 		return false
 	}
-	// Spec p.56: result is in seconds.
-	maxInterval := max(time.Duration(1440*remaining/volume)*time.Second, time.Second)
+	maxInterval := cadenceMaxInterval(remaining, volume)
 
 	interval := time.Duration(executionRand.Int63n(int64(maxInterval)))
 	if o.AfterHours {
@@ -598,6 +597,24 @@ func (s *Service) cadenceReady(ctx context.Context, o *domain.Order, listing *do
 		since = s.now().Sub(anchor)
 	}
 	return since >= interval
+}
+
+// cadenceMaxInterval is the spec p.56 random-cap formula
+// `1440 × remaining/volume` seconds. We scale to milliseconds so the
+// integer division survives the typical case of volume ≫ remaining
+// (e.g. remaining=1, volume=10000 → 144ms instead of truncating to 0).
+func cadenceMaxInterval(remaining, volume int64) time.Duration {
+	if volume <= 0 {
+		volume = 1
+	}
+	if remaining <= 0 {
+		return time.Millisecond
+	}
+	ms := 1440 * 1000 * remaining / volume
+	if ms < 1 {
+		ms = 1
+	}
+	return time.Duration(ms) * time.Millisecond
 }
 
 // timeSinceLastFill returns the duration since the latest execution on

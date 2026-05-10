@@ -4,6 +4,7 @@ import (
 	"context"
 	"math/big"
 	"testing"
+	"time"
 
 	"github.com/RAF-SI-2025/Banka-3-Backend/pkg/money"
 	"github.com/RAF-SI-2025/Banka-3-Backend/services/trading/internal/domain"
@@ -270,15 +271,39 @@ func (s *stubSettler) Settle(_ context.Context, in SettleInput) (string, error) 
 // in execution_integration_test.go behind the build tag because they
 // touch postgres.)
 
-// Sanity-check that big.Rat comparisons in cadenceReady's volume math
-// don't blow up on tiny remainders. Spec p.56: max_interval is in
-// seconds, computed as 1440 * remaining / volume.
-func TestCadenceVolumeMathSafe(t *testing.T) {
-	rem := int64(1)
-	vol := int64(10000)
-	gotSec := 1440 * rem / vol
-	if gotSec != 0 {
-		t.Fatalf("integer math got=%d want=0", gotSec)
+// Spec p.56: cap is `1440 × remaining/volume` seconds. The implementation
+// scales to milliseconds so thick listings (volume ≫ remaining) still
+// produce a positive sub-second cap, and thin listings (low volume) still
+// produce a much larger cap — the spec's "thin → slow, thick → fast"
+// pacing has to survive integer division.
+func TestCadenceMaxInterval(t *testing.T) {
+	cases := []struct {
+		name      string
+		remaining int64
+		volume    int64
+		want      time.Duration
+	}{
+		{"thick listing, single share", 1, 10000, 144 * time.Millisecond},
+		{"thick listing, ten shares", 10, 10000, 1440 * time.Millisecond},
+		{"thin listing", 10, 100, 144 * time.Second},
+		{"very thin listing, big remaining", 100, 10, 14400 * time.Second},
+		{"zero volume falls back to 1", 1, 0, 1440 * time.Second},
+		{"sub-millisecond floors to 1ms", 1, 10_000_000, time.Millisecond},
+	}
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			if got := cadenceMaxInterval(c.remaining, c.volume); got != c.want {
+				t.Fatalf("cadenceMaxInterval(%d,%d)=%s want=%s",
+					c.remaining, c.volume, got, c.want)
+			}
+		})
+	}
+
+	// Differential sanity: thick is always faster than thin at equal remaining.
+	thick := cadenceMaxInterval(5, 100000)
+	thin := cadenceMaxInterval(5, 50)
+	if thick >= thin {
+		t.Fatalf("expected thick(%s) < thin(%s)", thick, thin)
 	}
 }
 

@@ -8,8 +8,49 @@ import (
 	"github.com/RAF-SI-2025/Banka-3-Backend/pkg/auth"
 	"github.com/RAF-SI-2025/Banka-3-Backend/pkg/permissions"
 	"github.com/RAF-SI-2025/Banka-3-Backend/services/bank/internal/domain"
+	"github.com/RAF-SI-2025/Banka-3-Backend/services/bank/internal/store"
 	"github.com/jackc/pgx/v5"
 )
+
+// idempotentSettle wraps an in-tx settlement with conflict-on-retry
+// recovery. The fast-path lookup catches the common retry case without
+// opening a write tx; the post-tx unique-violation branch catches the
+// race where two retries open concurrent transactions and one wins the
+// (op_id, leg_index) unique constraint installed by migration 0011.
+//
+// The work closure does the writes; on success its accumulated legs are
+// returned. On unique-violation we re-read the winner's legs and return
+// those instead — the caller sees a single authoritative result either
+// way.
+func (s *Service) idempotentSettle(
+	ctx context.Context,
+	opID string,
+	work func(tx pgx.Tx) ([]*domain.Transaction, error),
+) (*domain.PaymentResult, error) {
+	if existing, err := s.Store.GetTransactionsByOpID(ctx, opID); err == nil && len(existing) > 0 {
+		return &domain.PaymentResult{OpID: opID, Status: domain.TxStatusRealized, Transactions: existing}, nil
+	}
+
+	var legs []*domain.Transaction
+	err := s.Store.ExecuteAtomic(ctx, func(tx pgx.Tx) error {
+		out, err := work(tx)
+		if err != nil {
+			return err
+		}
+		legs = out
+		return nil
+	})
+	if err != nil {
+		if store.IsUniqueViolation(err) {
+			existing, lerr := s.Store.GetTransactionsByOpID(ctx, opID)
+			if lerr == nil && len(existing) > 0 {
+				return &domain.PaymentResult{OpID: opID, Status: domain.TxStatusRealized, Transactions: existing}, nil
+			}
+		}
+		return nil, err
+	}
+	return &domain.PaymentResult{OpID: opID, Status: domain.TxStatusRealized, Transactions: legs}, nil
+}
 
 // SettleTradeInput is the validated payload of a single trading-fill
 // settlement (spec p.55-56). The trading service computes commission
@@ -83,13 +124,6 @@ func (s *Service) SettleTrade(ctx context.Context, in SettleTradeInput) (*domain
 		return nil, apperr.Validation("aktuari moraju izabrati trading-book račun, ne menjačnicu")
 	}
 
-	// Idempotency: if a transaction with this op_id already exists,
-	// return the existing legs. Trading service may retry on a flaky
-	// connection without re-charging.
-	if existing, err := s.Store.GetTransactionsByOpID(ctx, in.OpID); err == nil && len(existing) > 0 {
-		return &domain.PaymentResult{OpID: in.OpID, Status: domain.TxStatusRealized, Transactions: existing}, nil
-	}
-
 	// Direction selects which side is debited.
 	var from, to *domain.Account
 	if dir == "debit" {
@@ -118,19 +152,9 @@ func (s *Service) SettleTrade(ctx context.Context, in SettleTradeInput) (*domain
 		purpose = "Trgovinska poravnava"
 	}
 
-	result := &domain.PaymentResult{OpID: in.OpID, Status: domain.TxStatusRealized}
-	err = s.Store.ExecuteAtomic(ctx, func(tx pgx.Tx) error {
-		legs, err := s.executeMoneyMove(ctx, tx, from, to, amt, domain.TxKindTrade, in.OpID, initiator, paymentMeta{Purpose: purpose})
-		if err != nil {
-			return err
-		}
-		result.Transactions = legs
-		return nil
+	return s.idempotentSettle(ctx, in.OpID, func(tx pgx.Tx) ([]*domain.Transaction, error) {
+		return s.executeMoneyMove(ctx, tx, from, to, amt, domain.TxKindTrade, in.OpID, initiator, paymentMeta{Purpose: purpose}, 0)
 	})
-	if err != nil {
-		return nil, err
-	}
-	return result, nil
 }
 
 // SettleForexFillInput pairs the two cash legs of a forex pair fill
@@ -190,10 +214,6 @@ func (s *Service) SettleForexFill(ctx context.Context, in SettleForexFillInput) 
 		return nil, apperr.Validation("quote_amount: " + err.Error())
 	}
 
-	if existing, err := s.Store.GetTransactionsByOpID(ctx, in.OpID); err == nil && len(existing) > 0 {
-		return &domain.PaymentResult{OpID: in.OpID, Status: domain.TxStatusRealized, Transactions: existing}, nil
-	}
-
 	houseBase, err := s.Store.GetSystemAccount(ctx, in.BaseCurrency)
 	if err != nil {
 		return nil, err
@@ -238,21 +258,15 @@ func (s *Service) SettleForexFill(ctx context.Context, in SettleForexFillInput) 
 		fromBase, toBase = houseBase, bookBase
 	}
 
-	result := &domain.PaymentResult{OpID: in.OpID, Status: domain.TxStatusRealized}
-	err = s.Store.ExecuteAtomic(ctx, func(tx pgx.Tx) error {
-		quoteLegs, err := s.executeMoneyMove(ctx, tx, fromQuote, toQuote, quoteAmt, domain.TxKindForex, in.OpID, initiator, paymentMeta{Purpose: purpose})
+	return s.idempotentSettle(ctx, in.OpID, func(tx pgx.Tx) ([]*domain.Transaction, error) {
+		quoteLegs, err := s.executeMoneyMove(ctx, tx, fromQuote, toQuote, quoteAmt, domain.TxKindForex, in.OpID, initiator, paymentMeta{Purpose: purpose}, 0)
 		if err != nil {
-			return err
+			return nil, err
 		}
-		baseLegs, err := s.executeMoneyMove(ctx, tx, fromBase, toBase, baseAmt, domain.TxKindForex, in.OpID, initiator, paymentMeta{Purpose: purpose})
+		baseLegs, err := s.executeMoneyMove(ctx, tx, fromBase, toBase, baseAmt, domain.TxKindForex, in.OpID, initiator, paymentMeta{Purpose: purpose}, len(quoteLegs))
 		if err != nil {
-			return err
+			return nil, err
 		}
-		result.Transactions = append(quoteLegs, baseLegs...)
-		return nil
+		return append(quoteLegs, baseLegs...), nil
 	})
-	if err != nil {
-		return nil, err
-	}
-	return result, nil
 }

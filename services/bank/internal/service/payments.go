@@ -61,7 +61,7 @@ func (s *Service) CreatePayment(ctx context.Context, in CreatePaymentInput) (*do
 			PaymentCode:     code,
 			ReferenceNumber: in.ReferenceNumber,
 			Purpose:         in.Purpose,
-		})
+		}, 0)
 		if err != nil {
 			return err
 		}
@@ -141,7 +141,7 @@ func (s *Service) CreateTransfer(ctx context.Context, in CreateTransferInput) (*
 		if from.Currency != to.Currency {
 			kind = domain.TxKindExchange
 		}
-		legs, err := s.executeMoneyMove(ctx, tx, from, to, amt, kind, op, p, paymentMeta{Purpose: in.Purpose})
+		legs, err := s.executeMoneyMove(ctx, tx, from, to, amt, kind, op, p, paymentMeta{Purpose: in.Purpose}, 0)
 		if err != nil {
 			return err
 		}
@@ -172,7 +172,12 @@ type paymentMeta struct {
 // All balance updates run inside the caller's pgx.Tx so a partial
 // failure rolls back fully. The principal carries through so the
 // FX-commission branch can short-circuit for actuary trades.
-func (s *Service) executeMoneyMove(ctx context.Context, tx pgx.Tx, from, to *domain.Account, fromAmt *big.Rat, kind domain.TransactionKind, opID string, initiator auth.Principal, meta paymentMeta) ([]*domain.Transaction, error) {
+//
+// legOffset is added to each leg's stored leg_index so callers that
+// chain multiple executeMoneyMove invocations under a single op_id
+// (SettleForexFill) keep the (op_id, leg_index) unique-index invariant.
+// All other callers pass 0.
+func (s *Service) executeMoneyMove(ctx context.Context, tx pgx.Tx, from, to *domain.Account, fromAmt *big.Rat, kind domain.TransactionKind, opID string, initiator auth.Principal, meta paymentMeta, legOffset int) ([]*domain.Transaction, error) {
 	if from.Status != domain.AccountActive || to.Status != domain.AccountActive {
 		return nil, apperr.FailedPrecondition("jedan od računa nije aktivan")
 	}
@@ -192,7 +197,7 @@ func (s *Service) executeMoneyMove(ctx context.Context, tx pgx.Tx, from, to *dom
 			return nil, err
 		}
 		leg, err := s.Store.InsertTransaction(ctx, tx, &domain.Transaction{
-			OpID: opID, Kind: kind, LegIndex: 1,
+			OpID: opID, Kind: kind, LegIndex: legOffset + 1,
 			FromAccountID: from.ID, ToAccountID: to.ID,
 			FromAmount: fromStr, ToAmount: fromStr,
 			RecipientName: meta.RecipientName, PaymentCode: meta.PaymentCode,
@@ -249,7 +254,7 @@ func (s *Service) executeMoneyMove(ctx context.Context, tx pgx.Tx, from, to *dom
 	}
 
 	leg1, err := s.Store.InsertTransaction(ctx, tx, &domain.Transaction{
-		OpID: opID, Kind: kind, LegIndex: 1,
+		OpID: opID, Kind: kind, LegIndex: legOffset + 1,
 		FromAccountID: from.ID, ToAccountID: bankFrom.ID,
 		FromAmount: fromStr, ToAmount: fromStr,
 		RecipientName: meta.RecipientName, PaymentCode: meta.PaymentCode,
@@ -261,7 +266,7 @@ func (s *Service) executeMoneyMove(ctx context.Context, tx pgx.Tx, from, to *dom
 		return nil, err
 	}
 	leg2, err := s.Store.InsertTransaction(ctx, tx, &domain.Transaction{
-		OpID: opID, Kind: kind, LegIndex: 2,
+		OpID: opID, Kind: kind, LegIndex: legOffset + 2,
 		FromAccountID: bankTo.ID, ToAccountID: to.ID,
 		FromAmount: toStr, ToAmount: toStr,
 		Rate:              money.FormatRate(composite),

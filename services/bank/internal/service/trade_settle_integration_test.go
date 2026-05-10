@@ -97,6 +97,51 @@ func TestIntegration_SettleTrade_Idempotent(t *testing.T) {
 	}
 }
 
+// TestIntegration_SettleTrade_ConcurrentRetry confirms that two
+// concurrent SettleTrade calls with the same op_id can't both insert —
+// the (op_id, leg_index) unique index lets exactly one win, and the
+// loser observes the existing legs via the conflict-recovery branch.
+// Regression for the BE-2 TOCTOU window.
+func TestIntegration_SettleTrade_ConcurrentRetry(t *testing.T) {
+	svc := setup(t)
+	clientID := uuid.NewString()
+	acc := mintAccount(t, svc, clientID, domain.KindPersonalFX, domain.CurrencyUSD, "1000")
+	opID := uuid.NewString()
+
+	type result struct {
+		res *domain.PaymentResult
+		err error
+	}
+	results := make(chan result, 2)
+	start := make(chan struct{})
+	for i := 0; i < 2; i++ {
+		go func() {
+			<-start
+			r, err := svc.SettleTrade(adminTradingCtx(), SettleTradeInput{
+				AccountID: acc.ID, Direction: "debit", Currency: domain.CurrencyUSD,
+				Amount: "100", OpID: opID,
+			})
+			results <- result{r, err}
+		}()
+	}
+	close(start)
+	r1 := <-results
+	r2 := <-results
+
+	if r1.err != nil || r2.err != nil {
+		t.Fatalf("expected both retries to succeed, got r1.err=%v r2.err=%v", r1.err, r2.err)
+	}
+	if r1.res.OpID != opID || r2.res.OpID != opID {
+		t.Fatalf("op_id mismatch: r1=%s r2=%s want=%s", r1.res.OpID, r2.res.OpID, opID)
+	}
+
+	// Account debited exactly once, not twice.
+	post, _ := svc.Store.GetAccountByID(context.Background(), acc.ID)
+	if !numericEq(post.Balance, "900") {
+		t.Fatalf("post-concurrent balance = %s, want 900 (not 800)", post.Balance)
+	}
+}
+
 // TestIntegration_SettleTrade_ActuaryRequiresBankAccount verifies the
 // fix #6 guard: when IsActuary=true the source account must be a
 // bank-owned (KindSystem) account; a client account yields

@@ -450,11 +450,11 @@ func (s *Service) agentNeedsApproval(
 ) (bool, bool, error) {
 	info, err := s.Store.GetActuaryInfo(ctx, employeeID)
 	if err != nil {
-		// No actuary_info row for an employee with the agent permission
-		// is a misconfiguration — be safe and route to approval.
-		s.Log.Warn("agent without actuary_info row; routing to approval",
-			"employee_id", employeeID, "err", err.Error())
-		return true, false, nil
+		// Spec p.38 assumes every agent has a row with a definite limit.
+		// A missing row is a misconfiguration — refuse rather than
+		// flooding the supervisor queue with arbitrarily large pending
+		// orders that would still be auto-charged on approval.
+		return false, false, apperr.FailedPrecondition("aktuar nije konfigurisan — kontaktirajte supervizora")
 	}
 	if info.NeedApproval {
 		return true, false, nil
@@ -472,8 +472,12 @@ func (s *Service) agentNeedsApproval(
 	if err != nil {
 		return false, false, apperr.Internal("agent used_limit unparseable", err)
 	}
-	// daily_limit = 0 means unlimited; spec p.38 doesn't say so explicitly
-	// but matches the bank service's account-limit convention.
+	// Spec p.38 reserves daily_limit=0 for supervisors (who have no cap).
+	// For an agent, 0 means zero capacity — every trade routes to the
+	// supervisor.
+	if info.Type == domain.ActuaryAgent && limit.Sign() == 0 {
+		return false, true, nil
+	}
 	if limit.Sign() == 0 {
 		return false, false, nil
 	}

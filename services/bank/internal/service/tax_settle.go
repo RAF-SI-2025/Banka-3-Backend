@@ -53,11 +53,6 @@ func (s *Service) SettleCapitalGainsTax(ctx context.Context, in SettleCapitalGai
 		return nil, err
 	}
 
-	// Idempotency.
-	if existing, err := s.Store.GetTransactionsByOpID(ctx, in.OpID); err == nil && len(existing) > 0 {
-		return &domain.PaymentResult{OpID: in.OpID, Status: domain.TxStatusRealized, Transactions: existing}, nil
-	}
-
 	// Determine source-currency amount. When account is RSD this is a
 	// straight debit; otherwise we ask the menjačnica engine "how much
 	// of from.Currency converts to AmountRSD?". rateAndConvert with
@@ -89,17 +84,7 @@ func (s *Service) SettleCapitalGainsTax(ctx context.Context, in SettleCapitalGai
 		purpose = "Porez na kapitalni dobitak"
 	}
 
-	result := &domain.PaymentResult{OpID: in.OpID, Status: domain.TxStatusRealized}
-	err = s.Store.ExecuteAtomic(ctx, func(tx pgx.Tx) error {
-		legs, err := s.executeMoneyMove(ctx, tx, from, state, fromAmt, domain.TxKindTax, in.OpID, initiator, paymentMeta{Purpose: purpose})
-		if err != nil {
-			return err
-		}
-		result.Transactions = legs
-		return nil
+	return s.idempotentSettle(ctx, in.OpID, func(tx pgx.Tx) ([]*domain.Transaction, error) {
+		return s.executeMoneyMove(ctx, tx, from, state, fromAmt, domain.TxKindTax, in.OpID, initiator, paymentMeta{Purpose: purpose}, 0)
 	})
-	if err != nil {
-		return nil, err
-	}
-	return result, nil
 }
