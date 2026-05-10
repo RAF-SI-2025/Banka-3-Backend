@@ -23,6 +23,7 @@ import (
 	"time"
 
 	"github.com/google/uuid"
+	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
 
 	"github.com/RAF-SI-2025/Banka-3-Backend/pkg/apperr"
@@ -1392,6 +1393,205 @@ func TestIntegration_ListTaxPositions_DisplayName(t *testing.T) {
 	}
 	if len(filtered) != 1 || filtered[0].UserID != pera {
 		t.Fatalf("filter petr → %#v, want only pera", filtered)
+	}
+}
+
+// settlerFunc adapts a closure into a TradeSettler. Lets a test wedge
+// behaviour (e.g. cancel between settle and book) into the inner call.
+type settlerFunc func(ctx context.Context, in SettleInput) (string, error)
+
+func (f settlerFunc) Settle(ctx context.Context, in SettleInput) (string, error) {
+	return f(ctx, in)
+}
+
+// TestIntegration_Execution_CancelBetweenSettleAndBook is the BE-T15
+// regression for BE-3: a cancel that lands between bank.SettleTrade
+// committing and the trading-side booking tx must not strand money.
+// Sealed fills stay (spec p.50) — the holding + execution row land,
+// the order ends cancelled but is_done=true.
+func TestIntegration_Execution_CancelBetweenSettleAndBook(t *testing.T) {
+	svc := setup(t)
+	ex := seedExchange(t, svc, "XNYS", domain.CurrencyUSD)
+	sec, _ := seedStock(t, svc, "RACEX", ex, "10", "10", "9", 1000000)
+
+	clientID := uuid.NewString()
+	accID := uuid.NewString()
+
+	o, err := svc.CreateOrder(clientCtx(clientID), CreateOrderInput{
+		SecurityID: sec.ID,
+		OrderType:  domain.OrderMarket,
+		Direction:  domain.DirectionBuy,
+		Quantity:   2,
+		AllOrNone:  true,
+		AccountID:  accID,
+	})
+	if err != nil {
+		t.Fatalf("create: %v", err)
+	}
+
+	// Wrap the inner settler so the first call cancels the order BEFORE
+	// returning success. This simulates a cancel landing in the window
+	// between bank settle (committed) and the trading-side booking tx.
+	inner := svc.Settler
+	fired := false
+	svc.Settler = settlerFunc(func(ctx context.Context, in SettleInput) (string, error) {
+		if !fired {
+			fired = true
+			if _, err := svc.Store.CancelOrder(ctx, o.ID); err != nil {
+				return "", err
+			}
+		}
+		return inner.Settle(ctx, in)
+	})
+
+	if _, err := svc.ProcessOrderTick(context.Background(), o); err != nil {
+		t.Fatalf("tick: %v", err)
+	}
+
+	// Holding lands at qty=2 (sealed fill stays).
+	holdings, _ := svc.Store.ListHoldings(context.Background(), store.HoldingFilter{UserID: clientID})
+	var found bool
+	for _, h := range holdings {
+		if h.SecurityID == sec.ID && h.Quantity == 2 {
+			found = true
+		}
+	}
+	if !found {
+		t.Fatalf("expected holding qty=2 (sealed fill stays after cancel); got %+v", holdings)
+	}
+
+	// Execution row is settled, not stuck pending.
+	pending, err := svc.Store.GetPendingExecutionForOrder(context.Background(), o.ID)
+	if err != nil {
+		t.Fatalf("GetPending: %v", err)
+	}
+	if pending != nil {
+		t.Fatalf("execution still pending after cancel-then-resume: %+v", pending)
+	}
+	execs, _ := svc.Store.ListExecutions(context.Background(), o.ID)
+	if len(execs) != 1 || execs[0].Quantity != 2 {
+		t.Fatalf("expected 1 settled exec qty=2, got %+v", execs)
+	}
+
+	// Order is cancelled but drained.
+	final, _ := svc.Store.GetOrder(context.Background(), o.ID)
+	if !final.Cancelled {
+		t.Fatalf("order should be cancelled")
+	}
+	if !final.IsDone {
+		t.Fatalf("order is_done should be true after sealed fill drained remaining")
+	}
+}
+
+// TestIntegration_Execution_PendingRowResumes simulates a worker crash
+// after the pending-row insert but before bank settle. The next tick
+// must resume from the existing pending row (no duplicate exec, op_id
+// = pending row UUID for bank-side idempotency).
+func TestIntegration_Execution_PendingRowResumes(t *testing.T) {
+	svc := setup(t)
+	ex := seedExchange(t, svc, "XNYS", domain.CurrencyUSD)
+	sec, _ := seedStock(t, svc, "RECOV", ex, "10", "10", "9", 1000000)
+
+	clientID := uuid.NewString()
+	accID := uuid.NewString()
+
+	o, err := svc.CreateOrder(clientCtx(clientID), CreateOrderInput{
+		SecurityID: sec.ID,
+		OrderType:  domain.OrderMarket,
+		Direction:  domain.DirectionBuy,
+		Quantity:   3,
+		AllOrNone:  true,
+		AccountID:  accID,
+	})
+	if err != nil {
+		t.Fatalf("create: %v", err)
+	}
+
+	// Hand-insert a pending row to simulate "previous worker died after
+	// pending insert but before bank settle".
+	var pendingID string
+	err = svc.Store.ExecuteAtomic(context.Background(), func(tx pgx.Tx) error {
+		e, ierr := svc.Store.InsertPendingExecution(context.Background(), tx, &domain.OrderExecution{
+			OrderID:       o.ID,
+			Quantity:      3,
+			PricePerUnit:  "10",
+			TotalAmount:   "30",
+			CommissionAmt: "0",
+		})
+		if ierr != nil {
+			return ierr
+		}
+		pendingID = e.ID
+		return nil
+	})
+	if err != nil {
+		t.Fatalf("seed pending: %v", err)
+	}
+
+	// RunExecutionTick must pick this order up via the recovery sweep.
+	fired, err := svc.RunExecutionTick(context.Background())
+	if err != nil {
+		t.Fatalf("tick: %v", err)
+	}
+	if fired == 0 {
+		t.Fatalf("expected recovery sweep to fire the pending fill")
+	}
+
+	// Resume must not create a duplicate exec — same row flips to settled.
+	execs, _ := svc.Store.ListExecutions(context.Background(), o.ID)
+	if len(execs) != 1 {
+		t.Fatalf("got %d execs, want 1 (resume must not duplicate)", len(execs))
+	}
+	if execs[0].ID != pendingID {
+		t.Fatalf("recovery created a new exec %s instead of resuming pendingID=%s", execs[0].ID, pendingID)
+	}
+
+	// Bank settle was called once with op_id = pendingID — deterministic
+	// across crashes per BE-3/BE-4.
+	calls := currentSettler.settles()
+	if len(calls) != 1 {
+		t.Fatalf("expected 1 settle call, got %d", len(calls))
+	}
+	if calls[0].OpID != pendingID {
+		t.Fatalf("settle op_id=%s, want pendingID=%s (deterministic op_id)", calls[0].OpID, pendingID)
+	}
+}
+
+// TestIntegration_Tax_RetryUsesDeterministicOpID verifies BE-8: a
+// SettleTax that errors leaves the realized_gains rows unpaid; the next
+// RunTax invocation must re-derive the same op_id (bank-side idempotency
+// then makes the retry safe).
+func TestIntegration_Tax_RetryUsesDeterministicOpID(t *testing.T) {
+	svc := setup(t)
+	ex := seedExchange(t, svc, "XNYS", domain.CurrencyUSD)
+	sec, _ := seedStock(t, svc, "TAXR", ex, "100", "100", "99", 1000)
+
+	clientID := uuid.NewString()
+	accID := uuid.NewString()
+	if err := writeRealizedGain(t, svc, clientID, sec.ID, accID, "1000"); err != nil {
+		t.Fatalf("write: %v", err)
+	}
+
+	// First run: SettleTax errors. Rows stay unpaid.
+	currentSettler.taxErr = fmt.Errorf("transient bank error")
+	_, _ = svc.RunTax(TaxCronContext(context.Background()), RunTaxInput{})
+	currentSettler.taxErr = nil
+
+	// Second run: succeeds. Should record exactly one tax call with the
+	// deterministic op_id derived from (account, current month).
+	res, err := svc.RunTax(TaxCronContext(context.Background()), RunTaxInput{})
+	if err != nil {
+		t.Fatalf("RunTax: %v", err)
+	}
+	if res.UsersTaxed != 1 {
+		t.Fatalf("users_taxed=%d, want 1", res.UsersTaxed)
+	}
+	if len(currentSettler.taxCalls) != 1 {
+		t.Fatalf("got %d successful tax calls, want 1", len(currentSettler.taxCalls))
+	}
+	expected := taxOpID(accID, time.Now())
+	if currentSettler.taxCalls[0].OpID != expected {
+		t.Fatalf("tax op_id=%s, want deterministic %s", currentSettler.taxCalls[0].OpID, expected)
 	}
 }
 

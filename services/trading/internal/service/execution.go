@@ -28,7 +28,6 @@ import (
 	"github.com/RAF-SI-2025/Banka-3-Backend/pkg/money"
 	"github.com/RAF-SI-2025/Banka-3-Backend/pkg/permissions"
 	"github.com/RAF-SI-2025/Banka-3-Backend/services/trading/internal/domain"
-	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5"
 )
 
@@ -83,14 +82,40 @@ type processFillResult struct {
 
 // ProcessOrderTick is invoked by the execution worker for one active
 // order. Returns whether a fill fired, and (when none fires) the
-// earliest time the worker should retry this order. Fillability is
-// gated on:
+// earliest time the worker should retry this order.
+//
+// Recovery first: if a pending-execution row exists for this order, we
+// resume that fill (re-call bank with the same op_id, then book) and
+// return without rolling cadence for a fresh fill. The pending row
+// persists across worker crashes; bank's idempotency on op_id makes
+// the re-call safe regardless of whether the previous attempt's bank
+// settle committed or not.
+//
+// Fresh-fill path is gated on:
 //   - cancelled / done flags (worker shouldn't pick these but defend);
 //   - STOP / STOP_LIMIT trigger condition vs current price;
 //   - LIMIT price condition vs current ask (buy) / bid (sell);
 //   - cadence based on spec p.56 random-interval formula.
 func (s *Service) ProcessOrderTick(ctx context.Context, o *domain.Order) (processFillResult, error) {
 	res := processFillResult{Order: o}
+
+	// Resume a pending fill before anything else. We do this regardless
+	// of cancelled/done state — once a pending row exists, bank may
+	// already have settled and we owe the booking.
+	pending, err := s.Store.GetPendingExecutionForOrder(ctx, o.ID)
+	if err != nil {
+		return res, err
+	}
+	if pending != nil {
+		exec, err := s.resumePendingFill(ctx, o, pending)
+		if err != nil {
+			return res, err
+		}
+		res.Fired = true
+		res.Execution = exec
+		return res, nil
+	}
+
 	if o.Cancelled || o.IsDone || o.Status != domain.OrderStatusApproved {
 		return res, nil
 	}
@@ -174,15 +199,19 @@ func (s *Service) ProcessOrderTick(ctx context.Context, o *domain.Order) (proces
 	return res, nil
 }
 
-// executeFill performs one partial-fill pipeline atomically:
-//   1. Bank settles the cash leg (debit on buy / credit on sell).
-//   2. Inside a tx: insert order_executions, advance order progress,
-//      apply portfolio change, write realized_gain on a sell.
+// executeFill drives a fresh partial-fill through the saga:
 //
-// Failures during settlement abort early. Failures after settlement
-// log and rely on retry — bank has the money moved; we owe an
-// execution row. The op_id idempotency key on the bank side prevents
-// a double-charge when we retry.
+//   1. Insert a pending order_executions row in its own tx — its UUID
+//      is the deterministic op_id for the bank settle.
+//   2. Bank settles the cash leg, idempotent on op_id (bank migration
+//      0011's unique (op_id, leg_index) makes retries safe).
+//   3. In one tx: mark the row settled, advance order progress, apply
+//      the portfolio change, and write realized_gain on a sell.
+//
+// A worker crash anywhere between (1) and (3) leaves a pending row.
+// resumePendingFill picks it up on the next tick: bank.Settle is
+// idempotent so re-calling with the same op_id returns the existing
+// legs; the booking tx is the only operation needed to converge.
 func (s *Service) executeFill(ctx context.Context, o *domain.Order, listing *domain.Listing, fillPrice string, qty int32) (*domain.OrderExecution, error) {
 	if s.Settler == nil {
 		return nil, apperr.Internal("trade settler not wired", nil)
@@ -216,39 +245,92 @@ func (s *Service) executeFill(ctx context.Context, o *domain.Order, listing *dom
 	}
 	commission := proratedCommission(totalCommission, qty, o.Quantity)
 
-	// Forex orders use the spec p.42 paired-settlement RPC instead of
-	// the user-vs-house SettleTrade flow. Two legs go through the
-	// bank's per-currency forex_book accounts atomically.
-	settledOpID, err := s.settleCashLeg(ctx, o, sec, fillPrice, qty, notional, commission, csR)
-	if err != nil {
-		return nil, err
-	}
-
-	var exec *domain.OrderExecution
-	err = s.Store.ExecuteAtomic(ctx, func(tx pgx.Tx) error {
-		e, err := s.Store.InsertExecution(ctx, tx, &domain.OrderExecution{
+	// (1) Pre-write the pending row in its own tx so its UUID survives a
+	// crash in the bank call. Subsequent ticks find it and resume.
+	var pending *domain.OrderExecution
+	if err := s.Store.ExecuteAtomic(ctx, func(tx pgx.Tx) error {
+		row, err := s.Store.InsertPendingExecution(ctx, tx, &domain.OrderExecution{
 			OrderID:       o.ID,
 			Quantity:      qty,
 			PricePerUnit:  fillPrice,
 			TotalAmount:   money.FormatAmount(notional),
 			CommissionAmt: money.FormatAmount(commission),
-			BankOpID:      settledOpID,
 		})
 		if err != nil {
 			return err
 		}
-		exec = e
-		if _, err := s.Store.AdvanceOrderProgress(ctx, tx, o.ID, qty); err != nil {
+		pending = row
+		return nil
+	}); err != nil {
+		return nil, err
+	}
+
+	return s.completeFill(ctx, o, sec, pending, contractSize)
+}
+
+// resumePendingFill re-drives the saga for an order whose previous fill
+// attempt left a pending row. We rebuild the in-memory state from the
+// row's persisted amounts (the original qty / price / commission) and
+// re-call the bank with the same op_id; bank-side idempotency makes
+// the re-call a no-op when the previous attempt already committed.
+func (s *Service) resumePendingFill(ctx context.Context, o *domain.Order, pending *domain.OrderExecution) (*domain.OrderExecution, error) {
+	if s.Settler == nil {
+		return nil, apperr.Internal("trade settler not wired", nil)
+	}
+	sec, err := s.Store.GetSecurity(ctx, o.SecurityID)
+	if err != nil {
+		return nil, err
+	}
+	contractSize := o.ContractSize
+	if contractSize == "" {
+		contractSize = "1"
+	}
+	s.Log.Info("resuming pending execution",
+		"order_id", o.ID, "exec_id", pending.ID, "qty", pending.Quantity)
+	return s.completeFill(ctx, o, sec, pending, contractSize)
+}
+
+// completeFill is the shared steps (2) + (3) of the saga. Both fresh
+// fills (after InsertPendingExecution) and resumes call into here.
+func (s *Service) completeFill(
+	ctx context.Context,
+	o *domain.Order,
+	sec *domain.Security,
+	pending *domain.OrderExecution,
+	contractSize string,
+) (*domain.OrderExecution, error) {
+	notional, err := money.Parse(pending.TotalAmount)
+	if err != nil {
+		return nil, apperr.Internal("pending notional unparseable", err)
+	}
+	commission, err := money.Parse(pending.CommissionAmt)
+	if err != nil {
+		return nil, apperr.Internal("pending commission unparseable", err)
+	}
+
+	// (2) Bank settle, deterministic op_id = pending row's UUID. Both
+	// SettleTrade and SettleForexFill are idempotent on op_id (bank
+	// migration 0011), so a retry after a partial failure is a no-op.
+	settledOpID, err := s.settleCashLeg(ctx, o, sec, pending.PricePerUnit, pending.Quantity, notional, commission, pending.ID)
+	if err != nil {
+		return nil, err
+	}
+
+	// (3) Mark settled + advance + book in one tx. AdvanceOrderProgress
+	// no longer gates on `cancelled = false` — once we have a pending
+	// row, the cancel must not strand bank-settled money.
+	var exec *domain.OrderExecution
+	err = s.Store.ExecuteAtomic(ctx, func(tx pgx.Tx) error {
+		if err := s.Store.MarkExecutionSettled(ctx, tx, pending.ID, settledOpID); err != nil {
+			return err
+		}
+		if _, err := s.Store.AdvanceOrderProgress(ctx, tx, o.ID, pending.Quantity); err != nil {
 			return err
 		}
 
 		// Spec p.42: forex pairs are not held — buying a pair means
 		// selling one currency and buying the other, with no portfolio
-		// position. Skip portfolio + realized-gain bookkeeping here.
-		// TODO(c3 forex): the cash leg is currently still a single-
-		// currency SettleTrade above; proper two-leg paired settlement
-		// (debit quote-currency account, credit base-currency account)
-		// needs a new bank-side primitive — tracked separately.
+		// position. Skip portfolio + realized-gain bookkeeping for forex.
 		if sec.Type == domain.SecurityForex {
 			return nil
 		}
@@ -257,18 +339,18 @@ func (s *Service) executeFill(ctx context.Context, o *domain.Order, listing *dom
 		case domain.DirectionBuy:
 			if _, err := s.Store.ApplyBuyFill(ctx, tx,
 				o.UserID, string(o.UserKind), o.SecurityID, o.AccountID,
-				qty, fillPrice,
+				pending.Quantity, pending.PricePerUnit,
 			); err != nil {
 				return err
 			}
 		case domain.DirectionSell:
 			avgPrice, _, err := s.Store.ApplySellFill(ctx, tx,
-				o.UserID, string(o.UserKind), o.SecurityID, o.AccountID, qty,
+				o.UserID, string(o.UserKind), o.SecurityID, o.AccountID, pending.Quantity,
 			)
 			if err != nil {
 				return err
 			}
-			if err := s.recordRealizedGain(ctx, tx, o, sec, qty, fillPrice, avgPrice, contractSize); err != nil {
+			if err := s.recordRealizedGain(ctx, tx, o, sec, pending.Quantity, pending.PricePerUnit, avgPrice, contractSize); err != nil {
 				return err
 			}
 		}
@@ -276,27 +358,31 @@ func (s *Service) executeFill(ctx context.Context, o *domain.Order, listing *dom
 	})
 	if err != nil {
 		s.Log.Error("fill book-keeping failed after bank settle",
-			"order_id", o.ID, "op_id", settledOpID, "err", err.Error())
+			"order_id", o.ID, "exec_id", pending.ID, "op_id", settledOpID, "err", err.Error())
 		return nil, err
 	}
+	pending.BankOpID = settledOpID
+	pending.Status = "settled"
+	exec = pending
 	return exec, nil
 }
 
 // settleCashLeg routes the cash leg of a fill to the right bank
 // primitive. Stocks/futures/options use SettleTrade against the user
 // account; forex uses SettleForexFill against the bank's per-currency
-// forex_book accounts (spec p.42). Returns the bank-side op_id to
-// stamp on the execution row.
+// forex_book accounts (spec p.42). The op_id is the pending execution
+// row's UUID — deterministic across retries and recoveries.
 func (s *Service) settleCashLeg(
 	ctx context.Context,
 	o *domain.Order,
 	sec *domain.Security,
 	fillPrice string,
 	qty int32,
-	notional, commission, contractSize *big.Rat,
+	notional, commission *big.Rat,
+	opID string,
 ) (string, error) {
 	if sec.Type == domain.SecurityForex {
-		return s.settleForexLeg(ctx, o, sec, fillPrice, qty, contractSize)
+		return s.settleForexLeg(ctx, o, sec, fillPrice, qty, opID)
 	}
 
 	currency := sec.Currency
@@ -321,7 +407,7 @@ func (s *Service) settleCashLeg(
 		Direction: direction,
 		Currency:  currency,
 		Amount:    money.FormatAmount(settleAmount),
-		OpID:      uuid.NewString(),
+		OpID:      opID,
 		IsActuary: o.UserKind == domain.KindEmployee,
 		Purpose:   "Fill " + sec.Ticker,
 	})
@@ -330,13 +416,14 @@ func (s *Service) settleCashLeg(
 // settleForexLeg dispatches the spec p.42 paired settlement. base_amount
 // = qty × contract_size; quote_amount = qty × contract_size × fillPrice.
 // Direction maps order direction to the FX leg direction directly.
+// op_id is the pending row's UUID for deterministic retries.
 func (s *Service) settleForexLeg(
 	ctx context.Context,
 	o *domain.Order,
 	sec *domain.Security,
 	fillPrice string,
 	qty int32,
-	contractSize *big.Rat,
+	opID string,
 ) (string, error) {
 	if s.ForexSettler == nil {
 		s.Log.Warn("forex settler not wired; forex fill skipped its cash leg",
@@ -346,12 +433,16 @@ func (s *Service) settleForexLeg(
 	if !sec.BaseCurrency.Supported() || !sec.QuoteCurrency.Supported() {
 		return "", apperr.Internal("forex security missing base/quote currency", nil)
 	}
+	cs, err := money.Parse(o.ContractSize)
+	if err != nil || cs.Sign() == 0 {
+		cs = money.MustParse("1")
+	}
 	q := new(big.Rat).SetInt64(int64(qty))
 	priceR, err := money.Parse(fillPrice)
 	if err != nil {
 		return "", apperr.Internal("fill price unparseable", err)
 	}
-	baseAmt := money.Mul(q, contractSize)
+	baseAmt := money.Mul(q, cs)
 	quoteAmt := money.Mul(baseAmt, priceR)
 	dir := "buy"
 	if o.Direction == domain.DirectionSell {
@@ -363,7 +454,7 @@ func (s *Service) settleForexLeg(
 		BaseAmount:    money.FormatAmount(baseAmt),
 		QuoteCurrency: sec.QuoteCurrency,
 		QuoteAmount:   money.FormatAmount(quoteAmt),
-		OpID:          uuid.NewString(),
+		OpID:          opID,
 		Purpose:       "Forex fill " + sec.Ticker,
 	})
 }
@@ -766,13 +857,44 @@ func (s *Service) tickRetryInterval() time.Duration {
 // RunExecutionTick walks every active order once. Used by the worker
 // loop and exposed for forced runs (debug / test). Returns the number
 // of fills fired.
+//
+// Two passes: first the recovery sweep over orders with a pending
+// execution row (these may be cancelled or otherwise excluded from the
+// active set, but they still own a fill we must finish booking); then
+// the regular active-order sweep. We dedupe so an order with a pending
+// row + still-active status isn't ticked twice.
 func (s *Service) RunExecutionTick(ctx context.Context) (int, error) {
-	orders, err := s.Store.GetActiveOrdersForExecution(ctx, 200)
+	pendingIDs, err := s.Store.ListOrderIDsWithPendingExecutions(ctx, 200)
 	if err != nil {
 		return 0, err
 	}
+	seen := make(map[string]struct{}, len(pendingIDs))
 	fired := 0
+	for _, id := range pendingIDs {
+		seen[id] = struct{}{}
+		o, err := s.Store.GetOrder(ctx, id)
+		if err != nil {
+			s.Log.Warn("recovery: load order failed", "order_id", id, "err", err.Error())
+			continue
+		}
+		res, err := s.ProcessOrderTick(ctx, o)
+		if err != nil {
+			s.Log.Warn("recovery: order tick failed", "order_id", id, "err", err.Error())
+			continue
+		}
+		if res.Fired {
+			fired++
+		}
+	}
+
+	orders, err := s.Store.GetActiveOrdersForExecution(ctx, 200)
+	if err != nil {
+		return fired, err
+	}
 	for _, o := range orders {
+		if _, dup := seen[o.ID]; dup {
+			continue
+		}
 		res, err := s.ProcessOrderTick(ctx, o)
 		if err != nil {
 			s.Log.Warn("order tick failed", "order_id", o.ID, "err", err.Error())

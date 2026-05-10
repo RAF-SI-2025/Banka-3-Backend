@@ -223,6 +223,10 @@ type Order struct {
 }
 
 // OrderExecution is one partial fill. Spec p.55-56.
+//
+// Status walks `pending -> settled` in the executeFill saga (BE-3): a
+// fill is inserted as `pending` before the bank call so a worker crash
+// between settle and book leaves a durable signal to resume.
 type OrderExecution struct {
 	ID            string
 	OrderID       string
@@ -231,6 +235,7 @@ type OrderExecution struct {
 	TotalAmount   string
 	CommissionAmt string
 	BankOpID      string
+	Status        string
 	ExecutedAt    time.Time
 }
 

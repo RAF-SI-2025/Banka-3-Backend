@@ -39,6 +39,21 @@ import (
 // TaxRate is 15% per spec p.62.
 var taxRate = money.MustParse("0.15")
 
+// taxNamespace is the deterministic-uuid namespace for capital-gains tax
+// op_ids. Stable across runs so a worker crash between SettleTax and
+// MarkRealizedGainsTaxed re-derives the same op_id; bank's idempotency
+// (migration bank.0011 unique (op_id, leg_index)) makes the retry safe.
+var taxNamespace = uuid.MustParse("3e9bdfaa-0a64-4f0a-9d6a-f9c5b7c4e0aa")
+
+// taxOpID derives the deterministic op_id for one (account_id, year-month)
+// tax run. Two cron firings in the same calendar month for the same
+// account collide on op_id, which is exactly what we want — the second
+// no-ops at the bank.
+func taxOpID(accountID string, period time.Time) string {
+	yyyymm := period.Format("2006-01")
+	return uuid.NewSHA1(taxNamespace, []byte(accountID+"|"+yyyymm)).String()
+}
+
 // TaxSettleInput mirrors bank.SettleCapitalGainsTax.
 type TaxSettleInput struct {
 	AccountID string
@@ -142,6 +157,11 @@ type RunTaxResult struct {
 // supervisor-triggered paths share this entry point — the cron's
 // errgroup goroutine attaches an admin principal to the context before
 // calling, so requireSupervisor admits both flows.
+//
+// Op_ids are deterministic per (account_id, current month). A retry
+// after a partial failure (SettleTax committed at the bank but
+// MarkRealizedGainsTaxed didn't) re-derives the same op_id; bank
+// no-ops, MarkRealizedGainsTaxed converges. No double-charge.
 func (s *Service) RunTax(ctx context.Context, in RunTaxInput) (*RunTaxResult, error) {
 	if _, err := s.requireSupervisor(ctx); err != nil {
 		return nil, err
@@ -233,12 +253,13 @@ func (s *Service) runTaxForUser(ctx context.Context, userID string, kind domain.
 	}
 
 	collected := big.NewRat(0, 1)
+	period := s.now()
 	for _, g := range groups {
 		taxAmt := money.Mul(g.gainSum, taxRate)
-		// Even when taxAmt is zero (loss-only group), we still want the
-		// rows marked taxed=true so they don't recur. We just skip the
-		// bank call.
-		opID := uuid.NewString()
+		// Deterministic op_id — same (account, yyyy-mm) collides on retry
+		// and bank no-ops; loss-only groups still need a stable value
+		// so MarkRealizedGainsTaxed stamps tax_op_id consistently.
+		opID := taxOpID(g.accountID, period)
 		if money.IsPositive(taxAmt) {
 			settledOpID, err := s.TaxSettler.SettleTax(ctx, TaxSettleInput{
 				AccountID: g.accountID,
