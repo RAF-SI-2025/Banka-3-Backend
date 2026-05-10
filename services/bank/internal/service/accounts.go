@@ -201,6 +201,19 @@ func (s *Service) ListAccounts(ctx context.Context, f domain.AccountFilter, page
 	} else if !permissions.HasAny(p.Permissions, permissions.AccountRead, permissions.Admin) {
 		return nil, 0, apperr.PermissionDenied("nedovoljne permisije")
 	}
+	// Bank-internal bookkeeping accounts (system menjačnica house,
+	// state-tax destination, per-currency forex_book) are reachable
+	// via GetSystemAccount / GetAccount(id); they have no owner,
+	// name, or subtype to render and would just clutter the employee
+	// Računi list. Exclude them unless the caller asked for that
+	// kind explicitly.
+	if f.Kind == "" {
+		f.ExcludeKinds = []domain.AccountKind{
+			domain.KindSystem,
+			domain.KindStateTax,
+			domain.KindForexBook,
+		}
+	}
 	return s.Store.ListAccounts(ctx, f, page, pageSize)
 }
 

@@ -161,4 +161,9 @@ type AccountFilter struct {
 	Kind          AccountKind
 	Currency      Currency
 	Status        AccountStatus
+	// ExcludeKinds removes rows whose kind matches any entry. The
+	// service layer sets this to the bank-internal kinds (system,
+	// state_tax, forex_book) for general listing calls so the
+	// employee Računi page doesn't surface bookkeeping accounts.
+	ExcludeKinds []AccountKind
 }

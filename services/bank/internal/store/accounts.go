@@ -271,6 +271,14 @@ func (s *Store) ListAccounts(ctx context.Context, f domain.AccountFilter, page, 
 		args = append(args, string(f.Status))
 		conds = append(conds, fmt.Sprintf("status = $%d", len(args)))
 	}
+	if len(f.ExcludeKinds) > 0 {
+		placeholders := make([]string, 0, len(f.ExcludeKinds))
+		for _, k := range f.ExcludeKinds {
+			args = append(args, string(k))
+			placeholders = append(placeholders, fmt.Sprintf("$%d", len(args)))
+		}
+		conds = append(conds, "kind not in ("+strings.Join(placeholders, ", ")+")")
+	}
 	where := ""
 	if len(conds) > 0 {
 		where = " where " + strings.Join(conds, " and ")
