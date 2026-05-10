@@ -381,12 +381,12 @@ message Exchange {
   bool                      is_open        = 9;
   // is_after_hours is true within 4h of close per spec p.56.
   bool                      is_after_hours = 10;
-  // override_open carries the admin toggle's tri-state encoded as a
-  // wrapper field: not set → no override, false → forced closed,
-  // true → forced open. We use a one-of marker for clarity.
-  oneof override {
-    bool override_open = 11;
-  }
+  // override_state carries the admin toggle. Empty string means "no
+  // override, follow schedule"; otherwise one of "open" / "closed" /
+  // "after_hours". The "after_hours" mode forces is_open=false and
+  // is_after_hours=true at any wall-clock so admins can drive the
+  // spec p.56 cadence path during testing.
+  string                    override_state = 11;
   google.protobuf.Timestamp updated_at     = 12;
 }
 
@@ -409,9 +409,9 @@ message UpsertExchangeRequest {
 
 message SetExchangeOverrideRequest {
   string mic = 1 [(buf.validate.field).string.min_len = 1];
-  // clear=true wipes the override and falls back to schedule.
-  bool clear = 2;
-  bool open  = 3;
+  // state is one of "open" / "closed" / "after_hours". An empty
+  // string clears the override and falls back to the schedule.
+  string state = 2;
 }
 
 // =====================================================================

@@ -113,21 +113,35 @@ type ActuaryInfo struct {
 	UpdatedAt    time.Time
 }
 
-// Exchange is one venue (NYSE, NASDAQ, …). override_open is a tri-
-// state: nil → follow schedule, *true → forced open, *false → forced
-// closed. The "is_open" / "is_after_hours" flags exposed at the proto
-// boundary are computed from these fields plus the wall clock.
+// ExchangeOverrideState forces the resolver onto one of three modes
+// regardless of wall-clock. Spec p.39 only requires open/closed; the
+// after_hours value exists so admins can drive the spec p.56
+// after-hours cadence path at any time of day.
+type ExchangeOverrideState string
+
+const (
+	ExchangeOverrideOpen       ExchangeOverrideState = "open"
+	ExchangeOverrideClosed     ExchangeOverrideState = "closed"
+	ExchangeOverrideAfterHours ExchangeOverrideState = "after_hours"
+)
+
+// Exchange is one venue (NYSE, NASDAQ, …). override_state is a four-
+// state text column: nil → follow schedule, "open" → forced open,
+// "closed" → forced closed, "after_hours" → forced after-hours
+// (closed but within the 4h window). The "is_open" / "is_after_hours"
+// flags exposed at the proto boundary are computed from these fields
+// plus the wall clock.
 type Exchange struct {
-	MIC          string
-	Name         string
-	Acronym      string
-	Polity       string
-	Currency     Currency
-	Timezone     string
-	OpenLocal    string // "HH:MM"
-	CloseLocal   string
-	OverrideOpen *bool
-	UpdatedAt    time.Time
+	MIC           string
+	Name          string
+	Acronym       string
+	Polity        string
+	Currency      Currency
+	Timezone      string
+	OpenLocal     string // "HH:MM"
+	CloseLocal    string
+	OverrideState *ExchangeOverrideState
+	UpdatedAt     time.Time
 }
 
 // Security is the polymorphic instrument type (stock / future / forex

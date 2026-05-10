@@ -28,16 +28,25 @@ func (s *Service) UpsertExchange(ctx context.Context, in *domain.Exchange) (*dom
 	return s.Store.UpsertExchange(ctx, in)
 }
 
-// SetExchangeOverride toggles or clears the open-override per spec p.39.
+// SetExchangeOverride writes the four-state override (open / closed /
+// after_hours) per spec p.39, plus the after-hours mode for testing
+// the spec p.56 cadence path. state==nil clears the override.
 // Admin only.
-func (s *Service) SetExchangeOverride(ctx context.Context, mic string, clear, open bool) (*domain.Exchange, error) {
+func (s *Service) SetExchangeOverride(ctx context.Context, mic string, state *domain.ExchangeOverrideState) (*domain.Exchange, error) {
 	if err := s.requirePermission(ctx, permissions.Admin); err != nil {
 		return nil, err
 	}
 	if mic == "" {
 		return nil, apperr.Validation("mic is required")
 	}
-	return s.Store.SetExchangeOverride(ctx, mic, clear, open)
+	if state != nil {
+		switch *state {
+		case domain.ExchangeOverrideOpen, domain.ExchangeOverrideClosed, domain.ExchangeOverrideAfterHours:
+		default:
+			return nil, apperr.Validation("invalid override state")
+		}
+	}
+	return s.Store.SetExchangeOverride(ctx, mic, state)
 }
 
 // ListExchanges returns every exchange with the resolved is_open /
@@ -76,15 +85,20 @@ func (s *Service) MarketStateForRead(e *domain.Exchange) *MarketState {
 }
 
 // resolveMarketState computes is_open / is_after_hours from the
-// exchange row and the current wall-clock. The override_open flag
+// exchange row and the current wall-clock. The override_state column
 // short-circuits the schedule entirely.
 func (s *Service) resolveMarketState(e *domain.Exchange, now time.Time) *MarketState {
 	ms := &MarketState{Exchange: e}
-	if e.OverrideOpen != nil {
-		ms.IsOpen = *e.OverrideOpen
-		// In override mode, after-hours doesn't apply (we don't
-		// pretend to know what "4h from close" means when the
-		// override is forcing the venue open).
+	if e.OverrideState != nil {
+		switch *e.OverrideState {
+		case domain.ExchangeOverrideOpen:
+			ms.IsOpen = true
+		case domain.ExchangeOverrideClosed:
+			ms.IsOpen = false
+		case domain.ExchangeOverrideAfterHours:
+			ms.IsOpen = false
+			ms.IsAfterHours = true
+		}
 		return ms
 	}
 	loc, err := time.LoadLocation(e.Timezone)

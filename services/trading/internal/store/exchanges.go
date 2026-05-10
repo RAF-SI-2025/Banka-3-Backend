@@ -8,6 +8,10 @@ import (
 	"github.com/jackc/pgx/v5"
 )
 
+const exchangeCols = `mic, name, acronym, polity, currency, timezone,
+    to_char(open_local,'HH24:MI'), to_char(close_local,'HH24:MI'),
+    override_state, updated_at`
+
 // UpsertExchange writes one row keyed by MIC.
 func (s *Store) UpsertExchange(ctx context.Context, e *domain.Exchange) (*domain.Exchange, error) {
 	const q = `
@@ -22,7 +26,7 @@ func (s *Store) UpsertExchange(ctx context.Context, e *domain.Exchange) (*domain
               open_local  = excluded.open_local,
               close_local = excluded.close_local,
               updated_at  = now()
-        returning mic, name, acronym, polity, currency, timezone, to_char(open_local,'HH24:MI'), to_char(close_local,'HH24:MI'), override_open, updated_at`
+        returning ` + exchangeCols
 	row := s.Pool.QueryRow(ctx, q,
 		e.MIC, e.Name, e.Acronym, e.Polity, string(e.Currency), e.Timezone, e.OpenLocal, e.CloseLocal,
 	)
@@ -33,23 +37,19 @@ func (s *Store) UpsertExchange(ctx context.Context, e *domain.Exchange) (*domain
 	return out, nil
 }
 
-// SetExchangeOverride sets or clears the override_open tri-state.
-// clear=true → NULL (use schedule); else writes the bool.
-func (s *Store) SetExchangeOverride(ctx context.Context, mic string, clear bool, open bool) (*domain.Exchange, error) {
-	var (
-		q   string
-		arg any
-	)
-	if clear {
-		q = `update "trading".exchanges set override_open = NULL, updated_at = now() where mic = $1
-		     returning mic, name, acronym, polity, currency, timezone, to_char(open_local,'HH24:MI'), to_char(close_local,'HH24:MI'), override_open, updated_at`
+// SetExchangeOverride writes the override_state column. state==nil
+// clears the override (use schedule); else writes one of the three
+// supported values. Returns the updated row or NotFound.
+func (s *Store) SetExchangeOverride(ctx context.Context, mic string, state *domain.ExchangeOverrideState) (*domain.Exchange, error) {
+	if state == nil {
+		q := `update "trading".exchanges set override_state = NULL, updated_at = now() where mic = $1
+		      returning ` + exchangeCols
 		out, err := scanExchange(s.Pool.QueryRow(ctx, q, mic))
 		return wrapExchange(out, err)
 	}
-	arg = open
-	q = `update "trading".exchanges set override_open = $2, updated_at = now() where mic = $1
-	     returning mic, name, acronym, polity, currency, timezone, to_char(open_local,'HH24:MI'), to_char(close_local,'HH24:MI'), override_open, updated_at`
-	out, err := scanExchange(s.Pool.QueryRow(ctx, q, mic, arg))
+	q := `update "trading".exchanges set override_state = $2, updated_at = now() where mic = $1
+	      returning ` + exchangeCols
+	out, err := scanExchange(s.Pool.QueryRow(ctx, q, mic, string(*state)))
 	return wrapExchange(out, err)
 }
 
@@ -65,16 +65,14 @@ func wrapExchange(out *domain.Exchange, err error) (*domain.Exchange, error) {
 
 // GetExchange returns one row by MIC or NotFound.
 func (s *Store) GetExchange(ctx context.Context, mic string) (*domain.Exchange, error) {
-	const q = `select mic, name, acronym, polity, currency, timezone, to_char(open_local,'HH24:MI'), to_char(close_local,'HH24:MI'), override_open, updated_at
-	           from "trading".exchanges where mic = $1`
+	const q = `select ` + exchangeCols + ` from "trading".exchanges where mic = $1`
 	out, err := scanExchange(s.Pool.QueryRow(ctx, q, mic))
 	return wrapExchange(out, err)
 }
 
 // ListExchanges returns every row, ordered alphabetically by MIC.
 func (s *Store) ListExchanges(ctx context.Context) ([]*domain.Exchange, error) {
-	const q = `select mic, name, acronym, polity, currency, timezone, to_char(open_local,'HH24:MI'), to_char(close_local,'HH24:MI'), override_open, updated_at
-	           from "trading".exchanges order by mic`
+	const q = `select ` + exchangeCols + ` from "trading".exchanges order by mic`
 	rows, err := s.Pool.Query(ctx, q)
 	if err != nil {
 		return nil, apperr.Internal("list exchanges", err)
@@ -93,14 +91,17 @@ func (s *Store) ListExchanges(ctx context.Context) ([]*domain.Exchange, error) {
 
 func scanExchange(row pgx.Row) (*domain.Exchange, error) {
 	var (
-		e            domain.Exchange
-		cur          string
-		override     *bool
+		e        domain.Exchange
+		cur      string
+		override *string
 	)
 	if err := row.Scan(&e.MIC, &e.Name, &e.Acronym, &e.Polity, &cur, &e.Timezone, &e.OpenLocal, &e.CloseLocal, &override, &e.UpdatedAt); err != nil {
 		return nil, err
 	}
 	e.Currency = domain.Currency(cur)
-	e.OverrideOpen = override
+	if override != nil {
+		s := domain.ExchangeOverrideState(*override)
+		e.OverrideState = &s
+	}
 	return &e, nil
 }

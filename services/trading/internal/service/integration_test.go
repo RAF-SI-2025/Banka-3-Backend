@@ -342,21 +342,23 @@ func supervisorCtx(id string) context.Context {
 // MIC is reused for convenience.
 func seedExchange(t *testing.T, svc *Service, mic string, currency domain.Currency) *domain.Exchange {
 	t.Helper()
-	open := true
 	e := &domain.Exchange{
-		MIC:          mic,
-		Name:         mic + " Exchange",
-		Acronym:      mic,
-		Polity:       "United States",
-		Currency:     currency,
-		Timezone:     "America/New_York",
-		OpenLocal:    "09:30",
-		CloseLocal:   "16:00",
-		OverrideOpen: &open,
+		MIC:        mic,
+		Name:       mic + " Exchange",
+		Acronym:    mic,
+		Polity:     "United States",
+		Currency:   currency,
+		Timezone:   "America/New_York",
+		OpenLocal:  "09:30",
+		CloseLocal: "16:00",
 	}
-	out, err := svc.Store.UpsertExchange(context.Background(), e)
-	if err != nil {
+	if _, err := svc.Store.UpsertExchange(context.Background(), e); err != nil {
 		t.Fatalf("UpsertExchange: %v", err)
+	}
+	open := domain.ExchangeOverrideOpen
+	out, err := svc.Store.SetExchangeOverride(context.Background(), mic, &open)
+	if err != nil {
+		t.Fatalf("SetExchangeOverride: %v", err)
 	}
 	return out
 }

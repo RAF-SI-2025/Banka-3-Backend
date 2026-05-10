@@ -14,15 +14,18 @@ func TestResolveMarketState(t *testing.T) {
 	}
 	s := &Service{}
 
-	mkExchange := func(open, close string, override *bool) *domain.Exchange {
+	mkExchange := func(open, close string, override *domain.ExchangeOverrideState) *domain.Exchange {
 		return &domain.Exchange{
-			MIC:          "XBEL",
-			Timezone:     "Europe/Belgrade",
-			OpenLocal:    open,
-			CloseLocal:   close,
-			OverrideOpen: override,
+			MIC:           "XBEL",
+			Timezone:      "Europe/Belgrade",
+			OpenLocal:     open,
+			CloseLocal:    close,
+			OverrideState: override,
 		}
 	}
+	overrideOpen := domain.ExchangeOverrideOpen
+	overrideClosed := domain.ExchangeOverrideClosed
+	overrideAfterHours := domain.ExchangeOverrideAfterHours
 	at := func(date string) time.Time {
 		v, err := time.ParseInLocation("2006-01-02 15:04", date, belgrade)
 		if err != nil {
@@ -38,8 +41,12 @@ func TestResolveMarketState(t *testing.T) {
 		wantOpen       bool
 		wantAfterHours bool
 	}{
-		{"override open", mkExchange("09:00", "17:00", boolPtr(true)), at("2026-05-09 22:00"), true, false},
-		{"override closed", mkExchange("09:00", "17:00", boolPtr(false)), at("2026-05-09 12:00"), false, false},
+		{"override open", mkExchange("09:00", "17:00", &overrideOpen), at("2026-05-09 22:00"), true, false},
+		{"override closed", mkExchange("09:00", "17:00", &overrideClosed), at("2026-05-09 12:00"), false, false},
+		// after_hours override forces closed+within-window regardless of wall-clock
+		// (weekend at would-be open in this case).
+		{"override after-hours weekend", mkExchange("09:30", "16:00", &overrideAfterHours), at("2026-05-09 12:00"), false, true},
+		{"override after-hours middle of session", mkExchange("09:30", "16:00", &overrideAfterHours), at("2026-05-11 12:00"), false, true},
 		{"weekday before open", mkExchange("09:30", "16:00", nil), at("2026-05-11 09:00"), false, false},  // Mon 09:00
 		{"weekday during", mkExchange("09:30", "16:00", nil), at("2026-05-11 12:00"), true, false},
 		{"weekday just after close", mkExchange("09:30", "16:00", nil), at("2026-05-11 17:00"), false, true}, // 1h after close
@@ -58,8 +65,6 @@ func TestResolveMarketState(t *testing.T) {
 		})
 	}
 }
-
-func boolPtr(b bool) *bool { return &b }
 
 func TestParseHHMM(t *testing.T) {
 	cases := []struct {

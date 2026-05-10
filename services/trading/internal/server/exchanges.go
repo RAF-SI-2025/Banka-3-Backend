@@ -40,7 +40,12 @@ func (s *Server) UpsertExchange(ctx context.Context, in *tradingpb.UpsertExchang
 }
 
 func (s *Server) SetExchangeOverride(ctx context.Context, in *tradingpb.SetExchangeOverrideRequest) (*tradingpb.Exchange, error) {
-	e, err := s.Svc.SetExchangeOverride(ctx, in.GetMic(), in.GetClear(), in.GetOpen())
+	var state *domain.ExchangeOverrideState
+	if v := in.GetState(); v != "" {
+		s := domain.ExchangeOverrideState(v)
+		state = &s
+	}
+	e, err := s.Svc.SetExchangeOverride(ctx, in.GetMic(), state)
 	if err != nil {
 		return nil, err
 	}
@@ -67,8 +72,8 @@ func marketStateToProto(ms *service.MarketState) *tradingpb.Exchange {
 		IsAfterHours: ms.IsAfterHours,
 		UpdatedAt:    timestamppb.New(e.UpdatedAt),
 	}
-	if e.OverrideOpen != nil {
-		out.Override = &tradingpb.Exchange_OverrideOpen{OverrideOpen: *e.OverrideOpen}
+	if e.OverrideState != nil {
+		out.OverrideState = string(*e.OverrideState)
 	}
 	return out
 }
