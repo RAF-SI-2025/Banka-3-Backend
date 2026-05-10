@@ -1,6 +1,8 @@
 package service
 
 import (
+	"io"
+	"log/slog"
 	"math/big"
 	"testing"
 
@@ -35,6 +37,58 @@ func TestComputeMaintenanceMargin(t *testing.T) {
 	// missing listing for non-option types → not computable
 	if _, ok := computeMaintenanceMargin(fut, nil); ok {
 		t.Fatal("future margin should be unavailable without a listing")
+	}
+}
+
+func TestDecorateSecurityMarketCap(t *testing.T) {
+	// Service stub with a discard logger; decorateSecurity only touches
+	// s.Log on the parse-failure path.
+	s := &Service{Log: slog.New(slog.NewTextHandler(io.Discard, nil))}
+
+	cases := []struct {
+		name string
+		sec  *domain.Security
+		l    *domain.Listing
+		want string
+	}{
+		{
+			name: "stock with shares + listing → shares × price",
+			sec:  &domain.Security{Type: domain.SecurityStock, OutstandingShares: 1_000_000},
+			l:    &domain.Listing{Price: "150.50", ContractSize: "1"},
+			want: "150500000.0000",
+		},
+		{
+			name: "stock with zero outstanding_shares → empty",
+			sec:  &domain.Security{Type: domain.SecurityStock, OutstandingShares: 0},
+			l:    &domain.Listing{Price: "150.50", ContractSize: "1"},
+			want: "",
+		},
+		{
+			name: "future with shares set → empty (stocks-only field)",
+			sec:  &domain.Security{Type: domain.SecurityFuture, OutstandingShares: 1_000_000},
+			l:    &domain.Listing{Price: "100", ContractSize: "1000"},
+			want: "",
+		},
+		{
+			name: "stock with no listing → empty",
+			sec:  &domain.Security{Type: domain.SecurityStock, OutstandingShares: 1_000_000},
+			l:    nil,
+			want: "",
+		},
+		{
+			name: "stock with malformed price → empty (warn-and-skip)",
+			sec:  &domain.Security{Type: domain.SecurityStock, OutstandingShares: 1_000_000},
+			l:    &domain.Listing{Price: "not-a-number", ContractSize: "1"},
+			want: "",
+		},
+	}
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			got := s.decorateSecurity(c.sec, c.l).MarketCap
+			if got != c.want {
+				t.Fatalf("market cap: got %q want %q", got, c.want)
+			}
+		})
 	}
 }
 

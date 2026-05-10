@@ -21,6 +21,7 @@ type SecurityWithListing struct {
 	Listing            *domain.Listing
 	MaintenanceMargin  string // spec p.46
 	InitialMarginCost  string // 1.1 × maintenance margin (spec p.47)
+	MarketCap          string // spec p.40: outstanding_shares × current price (stocks only)
 }
 
 // UpsertSecurity admin-creates/updates a security. Validation is
@@ -57,7 +58,7 @@ func (s *Service) GetSecurity(ctx context.Context, id string) (*SecurityWithList
 			return nil, lerr
 		}
 	}
-	return decorateSecurity(sec, listing), nil
+	return s.decorateSecurity(sec, listing), nil
 }
 
 // ListSecuritiesInput exposes the catalog filters to the server layer
@@ -130,7 +131,7 @@ func (s *Service) ListSecurities(ctx context.Context, in ListSecuritiesInput) ([
 	out := make([]*SecurityWithListing, 0, len(secs))
 	for _, sec := range secs {
 		listing, _ := s.Store.GetListingBySecurityID(ctx, sec.ID)
-		out = append(out, decorateSecurity(sec, listing))
+		out = append(out, s.decorateSecurity(sec, listing))
 	}
 	return out, total, nil
 }
@@ -289,11 +290,22 @@ func filterStrikeWindow(rows []*OptionChainRow, shared *big.Rat, window int) []*
 }
 
 // decorateSecurity produces the catalog SecurityWithListing carrying
-// the spec p.46 derived margin metrics. The fallback when no listing
-// is present (forex without explicit row, options) reads price /
-// premium directly from the security.
-func decorateSecurity(sec *domain.Security, l *domain.Listing) *SecurityWithListing {
+// the spec p.40 market cap (stocks) and spec p.46 derived margin
+// metrics. The fallback when no listing is present (forex without
+// explicit row, options) reads price / premium directly from the
+// security.
+func (s *Service) decorateSecurity(sec *domain.Security, l *domain.Listing) *SecurityWithListing {
 	out := &SecurityWithListing{Security: sec, Listing: l}
+	if sec.Type == domain.SecurityStock && sec.OutstandingShares > 0 && l != nil && l.Price != "" {
+		price, err := money.Parse(l.Price)
+		if err != nil {
+			s.Log.Warn("market cap: listing price parse failed",
+				"security_id", sec.ID, "ticker", sec.Ticker, "price", l.Price, "err", err.Error())
+		} else {
+			shares := new(big.Rat).SetInt64(sec.OutstandingShares)
+			out.MarketCap = money.FormatAmount(money.Mul(shares, price))
+		}
+	}
 	mm, ok := computeMaintenanceMargin(sec, l)
 	if !ok {
 		return out

@@ -162,6 +162,12 @@ func securityWithListingToProto(r *service.SecurityWithListing) *tradingpb.Secur
 		MaintenanceMargin:  r.MaintenanceMargin,
 		InitialMarginCost:  r.InitialMarginCost,
 	}
+	// market_cap lives on the proto Security message but is derived
+	// per-listing in the service layer, so we stamp it onto the
+	// already-built proto here rather than mutating the domain row.
+	if out.Security != nil {
+		out.Security.MarketCap = r.MarketCap
+	}
 	if r.Listing != nil {
 		out.Listing = listingToProto(r.Listing)
 	}

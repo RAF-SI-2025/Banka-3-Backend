@@ -72,7 +72,7 @@ func (s *Service) ListListings(ctx context.Context, in store.ListingFilter, page
 				continue
 			}
 		}
-		out = append(out, decorateSecurity(r.Security, r.Listing))
+		out = append(out, s.decorateSecurity(r.Security, r.Listing))
 	}
 	return out, total, nil
 }
