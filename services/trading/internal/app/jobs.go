@@ -104,6 +104,80 @@ func nextEndOfMonthAfter(now time.Time, hour, minute int) time.Time {
 	return candidate
 }
 
+// runOptionsRefresh fires the Black-Scholes options generator. Daily
+// is fine: the strike grid + expiry ladder are a function of today's
+// underlying price and today's date, so re-running more often is just
+// noise. The first tick fires immediately so a fresh container has an
+// option chain without a full day's wait.
+func runOptionsRefresh(ctx context.Context, log *slog.Logger, svc *service.Service, interval time.Duration) error {
+	if svc.Options == nil {
+		return nil
+	}
+	if interval <= 0 {
+		interval = 24 * time.Hour
+	}
+	once := func() {
+		res, err := svc.Options.RunOnce(ctx)
+		if err != nil {
+			log.Warn("options generator failed", "err", err.Error())
+			return
+		}
+		log.Info("options generator ran",
+			"underlyings", res.UnderlyingsProcessed,
+			"options", res.OptionsUpserted,
+			"skipped", res.Skipped)
+	}
+	once()
+	t := time.NewTicker(interval)
+	defer t.Stop()
+	for {
+		select {
+		case <-ctx.Done():
+			return nil
+		case <-t.C:
+			once()
+		}
+	}
+}
+
+// runMarketDataRefresh fires the upstream-quote refresh once per
+// interval. The refresher itself stops cleanly on quota exhaustion,
+// so the loop's only job is to call it on a cadence and log the
+// summary. The first tick fires immediately so a fresh container
+// populates `last_refresh` without a wait.
+func runMarketDataRefresh(ctx context.Context, log *slog.Logger, svc *service.Service, interval time.Duration) error {
+	if svc.MarketData == nil {
+		return nil
+	}
+	if interval <= 0 {
+		interval = time.Hour
+	}
+	once := func() {
+		res, err := svc.MarketData.RunOnce(ctx)
+		if err != nil {
+			log.Warn("market-data refresh failed", "err", err.Error())
+			return
+		}
+		log.Info("market-data refresh ran",
+			"stocks", res.StocksUpdated,
+			"forex", res.ForexUpdated,
+			"skipped", res.Skipped,
+			"errors", res.UpstreamErrors,
+			"throttled", res.UpstreamThrottled)
+	}
+	once()
+	t := time.NewTicker(interval)
+	defer t.Stop()
+	for {
+		select {
+		case <-ctx.Done():
+			return nil
+		case <-t.C:
+			once()
+		}
+	}
+}
+
 // runExecutionWorker is the spec p.55-56 partial-fill loop. It wakes
 // up every interval and asks the service to walk every active order;
 // the service decides per-order whether to fire one fill on this tick

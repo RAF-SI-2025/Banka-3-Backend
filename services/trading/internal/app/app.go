@@ -18,6 +18,7 @@ import (
 	"github.com/RAF-SI-2025/Banka-3-Backend/pkg/probes"
 	pkgredis "github.com/RAF-SI-2025/Banka-3-Backend/pkg/redis"
 	"github.com/RAF-SI-2025/Banka-3-Backend/pkg/shutdown"
+	"github.com/RAF-SI-2025/Banka-3-Backend/services/trading/internal/external/alphavantage"
 	"github.com/RAF-SI-2025/Banka-3-Backend/services/trading/internal/server"
 	"github.com/RAF-SI-2025/Banka-3-Backend/services/trading/internal/service"
 	"github.com/RAF-SI-2025/Banka-3-Backend/services/trading/internal/store"
@@ -106,6 +107,35 @@ func Run() error {
 		log.Warn("BANK_GRPC_ADDR not set; execution worker will refuse to fill")
 	}
 
+	// Alpha Vantage market-data feed (spec p.40, p.42). Optional — when
+	// the API key is unset, the refresher field stays nil and the
+	// market-data cron no-ops.
+	if avKey := config.String("ALPHAVANTAGE_API_KEY", ""); avKey != "" {
+		client := alphavantage.New(avKey)
+		svc.MarketData = &service.MarketData{
+			Store:       st,
+			Log:         log,
+			Stocks:      &alphaStockAdapter{c: client},
+			Forex:       &alphaForexAdapter{c: client},
+			StockSpread: config.Float("STOCK_BIDASK_SPREAD", 0.001),
+			Pause:       config.Duration("MARKET_DATA_PAUSE", 13*time.Second),
+			Belgrade:    belgrade,
+		}
+		log.Info("alphavantage market-data refresh enabled")
+	} else {
+		log.Warn("ALPHAVANTAGE_API_KEY not set; market-data refresh disabled (catalog price fields stay at seed values)")
+	}
+
+	// Spec p.43 Pristup 2 — Black-Scholes option chain generator. No
+	// upstream dependency; always wired in production.
+	svc.Options = &service.OptionGenerator{
+		Store:        st,
+		Log:          log,
+		RiskFreeRate: config.Float("OPTIONS_RISK_FREE_RATE", 0.05),
+		Volatility:   config.Float("OPTIONS_VOLATILITY", 0.30),
+		Belgrade:     belgrade,
+	}
+
 	probeSrv := probes.New(fmt.Sprintf(":%d", config.Int("PROBE_PORT", 8081)))
 	probeSrv.Register("postgres", func(ctx context.Context) error { return postgres.Ping(ctx, pool) })
 	probeSrv.Register("redis", func(ctx context.Context) error { return pkgredis.Ping(ctx, rdb) })
@@ -141,6 +171,21 @@ func Run() error {
 	// share the same code path.
 	g.Go(func() error {
 		return runMonthlyTaxCron(gctx, log, svc, belgrade)
+	})
+
+	// Spec p.43 Black-Scholes option chain refresh. Daily; first tick
+	// fires immediately so a fresh container has options without delay.
+	optInterval := config.Duration("OPTIONS_REFRESH_INTERVAL", 24*time.Hour)
+	g.Go(func() error {
+		return runOptionsRefresh(gctx, log, svc, optInterval)
+	})
+
+	// Alpha Vantage refresh (spec p.40, p.42). 6h default cadence keeps
+	// us inside the free tier's 25/day quota with room for a manual
+	// rerun via SIGHUP-style restart. No-op when MarketData is nil.
+	mdInterval := config.Duration("MARKET_DATA_REFRESH_INTERVAL", 6*time.Hour)
+	g.Go(func() error {
+		return runMarketDataRefresh(gctx, log, svc, mdInterval)
 	})
 
 	probeSrv.MarkReady()

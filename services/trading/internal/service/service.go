@@ -104,6 +104,14 @@ type Service struct {
 	// (spec p.63). May be nil on a minimal dev stack; display_name
 	// then comes back empty.
 	Users UserResolver
+	// MarketData refreshes stock + forex listings against an upstream
+	// quote feed (spec p.40, p.42). Nil when the feed isn't wired —
+	// the cron then no-ops.
+	MarketData *MarketData
+	// Options synthesises Black-Scholes option chains (spec p.43
+	// Pristup 2). Always wired in production; nil in unit tests that
+	// don't exercise the generator.
+	Options *OptionGenerator
 	// Now is the wall-clock used by every time-dependent path. Tests
 	// pin it; production leaves it nil and falls through to time.Now.
 	Now func() time.Time
