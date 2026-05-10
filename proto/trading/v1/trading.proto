@@ -155,7 +155,7 @@ service TradingService {
   // Orders.
   // -----------------------------------------------------------------
 
-  rpc CreateOrder(CreateOrderRequest) returns (Order) {
+  rpc CreateOrder(CreateOrderRequest) returns (CreateOrderResponse) {
     option (google.api.http) = {
       post: "/api/v1/orders"
       body: "*"
@@ -650,6 +650,17 @@ message CreateOrderRequest {
   bool      all_or_none   = 7;
   bool      margin        = 8;
   string    account_id    = 9  [(buf.validate.field).string.uuid = true];
+}
+
+// CreateOrderResponse wraps the created Order plus advisory flags. Spec
+// p.57 — *"Obavestiti korisnika ako je berza zatvorena"*: the order
+// still gets placed, but the FE renders a notice when the security's
+// exchange is currently closed (not open and not in the after-hours
+// window). For exchanges without a calendar (forex, options) the flag
+// is always false.
+message CreateOrderResponse {
+  Order order            = 1;
+  bool  exchange_closed  = 2;
 }
 
 message ListOrdersRequest {

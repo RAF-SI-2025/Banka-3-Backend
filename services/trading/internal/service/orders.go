@@ -29,6 +29,17 @@ type CreateOrderInput struct {
 	AccountID  string
 }
 
+// CreateOrderResult bundles the persisted order with advisory flags
+// the caller surfaces back to the user. The order is embedded so
+// callers can keep reading order fields directly (`r.ID`, `r.Status`).
+// ExchangeClosed mirrors the resolved market state at create time per
+// spec p.57 — the order is still placed when the exchange is closed;
+// the FE renders a notice.
+type CreateOrderResult struct {
+	*domain.Order
+	ExchangeClosed bool
+}
+
 // CreateOrder validates, snapshots price + after-hours, routes for
 // approval, and persists.
 //
@@ -43,7 +54,7 @@ type CreateOrderInput struct {
 // or before today are auto-rejected (Validation, not "pending").
 //
 // Margin guard: only principals with TradingMargin may set margin=true.
-func (s *Service) CreateOrder(ctx context.Context, in CreateOrderInput) (*domain.Order, error) {
+func (s *Service) CreateOrder(ctx context.Context, in CreateOrderInput) (*CreateOrderResult, error) {
 	p, err := s.requirePrincipal(ctx)
 	if err != nil {
 		return nil, err
@@ -122,15 +133,32 @@ func (s *Service) CreateOrder(ctx context.Context, in CreateOrderInput) (*domain
 		if err := s.assertMarginEligible(ctx, p, in.AccountID, sec, listing, in.Quantity); err != nil {
 			return nil, err
 		}
+	} else if in.Direction == domain.DirectionBuy && sec.Type != domain.SecurityForex {
+		// BE-12: non-margin buys need a pre-fill funds check too.
+		// Without it the order is accepted, the worker tries to fill,
+		// the bank refuses on insufficient funds, and the order stalls
+		// pending forever. Better to reject up front. Forex skips —
+		// settles paired against the bank's per-currency forex_book,
+		// not the user's AccountID (spec p.42).
+		if err := s.assertFundsAvailable(ctx, in.AccountID, sec, in.Quantity, priceSnap, contractSize); err != nil {
+			return nil, err
+		}
 	}
 
-	// after_hours flag: if the security trades on an exchange, ask the
-	// exchange resolver. Forex / options without an exchange skip this.
+	// after_hours / exchange_closed flags: if the security trades on an
+	// exchange, ask the resolver. Forex / options without an exchange
+	// skip this — exchange_closed stays false there.
 	afterHours := false
+	exchangeClosed := false
 	if sec.ExchangeMIC != "" {
 		ex, err := s.Store.GetExchange(ctx, sec.ExchangeMIC)
 		if err == nil {
-			afterHours = s.resolveMarketState(ex, now).IsAfterHours
+			ms := s.resolveMarketState(ex, now)
+			afterHours = ms.IsAfterHours
+			// Spec p.57: notify the user when the exchange is closed.
+			// The order is still accepted (orders can sit overnight); the
+			// FE renders a Sonner toast off the response flag.
+			exchangeClosed = !ms.IsOpen && !ms.IsAfterHours
 		}
 	}
 
@@ -148,6 +176,14 @@ func (s *Service) CreateOrder(ctx context.Context, in CreateOrderInput) (*domain
 		}
 	}
 
+	// is_actuary is captured here from the principal's permissions and
+	// frozen on the row. Spec p.26 / p.55-56 use this on settle to gate
+	// FX-commission policy and to pick the bank-side house leg; deriving
+	// it from user_kind=='employee' over-includes any future non-actuary
+	// employee. See BE-10.
+	isActuary := permissions.HasAny(p.Permissions,
+		permissions.Admin, permissions.ActuarySupervisor, permissions.ActuaryAgent)
+
 	o := &domain.Order{
 		UserID:           p.UserID,
 		UserKind:         domain.UserKind(p.UserKind),
@@ -161,6 +197,7 @@ func (s *Service) CreateOrder(ctx context.Context, in CreateOrderInput) (*domain
 		StopPrice:        in.StopPrice,
 		AllOrNone:        in.AllOrNone,
 		Margin:           in.Margin,
+		IsActuary:        isActuary,
 		AccountID:        in.AccountID,
 		Status:           status,
 		ApprovalRequired: approvalRequired,
@@ -180,7 +217,7 @@ func (s *Service) CreateOrder(ctx context.Context, in CreateOrderInput) (*domain
 	if status == domain.OrderStatusApproved && permissions.Has(p.Permissions, permissions.ActuaryAgent) {
 		s.maybeChargeAgentLimit(ctx, out)
 	}
-	return out, nil
+	return &CreateOrderResult{Order: out, ExchangeClosed: exchangeClosed}, nil
 }
 
 // GetOrder returns one order. Visibility:
@@ -300,6 +337,12 @@ func (s *Service) DeclineOrder(ctx context.Context, id, reason string) (*domain.
 // CancelOrder marks the order cancelled. Only the order's owner (or a
 // supervisor/admin) can cancel. Cancelling halts further fills; fills
 // that already settled stay sealed (spec p.50).
+//
+// Spec p.38 reads "transakcija" as a trade — cancelling an approved
+// order that hasn't fully filled hands the agent's daily capacity back.
+// Refund is the order's RSD-equivalent at create-time; clamped at 0
+// store-side so a refund landing after the daily reset cron doesn't
+// underflow.
 func (s *Service) CancelOrder(ctx context.Context, id string) (*domain.Order, error) {
 	p, err := s.requirePrincipal(ctx)
 	if err != nil {
@@ -314,7 +357,14 @@ func (s *Service) CancelOrder(ctx context.Context, id string) (*domain.Order, er
 			return nil, apperr.PermissionDenied("nedovoljne permisije")
 		}
 	}
-	return s.Store.CancelOrder(ctx, id)
+	out, err := s.Store.CancelOrder(ctx, id)
+	if err != nil {
+		return nil, err
+	}
+	if cur.Status == domain.OrderStatusApproved && cur.UserKind == domain.KindEmployee && cur.IsActuary {
+		s.maybeRefundAgentLimit(ctx, cur)
+	}
+	return out, nil
 }
 
 // =====================================================================
@@ -379,6 +429,55 @@ func (s *Service) assertMarginEligible(
 		}
 	}
 	return apperr.FailedPrecondition("Initial Margin Cost prelazi raspoloživa sredstva i dostupne kredite")
+}
+
+// assertFundsAvailable enforces a balance ≥ trade-notional check on
+// non-margin buys. Comparison is in RSD via the rate provider's ASK
+// (no commission), mirroring the margin path so cross-currency
+// accounts/securities behave the same way. With no MarginChecker
+// wired (minimal dev stack) the check degrades to a noop with a
+// warning, same as assertMarginEligible.
+//
+// We don't add commission here: the cap is small relative to the
+// notional and the bank tx-tolerance has a few thousandths of slack
+// on the per-fill commission. If a buy fails mid-execution because
+// commission tipped the balance over, the worker stalls — same
+// recovery path as any other settle failure. See BE-12.
+func (s *Service) assertFundsAvailable(
+	ctx context.Context,
+	accountID string,
+	sec *domain.Security,
+	qty int32,
+	pricePerUnit, contractSize string,
+) error {
+	if s.MarginChecker == nil {
+		s.Log.Warn("margin checker not wired; skipping pre-fill funds check",
+			"account_id", accountID, "security_id", sec.ID)
+		return nil
+	}
+	notionalRSD, err := s.tradeValueRSD(ctx, sec, qty, pricePerUnit, contractSize)
+	if err != nil {
+		return err
+	}
+	cur, avail, err := s.MarginChecker.AccountAvailable(ctx, accountID)
+	if err != nil {
+		// Bank-side lookup unavailable (dev stub or transient failure).
+		// Degrade to no pre-check rather than blocking trade flow; the
+		// bank's SettleTrade still rejects on insufficient funds at fill
+		// time, so the worst case is a stalled order — same as before
+		// BE-12. Production wires a real adapter so the check fires.
+		s.Log.Warn("pre-fill funds check: account lookup failed; skipping",
+			"account_id", accountID, "err", err.Error())
+		return nil
+	}
+	availRSD, err := s.amountToRSD(ctx, cur, avail)
+	if err != nil {
+		return err
+	}
+	if availRSD.Cmp(notionalRSD) < 0 {
+		return apperr.FailedPrecondition("nedovoljna sredstva na računu za ovaj nalog")
+	}
+	return nil
 }
 
 // initialMarginCostRSD = qty × 1.1 × maintenance_margin, converted to
@@ -549,6 +648,35 @@ func (s *Service) maybeChargeAgentLimit(ctx context.Context, o *domain.Order) {
 		return s.Store.AddUsedLimit(ctx, tx, o.UserID, money.FormatAmount(rsd))
 	}); err != nil {
 		s.Log.Warn("limit charge: db update failed", "order_id", o.ID, "err", err.Error())
+	}
+}
+
+// maybeRefundAgentLimit hands an agent's daily capacity back when an
+// approved order is cancelled before all fills landed. The refund uses
+// the create-time RSD-equivalent (same number that was charged on
+// approval) so charge + refund net to zero on the typical case.
+// Refund is clamped at 0 store-side: if the daily reset cron has
+// already zeroed used_limit between approval and cancel, the
+// constraint stays intact. Failure is logged, not propagated — the
+// order is already cancelled and the cap is best-effort. See BE-13.
+func (s *Service) maybeRefundAgentLimit(ctx context.Context, o *domain.Order) {
+	sec, err := s.Store.GetSecurity(ctx, o.SecurityID)
+	if err != nil {
+		s.Log.Warn("limit refund: security lookup failed", "order_id", o.ID, "err", err.Error())
+		return
+	}
+	rsd, err := s.tradeValueRSD(ctx, sec, o.Quantity, o.PricePerUnit, o.ContractSize)
+	if err != nil {
+		s.Log.Warn("limit refund: rsd math failed", "order_id", o.ID, "err", err.Error())
+		return
+	}
+	if rsd.Sign() == 0 {
+		return
+	}
+	if err := s.Store.ExecuteAtomic(ctx, func(tx pgx.Tx) error {
+		return s.Store.RefundUsedLimit(ctx, tx, o.UserID, money.FormatAmount(rsd))
+	}); err != nil {
+		s.Log.Warn("limit refund: db update failed", "order_id", o.ID, "err", err.Error())
 	}
 }
 

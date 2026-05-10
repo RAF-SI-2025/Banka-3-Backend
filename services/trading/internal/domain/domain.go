@@ -194,6 +194,11 @@ type ListingDailyPrice struct {
 }
 
 // Order is one submitted nalog. Spec p.49.
+//
+// IsActuary is captured at create-time from the principal's permissions
+// rather than re-derived from UserKind. Frozen on the row so a future
+// "trading.client + employee" combo doesn't misroute through the FX
+// commission-zero path on settle (spec p.26 / p.55-56).
 type Order struct {
 	ID                 string
 	UserID             string
@@ -208,6 +213,7 @@ type Order struct {
 	StopPrice          string
 	AllOrNone          bool
 	Margin             bool
+	IsActuary          bool
 	AccountID          string
 	Status             OrderStatus
 	ApprovedBy         string

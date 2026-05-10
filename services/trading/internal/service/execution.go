@@ -18,7 +18,6 @@ package service
 
 import (
 	"context"
-	"errors"
 	"math/big"
 	"math/rand"
 	"time"
@@ -239,11 +238,19 @@ func (s *Service) executeFill(ctx context.Context, o *domain.Order, listing *dom
 	if err != nil {
 		return nil, err
 	}
-	totalCommission, err := s.commissionFor(ctx, o, sec, notional)
-	if err != nil {
-		return nil, err
+	// Spec p.42: forex pairs settle paired-currency without a commission
+	// fee — the bank's profit comes off the rate. Skip the commission
+	// math entirely so a future refactor can't accidentally re-enable it.
+	var commission *big.Rat
+	if sec.Type == domain.SecurityForex {
+		commission = new(big.Rat)
+	} else {
+		totalCommission, err := s.commissionFor(ctx, o, sec)
+		if err != nil {
+			return nil, err
+		}
+		commission = proratedCommission(totalCommission, qty, o.Quantity)
 	}
-	commission := proratedCommission(totalCommission, qty, o.Quantity)
 
 	// (1) Pre-write the pending row in its own tx so its UUID survives a
 	// crash in the bank call. Subsequent ticks find it and resume.
@@ -408,7 +415,7 @@ func (s *Service) settleCashLeg(
 		Currency:  currency,
 		Amount:    money.FormatAmount(settleAmount),
 		OpID:      opID,
-		IsActuary: o.UserKind == domain.KindEmployee,
+		IsActuary: o.IsActuary,
 		Purpose:   "Fill " + sec.Ticker,
 	})
 }
@@ -711,23 +718,12 @@ func cadenceMaxInterval(remaining, volume int64) time.Duration {
 // timeSinceLastFill returns the duration since the latest execution on
 // the order, plus an "ok" boolean that's false when no fills exist yet.
 func (s *Service) timeSinceLastFill(ctx context.Context, o *domain.Order) (time.Duration, bool, error) {
-	tStr, err := s.Store.LatestExecutionAt(ctx, o.ID)
+	t, ok, err := s.Store.LatestExecutionAt(ctx, o.ID)
 	if err != nil {
 		return 0, false, err
 	}
-	if tStr == "" {
+	if !ok {
 		return 0, false, nil
-	}
-	t, err := time.Parse("2006-01-02 15:04:05.999999-07", tStr)
-	if err != nil {
-		// Different driver renderings can include different layouts;
-		// Postgres' default is fine but if the column ever returns ISO
-		// 8601 try that too.
-		t2, err2 := time.Parse(time.RFC3339Nano, tStr)
-		if err2 != nil {
-			return 0, false, errors.Join(err, err2)
-		}
-		t = t2
 	}
 	return s.now().Sub(t), true, nil
 }
@@ -753,8 +749,7 @@ func (s *Service) timeSinceLastFill(ctx context.Context, o *domain.Order) (time.
 // Actuary / supervisor employees trading on behalf of the bank pay
 // the same trade commission as clients per spec p.55-56; only the
 // FX leg is commission-free for them (handled bank-side).
-func (s *Service) commissionFor(ctx context.Context, o *domain.Order, sec *domain.Security, fillNotional *big.Rat) (*big.Rat, error) {
-	_ = fillNotional // kept in signature to avoid wider call-site churn
+func (s *Service) commissionFor(ctx context.Context, o *domain.Order, sec *domain.Security) (*big.Rat, error) {
 	var rateStr, capUSDStr string
 	switch effectiveType(o) {
 	case domain.OrderMarket:
@@ -788,16 +783,8 @@ func (s *Service) commissionFor(ctx context.Context, o *domain.Order, sec *domai
 		totalCommission = cap
 	}
 
-	// Prorate to this fill by qty share. Need the fill qty derived
-	// from the notional and snapshot — we already have it implicitly
-	// via the caller (fillNotional / (cs × snapshot_price)) but using
-	// remaining-vs-total qty from the order is cleaner: this fill is
-	// (qty_so_far_after_this − qty_so_far_before) / total_qty. The
-	// caller will set fillQty via the helper below; this function
-	// just returns the total-commission target. Caller (executeFill)
-	// reads fillQty separately.
-
-	// Default: full commission. The caller subtracts already-paid.
+	// Returns the order-total commission target. Caller (executeFill)
+	// prorates per fill via proratedCommission(fillQty, totalQty).
 	return totalCommission, nil
 }
 
@@ -905,13 +892,6 @@ func (s *Service) RunExecutionTick(ctx context.Context) (int, error) {
 		}
 	}
 	return fired, nil
-}
-
-// IsActuaryOrder reports whether `o` was placed by an actuary (used
-// for FX-commission policy in bank settlement). Kept here so the
-// worker doesn't reach into pkg/permissions for one boolean.
-func IsActuaryOrder(o *domain.Order) bool {
-	return o.UserKind == domain.KindEmployee
 }
 
 // (Re-export for the unit test file's vis on the helper.)

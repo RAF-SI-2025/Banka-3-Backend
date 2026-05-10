@@ -790,6 +790,114 @@ func TestIntegration_Margin_ClientNoLoanNoPermission(t *testing.T) {
 	}
 }
 
+// TestIntegration_AON_Margin_Combination covers BE-17: AON and margin
+// can coexist on a single order. assertMarginEligible runs (account or
+// loan must cover IMC) and the persisted row carries both flags so the
+// execution worker honors them later.
+func TestIntegration_AON_Margin_Combination(t *testing.T) {
+	svc := setup(t)
+	ex := seedExchange(t, svc, "XNYS", domain.CurrencyUSD)
+	sec, _ := seedStock(t, svc, "AONM", ex, "100", "100", "99", 1000)
+
+	clientID := uuid.NewString()
+	accID := uuid.NewString()
+	// 50 USD ≈ 5500 RSD vs IMC ≈ 6055 RSD per share — under-balance, so
+	// the loan limb has to carry it.
+	currentMargin.addAccount(accID, domain.CurrencyUSD, "50")
+	currentMargin.addLoan(clientID, domain.CurrencyRSD, "100000")
+
+	out, err := svc.CreateOrder(clientMarginCtx(clientID), CreateOrderInput{
+		SecurityID: sec.ID,
+		OrderType:  domain.OrderMarket,
+		Direction:  domain.DirectionBuy,
+		Quantity:   1,
+		AccountID:  accID,
+		AllOrNone:  true,
+		Margin:     true,
+	})
+	if err != nil {
+		t.Fatalf("AON+margin: err=%v", err)
+	}
+	if !out.AllOrNone || !out.Margin {
+		t.Fatalf("AON+margin flags did not persist: AON=%v Margin=%v", out.AllOrNone, out.Margin)
+	}
+	if out.Status != domain.OrderStatusApproved {
+		t.Fatalf("AON+margin auto-approve expected, got status=%s", out.Status)
+	}
+}
+
+// TestIntegration_PreFundsCheck_RejectsUnderfunded covers BE-12: a
+// non-margin buy whose notional exceeds account balance is rejected
+// up-front, so the order doesn't accept-and-stall in the worker.
+func TestIntegration_PreFundsCheck_RejectsUnderfunded(t *testing.T) {
+	svc := setup(t)
+	ex := seedExchange(t, svc, "XNYS", domain.CurrencyUSD)
+	// 10 USD share; buy 1 → notional ≈ 1100 RSD; account holds 1 USD ≈ 110 RSD.
+	sec, _ := seedStock(t, svc, "PFUN", ex, "10", "10", "9", 1000)
+
+	clientID := uuid.NewString()
+	accID := uuid.NewString()
+	currentMargin.addAccount(accID, domain.CurrencyUSD, "1")
+
+	_, err := svc.CreateOrder(clientCtx(clientID), CreateOrderInput{
+		SecurityID: sec.ID,
+		OrderType:  domain.OrderMarket,
+		Direction:  domain.DirectionBuy,
+		Quantity:   1,
+		AccountID:  accID,
+	})
+	if !isApperr(err, apperr.KindFailedPrecondition) {
+		t.Fatalf("pre-fill funds check: err=%v, want FailedPrecondition", err)
+	}
+}
+
+// TestIntegration_CancelRefundsAgentLimit covers BE-13: cancelling an
+// approved agent order refunds the previously-charged daily-limit
+// amount. Auto-approved (under-limit) order charges used_limit; cancel
+// must zero it back out.
+func TestIntegration_CancelRefundsAgentLimit(t *testing.T) {
+	svc := setup(t)
+	ex := seedExchange(t, svc, "XNYS", domain.CurrencyUSD)
+	sec, _ := seedStock(t, svc, "PNNY", ex, "1", "1", "1", 1000)
+
+	agentID := uuid.NewString()
+	seedActuary(t, svc, agentID, domain.ActuaryAgent, "1000000", false)
+	accID := uuid.NewString()
+	currentMargin.addAccount(accID, domain.CurrencyUSD, "1000")
+
+	out, err := svc.CreateOrder(agentCtx(agentID), CreateOrderInput{
+		SecurityID: sec.ID,
+		OrderType:  domain.OrderMarket,
+		Direction:  domain.DirectionBuy,
+		Quantity:   1,
+		AccountID:  accID,
+	})
+	if err != nil {
+		t.Fatalf("create: %v", err)
+	}
+	if out.Status != domain.OrderStatusApproved {
+		t.Fatalf("expected auto-approve, got status=%s", out.Status)
+	}
+	info, err := svc.Store.GetActuaryInfo(context.Background(), agentID)
+	if err != nil {
+		t.Fatalf("GetActuaryInfo charged: %v", err)
+	}
+	if numericEq(info.UsedLimit, "0") {
+		t.Fatalf("used_limit should be > 0 after auto-approve, got %q", info.UsedLimit)
+	}
+
+	if _, err := svc.CancelOrder(agentCtx(agentID), out.ID); err != nil {
+		t.Fatalf("cancel: %v", err)
+	}
+	info, err = svc.Store.GetActuaryInfo(context.Background(), agentID)
+	if err != nil {
+		t.Fatalf("GetActuaryInfo refunded: %v", err)
+	}
+	if !numericEq(info.UsedLimit, "0") {
+		t.Fatalf("used_limit should be 0 after cancel-refund, got %q", info.UsedLimit)
+	}
+}
+
 // TestIntegration_ApproveRechecksSettlement covers fix #9 / spec p.50:
 // a pending order whose security passes settlement date between create
 // and approve auto-declines on approve.
@@ -921,7 +1029,7 @@ func TestIntegration_Execution_StopTriggersOnAsk(t *testing.T) {
 	if err != nil {
 		t.Fatalf("create stop: %v", err)
 	}
-	res, err := svc.ProcessOrderTick(context.Background(), o)
+	res, err := svc.ProcessOrderTick(context.Background(), o.Order)
 	if err != nil {
 		t.Fatalf("tick: %v", err)
 	}
@@ -965,7 +1073,7 @@ func TestIntegration_Execution_LimitFillPriceMin(t *testing.T) {
 	if err != nil {
 		t.Fatalf("create limit: %v", err)
 	}
-	res, err := svc.ProcessOrderTick(context.Background(), o)
+	res, err := svc.ProcessOrderTick(context.Background(), o.Order)
 	if err != nil {
 		t.Fatalf("tick: %v", err)
 	}
@@ -997,7 +1105,7 @@ func TestIntegration_Execution_AONFullFill(t *testing.T) {
 	if err != nil {
 		t.Fatalf("create AON: %v", err)
 	}
-	res, err := svc.ProcessOrderTick(context.Background(), o)
+	res, err := svc.ProcessOrderTick(context.Background(), o.Order)
 	if err != nil {
 		t.Fatalf("tick: %v", err)
 	}
@@ -1036,7 +1144,7 @@ func TestIntegration_Execution_BuyHoldingAndSellRealizesGain(t *testing.T) {
 	if err != nil {
 		t.Fatalf("create buy: %v", err)
 	}
-	if _, err := svc.ProcessOrderTick(context.Background(), buy); err != nil {
+	if _, err := svc.ProcessOrderTick(context.Background(), buy.Order); err != nil {
 		t.Fatalf("buy tick: %v", err)
 	}
 
@@ -1057,7 +1165,7 @@ func TestIntegration_Execution_BuyHoldingAndSellRealizesGain(t *testing.T) {
 	if err != nil {
 		t.Fatalf("create sell: %v", err)
 	}
-	if _, err := svc.ProcessOrderTick(context.Background(), sell); err != nil {
+	if _, err := svc.ProcessOrderTick(context.Background(), sell.Order); err != nil {
 		t.Fatalf("sell tick: %v", err)
 	}
 
@@ -1130,7 +1238,7 @@ func TestIntegration_Execution_ForexNoHolding(t *testing.T) {
 	if err != nil {
 		t.Fatalf("create forex order: %v", err)
 	}
-	res, err := svc.ProcessOrderTick(context.Background(), o)
+	res, err := svc.ProcessOrderTick(context.Background(), o.Order)
 	if err != nil {
 		t.Fatalf("tick: %v", err)
 	}
@@ -1444,7 +1552,7 @@ func TestIntegration_Execution_CancelBetweenSettleAndBook(t *testing.T) {
 		return inner.Settle(ctx, in)
 	})
 
-	if _, err := svc.ProcessOrderTick(context.Background(), o); err != nil {
+	if _, err := svc.ProcessOrderTick(context.Background(), o.Order); err != nil {
 		t.Fatalf("tick: %v", err)
 	}
 

@@ -118,6 +118,23 @@ func (s *Store) AddUsedLimit(ctx context.Context, tx pgx.Tx, employeeID, deltaRS
 	return nil
 }
 
+// RefundUsedLimit decrements used_limit by a positive RSD amount inside
+// the caller's transaction, clamped at 0 so a refund landing after the
+// daily cron has already reset the counter doesn't push it negative
+// (the constraint is `used_limit >= 0`). Spec p.38 implies "transakcija"
+// counts trades, not cancelled orders — see BE-13.
+func (s *Store) RefundUsedLimit(ctx context.Context, tx pgx.Tx, employeeID, deltaRSD string) error {
+	const q = `update "trading".actuary_info
+	           set used_limit = greatest(used_limit - $2, 0),
+	               updated_at = now()
+	           where employee_id = $1`
+	_, err := tx.Exec(ctx, q, employeeID, deltaRSD)
+	if err != nil {
+		return apperr.Internal("refund used limit", err)
+	}
+	return nil
+}
+
 // ActuaryFilter narrows ListActuaries.
 type ActuaryFilter struct {
 	Type        domain.ActuaryType

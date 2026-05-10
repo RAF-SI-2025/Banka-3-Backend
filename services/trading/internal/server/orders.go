@@ -9,7 +9,7 @@ import (
 	"google.golang.org/protobuf/types/known/timestamppb"
 )
 
-func (s *Server) CreateOrder(ctx context.Context, in *tradingpb.CreateOrderRequest) (*tradingpb.Order, error) {
+func (s *Server) CreateOrder(ctx context.Context, in *tradingpb.CreateOrderRequest) (*tradingpb.CreateOrderResponse, error) {
 	out, err := s.Svc.CreateOrder(ctx, service.CreateOrderInput{
 		SecurityID: in.GetSecurityId(),
 		OrderType:  orderTypeFromProto(in.GetOrderType()),
@@ -24,7 +24,10 @@ func (s *Server) CreateOrder(ctx context.Context, in *tradingpb.CreateOrderReque
 	if err != nil {
 		return nil, err
 	}
-	return orderToProto(out), nil
+	return &tradingpb.CreateOrderResponse{
+		Order:          orderToProto(out.Order),
+		ExchangeClosed: out.ExchangeClosed,
+	}, nil
 }
 
 func (s *Server) GetOrder(ctx context.Context, in *tradingpb.GetOrderRequest) (*tradingpb.Order, error) {

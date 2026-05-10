@@ -14,7 +14,7 @@ const orderCols = `
     id, user_id, user_kind, security_id, order_type, direction,
     quantity, contract_size::text, price_per_unit::text,
     coalesce(limit_price::text, ''), coalesce(stop_price::text, ''),
-    all_or_none, margin, account_id,
+    all_or_none, margin, is_actuary, account_id,
     status, coalesce(approved_by::text, ''),
     approval_required, approved_at,
     is_done, cancelled, triggered, after_hours,
@@ -29,7 +29,7 @@ func (s *Store) CreateOrder(ctx context.Context, o *domain.Order) (*domain.Order
         insert into "trading".orders (
             user_id, user_kind, security_id, order_type, direction,
             quantity, contract_size, price_per_unit, limit_price, stop_price,
-            all_or_none, margin, account_id,
+            all_or_none, margin, is_actuary, account_id,
             status, approval_required, after_hours,
             remaining_quantity, last_modification,
             approved_by, approved_at
@@ -37,17 +37,17 @@ func (s *Store) CreateOrder(ctx context.Context, o *domain.Order) (*domain.Order
             $1, $2, $3, $4, $5,
             $6, $7::numeric, $8::numeric,
             nullif($9, '')::numeric, nullif($10, '')::numeric,
-            $11, $12, $13,
-            $14, $15, $16,
-            $17, now(),
-            nullif($18, '')::uuid,
-            case when $19 then now() else null end
+            $11, $12, $13, $14,
+            $15, $16, $17,
+            $18, now(),
+            nullif($19, '')::uuid,
+            case when $20 then now() else null end
         ) returning ` + orderCols
 	autoApproved := o.Status == domain.OrderStatusApproved && o.ApprovedBy != ""
 	row := s.Pool.QueryRow(ctx, q,
 		o.UserID, string(o.UserKind), o.SecurityID, string(o.OrderType), string(o.Direction),
 		o.Quantity, o.ContractSize, o.PricePerUnit, o.LimitPrice, o.StopPrice,
-		o.AllOrNone, o.Margin, o.AccountID,
+		o.AllOrNone, o.Margin, o.IsActuary, o.AccountID,
 		string(o.Status), o.ApprovalRequired, o.AfterHours,
 		o.Quantity, // remaining_quantity = quantity at create time
 		o.ApprovedBy, autoApproved,
@@ -249,7 +249,7 @@ func scanOrder(row pgx.Row) (*domain.Order, error) {
 		&o.ID, &o.UserID, &kind, &o.SecurityID, &typ, &dir,
 		&o.Quantity, &o.ContractSize, &o.PricePerUnit,
 		&o.LimitPrice, &o.StopPrice,
-		&o.AllOrNone, &o.Margin, &o.AccountID,
+		&o.AllOrNone, &o.Margin, &o.IsActuary, &o.AccountID,
 		&status, &o.ApprovedBy,
 		&o.ApprovalRequired, &approvedAt,
 		&o.IsDone, &o.Cancelled, &o.Triggered, &o.AfterHours,

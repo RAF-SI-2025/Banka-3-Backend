@@ -135,7 +135,7 @@ func TestCommissionFor(t *testing.T) {
 
 	// Market: order-total notional = 1 × 1 × 30 = 30 → 14% = 4.2,
 	// well under $7 cap → 4.2.
-	got, err := s.commissionFor(ctx, mkOrder(domain.OrderMarket, 1, "30"), usd, nil)
+	got, err := s.commissionFor(ctx, mkOrder(domain.OrderMarket, 1, "30"), usd)
 	if err != nil {
 		t.Fatalf("market small: %v", err)
 	}
@@ -144,19 +144,19 @@ func TestCommissionFor(t *testing.T) {
 	}
 
 	// Market: notional = 100 → 14% = 14, capped at $7.
-	got, _ = s.commissionFor(ctx, mkOrder(domain.OrderMarket, 1, "100"), usd, nil)
+	got, _ = s.commissionFor(ctx, mkOrder(domain.OrderMarket, 1, "100"), usd)
 	if got.Cmp(money.MustParse("7")) != 0 {
 		t.Fatalf("market large got=%s want=7", got.String())
 	}
 
 	// Limit: notional = 40 → 24% = 9.6, under $12 cap.
-	got, _ = s.commissionFor(ctx, mkOrder(domain.OrderLimit, 1, "40"), usd, nil)
+	got, _ = s.commissionFor(ctx, mkOrder(domain.OrderLimit, 1, "40"), usd)
 	if got.Cmp(money.MustParse("9.6")) != 0 {
 		t.Fatalf("limit small got=%s want=9.6", got.String())
 	}
 
 	// Limit: notional = 100 → 24% = 24, capped at $12.
-	got, _ = s.commissionFor(ctx, mkOrder(domain.OrderLimit, 1, "100"), usd, nil)
+	got, _ = s.commissionFor(ctx, mkOrder(domain.OrderLimit, 1, "100"), usd)
 	if got.Cmp(money.MustParse("12")) != 0 {
 		t.Fatalf("limit large got=%s want=12", got.String())
 	}
@@ -164,7 +164,7 @@ func TestCommissionFor(t *testing.T) {
 	// Triggered StopLimit uses the Limit table.
 	o := mkOrder(domain.OrderStopLimit, 1, "30")
 	o.Triggered = true
-	got, _ = s.commissionFor(ctx, o, usd, nil)
+	got, _ = s.commissionFor(ctx, o, usd)
 	if got.Cmp(money.MustParse("7.2")) != 0 {
 		t.Fatalf("stoplimit triggered got=%s want=7.2", got.String())
 	}

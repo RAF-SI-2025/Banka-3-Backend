@@ -2,7 +2,7 @@ package store
 
 import (
 	"context"
-	"strings"
+	"time"
 
 	"github.com/RAF-SI-2025/Banka-3-Backend/pkg/apperr"
 	"github.com/RAF-SI-2025/Banka-3-Backend/services/trading/internal/domain"
@@ -184,17 +184,20 @@ func scanExecution(row pgx.Row) (*domain.OrderExecution, error) {
 }
 
 // LatestExecutionAt returns the timestamp of the most recent settled
-// execution on an order, or zero-time when none exist yet. Used by the
-// worker to pace partial-fill cadence — pending rows are excluded so a
-// stuck pending row doesn't reset cadence to "just fired".
-func (s *Store) LatestExecutionAt(ctx context.Context, orderID string) (string, error) {
+// execution on an order, or (zero, false) when none exist yet. Used by
+// the worker to pace partial-fill cadence — pending rows are excluded
+// so a stuck pending row doesn't reset cadence to "just fired".
+func (s *Store) LatestExecutionAt(ctx context.Context, orderID string) (time.Time, bool, error) {
 	const q = `
-        select coalesce(max(executed_at)::text, '')
+        select max(executed_at)
         from "trading".order_executions
         where order_id = $1 and status = 'settled'`
-	var t string
+	var t *time.Time
 	if err := s.Pool.QueryRow(ctx, q, orderID).Scan(&t); err != nil {
-		return "", apperr.Internal("latest execution", err)
+		return time.Time{}, false, apperr.Internal("latest execution", err)
 	}
-	return strings.TrimSpace(t), nil
+	if t == nil {
+		return time.Time{}, false, nil
+	}
+	return *t, true, nil
 }
