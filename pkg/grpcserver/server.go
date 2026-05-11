@@ -41,8 +41,15 @@ func Run(ctx context.Context, log *slog.Logger, addr string, register func(*grpc
 			recoveryInterceptor(log),
 			loggingInterceptor(log),
 			authmw.MetadataInterceptor(),
-			validationInterceptor(validator),
+			// errorMap MUST sit outside validation: protovalidate
+			// failures short-circuit before the handler runs, returning
+			// apperr.Validation. If errorMap were inner (the previous
+			// ordering), those returns bypassed apperr → grpc-status
+			// translation and reached the gateway as code=Unknown(2) /
+			// HTTP 500 instead of InvalidArgument / HTTP 400. Finding 3
+			// from the 2026-05-11 soak audit.
 			errorMapInterceptor(),
+			validationInterceptor(validator),
 		),
 	)
 	register(srv)
