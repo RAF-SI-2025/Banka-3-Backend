@@ -915,9 +915,11 @@ func proratedCommission(totalCommission *big.Rat, fillQty, totalQty int32) *big.
 }
 
 // usdToSecurity converts a USD-denominated reference amount (the
-// spec's $7 / $12 commission cap) into the security's currency via
-// the rate provider's ASK. Falls back to the raw string when the
-// security is already USD or no rate provider is wired.
+// spec's $7 / $12 commission cap) into the security's currency. The
+// exchange catalog only holds X→RSD rows, so cross-currency routes
+// through RSD: USD→RSD at ASK_USD, then RSD→cur by dividing by
+// ASK_cur. Falls back to the raw string when the security is already
+// USD or no rate provider is wired.
 func (s *Service) usdToSecurity(ctx context.Context, sec *domain.Security, usdAmount string) (*big.Rat, error) {
 	cap, err := money.Parse(usdAmount)
 	if err != nil {
@@ -932,15 +934,31 @@ func (s *Service) usdToSecurity(ctx context.Context, sec *domain.Security, usdAm
 		// pragmatic fallback the limit-math uses.
 		return cap, nil
 	}
-	_, ask, err := s.Rates.Quote(ctx, domain.CurrencyUSD, cur)
+	_, askUSD, err := s.Rates.Quote(ctx, domain.CurrencyUSD, domain.CurrencyRSD)
 	if err != nil {
-		return nil, apperr.Internal("usd→security fx quote failed", err)
+		return nil, apperr.Internal("usd→rsd fx quote failed", err)
 	}
-	rate, err := money.Parse(ask)
+	askUSDR, err := money.Parse(askUSD)
 	if err != nil {
-		return nil, apperr.Internal("usd→security ask unparseable", err)
+		return nil, apperr.Internal("usd→rsd ask unparseable", err)
 	}
-	return money.Mul(cap, rate), nil
+	rsdCap := money.Mul(cap, askUSDR)
+	if cur == domain.CurrencyRSD {
+		return rsdCap, nil
+	}
+	_, askCur, err := s.Rates.Quote(ctx, cur, domain.CurrencyRSD)
+	if err != nil {
+		return nil, apperr.Internal("security→rsd fx quote failed", err)
+	}
+	askCurR, err := money.Parse(askCur)
+	if err != nil {
+		return nil, apperr.Internal("security→rsd ask unparseable", err)
+	}
+	out, derr := money.Div(rsdCap, askCurR)
+	if derr != nil {
+		return nil, apperr.Internal("usd→security divide failed", derr)
+	}
+	return out, nil
 }
 
 // tickRetryInterval is how long to wait before re-checking an order

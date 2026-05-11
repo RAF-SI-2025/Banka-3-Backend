@@ -2,6 +2,7 @@ package service
 
 import (
 	"context"
+	"fmt"
 	"math/big"
 	"math/rand"
 	"testing"
@@ -234,6 +235,20 @@ func TestUsdToSecurityCapConversion(t *testing.T) {
 	if got.Cmp(money.MustParse("7")) != 0 {
 		t.Fatalf("no-rates cap got=%s want=7", got.String())
 	}
+
+	// GBP security: routes through RSD per spec p.26 — USD→RSD at
+	// 110.50, then divide by GBP→RSD ask 138.40. The catalog holds
+	// only X→RSD rows, so a direct USD→GBP quote isn't available.
+	// 7 × 110.50 / 138.40 = 5.59104046242774566473988...
+	gbp := &domain.Security{Currency: domain.CurrencyGBP}
+	got, err = s.usdToSecurity(ctx, gbp, "7")
+	if err != nil {
+		t.Fatalf("gbp: %v", err)
+	}
+	want := new(big.Rat).Quo(money.MustParse("773.50"), money.MustParse("138.40"))
+	if got.Cmp(want) != 0 {
+		t.Fatalf("gbp cap got=%s want=%s", got.String(), want.String())
+	}
 }
 
 type stubUSDRSDRate struct{}
@@ -242,10 +257,13 @@ func (stubUSDRSDRate) Quote(_ context.Context, from, to domain.Currency) (string
 	if from == domain.CurrencyUSD && to == domain.CurrencyRSD {
 		return "110.20", "110.50", nil
 	}
+	if from == domain.CurrencyGBP && to == domain.CurrencyRSD {
+		return "138.00", "138.40", nil
+	}
 	if from == to {
 		return "1", "1", nil
 	}
-	return "", "", nil
+	return "", "", fmt.Errorf("no stub rate %s→%s", from, to)
 }
 
 // stubSettler captures the last Settle call for assertions.
