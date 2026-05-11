@@ -18,6 +18,7 @@ package service
 
 import (
 	"context"
+	"log/slog"
 	"math/big"
 	"math/rand"
 	"time"
@@ -28,7 +29,52 @@ import (
 	"github.com/RAF-SI-2025/Banka-3-Backend/pkg/permissions"
 	"github.com/RAF-SI-2025/Banka-3-Backend/services/trading/internal/domain"
 	"github.com/jackc/pgx/v5"
+	"google.golang.org/grpc/codes"
+	"google.golang.org/grpc/status"
 )
+
+// maxResumeAttempts caps how many transient retries the recovery sweep
+// burns on a single pending row before the log level escalates from
+// WARN to ERROR. The sweep keeps trying past this — bank-side commits
+// can take arbitrarily long to converge with the trading-side booking
+// when the database flaps — but operators need a loud signal that a
+// row is stuck. Permanent bank errors short-circuit this entirely:
+// they abandon on the first attempt (see isPermanentBankError).
+const maxResumeAttempts = 8
+
+// isPermanentBankError reports whether a bank settle error reflects an
+// input the trading service got wrong in a way time won't fix. Examples:
+// the order's source account is the wrong kind (`system` vs
+// `forex_book`), the security's settlement date is in the past, the
+// account's currency doesn't match. Retrying these every tick produces
+// a never-ending log loop and pins worker capacity on a row that can
+// never make progress.
+//
+// Transient codes (Unavailable, DeadlineExceeded, Internal, Aborted) and
+// any non-status error (book-keeping failures, DB blips) are left to
+// retry. Bank.SettleTrade is idempotent on (op_id, leg_index) so
+// retrying is always safe — and book-keeping failures specifically are
+// where bank-committed-but-not-booked rows live, which we MUST resolve
+// by retrying (never abandon).
+func isPermanentBankError(err error) bool {
+	if err == nil {
+		return false
+	}
+	st, ok := status.FromError(err)
+	if !ok {
+		return false
+	}
+	switch st.Code() {
+	case codes.InvalidArgument,
+		codes.FailedPrecondition,
+		codes.PermissionDenied,
+		codes.NotFound,
+		codes.OutOfRange,
+		codes.Unauthenticated:
+		return true
+	}
+	return false
+}
 
 // SettleInput is the payload to TradeSettler.Settle. Fields mirror the
 // bank.SettleTrade RPC.
@@ -106,13 +152,55 @@ func (s *Service) ProcessOrderTick(ctx context.Context, o *domain.Order) (proces
 		return res, err
 	}
 	if pending != nil {
-		exec, err := s.resumePendingFill(ctx, o, pending)
-		if err != nil {
-			return res, err
+		exec, resumeErr := s.resumePendingFill(ctx, o, pending)
+		if resumeErr == nil {
+			res.Fired = true
+			res.Execution = exec
+			return res, nil
 		}
-		res.Fired = true
-		res.Execution = exec
-		return res, nil
+
+		// Resume failed. Two regimes:
+		//
+		//   1. Bank rejected the call with a permanent code (invalid
+		//      account kind, currency mismatch, settlement in the past
+		//      …). Retrying every tick can't help. Mark the row
+		//      abandoned and cancel the parent order so the fresh-fill
+		//      sweep doesn't immediately seed a new pending row with
+		//      the same bad inputs.
+		//
+		//   2. Anything else — transient bank failure, DB blip,
+		//      book-keeping error after bank committed. Bump the
+		//      attempts counter, escalate log level past a threshold,
+		//      and keep trying. Bank.SettleTrade is idempotent on
+		//      (op_id, leg_index) so retries are always safe; book-
+		//      keeping is the only operation that converges a
+		//      bank-committed-but-not-booked row.
+		errMsg := resumeErr.Error()
+		if isPermanentBankError(resumeErr) {
+			if abErr := s.abandonPendingFill(ctx, o, pending, errMsg); abErr != nil {
+				s.Log.Error("recovery: failed to abandon pending exec",
+					"order_id", o.ID, "exec_id", pending.ID,
+					"underlying", errMsg, "err", abErr.Error())
+				return res, resumeErr
+			}
+			s.Log.Warn("recovery: pending execution abandoned (permanent bank error)",
+				"order_id", o.ID, "exec_id", pending.ID, "err", errMsg)
+			return res, nil
+		}
+		attempts, recErr := s.Store.RecordResumeFailure(ctx, pending.ID, errMsg)
+		if recErr != nil {
+			s.Log.Warn("recovery: failed to bump attempts counter",
+				"order_id", o.ID, "exec_id", pending.ID, "err", recErr.Error())
+			return res, resumeErr
+		}
+		level := slog.LevelWarn
+		if attempts >= maxResumeAttempts {
+			level = slog.LevelError
+		}
+		s.Log.Log(ctx, level, "recovery: pending execution retry",
+			"order_id", o.ID, "exec_id", pending.ID,
+			"attempts", attempts, "err", errMsg)
+		return res, resumeErr
 	}
 
 	if o.Cancelled || o.IsDone || o.Status != domain.OrderStatusApproved {
@@ -295,6 +383,24 @@ func (s *Service) resumePendingFill(ctx context.Context, o *domain.Order, pendin
 	s.Log.Info("resuming pending execution",
 		"order_id", o.ID, "exec_id", pending.ID, "qty", pending.Quantity)
 	return s.completeFill(ctx, o, sec, pending, contractSize)
+}
+
+// abandonPendingFill is the terminal cleanup for a pending row whose
+// resume failed with a permanent bank error. Marks the row 'abandoned'
+// and cancels the parent order in one tx so the next tick's recovery
+// sweep won't re-pick it (status='pending' filter) and the fresh-fill
+// sweep won't start a replacement (gated on `o.Cancelled`).
+//
+// Cancelling an already-cancelled order is a no-op (CancelOrderTx
+// tolerates it) so this is safe for orders the supervisor cancelled
+// before the sweep got here.
+func (s *Service) abandonPendingFill(ctx context.Context, o *domain.Order, pending *domain.OrderExecution, errMsg string) error {
+	return s.Store.ExecuteAtomic(ctx, func(tx pgx.Tx) error {
+		if err := s.Store.MarkPendingAbandoned(ctx, tx, pending.ID, errMsg); err != nil {
+			return err
+		}
+		return s.Store.CancelOrderTx(ctx, tx, o.ID)
+	})
 }
 
 // completeFill is the shared steps (2) + (3) of the saga. Both fresh

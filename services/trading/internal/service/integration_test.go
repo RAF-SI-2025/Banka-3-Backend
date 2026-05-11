@@ -25,6 +25,8 @@ import (
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
+	"google.golang.org/grpc/codes"
+	"google.golang.org/grpc/status"
 
 	"github.com/RAF-SI-2025/Banka-3-Backend/pkg/apperr"
 	"github.com/RAF-SI-2025/Banka-3-Backend/pkg/auth"
@@ -1759,8 +1761,13 @@ func TestIntegration_Tax_RetryUsesDeterministicOpID(t *testing.T) {
 	_, _ = svc.RunTax(TaxCronContext(context.Background()), RunTaxInput{})
 	currentSettler.taxErr = nil
 
-	// Second run: succeeds. Should record exactly one tax call with the
-	// deterministic op_id derived from (account, current month).
+	// Second run: succeeds. Should record exactly one tax call.  The
+	// op_id is derived from the realized_gain row-id set + account +
+	// year-month — same set means same op_id, so the bank-side
+	// idempotency makes the retry safe.  Compare against the
+	// tax_op_id stamped on the realized_gain row rather than
+	// recomputing locally (decouples the test from the derivation
+	// implementation).
 	res, err := svc.RunTax(TaxCronContext(context.Background()), RunTaxInput{})
 	if err != nil {
 		t.Fatalf("RunTax: %v", err)
@@ -1771,9 +1778,71 @@ func TestIntegration_Tax_RetryUsesDeterministicOpID(t *testing.T) {
 	if len(currentSettler.taxCalls) != 1 {
 		t.Fatalf("got %d successful tax calls, want 1", len(currentSettler.taxCalls))
 	}
-	expected := taxOpID(accID, time.Now())
-	if currentSettler.taxCalls[0].OpID != expected {
-		t.Fatalf("tax op_id=%s, want deterministic %s", currentSettler.taxCalls[0].OpID, expected)
+	var stampedOpID string
+	if err := fixPool.QueryRow(context.Background(),
+		`select coalesce(tax_op_id::text, '') from "trading".realized_gains
+         where account_id = $1 and taxed = true`, accID).Scan(&stampedOpID); err != nil {
+		t.Fatalf("read tax_op_id: %v", err)
+	}
+	if stampedOpID == "" {
+		t.Fatalf("tax_op_id not stamped on realized_gain row")
+	}
+	if currentSettler.taxCalls[0].OpID != stampedOpID {
+		t.Fatalf("tax op_id=%s, want %s (matches row stamp)",
+			currentSettler.taxCalls[0].OpID, stampedOpID)
+	}
+}
+
+// TestIntegration_Tax_NewGainsSameMonthGetFreshOpID verifies the fix
+// for the soak suite's Finding 1: two tax runs in the same calendar
+// month with DISJOINT realized_gain rows must yield DIFFERENT op_ids,
+// so the bank's `(op_id, leg_index)` unique constraint doesn't
+// silently swallow the second debit.  Pre-fix this would have charged
+// the user once, then reported a fake "collected" total on subsequent
+// runs while the state_tax account didn't move.
+func TestIntegration_Tax_NewGainsSameMonthGetFreshOpID(t *testing.T) {
+	svc := setup(t)
+	ex := seedExchange(t, svc, "XNYS", domain.CurrencyUSD)
+	sec, _ := seedStock(t, svc, "TAXN", ex, "100", "100", "99", 1000)
+
+	clientID := uuid.NewString()
+	accID := uuid.NewString()
+
+	// Round 1: one gain row, run tax.
+	if err := writeRealizedGain(t, svc, clientID, sec.ID, accID, "1000"); err != nil {
+		t.Fatalf("write 1: %v", err)
+	}
+	res1, err := svc.RunTax(TaxCronContext(context.Background()), RunTaxInput{})
+	if err != nil {
+		t.Fatalf("RunTax 1: %v", err)
+	}
+	if res1.UsersTaxed != 1 {
+		t.Fatalf("round 1 users_taxed=%d, want 1", res1.UsersTaxed)
+	}
+	round1Calls := len(currentSettler.taxCalls)
+	if round1Calls != 1 {
+		t.Fatalf("round 1 tax calls=%d, want 1", round1Calls)
+	}
+	opID1 := currentSettler.taxCalls[0].OpID
+
+	// Round 2: add a fresh gain row in the same month, run tax again.
+	if err := writeRealizedGain(t, svc, clientID, sec.ID, accID, "500"); err != nil {
+		t.Fatalf("write 2: %v", err)
+	}
+	res2, err := svc.RunTax(TaxCronContext(context.Background()), RunTaxInput{})
+	if err != nil {
+		t.Fatalf("RunTax 2: %v", err)
+	}
+	if res2.UsersTaxed != 1 {
+		t.Fatalf("round 2 users_taxed=%d, want 1", res2.UsersTaxed)
+	}
+	if len(currentSettler.taxCalls) != round1Calls+1 {
+		t.Fatalf("round 2 new tax calls=%d, want 1",
+			len(currentSettler.taxCalls)-round1Calls)
+	}
+	opID2 := currentSettler.taxCalls[round1Calls].OpID
+	if opID1 == opID2 {
+		t.Fatalf("rounds 1 and 2 share op_id %s — bank would no-op the second debit", opID1)
 	}
 }
 
@@ -2504,5 +2573,165 @@ func TestIntegration_CreateOrder_NonTradingEmployeeRejected(t *testing.T) {
 	}
 	if n != 0 {
 		t.Fatalf("rejected order should not have been persisted; got %d rows", n)
+	}
+}
+
+// TestIntegration_Recovery_PermanentBankError_AbandonsAndCancels covers
+// Finding 2 from the 2026-05-11 soak audit: a pending execution whose
+// bank settle fails with a permanent code (InvalidArgument here) must
+// not be retried every tick forever. The recovery sweep marks the row
+// abandoned, cancels the parent order, and on the next tick produces
+// zero further bank calls.
+//
+// Symptom in the field (pre-fix): an order placed against the wrong
+// source-account kind produced ~70 InvalidArgument WARN logs in
+// 12 minutes with no backoff, no max-attempts, no terminal state. The
+// pending row could only be cleared via raw DELETE because the status
+// check constraint forbade any non-`pending`/`settled` value.
+func TestIntegration_Recovery_PermanentBankError_AbandonsAndCancels(t *testing.T) {
+	svc := setup(t)
+	ex := seedExchange(t, svc, "XNYS", domain.CurrencyUSD)
+	sec, _ := seedStock(t, svc, "ABND", ex, "100", "100", "99", 1_000_000)
+
+	// Permanent failure on settle. Same shape bank emits when the source
+	// account isn't a trading-book account.
+	currentSettler.reset()
+	t.Cleanup(currentSettler.reset)
+	currentSettler.settleErr = status.Error(codes.InvalidArgument,
+		"aktuari moraju izabrati trading-book račun, ne menjačnicu")
+
+	clientID := uuid.NewString()
+	accID := uuid.NewString()
+	o, err := svc.CreateOrder(clientCtx(clientID), CreateOrderInput{
+		SecurityID: sec.ID,
+		OrderType:  domain.OrderMarket,
+		Direction:  domain.DirectionBuy,
+		Quantity:   1,
+		AllOrNone:  true, // single fill — no random sub-quantity
+		AccountID:  accID,
+	})
+	if err != nil {
+		t.Fatalf("create order: %v", err)
+	}
+
+	// Tick 1: fresh fill path. Inserts the pending row, calls settle,
+	// settle returns InvalidArgument → recovery's first branch (which
+	// also runs for fresh fills via the same code path) abandons.
+	res, err := svc.ProcessOrderTick(context.Background(), o.Order)
+	if err == nil {
+		t.Fatalf("expected ProcessOrderTick to surface the bank error on the abandoning tick")
+	}
+	if res.Fired {
+		t.Fatalf("permanent settle failure must not count as a fired fill")
+	}
+
+	// The first tick above doesn't actually go through the recovery
+	// branch — executeFill is the fresh-fill path and it returns the
+	// error without abandoning. The row stays pending so the NEXT tick
+	// (recovery sweep) is what abandons it. Tick again.
+	o2, _ := svc.Store.GetOrder(context.Background(), o.ID)
+	res, err = svc.ProcessOrderTick(context.Background(), o2)
+	if err != nil {
+		t.Fatalf("second tick must not surface error (row already abandoned by recovery): %v", err)
+	}
+	if res.Fired {
+		t.Fatalf("abandoned recovery must not count as a fired fill")
+	}
+
+	// Pending row is now abandoned, with the bank error stamped.
+	var status, lastErr string
+	var attempts int
+	if err := fixPool.QueryRow(context.Background(),
+		`select status, attempts, coalesce(last_error,'') from "trading".order_executions where order_id=$1`,
+		o.ID).Scan(&status, &attempts, &lastErr); err != nil {
+		t.Fatalf("read execution row: %v", err)
+	}
+	if status != "abandoned" {
+		t.Fatalf("execution status = %q, want abandoned", status)
+	}
+	if lastErr == "" {
+		t.Fatalf("last_error must be populated on abandoned row")
+	}
+
+	// Parent order is cancelled so the fresh-fill sweep doesn't seed a
+	// replacement pending row with the same bad inputs.
+	post, _ := svc.Store.GetOrder(context.Background(), o.ID)
+	if !post.Cancelled {
+		t.Fatalf("parent order must be cancelled after abandoning a pending fill")
+	}
+
+	// Drop the error so a subsequent tick *would* settle if it tried —
+	// proves the recovery sweep no longer picks the row up.
+	currentSettler.settleErr = nil
+	pre := len(currentSettler.settles())
+	post2, _ := svc.Store.GetOrder(context.Background(), o.ID)
+	if _, err := svc.ProcessOrderTick(context.Background(), post2); err != nil {
+		t.Fatalf("third tick after abandon: %v", err)
+	}
+	if got := len(currentSettler.settles()) - pre; got != 0 {
+		t.Fatalf("recovery sweep continued retrying after abandon: %d further settle calls", got)
+	}
+}
+
+// TestIntegration_Recovery_TransientBankError_BumpsAttempts confirms
+// the other half of Finding 2's fix: transient bank errors increment
+// the attempts counter and stamp last_error but DO NOT abandon — bank
+// might recover, and book-keeping errors (which the classifier also
+// treats as transient) MUST keep retrying because they sit between
+// bank-committed and trading-booked.
+func TestIntegration_Recovery_TransientBankError_BumpsAttempts(t *testing.T) {
+	svc := setup(t)
+	ex := seedExchange(t, svc, "XNYS", domain.CurrencyUSD)
+	sec, _ := seedStock(t, svc, "TRAN", ex, "100", "100", "99", 1_000_000)
+
+	currentSettler.reset()
+	t.Cleanup(currentSettler.reset)
+	currentSettler.settleErr = status.Error(codes.Unavailable, "bank temporarily down")
+
+	clientID := uuid.NewString()
+	o, err := svc.CreateOrder(clientCtx(clientID), CreateOrderInput{
+		SecurityID: sec.ID,
+		OrderType:  domain.OrderMarket,
+		Direction:  domain.DirectionBuy,
+		Quantity:   1,
+		AllOrNone:  true,
+		AccountID:  uuid.NewString(),
+	})
+	if err != nil {
+		t.Fatalf("create order: %v", err)
+	}
+
+	// Fresh-fill tick leaves the pending row stranded with the bank error.
+	if _, err := svc.ProcessOrderTick(context.Background(), o.Order); err == nil {
+		t.Fatalf("expected first tick to surface the transient bank error")
+	}
+
+	// Recovery tick should bump the attempts counter and KEEP the row pending.
+	o2, _ := svc.Store.GetOrder(context.Background(), o.ID)
+	if _, err := svc.ProcessOrderTick(context.Background(), o2); err == nil {
+		t.Fatalf("expected recovery tick to surface the transient bank error")
+	}
+
+	var rowStatus, lastErr string
+	var attempts int
+	if err := fixPool.QueryRow(context.Background(),
+		`select status, attempts, coalesce(last_error,'') from "trading".order_executions where order_id=$1`,
+		o.ID).Scan(&rowStatus, &attempts, &lastErr); err != nil {
+		t.Fatalf("read execution row: %v", err)
+	}
+	if rowStatus != "pending" {
+		t.Fatalf("transient error must not abandon — status = %q", rowStatus)
+	}
+	if attempts < 1 {
+		t.Fatalf("attempts not bumped on transient retry: %d", attempts)
+	}
+	if lastErr == "" {
+		t.Fatalf("last_error must be populated on transient retry")
+	}
+
+	// Parent order must not be cancelled — only permanent errors do that.
+	post, _ := svc.Store.GetOrder(context.Background(), o.ID)
+	if post.Cancelled {
+		t.Fatalf("transient bank error must NOT cancel the parent order")
 	}
 }

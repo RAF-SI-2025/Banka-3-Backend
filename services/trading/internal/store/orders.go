@@ -209,6 +209,22 @@ func (s *Store) CancelOrder(ctx context.Context, orderID string) (*domain.Order,
 	return out, nil
 }
 
+// CancelOrderTx is the tx-bound idempotent variant used by the recovery
+// sweep when it abandons a pending row. Unlike CancelOrder it tolerates
+// an already-cancelled or done order — the goal is "ensure this order
+// is not going to start a fresh fill", not "the caller is the canonical
+// cancel actor". No-op on a row that's already cancelled.
+func (s *Store) CancelOrderTx(ctx context.Context, tx pgx.Tx, orderID string) error {
+	const q = `
+        update "trading".orders
+        set cancelled = true, last_modification = now()
+        where id = $1 and cancelled = false`
+	if _, err := tx.Exec(ctx, q, orderID); err != nil {
+		return apperr.Internal("cancel order (tx)", err)
+	}
+	return nil
+}
+
 // GetActiveOrdersForExecution returns approved+active orders for the
 // execution worker. Used by Phase C; landed now so the order surface
 // is complete.

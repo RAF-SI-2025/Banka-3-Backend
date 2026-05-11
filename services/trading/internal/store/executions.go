@@ -50,6 +50,43 @@ func (s *Store) MarkExecutionSettled(ctx context.Context, tx pgx.Tx, execID, ban
 	return nil
 }
 
+// RecordResumeFailure bumps the attempts counter and records the latest
+// error message on a pending row. Returns the post-increment counter so
+// the service can decide whether to escalate log level past a threshold.
+// Migration 0007 added the columns; the row stays 'pending' so the
+// recovery sweep keeps trying.
+func (s *Store) RecordResumeFailure(ctx context.Context, execID, errMsg string) (int32, error) {
+	const q = `
+        update "trading".order_executions
+        set attempts   = attempts + 1,
+            last_error = $2
+        where id = $1
+        returning attempts`
+	var attempts int32
+	if err := s.Pool.QueryRow(ctx, q, execID, errMsg).Scan(&attempts); err != nil {
+		return 0, apperr.Internal("record resume failure", err)
+	}
+	return attempts, nil
+}
+
+// MarkPendingAbandoned flips a pending row to status='abandoned' inside
+// the caller's tx and stamps the final error message. The recovery sweep
+// query filters on status='pending' so an abandoned row is naturally
+// excluded; the row remains for human audit. Caller is responsible for
+// cancelling the parent order so the fresh-fill sweep doesn't kick a
+// new pending row in its place.
+func (s *Store) MarkPendingAbandoned(ctx context.Context, tx pgx.Tx, execID, errMsg string) error {
+	const q = `
+        update "trading".order_executions
+        set status     = 'abandoned',
+            last_error = $2
+        where id = $1 and status = 'pending'`
+	if _, err := tx.Exec(ctx, q, execID, errMsg); err != nil {
+		return apperr.Internal("abandon pending execution", err)
+	}
+	return nil
+}
+
 // GetPendingExecutionForOrder returns the in-flight pending fill (if any)
 // for an order. Used by the worker to resume a fill after a crash.
 // Returns (nil, nil) when no pending row exists. There is at most one

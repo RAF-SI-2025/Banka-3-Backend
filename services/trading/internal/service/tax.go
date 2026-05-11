@@ -23,6 +23,7 @@ package service
 import (
 	"context"
 	"math/big"
+	"sort"
 	"strings"
 	"time"
 
@@ -45,13 +46,27 @@ var taxRate = money.MustParse("0.15")
 // (migration bank.0011 unique (op_id, leg_index)) makes the retry safe.
 var taxNamespace = uuid.MustParse("3e9bdfaa-0a64-4f0a-9d6a-f9c5b7c4e0aa")
 
-// taxOpID derives the deterministic op_id for one (account_id, year-month)
-// tax run. Two cron firings in the same calendar month for the same
-// account collide on op_id, which is exactly what we want — the second
-// no-ops at the bank.
-func taxOpID(accountID string, period time.Time) string {
-	yyyymm := period.Format("2006-01")
-	return uuid.NewSHA1(taxNamespace, []byte(accountID+"|"+yyyymm)).String()
+// taxOpID derives the deterministic op_id for one tax-settlement call.
+// The discriminator is the *set of realized_gains rows* being taxed,
+// not just the (account, year-month) pair — two runs in the same
+// month with disjoint new gains MUST produce different op_ids,
+// otherwise the bank's `(op_id, leg_index)` unique constraint
+// silently swallows the second debit while RunTax still reports it
+// as collected (the soak suite caught this in c3-multi-round.cy.ts).
+//
+// The crash-recovery invariant the original deterministic scheme
+// gave us is preserved: a retry against the *same* untaxed gain set
+// re-derives the same op_id, the bank no-ops, and
+// MarkRealizedGainsTaxed converges.
+//
+// `period` stays in the hash input for auditability — the format
+// makes it human-readable when grepping the bank ledger by op_id.
+func taxOpID(accountID string, gainIDs []string, period time.Time) string {
+	sorted := make([]string, len(gainIDs))
+	copy(sorted, gainIDs)
+	sort.Strings(sorted)
+	payload := accountID + "|" + period.Format("2006-01") + "|" + strings.Join(sorted, ",")
+	return uuid.NewSHA1(taxNamespace, []byte(payload)).String()
 }
 
 // TaxSettleInput mirrors bank.SettleCapitalGainsTax.
@@ -256,10 +271,12 @@ func (s *Service) runTaxForUser(ctx context.Context, userID string, kind domain.
 	period := s.now()
 	for _, g := range groups {
 		taxAmt := money.Mul(g.gainSum, taxRate)
-		// Deterministic op_id — same (account, yyyy-mm) collides on retry
-		// and bank no-ops; loss-only groups still need a stable value
-		// so MarkRealizedGainsTaxed stamps tax_op_id consistently.
-		opID := taxOpID(g.accountID, period)
+		// op_id discriminates on the row-id set so the bank's
+		// idempotency (`unique (op_id, leg_index)`) does not silently
+		// swallow a second tax run in the same month. Loss-only groups
+		// still derive an op_id so MarkRealizedGainsTaxed stamps
+		// tax_op_id consistently.
+		opID := taxOpID(g.accountID, g.ids, period)
 		if money.IsPositive(taxAmt) {
 			settledOpID, err := s.TaxSettler.SettleTax(ctx, TaxSettleInput{
 				AccountID: g.accountID,
