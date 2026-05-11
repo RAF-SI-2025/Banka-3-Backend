@@ -160,18 +160,31 @@ func (s *Service) ListCards(ctx context.Context, accountID string) ([]*domain.Ca
 	if err != nil {
 		return nil, err
 	}
-	a, err := s.Store.GetAccountByID(ctx, accountID)
-	if err != nil {
-		return nil, err
-	}
-	if p.UserKind == auth.KindClient {
-		if a.OwnerClientID != p.UserID {
+
+	var cards []*domain.Card
+	if accountID == "" {
+		if p.UserKind == auth.KindClient {
+			cards, err = s.Store.ListCardsByOwner(ctx, p.UserID)
+		} else {
+			if !permissions.HasAny(p.Permissions, permissions.CardRead, permissions.Admin) {
+				return nil, apperr.PermissionDenied("nedovoljne permisije")
+			}
+			cards, err = s.Store.ListAllCards(ctx)
+		}
+	} else {
+		a, aerr := s.Store.GetAccountByID(ctx, accountID)
+		if aerr != nil {
+			return nil, aerr
+		}
+		if p.UserKind == auth.KindClient {
+			if a.OwnerClientID != p.UserID {
+				return nil, apperr.PermissionDenied("nedovoljne permisije")
+			}
+		} else if !permissions.HasAny(p.Permissions, permissions.CardRead, permissions.Admin) {
 			return nil, apperr.PermissionDenied("nedovoljne permisije")
 		}
-	} else if !permissions.HasAny(p.Permissions, permissions.CardRead, permissions.Admin) {
-		return nil, apperr.PermissionDenied("nedovoljne permisije")
+		cards, err = s.Store.ListCardsByAccount(ctx, accountID)
 	}
-	cards, err := s.Store.ListCardsByAccount(ctx, accountID)
 	if err != nil {
 		return nil, err
 	}

@@ -154,9 +154,6 @@ func (s *Server) CreateCard(ctx context.Context, in *bankpb.CreateCardRequest) (
 }
 
 func (s *Server) ListCards(ctx context.Context, in *bankpb.ListCardsRequest) (*bankpb.ListCardsResponse, error) {
-	if in.GetAccountId() == "" {
-		return nil, apperr.Validation("account_id is required")
-	}
 	cs, err := s.Svc.ListCards(ctx, in.GetAccountId())
 	if err != nil {
 		return nil, err

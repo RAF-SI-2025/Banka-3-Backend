@@ -79,6 +79,53 @@ func (s *Store) ListCardsByAccount(ctx context.Context, accountID string) ([]*do
 	return out, rows.Err()
 }
 
+// ListCardsByOwner returns every card whose owning account belongs to
+// the given client.
+func (s *Store) ListCardsByOwner(ctx context.Context, ownerClientID string) ([]*domain.Card, error) {
+	const q = `select c.id, c.number, c.cvv_hash, c.brand, c.name,
+	           c.account_id, coalesce(c.authorized_person_id::text, ''),
+	           c.card_limit::text, c.expires_at, c.status, c.created_at, c.updated_at
+	           from "bank".cards c
+	           join "bank".accounts a on a.id = c.account_id
+	           where a.owner_client_id = $1
+	           order by c.created_at`
+	rows, err := s.Pool.Query(ctx, q, ownerClientID)
+	if err != nil {
+		return nil, apperr.Internal("list cards by owner", err)
+	}
+	defer rows.Close()
+	var out []*domain.Card
+	for rows.Next() {
+		c, err := scanCard(rows)
+		if err != nil {
+			return nil, apperr.Internal("scan card", err)
+		}
+		out = append(out, c)
+	}
+	return out, rows.Err()
+}
+
+// ListAllCards returns every card in the system. Reserved for
+// employee-side card administration; the service layer enforces
+// CardRead/Admin.
+func (s *Store) ListAllCards(ctx context.Context) ([]*domain.Card, error) {
+	const q = `select ` + cardColumns + ` from "bank".cards order by created_at`
+	rows, err := s.Pool.Query(ctx, q)
+	if err != nil {
+		return nil, apperr.Internal("list all cards", err)
+	}
+	defer rows.Close()
+	var out []*domain.Card
+	for rows.Next() {
+		c, err := scanCard(rows)
+		if err != nil {
+			return nil, apperr.Internal("scan card", err)
+		}
+		out = append(out, c)
+	}
+	return out, rows.Err()
+}
+
 // CountActiveCards returns the count of non-deactivated cards on
 // account, optionally narrowed to a specific OvlascenoLice. Used by
 // the service to enforce spec p.27 limits (max 2 lični, max 1 per
