@@ -378,4 +378,99 @@ func TestIntegration_Fund_DiscoveryDecoration(t *testing.T) {
 	}
 }
 
-var _ = permissions.Admin // silence unused-import when no helper refs it directly
+// adminCtx returns a principal carrying the internal admin sentinel —
+// matches the metadata the user-svc adapter attaches when it dials
+// trading.ReassignSupervisorAssets.
+func adminCtx(id string) context.Context {
+	return auth.WithPrincipal(context.Background(), auth.Principal{
+		UserID:      id,
+		UserKind:    auth.KindEmployee,
+		Permissions: []string{permissions.Admin},
+	})
+}
+
+// TestIntegration_Cascade_ReassignFundsOnDemotion is the c4 PR8 TEST-4
+// cascade gate: admin creates supervisor X, X mints fund A + fund B,
+// admin demotes X (revokes funds.manage.supervisor) — the user-svc
+// trigger calls trading.ReassignSupervisorAssets which must flip both
+// funds over to the acting admin in one shot. We exercise the trading
+// primitive directly (the user-svc → trading adapter is a thin proto
+// pass-through; its end-to-end behavior is covered by the celina4 live
+// cypress + the FundReassigner stub already in user-svc unit tests).
+// Also asserts idempotency: a second call after the flip returns 0.
+func TestIntegration_Cascade_ReassignFundsOnDemotion(t *testing.T) {
+	svc := setup(t)
+	supervisorID := uuid.NewString()
+	adminID := uuid.NewString()
+
+	fundA := seedFund(t, svc, supervisorID, "Alpha Cascade")
+	fundB := seedFund(t, svc, supervisorID, "Beta Cascade")
+
+	n, err := svc.ReassignSupervisorAssets(adminCtx(adminID), supervisorID, adminID)
+	if err != nil {
+		t.Fatalf("ReassignSupervisorAssets: %v", err)
+	}
+	if n != 2 {
+		t.Fatalf("reassigned count: got %d want 2", n)
+	}
+
+	for _, id := range []string{fundA.ID, fundB.ID} {
+		got, err := svc.Store.GetFund(context.Background(), id)
+		if err != nil {
+			t.Fatalf("GetFund(%s): %v", id, err)
+		}
+		if got.ManagerUserID != adminID {
+			t.Fatalf("fund %s manager_user_id: got %s want %s", id, got.ManagerUserID, adminID)
+		}
+	}
+
+	// Idempotent: after the flip there's no fund still managed by the
+	// demoted supervisor, so a re-run is a no-op.
+	n, err = svc.ReassignSupervisorAssets(adminCtx(adminID), supervisorID, adminID)
+	if err != nil {
+		t.Fatalf("ReassignSupervisorAssets (re-run): %v", err)
+	}
+	if n != 0 {
+		t.Fatalf("re-run count: got %d want 0", n)
+	}
+}
+
+// TestIntegration_Cascade_SkipsClosedFunds asserts only funds in
+// `status='active'` get reassigned — closed funds stay with the prior
+// manager (no point handing administrative tail off a wound-down fund).
+func TestIntegration_Cascade_SkipsClosedFunds(t *testing.T) {
+	svc := setup(t)
+	supervisorID := uuid.NewString()
+	adminID := uuid.NewString()
+
+	fundActive := seedFund(t, svc, supervisorID, "Active Cascade")
+	fundClosed := seedFund(t, svc, supervisorID, "Closed Cascade")
+	if _, err := fixPool.Exec(context.Background(),
+		`update "trading".investment_funds set status='closed' where id=$1`,
+		fundClosed.ID); err != nil {
+		t.Fatalf("close fund: %v", err)
+	}
+
+	n, err := svc.ReassignSupervisorAssets(adminCtx(adminID), supervisorID, adminID)
+	if err != nil {
+		t.Fatalf("ReassignSupervisorAssets: %v", err)
+	}
+	if n != 1 {
+		t.Fatalf("reassigned count: got %d want 1", n)
+	}
+
+	gotActive, err := svc.Store.GetFund(context.Background(), fundActive.ID)
+	if err != nil {
+		t.Fatalf("GetFund(active): %v", err)
+	}
+	if gotActive.ManagerUserID != adminID {
+		t.Fatalf("active fund not flipped: got %s want %s", gotActive.ManagerUserID, adminID)
+	}
+	gotClosed, err := svc.Store.GetFund(context.Background(), fundClosed.ID)
+	if err != nil {
+		t.Fatalf("GetFund(closed): %v", err)
+	}
+	if gotClosed.ManagerUserID != supervisorID {
+		t.Fatalf("closed fund unexpectedly flipped: got %s want %s", gotClosed.ManagerUserID, supervisorID)
+	}
+}

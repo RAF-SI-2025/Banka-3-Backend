@@ -177,15 +177,17 @@ func (s *Store) ListLatestOTCOffers(ctx context.Context, f OTCThreadFilter) ([]*
 	if f.PartyKind != "" {
 		add("(o.buyer_kind = ? or o.seller_kind = ?)", string(f.PartyKind), string(f.PartyKind))
 	}
+	// Alias the CTE's thread_id column so the projection's bare
+	// `thread_id` resolves unambiguously to the otc_offers row.
 	q := `
         with latest as (
-            select thread_id, max(created_at) as ts
+            select thread_id as tid, max(created_at) as ts
             from "trading".otc_offers
             group by thread_id
         )
         select ` + otcOfferCols + `
         from "trading".otc_offers o
-        join latest l on l.thread_id = o.thread_id and l.ts = o.created_at
+        join latest l on l.tid = o.thread_id and l.ts = o.created_at
         where ` + strings.Join(conds, " and ") + `
         order by o.updated_at desc`
 	rows, err := s.Pool.Query(ctx, q, args...)

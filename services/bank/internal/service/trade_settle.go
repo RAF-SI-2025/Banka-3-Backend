@@ -109,8 +109,10 @@ func (s *Service) SettleTrade(ctx context.Context, in SettleTradeInput) (*domain
 	// Both KindSystem (menjačnica house) and KindForexBook (bank's
 	// per-currency trading book) qualify as bank-owned. Picking the
 	// menjačnica house collapses to a no-op against itself, so for
-	// actuary trades we steer toward the forex_book.
-	if in.IsActuary && user.Kind != domain.KindSystem && user.Kind != domain.KindForexBook {
+	// actuary trades we steer toward the forex_book. c4: fund-actor
+	// orders settle from the fund's own bank account (KindFund), which
+	// is bank-owned too (owner_client_id = FundsOwnerID).
+	if in.IsActuary && user.Kind != domain.KindSystem && user.Kind != domain.KindForexBook && user.Kind != domain.KindFund {
 		return nil, apperr.FailedPrecondition("aktuari mogu trgovati samo sa bankinog računa")
 	}
 	house, err := s.Store.GetSystemAccount(ctx, in.Currency)

@@ -25,3 +25,4 @@ coverage.*
 
 # Local Go workspace (GOPATH set by flake shellHook)
 /.go/
+**/.go/
