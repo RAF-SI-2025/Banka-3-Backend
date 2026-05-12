@@ -215,6 +215,37 @@ func (s *Service) SetEmployeePermissions(ctx context.Context, id string, perms [
 	if err := s.guardAdminOnAdmin(ctx, target); err != nil {
 		return nil, err
 	}
+	// c4 PR4 CASCADE-1 — when funds.manage.supervisor is being revoked,
+	// reassign the demoted employee's funds to the acting admin BEFORE
+	// persisting the new permission set, so no fund can ever be left
+	// without a manager. If the trading-side cascade fails we abort the
+	// permission write entirely — partial state would be worse than no
+	// change.
+	losingFundsManager := permissions.Has(target.Permissions, permissions.FundsManageSupervisor) &&
+		!permissions.Has(perms, permissions.FundsManageSupervisor)
+	if losingFundsManager && s.FundReassigner != nil {
+		caller, ok := auth.PrincipalFrom(ctx)
+		if !ok {
+			return nil, apperr.Unauthenticated("not authenticated")
+		}
+		n, err := s.FundReassigner.Reassign(ctx, id, caller.UserID)
+		if err != nil {
+			return nil, apperr.Internal("reassign supervisor assets", err)
+		}
+		if n > 0 && s.Notifier != nil && target.Email != "" {
+			subject := "Fondovi su preusmereni"
+			body := "Poštovani,\n\n" +
+				"Pošto Vam je oduzeta uloga supervizora fondova, " +
+				"upravljanje Vašim postojećim fondovima je preneto na drugog supervizora.\n\n" +
+				"Banka 3"
+			if err := s.Notifier.Send(ctx, target.Email, subject, body, false); err != nil {
+				s.Log.Warn("send handover email failed", "to", target.Email, "err", err.Error())
+			}
+		}
+	} else if losingFundsManager && s.FundReassigner == nil {
+		s.Log.Warn("funds.manage.supervisor revoked but FundReassigner not wired — funds may be orphaned",
+			"user_id", id)
+	}
 	updated, err := s.Store.SetEmployeePermissions(ctx, id, perms)
 	if err != nil {
 		return nil, err

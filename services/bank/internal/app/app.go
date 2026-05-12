@@ -9,6 +9,7 @@ import (
 
 	bankpb "github.com/RAF-SI-2025/Banka-3-Backend/gen/proto/bank/v1"
 	exchangepb "github.com/RAF-SI-2025/Banka-3-Backend/gen/proto/exchange/v1"
+	notifpb "github.com/RAF-SI-2025/Banka-3-Backend/gen/proto/notification/v1"
 	userpb "github.com/RAF-SI-2025/Banka-3-Backend/gen/proto/user/v1"
 	"github.com/RAF-SI-2025/Banka-3-Backend/pkg/config"
 	"github.com/RAF-SI-2025/Banka-3-Backend/pkg/email"
@@ -82,17 +83,30 @@ func Run() error {
 		log.Warn("USER_GRPC_ADDR not set; client-email lookup disabled (notifications will be skipped)")
 	}
 
-	// Notifier wires SMTP if configured; otherwise pkg/email logs to
-	// stdout — same pattern as the user service in c1.
-	emailCfg := email.Config{
-		Host:     config.String("SMTP_HOST", ""),
-		Port:     config.Int("SMTP_PORT", 587),
-		Username: config.String("SMTP_USERNAME", ""),
-		Password: config.String("SMTP_PASSWORD", ""),
-		From:     config.String("SMTP_FROM", "no-reply@banka.local"),
-		UseTLS:   config.Bool("SMTP_TLS", false),
+	// Notifier wires to notification-svc when NOTIFICATION_GRPC_ADDR is
+	// set (c4 PR4 NOTIFY-1 centralization); otherwise pkg/email is used
+	// directly so slice-1 dev and unit tests keep working. Templating
+	// continues to live in bank-svc — notification-svc is currently a
+	// thin SMTP-credentials owner; typed event RPCs will migrate
+	// templates later.
+	if notifAddr := config.String("NOTIFICATION_GRPC_ADDR", ""); notifAddr != "" {
+		conn, err := grpc.NewClient(notifAddr, grpc.WithTransportCredentials(insecure.NewCredentials()))
+		if err != nil {
+			return fmt.Errorf("dial notification: %w", err)
+		}
+		defer conn.Close()
+		svc.Notifier = &notifClientAdapter{c: notifpb.NewNotificationServiceClient(conn)}
+	} else {
+		emailCfg := email.Config{
+			Host:     config.String("SMTP_HOST", ""),
+			Port:     config.Int("SMTP_PORT", 587),
+			Username: config.String("SMTP_USERNAME", ""),
+			Password: config.String("SMTP_PASSWORD", ""),
+			From:     config.String("SMTP_FROM", "no-reply@banka.local"),
+			UseTLS:   config.Bool("SMTP_TLS", false),
+		}
+		svc.Notifier = bankNotifierAdapter{sender: email.New(emailCfg, log)}
 	}
-	svc.Notifier = bankNotifierAdapter{sender: email.New(emailCfg, log)}
 
 	// Bring up the bank-owned house accounts before serving traffic so
 	// the FX flow can always look them up. Idempotent — only inserts

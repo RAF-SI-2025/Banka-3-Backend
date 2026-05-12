@@ -189,6 +189,58 @@ func (s *Store) ListUnpaidGainsForUser(ctx context.Context, userID string, kind 
 	return out, rows.Err()
 }
 
+// ActuaryPerformance is one row of ListActuaryPerformances. Profit
+// sums positive gain_rsd only — losses are clamped per row, matching
+// the capital-gains tax aggregate's reading. ActuaryType is the
+// `actuary_info.type` discriminator; rows for employees without an
+// actuary_info row are excluded (only actuaries can move bank money).
+type ActuaryPerformance struct {
+	UserID        string
+	ActuaryType   domain.ActuaryType
+	ProfitRSD     string
+	RealizedCount int64
+}
+
+// ListActuaryPerformances returns one row per employee with an
+// actuary_info row, summing positive gain_rsd on their realized_gains.
+// Rows with no realized_gains are skipped (HAVING > 0) so the
+// leaderboard doesn't pad with zero-profit actuaries.
+//
+// `typeFilter` narrows by actuary_info.type ('agent' / 'supervisor');
+// empty matches both.
+func (s *Store) ListActuaryPerformances(ctx context.Context, typeFilter string) ([]*ActuaryPerformance, error) {
+	const q = `
+        select rg.user_id,
+               ai.type,
+               coalesce(sum(case when rg.gain_rsd > 0 then rg.gain_rsd else 0 end), 0)::text as profit_rsd,
+               count(*)::bigint
+        from "trading".realized_gains rg
+        join "trading".actuary_info ai on ai.employee_id = rg.user_id
+        where rg.user_kind = 'employee'
+          and ($1 = '' or ai.type = $1)
+        group by rg.user_id, ai.type
+        having coalesce(sum(case when rg.gain_rsd > 0 then rg.gain_rsd else 0 end), 0) > 0
+        order by profit_rsd desc`
+	rows, err := s.Pool.Query(ctx, q, typeFilter)
+	if err != nil {
+		return nil, apperr.Internal("list actuary performances", err)
+	}
+	defer rows.Close()
+	var out []*ActuaryPerformance
+	for rows.Next() {
+		var (
+			p ActuaryPerformance
+			t string
+		)
+		if err := rows.Scan(&p.UserID, &t, &p.ProfitRSD, &p.RealizedCount); err != nil {
+			return nil, apperr.Internal("scan actuary performance", err)
+		}
+		p.ActuaryType = domain.ActuaryType(t)
+		out = append(out, &p)
+	}
+	return out, rows.Err()
+}
+
 func scanRealizedGain(row pgx.Row) (*domain.RealizedGain, error) {
 	var (
 		g   domain.RealizedGain

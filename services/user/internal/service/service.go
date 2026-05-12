@@ -20,6 +20,17 @@ type Notifier interface {
 	Send(ctx context.Context, to, subject, body string, html bool) error
 }
 
+// FundReassigner is the c4 PR4 CASCADE-1 hook into the trading service.
+// When SetEmployeePermissions revokes funds.manage.supervisor, user-svc
+// calls Reassign(from=demoted_user, to=acting_admin) before persisting
+// the permission write, so no fund is ever left orphaned. Wired by the
+// app to the trading gRPC client; may be nil on a minimal dev stack
+// (no trading container running). In that case the cascade is skipped
+// with a warning — fine for slice-1 user-only tests.
+type FundReassigner interface {
+	Reassign(ctx context.Context, fromUserID, toUserID string) (int64, error)
+}
+
 // Config bundles the time-and-secret knobs the service needs.
 type Config struct {
 	JWTSigningKey []byte
@@ -41,6 +52,9 @@ type Service struct {
 	Cfg      Config
 	Log      *slog.Logger
 	Clock    clock.Clock
+	// FundReassigner is the trading-service hook for the supervisor-
+	// demotion cascade (c4 PR4 CASCADE-1). Optional.
+	FundReassigner FundReassigner
 }
 
 // New returns a Service with sensible defaults applied to cfg.

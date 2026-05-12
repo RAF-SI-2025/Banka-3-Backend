@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 
+	notifpb "github.com/RAF-SI-2025/Banka-3-Backend/gen/proto/notification/v1"
 	userpb "github.com/RAF-SI-2025/Banka-3-Backend/gen/proto/user/v1"
 	"github.com/RAF-SI-2025/Banka-3-Backend/pkg/auth"
 	"github.com/RAF-SI-2025/Banka-3-Backend/pkg/email"
@@ -41,4 +42,24 @@ type bankNotifierAdapter struct{ sender email.Sender }
 
 func (n bankNotifierAdapter) Send(ctx context.Context, to, subject, body string, html bool) error {
 	return n.sender.Send(ctx, email.Message{To: to, Subject: subject, Body: body, HTML: html})
+}
+
+// notifClientAdapter dials notification-svc.SendEmail (c4 PR4 NOTIFY-1).
+// Templating still happens in bank-svc (the Serbian bodies are built in
+// notifications.go); this adapter only hands the rendered message to
+// the centralized dispatcher so SMTP credentials live in one place.
+type notifClientAdapter struct {
+	c notifpb.NotificationServiceClient
+}
+
+func (n *notifClientAdapter) Send(ctx context.Context, to, subject, body string, html bool) error {
+	_, err := n.c.SendEmail(ctx, &notifpb.SendEmailRequest{
+		To:            to,
+		Subject:       subject,
+		Body:          body,
+		Html:          html,
+		Kind:          notifpb.EmailKind_EMAIL_KIND_GENERIC,
+		OriginService: "bank",
+	})
+	return err
 }

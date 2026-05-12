@@ -10,6 +10,7 @@ import (
 	bankpb "github.com/RAF-SI-2025/Banka-3-Backend/gen/proto/bank/v1"
 	exchangepb "github.com/RAF-SI-2025/Banka-3-Backend/gen/proto/exchange/v1"
 	tradingpb "github.com/RAF-SI-2025/Banka-3-Backend/gen/proto/trading/v1"
+	notifpb "github.com/RAF-SI-2025/Banka-3-Backend/gen/proto/notification/v1"
 	userpb "github.com/RAF-SI-2025/Banka-3-Backend/gen/proto/user/v1"
 	"github.com/RAF-SI-2025/Banka-3-Backend/pkg/config"
 	"github.com/RAF-SI-2025/Banka-3-Backend/pkg/email"
@@ -94,16 +95,28 @@ func Run() error {
 		log.Warn("USER_GRPC_ADDR not set; tax dashboard display_name will be empty")
 	}
 
-	// c4 OTC email notifier (PR2-stub; PR4 swaps for notification-svc).
-	// Same SMTP-or-log fallback as user/bank — SMTP_HOST empty → log only.
-	emailSender := email.New(email.Config{
-		Host:     config.String("SMTP_HOST", ""),
-		Port:     config.Int("SMTP_PORT", 587),
-		Username: config.String("SMTP_USERNAME", ""),
-		Password: config.String("SMTP_PASSWORD", ""),
-		From:     config.String("SMTP_FROM", "banka@example.local"),
-		UseTLS:   config.Bool("SMTP_USE_TLS", true),
-	}, log)
+	// c4 OTC email notifier. With NOTIFICATION_GRPC_ADDR set (PR4
+	// NOTIFY-1) outbound mail goes through notification-svc; otherwise
+	// fall back to pkg/email directly so dev/test setups without
+	// notification-svc keep working.
+	var emailSender email.Sender
+	if notifAddr := config.String("NOTIFICATION_GRPC_ADDR", ""); notifAddr != "" {
+		conn, err := grpc.NewClient(notifAddr, grpc.WithTransportCredentials(insecure.NewCredentials()))
+		if err != nil {
+			return fmt.Errorf("dial notification: %w", err)
+		}
+		defer conn.Close()
+		emailSender = &notifEmailSender{c: notifpb.NewNotificationServiceClient(conn)}
+	} else {
+		emailSender = email.New(email.Config{
+			Host:     config.String("SMTP_HOST", ""),
+			Port:     config.Int("SMTP_PORT", 587),
+			Username: config.String("SMTP_USERNAME", ""),
+			Password: config.String("SMTP_PASSWORD", ""),
+			From:     config.String("SMTP_FROM", "banka@example.local"),
+			UseTLS:   config.Bool("SMTP_USE_TLS", true),
+		}, log)
+	}
 	svc.OTCNotifier = newOTCEmailNotifier(emailSender, userClient, log)
 
 	// Bank settler — the execution worker dials this on every fill to

@@ -16,6 +16,8 @@ import (
 	pkgredis "github.com/RAF-SI-2025/Banka-3-Backend/pkg/redis"
 	"github.com/RAF-SI-2025/Banka-3-Backend/pkg/shutdown"
 
+	notifpb "github.com/RAF-SI-2025/Banka-3-Backend/gen/proto/notification/v1"
+	tradingpb "github.com/RAF-SI-2025/Banka-3-Backend/gen/proto/trading/v1"
 	userpb "github.com/RAF-SI-2025/Banka-3-Backend/gen/proto/user/v1"
 	"github.com/RAF-SI-2025/Banka-3-Backend/services/user/internal/server"
 	"github.com/RAF-SI-2025/Banka-3-Backend/services/user/internal/service"
@@ -23,6 +25,7 @@ import (
 
 	"golang.org/x/sync/errgroup"
 	"google.golang.org/grpc"
+	"google.golang.org/grpc/credentials/insecure"
 )
 
 // Run blocks until the process is signalled to terminate.
@@ -45,7 +48,11 @@ func Run() error {
 	defer rdb.Close()
 
 	st := store.New(pool)
-	notifier := buildNotifier(log)
+	notifier, closeNotif, err := buildNotifier(ctx, log)
+	if err != nil {
+		return err
+	}
+	defer closeNotif()
 
 	svc := service.New(st, notifier, rdb, service.Config{
 		JWTSigningKey: []byte(config.MustString("JWT_SIGNING_KEY")),
@@ -55,6 +62,20 @@ func Run() error {
 		ResetTTL:      config.Duration("RESET_TTL", 0),
 		WebBaseURL:    config.String("WEB_BASE_URL", "http://localhost:5173"),
 	}, log)
+
+	// Optional trading-svc client for the c4 PR4 CASCADE-1 fund-manager
+	// reassignment on supervisor demotion. Skip wiring on a minimal dev
+	// stack that doesn't run trading (the cascade no-ops with a warning).
+	if tradingAddr := config.String("TRADING_GRPC_ADDR", ""); tradingAddr != "" {
+		conn, err := grpc.NewClient(tradingAddr, grpc.WithTransportCredentials(insecure.NewCredentials()))
+		if err != nil {
+			return fmt.Errorf("dial trading: %w", err)
+		}
+		defer conn.Close()
+		svc.FundReassigner = &fundReassignerAdapter{c: tradingpb.NewTradingServiceClient(conn)}
+	} else {
+		log.Info("TRADING_GRPC_ADDR not set; supervisor-demotion fund cascade disabled")
+	}
 
 	probeSrv := probes.New(fmt.Sprintf(":%d", config.Int("PROBE_PORT", 8081)))
 	probeSrv.Register("postgres", func(ctx context.Context) error { return postgres.Ping(ctx, pool) })
@@ -81,10 +102,20 @@ func Run() error {
 	return nil
 }
 
-// buildNotifier wires the email sender. For c1 the user service uses
-// pkg/email directly. Once notification gRPC is wired (c1 next step),
-// this swaps to a notification client.
-func buildNotifier(log *slog.Logger) service.Notifier {
+// buildNotifier wires the email sender. When NOTIFICATION_GRPC_ADDR is
+// set the user service dials the centralized notification-svc (c4 PR4
+// NOTIFY-1); otherwise it falls back to pkg/email directly so slice-1
+// dev and unit tests keep working without the extra service.
+func buildNotifier(ctx context.Context, log *slog.Logger) (service.Notifier, func(), error) {
+	if addr := config.String("NOTIFICATION_GRPC_ADDR", ""); addr != "" {
+		conn, err := grpc.NewClient(addr, grpc.WithTransportCredentials(insecure.NewCredentials()))
+		if err != nil {
+			return nil, func() {}, fmt.Errorf("dial notification: %w", err)
+		}
+		return &notifClientAdapter{c: notifpb.NewNotificationServiceClient(conn), origin: "user"},
+			func() { conn.Close() }, nil
+	}
+	log.Info("NOTIFICATION_GRPC_ADDR not set; falling back to direct pkg/email")
 	cfg := email.Config{
 		Host:     config.String("SMTP_HOST", ""),
 		Port:     config.Int("SMTP_PORT", 587),
@@ -94,11 +125,31 @@ func buildNotifier(log *slog.Logger) service.Notifier {
 		UseTLS:   config.Bool("SMTP_TLS", false),
 	}
 	sender := email.New(cfg, log)
-	return notifierAdapter{sender: sender}
+	return notifierAdapter{sender: sender}, func() {}, nil
 }
 
 type notifierAdapter struct{ sender email.Sender }
 
 func (n notifierAdapter) Send(ctx context.Context, to, subject, body string, html bool) error {
 	return n.sender.Send(ctx, email.Message{To: to, Subject: subject, Body: body, HTML: html})
+}
+
+// notifClientAdapter dials notification-svc.SendEmail. Templating still
+// happens in the caller (user-svc renders the Serbian body itself); the
+// service is a thin SMTP-credentials owner for now.
+type notifClientAdapter struct {
+	c      notifpb.NotificationServiceClient
+	origin string
+}
+
+func (n *notifClientAdapter) Send(ctx context.Context, to, subject, body string, html bool) error {
+	_, err := n.c.SendEmail(ctx, &notifpb.SendEmailRequest{
+		To:            to,
+		Subject:       subject,
+		Body:          body,
+		Html:          html,
+		Kind:          notifpb.EmailKind_EMAIL_KIND_GENERIC,
+		OriginService: n.origin,
+	})
+	return err
 }

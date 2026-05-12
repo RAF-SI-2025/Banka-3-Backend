@@ -6,13 +6,16 @@ import (
 	"errors"
 	"fmt"
 
+	notifpb "github.com/RAF-SI-2025/Banka-3-Backend/gen/proto/notification/v1"
 	"github.com/RAF-SI-2025/Banka-3-Backend/pkg/config"
+	"github.com/RAF-SI-2025/Banka-3-Backend/pkg/email"
 	"github.com/RAF-SI-2025/Banka-3-Backend/pkg/grpcserver"
 	"github.com/RAF-SI-2025/Banka-3-Backend/pkg/logger"
 	"github.com/RAF-SI-2025/Banka-3-Backend/pkg/postgres"
 	"github.com/RAF-SI-2025/Banka-3-Backend/pkg/probes"
 	pkgredis "github.com/RAF-SI-2025/Banka-3-Backend/pkg/redis"
 	"github.com/RAF-SI-2025/Banka-3-Backend/pkg/shutdown"
+	"github.com/RAF-SI-2025/Banka-3-Backend/services/notification/internal/server"
 	"google.golang.org/grpc"
 
 	"golang.org/x/sync/errgroup"
@@ -44,13 +47,26 @@ func Run() error {
 
 	grpcAddr := fmt.Sprintf(":%d", config.Int("GRPC_PORT", 50051))
 
+	// Outbound email sender. SMTP_HOST empty falls through to the
+	// log-only sender (same convention as user/bank/trading direct
+	// pkg/email use before centralization).
+	sender := email.New(email.Config{
+		Host:     config.String("SMTP_HOST", ""),
+		Port:     config.Int("SMTP_PORT", 587),
+		Username: config.String("SMTP_USERNAME", ""),
+		Password: config.String("SMTP_PASSWORD", ""),
+		From:     config.String("SMTP_FROM", "no-reply@banka.local"),
+		UseTLS:   config.Bool("SMTP_USE_TLS", false),
+	}, log)
+	notifSrv := server.New(sender, log)
+
 	g, gctx := errgroup.WithContext(ctx)
 	g.Go(func() error {
 		return probeSrv.ListenAndServe(gctx)
 	})
 	g.Go(func() error {
 		return grpcserver.Run(gctx, log, grpcAddr, func(s *grpc.Server) {
-			// TODO: register UserService once celina 1 work begins
+			notifpb.RegisterNotificationServiceServer(s, notifSrv)
 		})
 	})
 

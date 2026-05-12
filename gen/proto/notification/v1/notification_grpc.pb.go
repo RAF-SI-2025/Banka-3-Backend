@@ -19,19 +19,26 @@ import (
 const _ = grpc.SupportPackageIsVersion9
 
 const (
-	NotificationService_Health_FullMethodName = "/banka.notification.v1.NotificationService/Health"
+	NotificationService_SendEmail_FullMethodName = "/banka.notification.v1.NotificationService/SendEmail"
+	NotificationService_Health_FullMethodName    = "/banka.notification.v1.NotificationService/Health"
 )
 
 // NotificationServiceClient is the client API for NotificationService service.
 //
 // For semantics around ctx use and closing/ending streaming RPCs, please refer to https://pkg.go.dev/google.golang.org/grpc/?tab=doc#ClientConn.NewStream.
 //
-// Skeleton service contract for the notification service.
-//
-// Sends emails (account activation, blocked card, late installment,
-// OTC counter-offer, transaction confirmation). Internal-only — not
-// exposed via the gateway.
+// NotificationService is the centralized email-dispatch surface for
+// Banka 3 (c4 PR4 NOTIFY-1). Other services dial this instead of
+// importing pkg/email directly so SMTP credentials and any future
+// per-recipient rate limiting live in one place. Internal-only —
+// not exposed via the gateway.
 type NotificationServiceClient interface {
+	// SendEmail is the generic dispatch entry point used by user-svc,
+	// bank-svc, and trading-svc adapters. `kind` is an opaque tag used
+	// for observability and future per-template routing; rendering
+	// still happens in the caller. Templates may migrate into
+	// notification-svc as typed event RPCs are added.
+	SendEmail(ctx context.Context, in *SendEmailRequest, opts ...grpc.CallOption) (*SendEmailResponse, error)
 	Health(ctx context.Context, in *HealthRequest, opts ...grpc.CallOption) (*HealthResponse, error)
 }
 
@@ -41,6 +48,16 @@ type notificationServiceClient struct {
 
 func NewNotificationServiceClient(cc grpc.ClientConnInterface) NotificationServiceClient {
 	return &notificationServiceClient{cc}
+}
+
+func (c *notificationServiceClient) SendEmail(ctx context.Context, in *SendEmailRequest, opts ...grpc.CallOption) (*SendEmailResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(SendEmailResponse)
+	err := c.cc.Invoke(ctx, NotificationService_SendEmail_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
 }
 
 func (c *notificationServiceClient) Health(ctx context.Context, in *HealthRequest, opts ...grpc.CallOption) (*HealthResponse, error) {
@@ -57,12 +74,18 @@ func (c *notificationServiceClient) Health(ctx context.Context, in *HealthReques
 // All implementations should embed UnimplementedNotificationServiceServer
 // for forward compatibility.
 //
-// Skeleton service contract for the notification service.
-//
-// Sends emails (account activation, blocked card, late installment,
-// OTC counter-offer, transaction confirmation). Internal-only — not
-// exposed via the gateway.
+// NotificationService is the centralized email-dispatch surface for
+// Banka 3 (c4 PR4 NOTIFY-1). Other services dial this instead of
+// importing pkg/email directly so SMTP credentials and any future
+// per-recipient rate limiting live in one place. Internal-only —
+// not exposed via the gateway.
 type NotificationServiceServer interface {
+	// SendEmail is the generic dispatch entry point used by user-svc,
+	// bank-svc, and trading-svc adapters. `kind` is an opaque tag used
+	// for observability and future per-template routing; rendering
+	// still happens in the caller. Templates may migrate into
+	// notification-svc as typed event RPCs are added.
+	SendEmail(context.Context, *SendEmailRequest) (*SendEmailResponse, error)
 	Health(context.Context, *HealthRequest) (*HealthResponse, error)
 }
 
@@ -73,6 +96,9 @@ type NotificationServiceServer interface {
 // pointer dereference when methods are called.
 type UnimplementedNotificationServiceServer struct{}
 
+func (UnimplementedNotificationServiceServer) SendEmail(context.Context, *SendEmailRequest) (*SendEmailResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method SendEmail not implemented")
+}
 func (UnimplementedNotificationServiceServer) Health(context.Context, *HealthRequest) (*HealthResponse, error) {
 	return nil, status.Error(codes.Unimplemented, "method Health not implemented")
 }
@@ -94,6 +120,24 @@ func RegisterNotificationServiceServer(s grpc.ServiceRegistrar, srv Notification
 		t.testEmbeddedByValue()
 	}
 	s.RegisterService(&NotificationService_ServiceDesc, srv)
+}
+
+func _NotificationService_SendEmail_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(SendEmailRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(NotificationServiceServer).SendEmail(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: NotificationService_SendEmail_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(NotificationServiceServer).SendEmail(ctx, req.(*SendEmailRequest))
+	}
+	return interceptor(ctx, in, info, handler)
 }
 
 func _NotificationService_Health_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
@@ -121,6 +165,10 @@ var NotificationService_ServiceDesc = grpc.ServiceDesc{
 	ServiceName: "banka.notification.v1.NotificationService",
 	HandlerType: (*NotificationServiceServer)(nil),
 	Methods: []grpc.MethodDesc{
+		{
+			MethodName: "SendEmail",
+			Handler:    _NotificationService_SendEmail_Handler,
+		},
 		{
 			MethodName: "Health",
 			Handler:    _NotificationService_Health_Handler,

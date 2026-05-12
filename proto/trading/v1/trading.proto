@@ -431,6 +431,42 @@ service TradingService {
       get: "/api/v1/funds/{id}/transactions"
     };
   }
+
+  // -----------------------------------------------------------------
+  // Profit Banke (c4 PR4 — spec p.76).
+  //
+  // Two supervisor-facing dashboards:
+  //   • ListActuaryPerformances — every actuary's lifetime profit in
+  //     RSD (sum of positive gain_rsd on realized_gains rows owned by
+  //     the employee acting as a bank actuary; supervisors with
+  //     account_kind=fund are intentionally excluded — funds book
+  //     their own pre-tax basis at the client boundary, EDGE-3).
+  //   • ListBankFundPositions — every position the bank itself holds
+  //     in an investment fund (client_id = BankAsClient sentinel),
+  //     decorated with fund name + manager.
+  //
+  // Both gated by `bank.profit.read`.
+  // -----------------------------------------------------------------
+
+  rpc ListActuaryPerformances(ListActuaryPerformancesRequest) returns (ListActuaryPerformancesResponse) {
+    option (google.api.http) = {
+      get: "/api/v1/profit/actuaries"
+    };
+  }
+
+  rpc ListBankFundPositions(ListBankFundPositionsRequest) returns (ListBankFundPositionsResponse) {
+    option (google.api.http) = {
+      get: "/api/v1/profit/funds"
+    };
+  }
+
+  // ReassignSupervisorAssets reassigns every fund managed by `from_user_id`
+  // to `to_user_id`. Internal-only (no http annotation) — called by
+  // user-svc inside SetEmployeePermissions when the funds.manage.supervisor
+  // permission is being revoked, so the demoted supervisor can't orphan
+  // their managed funds. Idempotent: a fund already managed by
+  // `to_user_id` is a no-op.
+  rpc ReassignSupervisorAssets(ReassignSupervisorAssetsRequest) returns (ReassignSupervisorAssetsResponse);
 }
 
 // =====================================================================
@@ -1450,4 +1486,62 @@ message ListFundTransactionsResponse {
   int32 page                            = 2;
   int32 page_size                       = 3;
   int64 total                           = 4;
+}
+
+// =====================================================================
+// Profit Banke (c4 PR4 — spec p.76)
+// =====================================================================
+
+// ActuaryPerformance is one row on the supervisor-facing actuary
+// leaderboard. profit_rsd is the sum of *positive* gain_rsd on
+// realized_gains rows attributed to this actuary; losses are clamped
+// to zero per row, matching the capital-gains tax cron's reading.
+message ActuaryPerformance {
+  string      user_id           = 1;
+  string      display_name      = 2;
+  ActuaryType type              = 3;
+  // profit_rsd is decimal-string RSD. Always positive (negative
+  // contributions are clamped to zero per row before summing).
+  string      profit_rsd        = 4;
+  // realized_count is the row count behind profit_rsd — useful for
+  // sanity checks in the FE and the soak suite invariants.
+  int64       realized_count    = 5;
+}
+
+message ListActuaryPerformancesRequest {
+  // "agent" / "supervisor" / "" (default both). Mirrors actuary_info.type.
+  string type       = 1;
+  string name_query = 2;
+}
+
+message ListActuaryPerformancesResponse {
+  repeated ActuaryPerformance rows = 1;
+}
+
+// BankFundPosition is one row on the "bank's positions in funds"
+// dashboard (spec p.76 — "Pozicije banke u fondovima"). Wraps the
+// underlying FundPosition with the fund's display columns so the FE
+// doesn't need a second round-trip per row.
+message BankFundPosition {
+  FundPosition position             = 1;
+  string       fund_name            = 2;
+  string       manager_user_id      = 3;
+  string       manager_display_name = 4;
+}
+
+message ListBankFundPositionsRequest {}
+
+message ListBankFundPositionsResponse {
+  repeated BankFundPosition rows = 1;
+}
+
+message ReassignSupervisorAssetsRequest {
+  string from_user_id = 1 [(buf.validate.field).string.uuid = true];
+  string to_user_id   = 2 [(buf.validate.field).string.uuid = true];
+}
+
+message ReassignSupervisorAssetsResponse {
+  // funds_reassigned counts active fund rows whose manager_user_id was
+  // flipped. Funds already managed by `to_user_id` are not counted.
+  int32 funds_reassigned = 1;
 }

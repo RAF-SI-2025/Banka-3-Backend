@@ -151,6 +151,22 @@ func (s *Store) SetFundManager(ctx context.Context, tx pgx.Tx, fundID, managerID
 	return nil
 }
 
+// ReassignFundManager flips every active fund managed by `fromID`
+// over to `toID` in one statement. Returns the row count. Funds
+// already managed by `toID` are unaffected. Used by the c4 PR4
+// CASCADE-1 hook in user-svc.
+func (s *Store) ReassignFundManager(ctx context.Context, fromID, toID string) (int64, error) {
+	const q = `update "trading".investment_funds
+	           set manager_user_id = $2, updated_at = now()
+	           where manager_user_id = $1
+	             and status = 'active'`
+	tag, err := s.Pool.Exec(ctx, q, fromID, toID)
+	if err != nil {
+		return 0, apperr.Internal("reassign fund manager", err)
+	}
+	return tag.RowsAffected(), nil
+}
+
 // AdjustFundUnits adds delta (signed numeric string) to the fund's
 // total_units inside the caller's tx. Underflow trips the >= 0 check
 // constraint and surfaces as FailedPrecondition.

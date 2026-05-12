@@ -3508,6 +3508,65 @@
         ]
       }
     },
+    "/api/v1/profit/actuaries": {
+      "get": {
+        "operationId": "TradingService_ListActuaryPerformances",
+        "responses": {
+          "200": {
+            "description": "A successful response.",
+            "schema": {
+              "$ref": "#/definitions/v1ListActuaryPerformancesResponse"
+            }
+          },
+          "default": {
+            "description": "An unexpected error response.",
+            "schema": {
+              "$ref": "#/definitions/rpcStatus"
+            }
+          }
+        },
+        "parameters": [
+          {
+            "name": "type",
+            "description": "\"agent\" / \"supervisor\" / \"\" (default both). Mirrors actuary_info.type.",
+            "in": "query",
+            "required": false,
+            "type": "string"
+          },
+          {
+            "name": "nameQuery",
+            "in": "query",
+            "required": false,
+            "type": "string"
+          }
+        ],
+        "tags": [
+          "TradingService"
+        ]
+      }
+    },
+    "/api/v1/profit/funds": {
+      "get": {
+        "operationId": "TradingService_ListBankFundPositions",
+        "responses": {
+          "200": {
+            "description": "A successful response.",
+            "schema": {
+              "$ref": "#/definitions/v1ListBankFundPositionsResponse"
+            }
+          },
+          "default": {
+            "description": "An unexpected error response.",
+            "schema": {
+              "$ref": "#/definitions/rpcStatus"
+            }
+          }
+        },
+        "tags": [
+          "TradingService"
+        ]
+      }
+    },
     "/api/v1/securities": {
       "get": {
         "operationId": "TradingService_ListSecurities",
@@ -4599,6 +4658,30 @@
         }
       }
     },
+    "v1ActuaryPerformance": {
+      "type": "object",
+      "properties": {
+        "userId": {
+          "type": "string"
+        },
+        "displayName": {
+          "type": "string"
+        },
+        "type": {
+          "$ref": "#/definitions/v1ActuaryType"
+        },
+        "profitRsd": {
+          "type": "string",
+          "description": "profit_rsd is decimal-string RSD. Always positive (negative\ncontributions are clamped to zero per row before summing)."
+        },
+        "realizedCount": {
+          "type": "string",
+          "format": "int64",
+          "description": "realized_count is the row count behind profit_rsd — useful for\nsanity checks in the FE and the soak suite invariants."
+        }
+      },
+      "description": "ActuaryPerformance is one row on the supervisor-facing actuary\nleaderboard. profit_rsd is the sum of *positive* gain_rsd on\nrealized_gains rows attributed to this actuary; losses are clamped\nto zero per row, matching the capital-gains tax cron's reading."
+    },
     "v1ActuaryType": {
       "type": "string",
       "enum": [
@@ -4648,6 +4731,24 @@
           "format": "date-time"
         }
       }
+    },
+    "v1BankFundPosition": {
+      "type": "object",
+      "properties": {
+        "position": {
+          "$ref": "#/definitions/v1FundPosition"
+        },
+        "fundName": {
+          "type": "string"
+        },
+        "managerUserId": {
+          "type": "string"
+        },
+        "managerDisplayName": {
+          "type": "string"
+        }
+      },
+      "description": "BankFundPosition is one row on the \"bank's positions in funds\"\ndashboard (spec p.76 — \"Pozicije banke u fondovima\"). Wraps the\nunderlying FundPosition with the fund's display columns so the FE\ndoesn't need a second round-trip per row."
     },
     "v1Card": {
       "type": "object",
@@ -5752,6 +5853,18 @@
         }
       }
     },
+    "v1ListActuaryPerformancesResponse": {
+      "type": "object",
+      "properties": {
+        "rows": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "$ref": "#/definitions/v1ActuaryPerformance"
+          }
+        }
+      }
+    },
     "v1ListAuthorizedPersonsResponse": {
       "type": "object",
       "properties": {
@@ -5760,6 +5873,18 @@
           "items": {
             "type": "object",
             "$ref": "#/definitions/v1AuthorizedPerson"
+          }
+        }
+      }
+    },
+    "v1ListBankFundPositionsResponse": {
+      "type": "object",
+      "properties": {
+        "rows": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "$ref": "#/definitions/v1BankFundPosition"
           }
         }
       }

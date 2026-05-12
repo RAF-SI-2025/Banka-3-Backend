@@ -20,54 +20,57 @@ import (
 const _ = grpc.SupportPackageIsVersion9
 
 const (
-	TradingService_GetActuaryInfo_FullMethodName         = "/banka.trading.v1.TradingService/GetActuaryInfo"
-	TradingService_ListActuaries_FullMethodName          = "/banka.trading.v1.TradingService/ListActuaries"
-	TradingService_UpsertActuaryInfo_FullMethodName      = "/banka.trading.v1.TradingService/UpsertActuaryInfo"
-	TradingService_UpdateActuaryLimit_FullMethodName     = "/banka.trading.v1.TradingService/UpdateActuaryLimit"
-	TradingService_ResetActuaryUsedLimit_FullMethodName  = "/banka.trading.v1.TradingService/ResetActuaryUsedLimit"
-	TradingService_SetActuaryNeedApproval_FullMethodName = "/banka.trading.v1.TradingService/SetActuaryNeedApproval"
-	TradingService_RunDailyResetActuaries_FullMethodName = "/banka.trading.v1.TradingService/RunDailyResetActuaries"
-	TradingService_ListExchanges_FullMethodName          = "/banka.trading.v1.TradingService/ListExchanges"
-	TradingService_UpsertExchange_FullMethodName         = "/banka.trading.v1.TradingService/UpsertExchange"
-	TradingService_SetExchangeOverride_FullMethodName    = "/banka.trading.v1.TradingService/SetExchangeOverride"
-	TradingService_UpsertSecurity_FullMethodName         = "/banka.trading.v1.TradingService/UpsertSecurity"
-	TradingService_ListSecurities_FullMethodName         = "/banka.trading.v1.TradingService/ListSecurities"
-	TradingService_GetSecurity_FullMethodName            = "/banka.trading.v1.TradingService/GetSecurity"
-	TradingService_UpsertListing_FullMethodName          = "/banka.trading.v1.TradingService/UpsertListing"
-	TradingService_ListListings_FullMethodName           = "/banka.trading.v1.TradingService/ListListings"
-	TradingService_GetListing_FullMethodName             = "/banka.trading.v1.TradingService/GetListing"
-	TradingService_GetOptionChain_FullMethodName         = "/banka.trading.v1.TradingService/GetOptionChain"
-	TradingService_GetListingDailyHistory_FullMethodName = "/banka.trading.v1.TradingService/GetListingDailyHistory"
-	TradingService_CreateOrder_FullMethodName            = "/banka.trading.v1.TradingService/CreateOrder"
-	TradingService_ListOrders_FullMethodName             = "/banka.trading.v1.TradingService/ListOrders"
-	TradingService_GetOrder_FullMethodName               = "/banka.trading.v1.TradingService/GetOrder"
-	TradingService_ApproveOrder_FullMethodName           = "/banka.trading.v1.TradingService/ApproveOrder"
-	TradingService_DeclineOrder_FullMethodName           = "/banka.trading.v1.TradingService/DeclineOrder"
-	TradingService_CancelOrder_FullMethodName            = "/banka.trading.v1.TradingService/CancelOrder"
-	TradingService_ListHoldings_FullMethodName           = "/banka.trading.v1.TradingService/ListHoldings"
-	TradingService_SetPublicCount_FullMethodName         = "/banka.trading.v1.TradingService/SetPublicCount"
-	TradingService_ExerciseOption_FullMethodName         = "/banka.trading.v1.TradingService/ExerciseOption"
-	TradingService_ListTaxPositions_FullMethodName       = "/banka.trading.v1.TradingService/ListTaxPositions"
-	TradingService_RunTax_FullMethodName                 = "/banka.trading.v1.TradingService/RunTax"
-	TradingService_ListRealizedPnL_FullMethodName        = "/banka.trading.v1.TradingService/ListRealizedPnL"
-	TradingService_ListPublicHoldings_FullMethodName     = "/banka.trading.v1.TradingService/ListPublicHoldings"
-	TradingService_CreateOTCOffer_FullMethodName         = "/banka.trading.v1.TradingService/CreateOTCOffer"
-	TradingService_CounterOfferOTC_FullMethodName        = "/banka.trading.v1.TradingService/CounterOfferOTC"
-	TradingService_WithdrawOTCOffer_FullMethodName       = "/banka.trading.v1.TradingService/WithdrawOTCOffer"
-	TradingService_ListOTCThreads_FullMethodName         = "/banka.trading.v1.TradingService/ListOTCThreads"
-	TradingService_GetOTCThread_FullMethodName           = "/banka.trading.v1.TradingService/GetOTCThread"
-	TradingService_AcceptOTCOffer_FullMethodName         = "/banka.trading.v1.TradingService/AcceptOTCOffer"
-	TradingService_ListOTCContracts_FullMethodName       = "/banka.trading.v1.TradingService/ListOTCContracts"
-	TradingService_GetOTCContract_FullMethodName         = "/banka.trading.v1.TradingService/GetOTCContract"
-	TradingService_ExerciseOTCContract_FullMethodName    = "/banka.trading.v1.TradingService/ExerciseOTCContract"
-	TradingService_ListFunds_FullMethodName              = "/banka.trading.v1.TradingService/ListFunds"
-	TradingService_GetFund_FullMethodName                = "/banka.trading.v1.TradingService/GetFund"
-	TradingService_CreateFund_FullMethodName             = "/banka.trading.v1.TradingService/CreateFund"
-	TradingService_InvestInFund_FullMethodName           = "/banka.trading.v1.TradingService/InvestInFund"
-	TradingService_WithdrawFromFund_FullMethodName       = "/banka.trading.v1.TradingService/WithdrawFromFund"
-	TradingService_ListFundPositions_FullMethodName      = "/banka.trading.v1.TradingService/ListFundPositions"
-	TradingService_GetFundPerformance_FullMethodName     = "/banka.trading.v1.TradingService/GetFundPerformance"
-	TradingService_ListFundTransactions_FullMethodName   = "/banka.trading.v1.TradingService/ListFundTransactions"
+	TradingService_GetActuaryInfo_FullMethodName           = "/banka.trading.v1.TradingService/GetActuaryInfo"
+	TradingService_ListActuaries_FullMethodName            = "/banka.trading.v1.TradingService/ListActuaries"
+	TradingService_UpsertActuaryInfo_FullMethodName        = "/banka.trading.v1.TradingService/UpsertActuaryInfo"
+	TradingService_UpdateActuaryLimit_FullMethodName       = "/banka.trading.v1.TradingService/UpdateActuaryLimit"
+	TradingService_ResetActuaryUsedLimit_FullMethodName    = "/banka.trading.v1.TradingService/ResetActuaryUsedLimit"
+	TradingService_SetActuaryNeedApproval_FullMethodName   = "/banka.trading.v1.TradingService/SetActuaryNeedApproval"
+	TradingService_RunDailyResetActuaries_FullMethodName   = "/banka.trading.v1.TradingService/RunDailyResetActuaries"
+	TradingService_ListExchanges_FullMethodName            = "/banka.trading.v1.TradingService/ListExchanges"
+	TradingService_UpsertExchange_FullMethodName           = "/banka.trading.v1.TradingService/UpsertExchange"
+	TradingService_SetExchangeOverride_FullMethodName      = "/banka.trading.v1.TradingService/SetExchangeOverride"
+	TradingService_UpsertSecurity_FullMethodName           = "/banka.trading.v1.TradingService/UpsertSecurity"
+	TradingService_ListSecurities_FullMethodName           = "/banka.trading.v1.TradingService/ListSecurities"
+	TradingService_GetSecurity_FullMethodName              = "/banka.trading.v1.TradingService/GetSecurity"
+	TradingService_UpsertListing_FullMethodName            = "/banka.trading.v1.TradingService/UpsertListing"
+	TradingService_ListListings_FullMethodName             = "/banka.trading.v1.TradingService/ListListings"
+	TradingService_GetListing_FullMethodName               = "/banka.trading.v1.TradingService/GetListing"
+	TradingService_GetOptionChain_FullMethodName           = "/banka.trading.v1.TradingService/GetOptionChain"
+	TradingService_GetListingDailyHistory_FullMethodName   = "/banka.trading.v1.TradingService/GetListingDailyHistory"
+	TradingService_CreateOrder_FullMethodName              = "/banka.trading.v1.TradingService/CreateOrder"
+	TradingService_ListOrders_FullMethodName               = "/banka.trading.v1.TradingService/ListOrders"
+	TradingService_GetOrder_FullMethodName                 = "/banka.trading.v1.TradingService/GetOrder"
+	TradingService_ApproveOrder_FullMethodName             = "/banka.trading.v1.TradingService/ApproveOrder"
+	TradingService_DeclineOrder_FullMethodName             = "/banka.trading.v1.TradingService/DeclineOrder"
+	TradingService_CancelOrder_FullMethodName              = "/banka.trading.v1.TradingService/CancelOrder"
+	TradingService_ListHoldings_FullMethodName             = "/banka.trading.v1.TradingService/ListHoldings"
+	TradingService_SetPublicCount_FullMethodName           = "/banka.trading.v1.TradingService/SetPublicCount"
+	TradingService_ExerciseOption_FullMethodName           = "/banka.trading.v1.TradingService/ExerciseOption"
+	TradingService_ListTaxPositions_FullMethodName         = "/banka.trading.v1.TradingService/ListTaxPositions"
+	TradingService_RunTax_FullMethodName                   = "/banka.trading.v1.TradingService/RunTax"
+	TradingService_ListRealizedPnL_FullMethodName          = "/banka.trading.v1.TradingService/ListRealizedPnL"
+	TradingService_ListPublicHoldings_FullMethodName       = "/banka.trading.v1.TradingService/ListPublicHoldings"
+	TradingService_CreateOTCOffer_FullMethodName           = "/banka.trading.v1.TradingService/CreateOTCOffer"
+	TradingService_CounterOfferOTC_FullMethodName          = "/banka.trading.v1.TradingService/CounterOfferOTC"
+	TradingService_WithdrawOTCOffer_FullMethodName         = "/banka.trading.v1.TradingService/WithdrawOTCOffer"
+	TradingService_ListOTCThreads_FullMethodName           = "/banka.trading.v1.TradingService/ListOTCThreads"
+	TradingService_GetOTCThread_FullMethodName             = "/banka.trading.v1.TradingService/GetOTCThread"
+	TradingService_AcceptOTCOffer_FullMethodName           = "/banka.trading.v1.TradingService/AcceptOTCOffer"
+	TradingService_ListOTCContracts_FullMethodName         = "/banka.trading.v1.TradingService/ListOTCContracts"
+	TradingService_GetOTCContract_FullMethodName           = "/banka.trading.v1.TradingService/GetOTCContract"
+	TradingService_ExerciseOTCContract_FullMethodName      = "/banka.trading.v1.TradingService/ExerciseOTCContract"
+	TradingService_ListFunds_FullMethodName                = "/banka.trading.v1.TradingService/ListFunds"
+	TradingService_GetFund_FullMethodName                  = "/banka.trading.v1.TradingService/GetFund"
+	TradingService_CreateFund_FullMethodName               = "/banka.trading.v1.TradingService/CreateFund"
+	TradingService_InvestInFund_FullMethodName             = "/banka.trading.v1.TradingService/InvestInFund"
+	TradingService_WithdrawFromFund_FullMethodName         = "/banka.trading.v1.TradingService/WithdrawFromFund"
+	TradingService_ListFundPositions_FullMethodName        = "/banka.trading.v1.TradingService/ListFundPositions"
+	TradingService_GetFundPerformance_FullMethodName       = "/banka.trading.v1.TradingService/GetFundPerformance"
+	TradingService_ListFundTransactions_FullMethodName     = "/banka.trading.v1.TradingService/ListFundTransactions"
+	TradingService_ListActuaryPerformances_FullMethodName  = "/banka.trading.v1.TradingService/ListActuaryPerformances"
+	TradingService_ListBankFundPositions_FullMethodName    = "/banka.trading.v1.TradingService/ListBankFundPositions"
+	TradingService_ReassignSupervisorAssets_FullMethodName = "/banka.trading.v1.TradingService/ReassignSupervisorAssets"
 )
 
 // TradingServiceClient is the client API for TradingService service.
@@ -195,6 +198,15 @@ type TradingServiceClient interface {
 	// ListFundTransactions returns the audit log of invest/withdraw rows
 	// for a fund. Supervisors see everything; clients see only their own.
 	ListFundTransactions(ctx context.Context, in *ListFundTransactionsRequest, opts ...grpc.CallOption) (*ListFundTransactionsResponse, error)
+	ListActuaryPerformances(ctx context.Context, in *ListActuaryPerformancesRequest, opts ...grpc.CallOption) (*ListActuaryPerformancesResponse, error)
+	ListBankFundPositions(ctx context.Context, in *ListBankFundPositionsRequest, opts ...grpc.CallOption) (*ListBankFundPositionsResponse, error)
+	// ReassignSupervisorAssets reassigns every fund managed by `from_user_id`
+	// to `to_user_id`. Internal-only (no http annotation) — called by
+	// user-svc inside SetEmployeePermissions when the funds.manage.supervisor
+	// permission is being revoked, so the demoted supervisor can't orphan
+	// their managed funds. Idempotent: a fund already managed by
+	// `to_user_id` is a no-op.
+	ReassignSupervisorAssets(ctx context.Context, in *ReassignSupervisorAssetsRequest, opts ...grpc.CallOption) (*ReassignSupervisorAssetsResponse, error)
 }
 
 type tradingServiceClient struct {
@@ -685,6 +697,36 @@ func (c *tradingServiceClient) ListFundTransactions(ctx context.Context, in *Lis
 	return out, nil
 }
 
+func (c *tradingServiceClient) ListActuaryPerformances(ctx context.Context, in *ListActuaryPerformancesRequest, opts ...grpc.CallOption) (*ListActuaryPerformancesResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(ListActuaryPerformancesResponse)
+	err := c.cc.Invoke(ctx, TradingService_ListActuaryPerformances_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *tradingServiceClient) ListBankFundPositions(ctx context.Context, in *ListBankFundPositionsRequest, opts ...grpc.CallOption) (*ListBankFundPositionsResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(ListBankFundPositionsResponse)
+	err := c.cc.Invoke(ctx, TradingService_ListBankFundPositions_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *tradingServiceClient) ReassignSupervisorAssets(ctx context.Context, in *ReassignSupervisorAssetsRequest, opts ...grpc.CallOption) (*ReassignSupervisorAssetsResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(ReassignSupervisorAssetsResponse)
+	err := c.cc.Invoke(ctx, TradingService_ReassignSupervisorAssets_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
 // TradingServiceServer is the server API for TradingService service.
 // All implementations should embed UnimplementedTradingServiceServer
 // for forward compatibility.
@@ -810,6 +852,15 @@ type TradingServiceServer interface {
 	// ListFundTransactions returns the audit log of invest/withdraw rows
 	// for a fund. Supervisors see everything; clients see only their own.
 	ListFundTransactions(context.Context, *ListFundTransactionsRequest) (*ListFundTransactionsResponse, error)
+	ListActuaryPerformances(context.Context, *ListActuaryPerformancesRequest) (*ListActuaryPerformancesResponse, error)
+	ListBankFundPositions(context.Context, *ListBankFundPositionsRequest) (*ListBankFundPositionsResponse, error)
+	// ReassignSupervisorAssets reassigns every fund managed by `from_user_id`
+	// to `to_user_id`. Internal-only (no http annotation) — called by
+	// user-svc inside SetEmployeePermissions when the funds.manage.supervisor
+	// permission is being revoked, so the demoted supervisor can't orphan
+	// their managed funds. Idempotent: a fund already managed by
+	// `to_user_id` is a no-op.
+	ReassignSupervisorAssets(context.Context, *ReassignSupervisorAssetsRequest) (*ReassignSupervisorAssetsResponse, error)
 }
 
 // UnimplementedTradingServiceServer should be embedded to have
@@ -962,6 +1013,15 @@ func (UnimplementedTradingServiceServer) GetFundPerformance(context.Context, *Ge
 }
 func (UnimplementedTradingServiceServer) ListFundTransactions(context.Context, *ListFundTransactionsRequest) (*ListFundTransactionsResponse, error) {
 	return nil, status.Error(codes.Unimplemented, "method ListFundTransactions not implemented")
+}
+func (UnimplementedTradingServiceServer) ListActuaryPerformances(context.Context, *ListActuaryPerformancesRequest) (*ListActuaryPerformancesResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method ListActuaryPerformances not implemented")
+}
+func (UnimplementedTradingServiceServer) ListBankFundPositions(context.Context, *ListBankFundPositionsRequest) (*ListBankFundPositionsResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method ListBankFundPositions not implemented")
+}
+func (UnimplementedTradingServiceServer) ReassignSupervisorAssets(context.Context, *ReassignSupervisorAssetsRequest) (*ReassignSupervisorAssetsResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method ReassignSupervisorAssets not implemented")
 }
 func (UnimplementedTradingServiceServer) testEmbeddedByValue() {}
 
@@ -1847,6 +1907,60 @@ func _TradingService_ListFundTransactions_Handler(srv interface{}, ctx context.C
 	return interceptor(ctx, in, info, handler)
 }
 
+func _TradingService_ListActuaryPerformances_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(ListActuaryPerformancesRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(TradingServiceServer).ListActuaryPerformances(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: TradingService_ListActuaryPerformances_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(TradingServiceServer).ListActuaryPerformances(ctx, req.(*ListActuaryPerformancesRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _TradingService_ListBankFundPositions_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(ListBankFundPositionsRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(TradingServiceServer).ListBankFundPositions(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: TradingService_ListBankFundPositions_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(TradingServiceServer).ListBankFundPositions(ctx, req.(*ListBankFundPositionsRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _TradingService_ReassignSupervisorAssets_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(ReassignSupervisorAssetsRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(TradingServiceServer).ReassignSupervisorAssets(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: TradingService_ReassignSupervisorAssets_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(TradingServiceServer).ReassignSupervisorAssets(ctx, req.(*ReassignSupervisorAssetsRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
 // TradingService_ServiceDesc is the grpc.ServiceDesc for TradingService service.
 // It's only intended for direct use with grpc.RegisterService,
 // and not to be introspected or modified (even as a copy)
@@ -2045,6 +2159,18 @@ var TradingService_ServiceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "ListFundTransactions",
 			Handler:    _TradingService_ListFundTransactions_Handler,
+		},
+		{
+			MethodName: "ListActuaryPerformances",
+			Handler:    _TradingService_ListActuaryPerformances_Handler,
+		},
+		{
+			MethodName: "ListBankFundPositions",
+			Handler:    _TradingService_ListBankFundPositions_Handler,
+		},
+		{
+			MethodName: "ReassignSupervisorAssets",
+			Handler:    _TradingService_ReassignSupervisorAssets_Handler,
 		},
 	},
 	Streams:  []grpc.StreamDesc{},
