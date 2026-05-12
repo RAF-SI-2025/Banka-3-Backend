@@ -37,6 +37,11 @@ var allowedKinds = map[string]verification.ActionKind{
 	string(verification.ActionTransfer):    verification.ActionTransfer,
 	string(verification.ActionLimitChange): verification.ActionLimitChange,
 	string(verification.ActionCardIssue):   verification.ActionCardIssue,
+	// c4 — same dialog, distinct kinds so codes don't cross flows.
+	string(verification.ActionOTCAccept):    verification.ActionOTCAccept,
+	string(verification.ActionOTCExercise):  verification.ActionOTCExercise,
+	string(verification.ActionFundInvest):   verification.ActionFundInvest,
+	string(verification.ActionFundWithdraw): verification.ActionFundWithdraw,
 }
 
 // VerificationHandler returns the POST /api/v1/verification/request

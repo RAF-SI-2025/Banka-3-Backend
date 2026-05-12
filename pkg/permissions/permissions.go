@@ -84,6 +84,31 @@ const (
 	TradingMargin = "trading.margin"
 )
 
+// Celina 4 — OTC trading + investment funds + Profit Banke (spec
+// p.64-76).
+//
+//   - OTC: clients and supervisors can browse other parties' public
+//     holdings and negotiate offers. The client and supervisor variants
+//     differ in counterparty (client↔client vs supervisor↔supervisor —
+//     spec p.79 forbids the mixed case).
+//   - Funds: clients invest/withdraw on their own behalf; supervisors
+//     create funds, place orders as the fund actor, and act "in name
+//     of the bank" (spec p.75 Napomena 2). Read perms are split per-
+//     audience so a supervisor without funds.manage.supervisor still
+//     sees the discovery surface.
+//   - Profit Banke (spec p.76): the supervisor dashboard reading
+//     actuary performance + bank's positions in funds.
+const (
+	OTCRead             = "otc.read"
+	OTCTradeClient      = "otc.trade.client"
+	OTCTradeSupervisor  = "otc.trade.supervisor"
+	FundsReadClient     = "funds.read.client"
+	FundsInvestClient   = "funds.invest.client"
+	FundsReadSupervisor = "funds.read.supervisor"
+	FundsManageSupervisor = "funds.manage.supervisor"
+	BankProfitRead      = "bank.profit.read"
+)
+
 // Role bundles. The spec frames users in terms of roles; the system
 // stores and checks permissions. These bundles are applied at user
 // creation; later admin actions can add or remove individual permissions.
@@ -92,8 +117,14 @@ var (
 	// own cards, and initiate payments. They don't have account.write
 	// — opening a new account is an employee action per spec p.11
 	// ("Račun kreira Zaposleni").
-	RoleClientBasic   = []string{ClientRead, AccountRead, CardRead, CardWrite, PaymentWrite, LoanRead, LoanWrite}
-	RoleClientTrading = append(append([]string{}, RoleClientBasic...), TradingClient)
+	RoleClientBasic = []string{ClientRead, AccountRead, CardRead, CardWrite, PaymentWrite, LoanRead, LoanWrite}
+	RoleClientTrading = append(append([]string{}, RoleClientBasic...),
+		TradingClient,
+		// c4: every trading-eligible client may negotiate OTC + invest
+		// in funds. The funds.manage perm is supervisor-only.
+		OTCRead, OTCTradeClient,
+		FundsReadClient, FundsInvestClient,
+	)
 
 	// Employees:
 	//   basic — read-only on people and accounts; legacy from c1.
@@ -138,8 +169,15 @@ var (
 	// matching trading.actuary_info row with the same `type`.
 	// Spec p.38: a supervisor manages agents — needs to read employee
 	// rows to render their name/email/position on the actuari portal.
-	RoleEmployeeActuarySupervisor = []string{Actuary, ActuarySupervisor, TradingMargin, EmployeeRead}
-	RoleEmployeeActuaryAgent      = []string{Actuary, ActuaryAgent}
+	RoleEmployeeActuarySupervisor = []string{
+		Actuary, ActuarySupervisor, TradingMargin, EmployeeRead,
+		// c4: supervisors negotiate OTC with other supervisors, manage
+		// investment funds, and see the Profit Banke dashboard.
+		OTCRead, OTCTradeSupervisor,
+		FundsReadSupervisor, FundsManageSupervisor,
+		BankProfitRead,
+	}
+	RoleEmployeeActuaryAgent = []string{Actuary, ActuaryAgent}
 )
 
 // Has reports whether the holder set contains target.

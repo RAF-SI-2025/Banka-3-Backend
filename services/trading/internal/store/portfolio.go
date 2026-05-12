@@ -11,7 +11,7 @@ import (
 
 const holdingCols = `
     id, user_id, user_kind, security_id, account_id,
-    quantity, weighted_avg_price::text, public_count,
+    quantity, weighted_avg_price::text, public_count, reserved_count,
     acquired_at, updated_at`
 
 // GetHolding returns the (user, security, account) holding row or
@@ -84,7 +84,7 @@ func (s *Store) ApplySellFill(
 	if err := row.Scan(
 		&avg,
 		&h.ID, &h.UserID, &t, &h.SecurityID, &h.AccountID,
-		&h.Quantity, &h.WeightedAvgPrice, &h.PublicCount,
+		&h.Quantity, &h.WeightedAvgPrice, &h.PublicCount, &h.ReservedCount,
 		&h.AcquiredAt, &h.UpdatedAt,
 	); err != nil {
 		if noRows(err) {
@@ -177,11 +177,69 @@ func scanHolding(row pgx.Row) (*domain.Holding, error) {
 	var t string
 	if err := row.Scan(
 		&h.ID, &h.UserID, &t, &h.SecurityID, &h.AccountID,
-		&h.Quantity, &h.WeightedAvgPrice, &h.PublicCount,
+		&h.Quantity, &h.WeightedAvgPrice, &h.PublicCount, &h.ReservedCount,
 		&h.AcquiredAt, &h.UpdatedAt,
 	); err != nil {
 		return nil, err
 	}
 	h.UserKind = domain.UserKind(t)
 	return &h, nil
+}
+
+// IncrementReservedHolding bumps a holding's reserved_count by n inside
+// the caller's tx. Spec p.68 — used when an OTC offer is created or
+// counter-offered upward (the seller commits the corresponding shares)
+// and when a signed contract activates. The database CHECK guarantees
+// reserved_count ≤ quantity; a violation surfaces as FailedPrecondition
+// so the SAGA forward step fails cleanly and rolls back.
+func (s *Store) IncrementReservedHolding(ctx context.Context, tx pgx.Tx, holdingID string, n int32) (*domain.Holding, error) {
+	if n <= 0 {
+		return nil, apperr.Validation("delta mora biti pozitivan")
+	}
+	const q = `
+        update "trading".portfolio_holdings
+        set reserved_count = reserved_count + $2,
+            updated_at     = now()
+        where id = $1
+        returning ` + holdingCols
+	row := tx.QueryRow(ctx, q, holdingID, n)
+	out, err := scanHolding(row)
+	if err != nil {
+		if noRows(err) {
+			return nil, apperr.NotFound("holding ne postoji")
+		}
+		if isCheckViolation(err) {
+			return nil, apperr.FailedPrecondition("nedovoljno raspoloživih akcija za rezervaciju")
+		}
+		return nil, apperr.Internal("increment reserved", err)
+	}
+	return out, nil
+}
+
+// DecrementReservedHolding releases n units of reservation on a holding
+// (offer withdrawn, contract expired/exercised). The CHECK guarantees
+// reserved_count ≥ 0; a violation surfaces as Internal so a buggy SAGA
+// compensation can't quietly poison the column.
+func (s *Store) DecrementReservedHolding(ctx context.Context, tx pgx.Tx, holdingID string, n int32) (*domain.Holding, error) {
+	if n <= 0 {
+		return nil, apperr.Validation("delta mora biti pozitivan")
+	}
+	const q = `
+        update "trading".portfolio_holdings
+        set reserved_count = reserved_count - $2,
+            updated_at     = now()
+        where id = $1
+        returning ` + holdingCols
+	row := tx.QueryRow(ctx, q, holdingID, n)
+	out, err := scanHolding(row)
+	if err != nil {
+		if noRows(err) {
+			return nil, apperr.NotFound("holding ne postoji")
+		}
+		if isCheckViolation(err) {
+			return nil, apperr.Internal("rezervacija je negativna", err)
+		}
+		return nil, apperr.Internal("decrement reserved", err)
+	}
+	return out, nil
 }

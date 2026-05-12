@@ -35,7 +35,8 @@ type Rule struct {
 }
 
 // DefaultRules covers the spec p.11 surface (payments, transfers,
-// limit changes) plus card issuance per spec p.28. Internal cron
+// limit changes) plus card issuance per spec p.28, plus the c4
+// money-moving OTC + funds surface (spec p.64-76). Internal cron
 // endpoints (loans/run-*-job) are not exposed to clients and do not
 // need verification — they're employee-triggered and run with
 // service credentials.
@@ -46,6 +47,15 @@ func DefaultRules() []Rule {
 		{http.MethodPost, regexp.MustCompile(`^/api/v1/cards$`), verification.ActionCardIssue},
 		{http.MethodPatch, regexp.MustCompile(`^/api/v1/accounts/[^/]+/limits$`), verification.ActionLimitChange},
 		{http.MethodPatch, regexp.MustCompile(`^/api/v1/cards/[^/]+/limit$`), verification.ActionLimitChange},
+		// c4 — money-moving OTC + funds endpoints. The four routes
+		// below all transfer real money on behalf of a client; the same
+		// 6-digit dialog clients see on c2 payments gates them. Until
+		// the c5 mobile app lands the code travels back inline (see
+		// pkg/verification.Issue + router/verification.go).
+		{http.MethodPost, regexp.MustCompile(`^/api/v1/otc/offers/[^/]+/accept$`), verification.ActionOTCAccept},
+		{http.MethodPost, regexp.MustCompile(`^/api/v1/otc/contracts/[^/]+/exercise$`), verification.ActionOTCExercise},
+		{http.MethodPost, regexp.MustCompile(`^/api/v1/funds/[^/]+/invest$`), verification.ActionFundInvest},
+		{http.MethodPost, regexp.MustCompile(`^/api/v1/funds/[^/]+/withdraw$`), verification.ActionFundWithdraw},
 	}
 }
 

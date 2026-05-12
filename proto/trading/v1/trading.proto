@@ -726,6 +726,11 @@ message Holding {
   string                    profit             = 11;
   google.protobuf.Timestamp acquired_at        = 12;
   google.protobuf.Timestamp updated_at         = 13;
+  // c4 (spec p.68) — count of shares committed against outstanding OTC
+  // offers + active OTC contracts. public_count and reserved_count are
+  // orthogonal; the FE renders public_count − reserved_count as the
+  // "available on the OTC board" number.
+  int32                     reserved_count     = 14;
 }
 
 message ListHoldingsRequest {

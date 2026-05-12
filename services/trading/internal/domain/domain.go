@@ -260,6 +260,13 @@ type OrderExecution struct {
 }
 
 // Holding is one row in a user's portfolio.
+//
+// public_count and reserved_count are orthogonal (spec p.68):
+//   - PublicCount is visibility on the OTC discovery board.
+//   - ReservedCount is commitment behind in-flight OTC offers + signed
+//     active contracts. Discovery surfaces PublicCount − ReservedCount
+//     as the "available now" number; the schema CHECK guarantees
+//     reserved_count ≤ quantity.
 type Holding struct {
 	ID               string
 	UserID           string
@@ -269,6 +276,7 @@ type Holding struct {
 	Quantity         int32
 	WeightedAvgPrice string
 	PublicCount      int32
+	ReservedCount    int32
 	AcquiredAt       time.Time
 	UpdatedAt        time.Time
 }

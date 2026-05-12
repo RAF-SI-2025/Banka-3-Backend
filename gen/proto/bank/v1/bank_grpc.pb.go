@@ -34,6 +34,10 @@ const (
 	BankService_SettleTrade_FullMethodName            = "/banka.bank.v1.BankService/SettleTrade"
 	BankService_SettleCapitalGainsTax_FullMethodName  = "/banka.bank.v1.BankService/SettleCapitalGainsTax"
 	BankService_SettleForexFill_FullMethodName        = "/banka.bank.v1.BankService/SettleForexFill"
+	BankService_ReserveFunds_FullMethodName           = "/banka.bank.v1.BankService/ReserveFunds"
+	BankService_ReleaseFunds_FullMethodName           = "/banka.bank.v1.BankService/ReleaseFunds"
+	BankService_CommitReservedFunds_FullMethodName    = "/banka.bank.v1.BankService/CommitReservedFunds"
+	BankService_TransferBetweenClients_FullMethodName = "/banka.bank.v1.BankService/TransferBetweenClients"
 	BankService_CreatePayment_FullMethodName          = "/banka.bank.v1.BankService/CreatePayment"
 	BankService_CreateTransfer_FullMethodName         = "/banka.bank.v1.BankService/CreateTransfer"
 	BankService_QuoteExchange_FullMethodName          = "/banka.bank.v1.BankService/QuoteExchange"
@@ -112,6 +116,34 @@ type BankServiceClient interface {
 	// conceptual "market" counterparty. Idempotent on `op_id`. Internal
 	// RPC — no http annotation, callers authenticate with admin metadata.
 	SettleForexFill(ctx context.Context, in *SettleForexFillRequest, opts ...grpc.CallOption) (*SettleForexFillResponse, error)
+	// ReserveFunds debits the source account's available_balance (leaving
+	// balance untouched) and inserts a `held` reservation row. Used by
+	// the c4 SAGA orchestrator as step 1 of OTC premium / OTC exercise /
+	// fund-invest / fund-withdraw flows. Idempotent on op_id — a retry
+	// returns the existing reservation rather than double-debiting.
+	ReserveFunds(ctx context.Context, in *ReserveFundsRequest, opts ...grpc.CallOption) (*ReserveFundsResponse, error)
+	// ReleaseFunds re-credits available_balance and flips the reservation
+	// row to `released`. Compensating step in every SAGA that calls
+	// ReserveFunds. No-op (success) when the reservation is already
+	// released or never existed — SAGA compensations need to be
+	// idempotent and runnable out-of-order from the failed forward step.
+	ReleaseFunds(ctx context.Context, in *ReleaseFundsRequest, opts ...grpc.CallOption) (*ReleaseFundsResponse, error)
+	// CommitReservedFunds finalises a held reservation: in one tx debits
+	// `balance` on the source (available_balance already debited at
+	// reserve time), credits the destination's balance + available_balance,
+	// and flips the reservation row to `committed`. Cross-currency
+	// commits hop through the bank's house accounts (same menjačnica
+	// convention as SettleTrade). Idempotent on op_id.
+	CommitReservedFunds(ctx context.Context, in *CommitReservedFundsRequest, opts ...grpc.CallOption) (*CommitReservedFundsResponse, error)
+	// TransferBetweenClients is the convenience wrapper composing
+	// ReserveFunds + CommitReservedFunds when no FX hop is needed (or
+	// when the caller wants the bank to handle the FX hop internally).
+	// Used by OTC premium + OTC exercise + fund invest/withdraw whenever
+	// both legs are in compatible currencies. `is_actuary` toggles the
+	// FX commission off (spec p.55 actuary path); op_kind tags the
+	// ledger leg so reporting (Profit Banke + pregled plaćanja) can
+	// distinguish OTC vs fund flows.
+	TransferBetweenClients(ctx context.Context, in *TransferBetweenClientsRequest, opts ...grpc.CallOption) (*TransferBetweenClientsResponse, error)
 	CreatePayment(ctx context.Context, in *CreatePaymentRequest, opts ...grpc.CallOption) (*PaymentResult, error)
 	CreateTransfer(ctx context.Context, in *CreateTransferRequest, opts ...grpc.CallOption) (*PaymentResult, error)
 	// QuoteExchange returns the converted-amount preview for a
@@ -289,6 +321,46 @@ func (c *bankServiceClient) SettleForexFill(ctx context.Context, in *SettleForex
 	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
 	out := new(SettleForexFillResponse)
 	err := c.cc.Invoke(ctx, BankService_SettleForexFill_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *bankServiceClient) ReserveFunds(ctx context.Context, in *ReserveFundsRequest, opts ...grpc.CallOption) (*ReserveFundsResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(ReserveFundsResponse)
+	err := c.cc.Invoke(ctx, BankService_ReserveFunds_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *bankServiceClient) ReleaseFunds(ctx context.Context, in *ReleaseFundsRequest, opts ...grpc.CallOption) (*ReleaseFundsResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(ReleaseFundsResponse)
+	err := c.cc.Invoke(ctx, BankService_ReleaseFunds_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *bankServiceClient) CommitReservedFunds(ctx context.Context, in *CommitReservedFundsRequest, opts ...grpc.CallOption) (*CommitReservedFundsResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(CommitReservedFundsResponse)
+	err := c.cc.Invoke(ctx, BankService_CommitReservedFunds_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *bankServiceClient) TransferBetweenClients(ctx context.Context, in *TransferBetweenClientsRequest, opts ...grpc.CallOption) (*TransferBetweenClientsResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(TransferBetweenClientsResponse)
+	err := c.cc.Invoke(ctx, BankService_TransferBetweenClients_FullMethodName, in, out, cOpts...)
 	if err != nil {
 		return nil, err
 	}
@@ -560,6 +632,34 @@ type BankServiceServer interface {
 	// conceptual "market" counterparty. Idempotent on `op_id`. Internal
 	// RPC — no http annotation, callers authenticate with admin metadata.
 	SettleForexFill(context.Context, *SettleForexFillRequest) (*SettleForexFillResponse, error)
+	// ReserveFunds debits the source account's available_balance (leaving
+	// balance untouched) and inserts a `held` reservation row. Used by
+	// the c4 SAGA orchestrator as step 1 of OTC premium / OTC exercise /
+	// fund-invest / fund-withdraw flows. Idempotent on op_id — a retry
+	// returns the existing reservation rather than double-debiting.
+	ReserveFunds(context.Context, *ReserveFundsRequest) (*ReserveFundsResponse, error)
+	// ReleaseFunds re-credits available_balance and flips the reservation
+	// row to `released`. Compensating step in every SAGA that calls
+	// ReserveFunds. No-op (success) when the reservation is already
+	// released or never existed — SAGA compensations need to be
+	// idempotent and runnable out-of-order from the failed forward step.
+	ReleaseFunds(context.Context, *ReleaseFundsRequest) (*ReleaseFundsResponse, error)
+	// CommitReservedFunds finalises a held reservation: in one tx debits
+	// `balance` on the source (available_balance already debited at
+	// reserve time), credits the destination's balance + available_balance,
+	// and flips the reservation row to `committed`. Cross-currency
+	// commits hop through the bank's house accounts (same menjačnica
+	// convention as SettleTrade). Idempotent on op_id.
+	CommitReservedFunds(context.Context, *CommitReservedFundsRequest) (*CommitReservedFundsResponse, error)
+	// TransferBetweenClients is the convenience wrapper composing
+	// ReserveFunds + CommitReservedFunds when no FX hop is needed (or
+	// when the caller wants the bank to handle the FX hop internally).
+	// Used by OTC premium + OTC exercise + fund invest/withdraw whenever
+	// both legs are in compatible currencies. `is_actuary` toggles the
+	// FX commission off (spec p.55 actuary path); op_kind tags the
+	// ledger leg so reporting (Profit Banke + pregled plaćanja) can
+	// distinguish OTC vs fund flows.
+	TransferBetweenClients(context.Context, *TransferBetweenClientsRequest) (*TransferBetweenClientsResponse, error)
 	CreatePayment(context.Context, *CreatePaymentRequest) (*PaymentResult, error)
 	CreateTransfer(context.Context, *CreateTransferRequest) (*PaymentResult, error)
 	// QuoteExchange returns the converted-amount preview for a
@@ -643,6 +743,18 @@ func (UnimplementedBankServiceServer) SettleCapitalGainsTax(context.Context, *Se
 }
 func (UnimplementedBankServiceServer) SettleForexFill(context.Context, *SettleForexFillRequest) (*SettleForexFillResponse, error) {
 	return nil, status.Error(codes.Unimplemented, "method SettleForexFill not implemented")
+}
+func (UnimplementedBankServiceServer) ReserveFunds(context.Context, *ReserveFundsRequest) (*ReserveFundsResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method ReserveFunds not implemented")
+}
+func (UnimplementedBankServiceServer) ReleaseFunds(context.Context, *ReleaseFundsRequest) (*ReleaseFundsResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method ReleaseFunds not implemented")
+}
+func (UnimplementedBankServiceServer) CommitReservedFunds(context.Context, *CommitReservedFundsRequest) (*CommitReservedFundsResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method CommitReservedFunds not implemented")
+}
+func (UnimplementedBankServiceServer) TransferBetweenClients(context.Context, *TransferBetweenClientsRequest) (*TransferBetweenClientsResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method TransferBetweenClients not implemented")
 }
 func (UnimplementedBankServiceServer) CreatePayment(context.Context, *CreatePaymentRequest) (*PaymentResult, error) {
 	return nil, status.Error(codes.Unimplemented, "method CreatePayment not implemented")
@@ -975,6 +1087,78 @@ func _BankService_SettleForexFill_Handler(srv interface{}, ctx context.Context, 
 	}
 	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
 		return srv.(BankServiceServer).SettleForexFill(ctx, req.(*SettleForexFillRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _BankService_ReserveFunds_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(ReserveFundsRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(BankServiceServer).ReserveFunds(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: BankService_ReserveFunds_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(BankServiceServer).ReserveFunds(ctx, req.(*ReserveFundsRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _BankService_ReleaseFunds_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(ReleaseFundsRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(BankServiceServer).ReleaseFunds(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: BankService_ReleaseFunds_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(BankServiceServer).ReleaseFunds(ctx, req.(*ReleaseFundsRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _BankService_CommitReservedFunds_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(CommitReservedFundsRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(BankServiceServer).CommitReservedFunds(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: BankService_CommitReservedFunds_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(BankServiceServer).CommitReservedFunds(ctx, req.(*CommitReservedFundsRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _BankService_TransferBetweenClients_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(TransferBetweenClientsRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(BankServiceServer).TransferBetweenClients(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: BankService_TransferBetweenClients_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(BankServiceServer).TransferBetweenClients(ctx, req.(*TransferBetweenClientsRequest))
 	}
 	return interceptor(ctx, in, info, handler)
 }
@@ -1419,6 +1603,22 @@ var BankService_ServiceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "SettleForexFill",
 			Handler:    _BankService_SettleForexFill_Handler,
+		},
+		{
+			MethodName: "ReserveFunds",
+			Handler:    _BankService_ReserveFunds_Handler,
+		},
+		{
+			MethodName: "ReleaseFunds",
+			Handler:    _BankService_ReleaseFunds_Handler,
+		},
+		{
+			MethodName: "CommitReservedFunds",
+			Handler:    _BankService_CommitReservedFunds_Handler,
+		},
+		{
+			MethodName: "TransferBetweenClients",
+			Handler:    _BankService_TransferBetweenClients_Handler,
 		},
 		{
 			MethodName: "CreatePayment",

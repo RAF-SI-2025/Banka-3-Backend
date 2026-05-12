@@ -16,7 +16,38 @@ const (
 	TxKindTrade    TransactionKind = "trade"
 	TxKindTax      TransactionKind = "tax"
 	TxKindForex    TransactionKind = "forex_fill"
+	// c4 — money-moving OTC and fund flows. Each tag picks the same
+	// executeMoneyMove engine but tags the ledger row so the Profit
+	// Banke dashboard and pregled plaćanja can render the right
+	// category.
+	TxKindOTCPremium   TransactionKind = "otc_premium"
+	TxKindOTCExercise  TransactionKind = "otc_exercise"
+	TxKindFundInvest   TransactionKind = "fund_invest"
+	TxKindFundWithdraw TransactionKind = "fund_withdraw"
 )
+
+// ReservationState pins the bank.reservations row lifecycle (c4).
+type ReservationState string
+
+const (
+	ReservationHeld      ReservationState = "held"
+	ReservationCommitted ReservationState = "committed"
+	ReservationReleased  ReservationState = "released"
+)
+
+// Reservation is one row in bank.reservations — a held debit against
+// available_balance pending the SAGA commit/release decision.
+type Reservation struct {
+	ID         string
+	AccountID  string
+	OpID       string
+	Amount     string
+	Currency   Currency
+	State      ReservationState
+	OpKind     string
+	HeldAt     time.Time
+	SettledAt  *time.Time
+}
 
 type TransactionStatus string
 

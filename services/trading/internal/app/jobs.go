@@ -212,3 +212,49 @@ func runExecutionWorker(ctx context.Context, log *slog.Logger, svc *service.Serv
 		}
 	}
 }
+
+// runSagaRecoveryWorker resumes c4 sagas parked by a transient error
+// (or a crashed worker). Every tick it asks the orchestrator's store
+// for sagas in `running`/`compensating` whose `next_attempt_at` has
+// passed; for each it calls Resume which re-takes the advisory lock,
+// re-loads state, and drives the next step (or compensation).
+//
+// Resume is idempotent — the bank-side RPCs dedupe on op_id, so a
+// double-resume after a crash never double-debits. The advisory lock
+// is the cross-worker guard so two recovery workers (or a foreground
+// + recovery race) can't drive the same saga at the same time.
+func runSagaRecoveryWorker(ctx context.Context, log *slog.Logger, svc *service.Service, interval time.Duration) error {
+	if svc.SagaOrch == nil {
+		log.Warn("saga orchestrator not wired; recovery worker disabled")
+		return nil
+	}
+	if interval <= 0 {
+		interval = 30 * time.Second
+	}
+	t := time.NewTicker(interval)
+	defer t.Stop()
+	log.Info("saga recovery worker started", "interval", interval)
+	for {
+		select {
+		case <-ctx.Done():
+			return nil
+		case <-t.C:
+			due, err := svc.SagaStore.DueForRecovery(ctx, 100)
+			if err != nil {
+				log.Warn("saga recovery: list due failed", "err", err.Error())
+				continue
+			}
+			for _, row := range due {
+				if err := svc.SagaOrch.Resume(ctx, row.TransactionID); err != nil {
+					log.Warn("saga recovery: resume failed",
+						"transaction_id", row.TransactionID,
+						"saga_type", row.SagaType,
+						"err", err.Error())
+				}
+			}
+			if len(due) > 0 {
+				log.Info("saga recovery tick", "rows", len(due))
+			}
+		}
+	}
+}

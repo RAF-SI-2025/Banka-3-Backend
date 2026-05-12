@@ -109,6 +109,87 @@ func (a *bankSettlerAdapter) AccountAvailable(ctx context.Context, accountID str
 	return currencyFromBankProto(resp.GetCurrency()), resp.GetAvailableBalance(), nil
 }
 
+// Reserve bridges service.BankReservations.Reserve to
+// bank.ReserveFunds with the admin-sentinel principal.
+func (a *bankSettlerAdapter) Reserve(ctx context.Context, in service.ReserveInput) (string, error) {
+	ctx = auth.AttachToOutgoing(ctx, auth.Principal{
+		UserID:      "00000000-0000-0000-0000-00000000fffe",
+		UserKind:    auth.KindEmployee,
+		Permissions: []string{permissions.Admin},
+	})
+	resp, err := a.c.ReserveFunds(ctx, &bankpb.ReserveFundsRequest{
+		AccountId: in.AccountID,
+		Amount:    in.Amount,
+		Currency:  currencyToBankProto(in.Currency),
+		OpId:      in.OpID,
+		OpKind:    in.OpKind,
+	})
+	if err != nil {
+		return "", fmt.Errorf("bank.ReserveFunds: %w", err)
+	}
+	return resp.GetReservationId(), nil
+}
+
+// Release bridges service.BankReservations.Release to bank.ReleaseFunds.
+// Returns whether the call moved the row from held→released (false on a
+// no-op release of an already-released or never-existed reservation).
+func (a *bankSettlerAdapter) Release(ctx context.Context, opID string) (bool, error) {
+	ctx = auth.AttachToOutgoing(ctx, auth.Principal{
+		UserID:      "00000000-0000-0000-0000-00000000fffe",
+		UserKind:    auth.KindEmployee,
+		Permissions: []string{permissions.Admin},
+	})
+	resp, err := a.c.ReleaseFunds(ctx, &bankpb.ReleaseFundsRequest{OpId: opID})
+	if err != nil {
+		return false, fmt.Errorf("bank.ReleaseFunds: %w", err)
+	}
+	return resp.GetReleased(), nil
+}
+
+// Commit bridges service.BankReservations.Commit to bank.CommitReservedFunds.
+func (a *bankSettlerAdapter) Commit(ctx context.Context, in service.CommitInput) (string, error) {
+	ctx = auth.AttachToOutgoing(ctx, auth.Principal{
+		UserID:      "00000000-0000-0000-0000-00000000fffe",
+		UserKind:    auth.KindEmployee,
+		Permissions: []string{permissions.Admin},
+	})
+	resp, err := a.c.CommitReservedFunds(ctx, &bankpb.CommitReservedFundsRequest{
+		OpId:          in.OpID,
+		DestAccountId: in.DestAccountID,
+		DestAmount:    in.DestAmount,
+		DestCurrency:  currencyToBankProto(in.DestCurrency),
+		IsActuary:     in.IsActuary,
+		Purpose:       in.Purpose,
+	})
+	if err != nil {
+		return "", fmt.Errorf("bank.CommitReservedFunds: %w", err)
+	}
+	return resp.GetOpId(), nil
+}
+
+// Transfer bridges service.BankReservations.Transfer to
+// bank.TransferBetweenClients.
+func (a *bankSettlerAdapter) Transfer(ctx context.Context, in service.TransferInput) (string, error) {
+	ctx = auth.AttachToOutgoing(ctx, auth.Principal{
+		UserID:      "00000000-0000-0000-0000-00000000fffe",
+		UserKind:    auth.KindEmployee,
+		Permissions: []string{permissions.Admin},
+	})
+	resp, err := a.c.TransferBetweenClients(ctx, &bankpb.TransferBetweenClientsRequest{
+		FromAccountId: in.FromAccountID,
+		ToAccountId:   in.ToAccountID,
+		Amount:        in.Amount,
+		OpId:          in.OpID,
+		OpKind:        in.OpKind,
+		IsActuary:     in.IsActuary,
+		Purpose:       in.Purpose,
+	})
+	if err != nil {
+		return "", fmt.Errorf("bank.TransferBetweenClients: %w", err)
+	}
+	return resp.GetOpId(), nil
+}
+
 // ClientLargestActiveLoan picks the largest remaining_principal across
 // the client's active loans. Returns ("","",nil) when none exist.
 func (a *bankSettlerAdapter) ClientLargestActiveLoan(ctx context.Context, clientID string) (domain.Currency, string, error) {

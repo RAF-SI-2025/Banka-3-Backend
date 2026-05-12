@@ -4505,6 +4505,11 @@
         "updatedAt": {
           "type": "string",
           "format": "date-time"
+        },
+        "reservedCount": {
+          "type": "integer",
+          "format": "int32",
+          "description": "c4 (spec p.68) — count of shares committed against outstanding OTC\noffers + active OTC contracts. public_count and reserved_count are\northogonal; the FE renders public_count − reserved_count as the\n\"available on the OTC board\" number."
         }
       }
     },
@@ -5918,10 +5923,15 @@
         "TRANSACTION_KIND_EXCHANGE",
         "TRANSACTION_KIND_FEE",
         "TRANSACTION_KIND_TRADE",
-        "TRANSACTION_KIND_TAX"
+        "TRANSACTION_KIND_TAX",
+        "TRANSACTION_KIND_FOREX_FILL",
+        "TRANSACTION_KIND_OTC_PREMIUM",
+        "TRANSACTION_KIND_OTC_EXERCISE",
+        "TRANSACTION_KIND_FUND_INVEST",
+        "TRANSACTION_KIND_FUND_WITHDRAW"
       ],
       "default": "TRANSACTION_KIND_UNSPECIFIED",
-      "title": "- TRANSACTION_KIND_EXCHANGE: intermediate leg in a menjačnica path\n - TRANSACTION_KIND_TRADE: trading-service fill settlement\n - TRANSACTION_KIND_TAX: capital-gains tax debit (spec p.62)"
+      "description": " - TRANSACTION_KIND_EXCHANGE: intermediate leg in a menjačnica path\n - TRANSACTION_KIND_TRADE: trading-service fill settlement\n - TRANSACTION_KIND_TAX: capital-gains tax debit (spec p.62)\n - TRANSACTION_KIND_FOREX_FILL: forex pair fill (spec p.42)\n - TRANSACTION_KIND_OTC_PREMIUM: c4 — OTC + funds money-moving categories."
     },
     "v1TransactionStatus": {
       "type": "string",

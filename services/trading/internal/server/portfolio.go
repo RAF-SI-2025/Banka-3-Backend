@@ -77,6 +77,7 @@ func holdingToProto(h *domain.Holding, sec *domain.Security) *tradingpb.Holding 
 		Quantity:         h.Quantity,
 		WeightedAvgPrice: h.WeightedAvgPrice,
 		PublicCount:      h.PublicCount,
+		ReservedCount:    h.ReservedCount,
 		AcquiredAt:       timestamppb.New(h.AcquiredAt),
 		UpdatedAt:        timestamppb.New(h.UpdatedAt),
 	}

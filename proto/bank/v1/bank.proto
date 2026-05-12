@@ -136,6 +136,38 @@ service BankService {
   // RPC — no http annotation, callers authenticate with admin metadata.
   rpc SettleForexFill(SettleForexFillRequest) returns (SettleForexFillResponse);
 
+  // ReserveFunds debits the source account's available_balance (leaving
+  // balance untouched) and inserts a `held` reservation row. Used by
+  // the c4 SAGA orchestrator as step 1 of OTC premium / OTC exercise /
+  // fund-invest / fund-withdraw flows. Idempotent on op_id — a retry
+  // returns the existing reservation rather than double-debiting.
+  rpc ReserveFunds(ReserveFundsRequest) returns (ReserveFundsResponse);
+
+  // ReleaseFunds re-credits available_balance and flips the reservation
+  // row to `released`. Compensating step in every SAGA that calls
+  // ReserveFunds. No-op (success) when the reservation is already
+  // released or never existed — SAGA compensations need to be
+  // idempotent and runnable out-of-order from the failed forward step.
+  rpc ReleaseFunds(ReleaseFundsRequest) returns (ReleaseFundsResponse);
+
+  // CommitReservedFunds finalises a held reservation: in one tx debits
+  // `balance` on the source (available_balance already debited at
+  // reserve time), credits the destination's balance + available_balance,
+  // and flips the reservation row to `committed`. Cross-currency
+  // commits hop through the bank's house accounts (same menjačnica
+  // convention as SettleTrade). Idempotent on op_id.
+  rpc CommitReservedFunds(CommitReservedFundsRequest) returns (CommitReservedFundsResponse);
+
+  // TransferBetweenClients is the convenience wrapper composing
+  // ReserveFunds + CommitReservedFunds when no FX hop is needed (or
+  // when the caller wants the bank to handle the FX hop internally).
+  // Used by OTC premium + OTC exercise + fund invest/withdraw whenever
+  // both legs are in compatible currencies. `is_actuary` toggles the
+  // FX commission off (spec p.55 actuary path); op_kind tags the
+  // ledger leg so reporting (Profit Banke + pregled plaćanja) can
+  // distinguish OTC vs fund flows.
+  rpc TransferBetweenClients(TransferBetweenClientsRequest) returns (TransferBetweenClientsResponse);
+
   // -----------------------------------------------------------------
   // Payments — Klijent → another Klijent (different owner). Spec
   // p.21 "Novo plaćanje". Same-currency intra-bank: 1 transaction
@@ -566,6 +598,80 @@ message SettleForexFillResponse {
 }
 
 // =====================================================================
+// c4 reservation primitives
+// =====================================================================
+
+// ReserveFundsRequest: pre-debit `available_balance` on `account_id`
+// by `amount` in the account's currency. `op_kind` tags the ledger
+// row when the reservation later commits or releases (one of
+// "otc_premium", "otc_exercise", "fund_invest", "fund_withdraw").
+message ReserveFundsRequest {
+  string   account_id = 1 [(buf.validate.field).string.uuid = true];
+  string   amount     = 2 [(buf.validate.field).string.min_len = 1];
+  Currency currency   = 3 [(buf.validate.field).enum = {defined_only: true, not_in: [0]}];
+  string   op_id      = 4 [(buf.validate.field).string.uuid = true];
+  string   op_kind    = 5 [(buf.validate.field).string.min_len = 1];
+}
+
+message ReserveFundsResponse {
+  string reservation_id = 1;
+  string op_id          = 2;
+}
+
+message ReleaseFundsRequest {
+  string op_id = 1 [(buf.validate.field).string.uuid = true];
+}
+
+message ReleaseFundsResponse {
+  // released=true when this call moved the row from held→released;
+  // false when the row was already released or never existed (still
+  // a success — SAGA compensations must be idempotent).
+  bool released = 1;
+}
+
+// CommitReservedFundsRequest finalises the held reservation. The
+// reservation must be in `held` state for the call to succeed; a
+// committed reservation returns the prior result. `dest_amount` is in
+// `dest_currency`; when the held currency differs the bank hops via
+// its house accounts using the standard menjačnica engine. `is_actuary`
+// suppresses the FX commission (spec p.55).
+message CommitReservedFundsRequest {
+  string   op_id           = 1 [(buf.validate.field).string.uuid = true];
+  string   dest_account_id = 2 [(buf.validate.field).string.uuid = true];
+  string   dest_amount     = 3 [(buf.validate.field).string.min_len = 1];
+  Currency dest_currency   = 4 [(buf.validate.field).enum = {defined_only: true, not_in: [0]}];
+  bool     is_actuary      = 5;
+  string   purpose         = 6;
+}
+
+message CommitReservedFundsResponse {
+  string                 op_id        = 1;
+  repeated Transaction   transactions = 2;
+}
+
+// TransferBetweenClientsRequest debits source, credits destination, in
+// one logical operation (the wrapper internally drives Reserve +
+// Commit). For same-currency endpoints this is a single ledger leg;
+// for cross-currency the menjačnica engine fires the standard two
+// legs through the bank's house. `op_kind` is one of "otc_premium",
+// "otc_exercise", "fund_invest", "fund_withdraw" — used both for
+// transactions.op_kind tagging and for the FX-commission gate.
+message TransferBetweenClientsRequest {
+  string   from_account_id = 1 [(buf.validate.field).string.uuid = true];
+  string   to_account_id   = 2 [(buf.validate.field).string.uuid = true];
+  string   amount          = 3 [(buf.validate.field).string.min_len = 1];
+  string   op_id           = 4 [(buf.validate.field).string.uuid = true];
+  string   op_kind         = 5 [(buf.validate.field).string.min_len = 1];
+  bool     is_actuary      = 6;
+  string   purpose         = 7;
+}
+
+message TransferBetweenClientsResponse {
+  string                 op_id        = 1;
+  repeated Transaction   transactions = 2;
+}
+
+// =====================================================================
 // Payments / transfers / transactions
 // =====================================================================
 
@@ -584,6 +690,12 @@ enum TransactionKind {
   TRANSACTION_KIND_FEE         = 4;
   TRANSACTION_KIND_TRADE       = 5; // trading-service fill settlement
   TRANSACTION_KIND_TAX         = 6; // capital-gains tax debit (spec p.62)
+  TRANSACTION_KIND_FOREX_FILL  = 7; // forex pair fill (spec p.42)
+  // c4 — OTC + funds money-moving categories.
+  TRANSACTION_KIND_OTC_PREMIUM   = 8;
+  TRANSACTION_KIND_OTC_EXERCISE  = 9;
+  TRANSACTION_KIND_FUND_INVEST   = 10;
+  TRANSACTION_KIND_FUND_WITHDRAW = 11;
 }
 
 // Transaction is one ledger leg. UX-level operations (a payment, a

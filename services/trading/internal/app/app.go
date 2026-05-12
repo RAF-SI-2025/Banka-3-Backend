@@ -19,6 +19,7 @@ import (
 	pkgredis "github.com/RAF-SI-2025/Banka-3-Backend/pkg/redis"
 	"github.com/RAF-SI-2025/Banka-3-Backend/pkg/shutdown"
 	"github.com/RAF-SI-2025/Banka-3-Backend/services/trading/internal/external/alphavantage"
+	"github.com/RAF-SI-2025/Banka-3-Backend/services/trading/internal/saga"
 	"github.com/RAF-SI-2025/Banka-3-Backend/services/trading/internal/server"
 	"github.com/RAF-SI-2025/Banka-3-Backend/services/trading/internal/service"
 	"github.com/RAF-SI-2025/Banka-3-Backend/services/trading/internal/store"
@@ -103,6 +104,7 @@ func Run() error {
 		svc.TaxSettler = adapter
 		svc.MarginChecker = adapter
 		svc.ForexSettler = adapter
+		svc.Reservations = adapter
 	} else {
 		log.Warn("BANK_GRPC_ADDR not set; execution worker will refuse to fill")
 	}
@@ -135,6 +137,17 @@ func Run() error {
 		Volatility:   config.Float("OPTIONS_VOLATILITY", 0.30),
 		Belgrade:     belgrade,
 	}
+
+	// c4 — SAGA orchestrator for OTC + funds intra-bank flows. The
+	// registry holds the typed Definition for each saga type the
+	// service knows about. Individual definitions (otc_accept,
+	// otc_exercise, fund_invest, fund_withdraw, option_exercise) are
+	// registered by service.RegisterSagas during construction; the
+	// orchestrator and the recovery worker share the same registry.
+	svc.SagaStore = st.Sagas()
+	sagaReg := saga.NewRegistry()
+	svc.SagaOrch = saga.New(svc.SagaStore, sagaReg, log)
+	service.RegisterSagas(sagaReg, svc)
 
 	probeSrv := probes.New(fmt.Sprintf(":%d", config.Int("PROBE_PORT", 8081)))
 	probeSrv.Register("postgres", func(ctx context.Context) error { return postgres.Ping(ctx, pool) })
@@ -186,6 +199,15 @@ func Run() error {
 	mdInterval := config.Duration("MARKET_DATA_REFRESH_INTERVAL", 6*time.Hour)
 	g.Go(func() error {
 		return runMarketDataRefresh(gctx, log, svc, mdInterval)
+	})
+
+	// c4 SAGA recovery worker — scans trading.saga_executions for rows
+	// parked by a transient error (or a crashed worker) and resumes
+	// them. The orchestrator's advisory lock keeps this from racing
+	// foreground saga drives.
+	sagaTick := config.Duration("SAGA_RECOVERY_TICK", 30*time.Second)
+	g.Go(func() error {
+		return runSagaRecoveryWorker(gctx, log, svc, sagaTick)
 	})
 
 	probeSrv.MarkReady()

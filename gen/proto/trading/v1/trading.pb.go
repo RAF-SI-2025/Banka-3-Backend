@@ -3738,11 +3738,16 @@ type Holding struct {
 	WeightedAvgPrice string                 `protobuf:"bytes,7,opt,name=weighted_avg_price,json=weightedAvgPrice,proto3" json:"weighted_avg_price,omitempty"`
 	PublicCount      int32                  `protobuf:"varint,8,opt,name=public_count,json=publicCount,proto3" json:"public_count,omitempty"`
 	// Computed market metrics.
-	CurrentPrice  string                 `protobuf:"bytes,9,opt,name=current_price,json=currentPrice,proto3" json:"current_price,omitempty"`
-	MarketValue   string                 `protobuf:"bytes,10,opt,name=market_value,json=marketValue,proto3" json:"market_value,omitempty"`
-	Profit        string                 `protobuf:"bytes,11,opt,name=profit,proto3" json:"profit,omitempty"`
-	AcquiredAt    *timestamppb.Timestamp `protobuf:"bytes,12,opt,name=acquired_at,json=acquiredAt,proto3" json:"acquired_at,omitempty"`
-	UpdatedAt     *timestamppb.Timestamp `protobuf:"bytes,13,opt,name=updated_at,json=updatedAt,proto3" json:"updated_at,omitempty"`
+	CurrentPrice string                 `protobuf:"bytes,9,opt,name=current_price,json=currentPrice,proto3" json:"current_price,omitempty"`
+	MarketValue  string                 `protobuf:"bytes,10,opt,name=market_value,json=marketValue,proto3" json:"market_value,omitempty"`
+	Profit       string                 `protobuf:"bytes,11,opt,name=profit,proto3" json:"profit,omitempty"`
+	AcquiredAt   *timestamppb.Timestamp `protobuf:"bytes,12,opt,name=acquired_at,json=acquiredAt,proto3" json:"acquired_at,omitempty"`
+	UpdatedAt    *timestamppb.Timestamp `protobuf:"bytes,13,opt,name=updated_at,json=updatedAt,proto3" json:"updated_at,omitempty"`
+	// c4 (spec p.68) — count of shares committed against outstanding OTC
+	// offers + active OTC contracts. public_count and reserved_count are
+	// orthogonal; the FE renders public_count − reserved_count as the
+	// "available on the OTC board" number.
+	ReservedCount int32 `protobuf:"varint,14,opt,name=reserved_count,json=reservedCount,proto3" json:"reserved_count,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -3866,6 +3871,13 @@ func (x *Holding) GetUpdatedAt() *timestamppb.Timestamp {
 		return x.UpdatedAt
 	}
 	return nil
+}
+
+func (x *Holding) GetReservedCount() int32 {
+	if x != nil {
+		return x.ReservedCount
+	}
+	return 0
 }
 
 type ListHoldingsRequest struct {
@@ -5063,7 +5075,7 @@ const file_trading_v1_trading_proto_rawDesc = "" +
 	"\x02id\x18\x01 \x01(\tB\b\xbaH\x05r\x03\xb0\x01\x01R\x02id\x12\x16\n" +
 	"\x06reason\x18\x02 \x01(\tR\x06reason\".\n" +
 	"\x12CancelOrderRequest\x12\x18\n" +
-	"\x02id\x18\x01 \x01(\tB\b\xbaH\x05r\x03\xb0\x01\x01R\x02id\"\x87\x04\n" +
+	"\x02id\x18\x01 \x01(\tB\b\xbaH\x05r\x03\xb0\x01\x01R\x02id\"\xae\x04\n" +
 	"\aHolding\x12\x0e\n" +
 	"\x02id\x18\x01 \x01(\tR\x02id\x12\x17\n" +
 	"\auser_id\x18\x02 \x01(\tR\x06userId\x127\n" +
@@ -5081,7 +5093,8 @@ const file_trading_v1_trading_proto_rawDesc = "" +
 	"\vacquired_at\x18\f \x01(\v2\x1a.google.protobuf.TimestampR\n" +
 	"acquiredAt\x129\n" +
 	"\n" +
-	"updated_at\x18\r \x01(\v2\x1a.google.protobuf.TimestampR\tupdatedAt\"\x9b\x01\n" +
+	"updated_at\x18\r \x01(\v2\x1a.google.protobuf.TimestampR\tupdatedAt\x12%\n" +
+	"\x0ereserved_count\x18\x0e \x01(\x05R\rreservedCount\"\x9b\x01\n" +
 	"\x13ListHoldingsRequest\x12\x17\n" +
 	"\auser_id\x18\x01 \x01(\tR\x06userId\x127\n" +
 	"\tuser_kind\x18\x02 \x01(\x0e2\x1a.banka.trading.v1.UserKindR\buserKind\x122\n" +

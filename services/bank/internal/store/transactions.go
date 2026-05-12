@@ -89,6 +89,64 @@ func (s *Store) AdjustBalance(ctx context.Context, tx pgx.Tx, accountID, delta s
 	return nil
 }
 
+// AdjustAvailableBalance moves `available_balance` only, leaving
+// `balance` untouched. Used by the c4 reservation primitive: the
+// reserve step debits available_balance so the client can't double-
+// spend the same money before the SAGA commits, but the headline
+// balance stays unchanged until commit time (the money is still
+// notionally in the account).
+//
+// daily/monthly spent counters are NOT bumped here — reservations
+// aren't outbound payments and the spec p.12 limits apply to settled
+// debits only. (The commit's AdjustBalanceOnly stamp also stays clear
+// of the counters for the same reason: the limits were already
+// satisfied when the reserve happened.)
+//
+// Surface ErrInsufficientFunds on underflow so the caller can map it
+// to FailedPrecondition like the regular AdjustBalance path.
+func (s *Store) AdjustAvailableBalance(ctx context.Context, tx pgx.Tx, accountID, delta string) error {
+	const q = `
+        update "bank".accounts set
+            available_balance = available_balance + $2::numeric,
+            updated_at        = now()
+        where id = $1
+          and (available_balance + $2::numeric) >= 0
+        returning id`
+	var got string
+	err := tx.QueryRow(ctx, q, accountID, delta).Scan(&got)
+	if err != nil {
+		if noRows(err) {
+			return ErrInsufficientFunds
+		}
+		return apperr.Internal("adjust available balance", err)
+	}
+	return nil
+}
+
+// AdjustBalanceOnly moves `balance` only, leaving `available_balance`
+// untouched. Used by the c4 reservation commit: available_balance was
+// debited at reserve time; the commit step closes the loop by debiting
+// balance. The underflow guard checks the resulting balance directly
+// — available_balance is already at its post-reserve value.
+func (s *Store) AdjustBalanceOnly(ctx context.Context, tx pgx.Tx, accountID, delta string) error {
+	const q = `
+        update "bank".accounts set
+            balance    = balance + $2::numeric,
+            updated_at = now()
+        where id = $1
+          and (balance + $2::numeric) >= 0
+        returning id`
+	var got string
+	err := tx.QueryRow(ctx, q, accountID, delta).Scan(&got)
+	if err != nil {
+		if noRows(err) {
+			return ErrInsufficientFunds
+		}
+		return apperr.Internal("adjust balance only", err)
+	}
+	return nil
+}
+
 // CheckLimits reports whether `amount` would push the account over its
 // daily or monthly limit. Spec p.12: limits are RSD-equivalent and
 // the FE shows "preostalo limita". For now we treat the amount as

@@ -24,6 +24,23 @@ const StateTaxOwnerID = "00000000-0000-0000-0000-000000000010"
 // lookups.
 const ForexBookOwnerID = "00000000-0000-0000-0000-000000000020"
 
+// BankAsClientOwnerID is the sentinel client_id used by the trading
+// service when the bank holds a position in one of its own investment
+// funds (spec p.75 Napomena 2: "Klijent je klijent koji je vlasnik
+// banke"). c4 — trading.client_fund_positions rows whose client_id
+// equals this sentinel represent the bank's own stake; the Profit
+// Banke dashboard reads exactly this slice. Distinct from SystemOwnerID
+// (menjačnica), StateTaxOwnerID (porez), and ForexBookOwnerID (FX
+// pairs) so cross-cutting lookups can't bleed.
+const BankAsClientOwnerID = "00000000-0000-0000-0000-000000000030"
+
+// FundsOwnerID is the sentinel owner_client_id stamped on every
+// bank-side account created to hold an investment fund's liquidity
+// (spec p.74). c4 — `bank.CreateAccount(kind=fund, owner=FundsOwnerID,
+// currency=RSD)`. Kept separate from SystemOwnerID so the fund's
+// liquidity account does not collide with menjačnica house lookups.
+const FundsOwnerID = "00000000-0000-0000-0000-000000000040"
+
 // =====================================================================
 // Currency
 // =====================================================================

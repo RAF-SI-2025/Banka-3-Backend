@@ -58,6 +58,16 @@ const (
 	ActionTransfer    ActionKind = "transfer"
 	ActionLimitChange ActionKind = "limit_change"
 	ActionCardIssue   ActionKind = "card_issue"
+
+	// c4 — every money-moving OTC + fund flow goes through the same
+	// 6-digit verifikacioni-kod gate the client uses for c2 payments.
+	// Kept as distinct kinds (rather than one umbrella) so a code
+	// minted for "OTC accept" can't be replayed to confirm a fund
+	// withdrawal, and the FE renders the right Serbian copy per flow.
+	ActionOTCAccept     ActionKind = "otc_accept"
+	ActionOTCExercise   ActionKind = "otc_exercise"
+	ActionFundInvest    ActionKind = "fund_invest"
+	ActionFundWithdraw  ActionKind = "fund_withdraw"
 )
 
 var (

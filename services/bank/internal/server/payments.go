@@ -268,6 +268,16 @@ func txKindToProto(k domain.TransactionKind) bankpb.TransactionKind {
 		return bankpb.TransactionKind_TRANSACTION_KIND_TRADE
 	case domain.TxKindTax:
 		return bankpb.TransactionKind_TRANSACTION_KIND_TAX
+	case domain.TxKindForex:
+		return bankpb.TransactionKind_TRANSACTION_KIND_FOREX_FILL
+	case domain.TxKindOTCPremium:
+		return bankpb.TransactionKind_TRANSACTION_KIND_OTC_PREMIUM
+	case domain.TxKindOTCExercise:
+		return bankpb.TransactionKind_TRANSACTION_KIND_OTC_EXERCISE
+	case domain.TxKindFundInvest:
+		return bankpb.TransactionKind_TRANSACTION_KIND_FUND_INVEST
+	case domain.TxKindFundWithdraw:
+		return bankpb.TransactionKind_TRANSACTION_KIND_FUND_WITHDRAW
 	}
 	return bankpb.TransactionKind_TRANSACTION_KIND_UNSPECIFIED
 }

@@ -10,6 +10,7 @@ import (
 	"github.com/RAF-SI-2025/Banka-3-Backend/pkg/auth"
 	"github.com/RAF-SI-2025/Banka-3-Backend/pkg/permissions"
 	"github.com/RAF-SI-2025/Banka-3-Backend/services/trading/internal/domain"
+	"github.com/RAF-SI-2025/Banka-3-Backend/services/trading/internal/saga"
 	"github.com/RAF-SI-2025/Banka-3-Backend/services/trading/internal/store"
 )
 
@@ -108,13 +109,67 @@ type Service struct {
 	// quote feed (spec p.40, p.42). Nil when the feed isn't wired —
 	// the cron then no-ops.
 	MarketData *MarketData
-	// Options synthesises Black-Scholes option chains (spec p.43
+	// Options synthesises Black-Scholes option chains (spec x.43
 	// Pristup 2). Always wired in production; nil in unit tests that
 	// don't exercise the generator.
 	Options *OptionGenerator
+	// SagaOrch drives c4 multi-step intra-bank operations (OTC premium
+	// transfer, OTC exercise, fund invest/withdraw). May be nil in unit
+	// tests that don't exercise the saga path. Production must wire
+	// this; the recovery worker also depends on it.
+	SagaOrch *saga.Orchestrator
+	// SagaStore is the orchestrator's persistence adapter. Held on the
+	// service so the recovery worker can scan due rows without going
+	// through the orchestrator.
+	SagaStore *store.SagaStore
+	// Reservations is the c4 bank-side reservation surface — Reserve,
+	// Release, Commit, TransferBetweenClients. SAGA step handlers dial
+	// this instead of the lower-level Settler. May be nil on a dev
+	// stack that doesn't run the c4 RPCs.
+	Reservations BankReservations
 	// Now is the wall-clock used by every time-dependent path. Tests
 	// pin it; production leaves it nil and falls through to time.Now.
 	Now func() time.Time
+}
+
+// BankReservations is the trading-service view of bank's c4 reservation
+// surface. The app layer wires this to a bank gRPC client; tests stub
+// it. SAGA step handlers dial these instead of the lower-level Settler.
+type BankReservations interface {
+	Reserve(ctx context.Context, in ReserveInput) (string, error)
+	Release(ctx context.Context, opID string) (released bool, err error)
+	Commit(ctx context.Context, in CommitInput) (string, error)
+	Transfer(ctx context.Context, in TransferInput) (string, error)
+}
+
+// ReserveInput mirrors the bank.ReserveFunds RPC fields the SAGA needs.
+type ReserveInput struct {
+	AccountID string
+	Amount    string
+	Currency  domain.Currency
+	OpID      string
+	OpKind    string
+}
+
+// CommitInput mirrors bank.CommitReservedFunds.
+type CommitInput struct {
+	OpID          string
+	DestAccountID string
+	DestAmount    string
+	DestCurrency  domain.Currency
+	IsActuary     bool
+	Purpose       string
+}
+
+// TransferInput mirrors bank.TransferBetweenClients.
+type TransferInput struct {
+	FromAccountID string
+	ToAccountID   string
+	Amount        string
+	OpID          string
+	OpKind        string
+	IsActuary     bool
+	Purpose       string
 }
 
 // New constructs a Service with sane defaults. The app layer fills in

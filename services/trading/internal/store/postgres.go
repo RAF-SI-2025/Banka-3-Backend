@@ -21,6 +21,29 @@ func New(pool *pgxpool.Pool) *Store { return &Store{Pool: pool} }
 // noRows reports whether err wraps pgx.ErrNoRows.
 func noRows(err error) bool { return errors.Is(err, pgx.ErrNoRows) }
 
+// isCheckViolation reports whether err is a Postgres check-constraint
+// violation (SQLSTATE 23514). Used by the OTC reservation helpers so a
+// `reserved_count > quantity` attempt surfaces as FailedPrecondition
+// instead of a generic Internal.
+func isCheckViolation(err error) bool {
+	type pgErr interface {
+		SQLState() string
+	}
+	var pe pgErr
+	return errors.As(err, &pe) && pe.SQLState() == "23514"
+}
+
+// isUniqueViolation reports whether err is a Postgres unique-constraint
+// violation (SQLSTATE 23505). Used by SAGA persistence so a duplicate
+// transaction_id surfaces cleanly to the orchestrator.
+func isUniqueViolation(err error) bool {
+	type pgErr interface {
+		SQLState() string
+	}
+	var pe pgErr
+	return errors.As(err, &pe) && pe.SQLState() == "23505"
+}
+
 // intArg returns "$N" for placeholder building in dynamic queries.
 // The store keeps queries with up to ~16 placeholders; if a query
 // needs more, prefer pgx.Identifier or static SQL.

@@ -223,19 +223,20 @@ func seedClient(ctx context.Context, pool *pgxpool.Pool, email, password, firstN
 	switch err := pool.QueryRow(ctx,
 		`select id from "user".clients where lower(email) = lower($1)`, email).Scan(&existing); err {
 	case nil:
-		// Existing rows from before c3 may be missing `trading.client`.
-		// Append the permission idempotently so the seed promotes
-		// already-planted clients into trading-capable on every run.
+		// Existing rows from before c3/c4 may be missing trading + OTC +
+		// fund client permissions. Append the full RoleClientTrading
+		// bundle idempotently so the seed promotes already-planted
+		// clients into the current trading-capable set on every run.
 		if _, err := pool.Exec(ctx, `
             update "user".clients
             set permissions = (
                 select array_agg(distinct p)
-                from unnest(permissions || array['trading.client']) as p
+                from unnest(permissions || $2::text[]) as p
             )
-            where id = $1`, existing); err != nil {
+            where id = $1`, existing, []string(permissions.RoleClientTrading)); err != nil {
 			return "", fmt.Errorf("augment client perms: %w", err)
 		}
-		fmt.Printf("seed: client already exists (id=%s, email=%s); ensured trading.client\n", existing, email)
+		fmt.Printf("seed: client already exists (id=%s, email=%s); ensured trading+otc+funds perms\n", existing, email)
 		return existing, nil
 	default:
 		if err.Error() != "no rows in result set" {
@@ -254,11 +255,10 @@ func seedClient(ctx context.Context, pool *pgxpool.Pool, email, password, firstN
         ) values (
             $1, $2,
             $3, $4, '1990-01-01', 'male', $5, 'Beograd',
-            true,
-            array['client.read','account.read','card.read','card.write','payment.write','loan.read','loan.write','trading.client']
+            true, $6
         ) returning id`
 	var id string
-	if err := pool.QueryRow(ctx, q, email, hash, firstName, lastName, phone).Scan(&id); err != nil {
+	if err := pool.QueryRow(ctx, q, email, hash, firstName, lastName, phone, []string(permissions.RoleClientTrading)).Scan(&id); err != nil {
 		return "", fmt.Errorf("insert client: %w", err)
 	}
 	fmt.Printf("seed: client created (id=%s)\n  email:    %s\n  password: %s\n", id, email, password)
