@@ -205,6 +205,41 @@ task lint                   # golangci-lint
 task fmt                    # gofumpt
 ```
 
+## C4 status
+
+c4 backend feature-complete + E2E + cascade gates green on `rewrite`.
+PR8 landed two backend deliverables on top of PR1–PR7:
+
+- *Cascade integration tests* (`services/trading/internal/service/funds_integration_test.go`):
+  `TestIntegration_Cascade_ReassignFundsOnDemotion` proves
+  `ReassignSupervisorAssets(from=demoted, to=actingAdmin)` flips
+  every active fund managed by the demoted supervisor in one shot
+  + is idempotent. `TestIntegration_Cascade_SkipsClosedFunds` proves
+  closed funds stay with the prior manager (`status='active'`-only).
+  Run via `task test:integration` after `task up` + `task migrate`.
+
+- *Two real bugs surfaced + fixed* by the c4-PR8 frontend cypress
+  specs:
+
+  - `trading.otc_offers` `ListLatestOTCOffers` had an ambiguous
+    `thread_id` reference between the CTE's projection and the
+    outer `otc_offers o` row — every `ListOTCThreads` call 500'd
+    with `column reference "thread_id" is ambiguous`. Aliased the
+    CTE column as `tid` so the bare `thread_id` in the projection
+    resolves unambiguously to the otc_offers row. Surfaced by
+    `/banking/otc/ponude` rendering empty under live data; the
+    OTC integration tests didn't exercise this path with a
+    matching scan-list cycle.
+
+  - `bank.SettleTrade`'s actuary gate rejected `KindFund` accounts
+    with "aktuari mogu trgovati samo sa bankinog računa". Fund
+    accounts are bank-owned (`owner_client_id = FundsOwnerID`), so
+    fund-actor orders (which set `IsActuary=true`) belong in the
+    same allow-list as `KindSystem` + `KindForexBook`. Without
+    this the fund-actor BUY in the funds-day cypress spec
+    abandoned every fill at the bank settle, and any real fund
+    manager would have hit the same wall.
+
 ## C1 + C2 status
 
 c1 and c2 are feature-complete and verified end-to-end. See top-level
