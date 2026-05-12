@@ -168,6 +168,12 @@ service BankService {
   // distinguish OTC vs fund flows.
   rpc TransferBetweenClients(TransferBetweenClientsRequest) returns (TransferBetweenClientsResponse);
 
+  // CreateFundAccount mints a kind='fund' RSD account owned by the
+  // FundsOwnerID sentinel. Trading service dials this internally at
+  // CreateFund time. Distinct from CreateAccount so the client-facing
+  // path can keep rejecting kind=fund as a validation error.
+  rpc CreateFundAccount(CreateFundAccountRequest) returns (Account);
+
   // -----------------------------------------------------------------
   // Payments — Klijent → another Klijent (different owner). Spec
   // p.21 "Novo plaćanje". Same-currency intra-bank: 1 transaction
@@ -369,6 +375,7 @@ enum AccountKind {
   ACCOUNT_KIND_SYSTEM                 = 5; // bank-owned house  (TT=99, internal)
   ACCOUNT_KIND_FOREX_BOOK             = 6; // bank's per-currency FX inventory book (internal, addressable for actuary trading)
   ACCOUNT_KIND_STATE_TAX              = 7; // RSD destination for capital-gains tax remittance (internal)
+  ACCOUNT_KIND_FUND                   = 8; // investment fund's liquidity account (c4 PR3, spec p.74; FundsOwnerID sentinel as owner)
 }
 
 // AccountSubtype only applies to Lični Tekući RSD per spec p.12; the
@@ -541,6 +548,16 @@ message SetAccountStatusRequest {
 
 message GetSystemAccountRequest {
   Currency currency = 1;
+}
+
+message CreateFundAccountRequest {
+  // Display name shown on the account row (spec p.74). Defaults to
+  // "Račun investicionog fonda" when empty.
+  string   name     = 1 [(buf.validate.field).string.max_len = 120];
+  // Currency. RSD only for c4 PR3 (the fund holds a single RSD
+  // liquidity account; FX hops to/from it via the reservation engine
+  // when invest/withdraw cross currencies).
+  Currency currency = 2 [(buf.validate.field).enum = {defined_only: true, not_in: [0]}];
 }
 
 // SettleTradeRequest moves money between a user's bank account and the

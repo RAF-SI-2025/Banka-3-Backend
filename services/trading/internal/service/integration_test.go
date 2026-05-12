@@ -233,17 +233,22 @@ var (
 // call type for failure-path tests.
 type stubReservations struct {
 	sync.Mutex
-	balances  map[string]string // accountID → amount (decimal string)
-	reserved  map[string]reservedRow
-	reserveCalls  []ReserveInput
-	releaseCalls  []string
-	commitCalls   []CommitInput
-	transferCalls []TransferInput
+	balances     map[string]string // accountID → amount (decimal string)
+	currencies   map[string]domain.Currency
+	reserved     map[string]reservedRow
+	reserveCalls    []ReserveInput
+	releaseCalls    []string
+	commitCalls     []CommitInput
+	transferCalls   []TransferInput
+	createFundCalls []string
 	// Pluggable errors for failure-path tests.
 	reserveErr  error
 	commitErr   error
 	releaseErr  error
 	transferErr error
+	// fundAccountIDs queued for CreateFundAccount returns. Empty queue
+	// means a fresh UUID is generated per call.
+	fundAccountIDs []string
 }
 
 type reservedRow struct {
@@ -256,8 +261,9 @@ type reservedRow struct {
 
 func newStubReservations() *stubReservations {
 	return &stubReservations{
-		balances: map[string]string{},
-		reserved: map[string]reservedRow{},
+		balances:   map[string]string{},
+		currencies: map[string]domain.Currency{},
+		reserved:   map[string]reservedRow{},
 	}
 }
 
@@ -265,21 +271,30 @@ func (s *stubReservations) reset() {
 	s.Lock()
 	defer s.Unlock()
 	s.balances = map[string]string{}
+	s.currencies = map[string]domain.Currency{}
 	s.reserved = map[string]reservedRow{}
 	s.reserveCalls = nil
 	s.releaseCalls = nil
 	s.commitCalls = nil
 	s.transferCalls = nil
+	s.createFundCalls = nil
 	s.reserveErr = nil
 	s.commitErr = nil
 	s.releaseErr = nil
 	s.transferErr = nil
+	s.fundAccountIDs = nil
 }
 
 func (s *stubReservations) setBalance(accountID string, amount string) {
 	s.Lock()
 	defer s.Unlock()
 	s.balances[accountID] = amount
+}
+
+func (s *stubReservations) setCurrency(accountID string, c domain.Currency) {
+	s.Lock()
+	defer s.Unlock()
+	s.currencies[accountID] = c
 }
 
 func (s *stubReservations) balance(accountID string) string {
@@ -366,6 +381,42 @@ func (s *stubReservations) Commit(_ context.Context, in CommitInput) (string, er
 	s.reserved[in.OpID] = r
 	s.commitCalls = append(s.commitCalls, in)
 	return in.OpID, nil
+}
+
+// AccountAvailable returns the (currency, balance) tuple. Defaults to
+// RSD when the test hasn't pinned a currency on the account.
+func (s *stubReservations) AccountAvailable(_ context.Context, accountID string) (domain.Currency, string, error) {
+	s.Lock()
+	defer s.Unlock()
+	c, ok := s.currencies[accountID]
+	if !ok {
+		c = domain.CurrencyRSD
+	}
+	bal, ok := s.balances[accountID]
+	if !ok {
+		bal = "0"
+	}
+	return c, bal, nil
+}
+
+// CreateFundAccount returns the next queued fund account id, or a
+// freshly-minted UUID otherwise. The created account is registered in
+// the stub's balance map at zero with the requested currency so
+// subsequent AccountAvailable lookups don't fail.
+func (s *stubReservations) CreateFundAccount(_ context.Context, name string, currency domain.Currency) (string, error) {
+	s.Lock()
+	defer s.Unlock()
+	s.createFundCalls = append(s.createFundCalls, name)
+	var id string
+	if len(s.fundAccountIDs) > 0 {
+		id = s.fundAccountIDs[0]
+		s.fundAccountIDs = s.fundAccountIDs[1:]
+	} else {
+		id = uuid.NewString()
+	}
+	s.balances[id] = "0"
+	s.currencies[id] = currency
+	return id, nil
 }
 
 func (s *stubReservations) Transfer(_ context.Context, in TransferInput) (string, error) {
@@ -456,6 +507,10 @@ func resetSchema(t *testing.T) {
 	t.Helper()
 	_, err := fixPool.Exec(context.Background(), `
         truncate
+            "trading".fund_performance_snapshots,
+            "trading".client_fund_transactions,
+            "trading".client_fund_positions,
+            "trading".investment_funds,
             "trading".otc_contracts,
             "trading".otc_offers,
             "trading".option_exercises,

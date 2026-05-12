@@ -38,6 +38,7 @@ const (
 	BankService_ReleaseFunds_FullMethodName           = "/banka.bank.v1.BankService/ReleaseFunds"
 	BankService_CommitReservedFunds_FullMethodName    = "/banka.bank.v1.BankService/CommitReservedFunds"
 	BankService_TransferBetweenClients_FullMethodName = "/banka.bank.v1.BankService/TransferBetweenClients"
+	BankService_CreateFundAccount_FullMethodName      = "/banka.bank.v1.BankService/CreateFundAccount"
 	BankService_CreatePayment_FullMethodName          = "/banka.bank.v1.BankService/CreatePayment"
 	BankService_CreateTransfer_FullMethodName         = "/banka.bank.v1.BankService/CreateTransfer"
 	BankService_QuoteExchange_FullMethodName          = "/banka.bank.v1.BankService/QuoteExchange"
@@ -144,6 +145,11 @@ type BankServiceClient interface {
 	// ledger leg so reporting (Profit Banke + pregled plaćanja) can
 	// distinguish OTC vs fund flows.
 	TransferBetweenClients(ctx context.Context, in *TransferBetweenClientsRequest, opts ...grpc.CallOption) (*TransferBetweenClientsResponse, error)
+	// CreateFundAccount mints a kind='fund' RSD account owned by the
+	// FundsOwnerID sentinel. Trading service dials this internally at
+	// CreateFund time. Distinct from CreateAccount so the client-facing
+	// path can keep rejecting kind=fund as a validation error.
+	CreateFundAccount(ctx context.Context, in *CreateFundAccountRequest, opts ...grpc.CallOption) (*Account, error)
 	CreatePayment(ctx context.Context, in *CreatePaymentRequest, opts ...grpc.CallOption) (*PaymentResult, error)
 	CreateTransfer(ctx context.Context, in *CreateTransferRequest, opts ...grpc.CallOption) (*PaymentResult, error)
 	// QuoteExchange returns the converted-amount preview for a
@@ -361,6 +367,16 @@ func (c *bankServiceClient) TransferBetweenClients(ctx context.Context, in *Tran
 	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
 	out := new(TransferBetweenClientsResponse)
 	err := c.cc.Invoke(ctx, BankService_TransferBetweenClients_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *bankServiceClient) CreateFundAccount(ctx context.Context, in *CreateFundAccountRequest, opts ...grpc.CallOption) (*Account, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(Account)
+	err := c.cc.Invoke(ctx, BankService_CreateFundAccount_FullMethodName, in, out, cOpts...)
 	if err != nil {
 		return nil, err
 	}
@@ -660,6 +676,11 @@ type BankServiceServer interface {
 	// ledger leg so reporting (Profit Banke + pregled plaćanja) can
 	// distinguish OTC vs fund flows.
 	TransferBetweenClients(context.Context, *TransferBetweenClientsRequest) (*TransferBetweenClientsResponse, error)
+	// CreateFundAccount mints a kind='fund' RSD account owned by the
+	// FundsOwnerID sentinel. Trading service dials this internally at
+	// CreateFund time. Distinct from CreateAccount so the client-facing
+	// path can keep rejecting kind=fund as a validation error.
+	CreateFundAccount(context.Context, *CreateFundAccountRequest) (*Account, error)
 	CreatePayment(context.Context, *CreatePaymentRequest) (*PaymentResult, error)
 	CreateTransfer(context.Context, *CreateTransferRequest) (*PaymentResult, error)
 	// QuoteExchange returns the converted-amount preview for a
@@ -755,6 +776,9 @@ func (UnimplementedBankServiceServer) CommitReservedFunds(context.Context, *Comm
 }
 func (UnimplementedBankServiceServer) TransferBetweenClients(context.Context, *TransferBetweenClientsRequest) (*TransferBetweenClientsResponse, error) {
 	return nil, status.Error(codes.Unimplemented, "method TransferBetweenClients not implemented")
+}
+func (UnimplementedBankServiceServer) CreateFundAccount(context.Context, *CreateFundAccountRequest) (*Account, error) {
+	return nil, status.Error(codes.Unimplemented, "method CreateFundAccount not implemented")
 }
 func (UnimplementedBankServiceServer) CreatePayment(context.Context, *CreatePaymentRequest) (*PaymentResult, error) {
 	return nil, status.Error(codes.Unimplemented, "method CreatePayment not implemented")
@@ -1159,6 +1183,24 @@ func _BankService_TransferBetweenClients_Handler(srv interface{}, ctx context.Co
 	}
 	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
 		return srv.(BankServiceServer).TransferBetweenClients(ctx, req.(*TransferBetweenClientsRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _BankService_CreateFundAccount_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(CreateFundAccountRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(BankServiceServer).CreateFundAccount(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: BankService_CreateFundAccount_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(BankServiceServer).CreateFundAccount(ctx, req.(*CreateFundAccountRequest))
 	}
 	return interceptor(ctx, in, info, handler)
 }
@@ -1619,6 +1661,10 @@ var BankService_ServiceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "TransferBetweenClients",
 			Handler:    _BankService_TransferBetweenClients_Handler,
+		},
+		{
+			MethodName: "CreateFundAccount",
+			Handler:    _BankService_CreateFundAccount_Handler,
 		},
 		{
 			MethodName: "CreatePayment",

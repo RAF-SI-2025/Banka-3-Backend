@@ -11,15 +11,16 @@ import (
 
 func (s *Server) CreateOrder(ctx context.Context, in *tradingpb.CreateOrderRequest) (*tradingpb.CreateOrderResponse, error) {
 	out, err := s.Svc.CreateOrder(ctx, service.CreateOrderInput{
-		SecurityID: in.GetSecurityId(),
-		OrderType:  orderTypeFromProto(in.GetOrderType()),
-		Direction:  directionFromProto(in.GetDirection()),
-		Quantity:   in.GetQuantity(),
-		LimitPrice: in.GetLimitPrice(),
-		StopPrice:  in.GetStopPrice(),
-		AllOrNone:  in.GetAllOrNone(),
-		Margin:     in.GetMargin(),
-		AccountID:  in.GetAccountId(),
+		SecurityID:       in.GetSecurityId(),
+		OrderType:        orderTypeFromProto(in.GetOrderType()),
+		Direction:        directionFromProto(in.GetDirection()),
+		Quantity:         in.GetQuantity(),
+		LimitPrice:       in.GetLimitPrice(),
+		StopPrice:        in.GetStopPrice(),
+		AllOrNone:        in.GetAllOrNone(),
+		Margin:           in.GetMargin(),
+		AccountID:        in.GetAccountId(),
+		OnBehalfOfFundID: in.GetOnBehalfOfFundId(),
 	})
 	if err != nil {
 		return nil, err
@@ -121,6 +122,8 @@ func orderToProto(o *domain.Order) *tradingpb.Order {
 		RemainingQuantity: o.RemainingQuantity,
 		LastModification:  timestamppb.New(o.LastModification),
 		CreatedAt:         timestamppb.New(o.CreatedAt),
+		ActorKind:         userKindToProto(o.ActorKind),
+		OnBehalfOfFundId:  o.OnBehalfOfFundID,
 	}
 	if o.ApprovedAt != nil {
 		out.ApprovedAt = timestamppb.New(*o.ApprovedAt)
@@ -194,6 +197,8 @@ func userKindToProto(k domain.UserKind) tradingpb.UserKind {
 		return tradingpb.UserKind_USER_KIND_CLIENT
 	case domain.KindEmployee:
 		return tradingpb.UserKind_USER_KIND_EMPLOYEE
+	case domain.KindFund:
+		return tradingpb.UserKind_USER_KIND_FUND
 	}
 	return tradingpb.UserKind_USER_KIND_UNSPECIFIED
 }
@@ -204,6 +209,8 @@ func userKindFromProto(k tradingpb.UserKind) domain.UserKind {
 		return domain.KindClient
 	case tradingpb.UserKind_USER_KIND_EMPLOYEE:
 		return domain.KindEmployee
+	case tradingpb.UserKind_USER_KIND_FUND:
+		return domain.KindFund
 	}
 	return ""
 }

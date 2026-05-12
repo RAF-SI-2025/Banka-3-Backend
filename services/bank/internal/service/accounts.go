@@ -212,6 +212,7 @@ func (s *Service) ListAccounts(ctx context.Context, f domain.AccountFilter, page
 			domain.KindSystem,
 			domain.KindStateTax,
 			domain.KindForexBook,
+			domain.KindFund,
 		}
 	}
 	return s.Store.ListAccounts(ctx, f, page, pageSize)
@@ -280,6 +281,51 @@ func (s *Service) GetSystemAccount(ctx context.Context, currency domain.Currency
 		return nil, apperr.Validation("unsupported currency")
 	}
 	return s.Store.GetSystemAccount(ctx, currency)
+}
+
+// CreateFundAccount mints the bank-side liquidity account for an
+// investment fund (c4 PR3, spec p.74). Internal RPC — the trading
+// service calls this at CreateFund time, authenticated with admin
+// metadata. Distinct from CreateAccount so the client-facing path can
+// keep rejecting kind=fund as a validation error.
+//
+// Owner is the FundsOwnerID sentinel (not a real client). Currency is
+// limited to RSD: the fund's bookkeeping is RSD-denominated and FX
+// flows hop through the menjačnica engine when invest/withdraw cross
+// currencies. Opening balance is always zero; investments fund it.
+func (s *Service) CreateFundAccount(ctx context.Context, name string, currency domain.Currency) (*domain.Account, error) {
+	if err := s.requireInternal(ctx); err != nil {
+		return nil, err
+	}
+	if currency != domain.CurrencyRSD {
+		return nil, apperr.Validation("fund liquidity accounts are RSD only")
+	}
+	number, err := account.Generate(s.Cfg.BankCode, s.Cfg.Branch, account.TypeFund)
+	if err != nil {
+		return nil, apperr.Internal("generate account number", err)
+	}
+	display := strings.TrimSpace(name)
+	if display == "" {
+		display = "Račun investicionog fonda"
+	}
+	a := &domain.Account{
+		Number:              number,
+		Name:                display,
+		OwnerClientID:       domain.FundsOwnerID,
+		CreatedByEmployeeID: domain.SystemOwnerID,
+		Kind:                domain.KindFund,
+		Subtype:             domain.SubtypeUnspecified,
+		Currency:            currency,
+		Status:              domain.AccountActive,
+		Balance:             "0",
+		AvailableBalance:    "0",
+		MaintenanceFee:      "0",
+		DailyLimit:          "0",
+		MonthlyLimit:        "0",
+		DailySpent:          "0",
+		MonthlySpent:        "0",
+	}
+	return s.Store.CreateAccount(ctx, a)
 }
 
 // EnsureSystemAccounts is called once at boot. For each supported

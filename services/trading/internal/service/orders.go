@@ -27,6 +27,12 @@ type CreateOrderInput struct {
 	AllOrNone  bool
 	Margin     bool
 	AccountID  string
+	// c4 PR3: when set, the caller (must be a supervisor admin or the
+	// fund's manager) is placing the order on behalf of an investment
+	// fund. The order's owner becomes (fund.id, KindFund), the account
+	// must equal fund.bank_account_id, and realized_gains writes are
+	// skipped on the fill (EDGE-3).
+	OnBehalfOfFundID string
 }
 
 // CreateOrderResult bundles the persisted order with advisory flags
@@ -58,6 +64,13 @@ func (s *Service) CreateOrder(ctx context.Context, in CreateOrderInput) (*Create
 	p, err := s.requirePrincipal(ctx)
 	if err != nil {
 		return nil, err
+	}
+	// c4 PR3 fund-actor branch — supervisor places an order on behalf
+	// of an investment fund they manage. Routes through a dedicated
+	// helper that uses fund-scoped checks (holding availability + funds
+	// available read against the fund row, not the supervisor).
+	if in.OnBehalfOfFundID != "" {
+		return s.createFundActorOrderFromInput(ctx, p, in)
 	}
 	if err := s.assertTraderRole(p); err != nil {
 		return nil, err
@@ -784,4 +797,151 @@ func validateOrderShape(in CreateOrderInput) error {
 		return apperr.Validation("nepoznata direction")
 	}
 	return nil
+}
+
+// =====================================================================
+// Fund-actor order placement (c4 PR3, spec p.74-75)
+// =====================================================================
+
+// fundActorOrderInput is the internal helper input. Used by both the
+// public CreateOrder fund-actor branch and the auto-liquidation step of
+// the fund_withdraw saga.
+type fundActorOrderInput struct {
+	FundID     string
+	SecurityID string
+	AccountID  string
+	Quantity   int32
+	Direction  domain.Direction
+	OrderType  domain.OrderType
+	LimitPrice string
+	StopPrice  string
+	AllOrNone  bool
+	// InitiatorUser is the supervisor who initiated. May be empty when
+	// the saga's own context owns the call (recovery worker re-enters).
+	InitiatorUser string
+}
+
+// createFundActorOrderFromInput is the CreateOrder fund-actor branch.
+// Validates the caller is the fund's manager + the account matches the
+// fund's bank account, then delegates to createFundActorOrder.
+func (s *Service) createFundActorOrderFromInput(
+	ctx context.Context, p auth.Principal, in CreateOrderInput,
+) (*CreateOrderResult, error) {
+	if err := s.requireFundsManage(p); err != nil {
+		return nil, err
+	}
+	f, err := s.Store.GetFund(ctx, in.OnBehalfOfFundID)
+	if err != nil {
+		return nil, err
+	}
+	if err := requireFundManager(p, f); err != nil {
+		return nil, err
+	}
+	if in.AccountID != f.BankAccountID {
+		return nil, apperr.Validation("nalog mora ići preko računa fonda")
+	}
+	if in.Margin {
+		return nil, apperr.Validation("fond ne podržava margin trgovinu")
+	}
+	o, err := s.createFundActorOrder(ctx, fundActorOrderInput{
+		FundID:        f.ID,
+		SecurityID:    in.SecurityID,
+		AccountID:     in.AccountID,
+		Quantity:      in.Quantity,
+		Direction:     in.Direction,
+		OrderType:     in.OrderType,
+		LimitPrice:    in.LimitPrice,
+		StopPrice:     in.StopPrice,
+		AllOrNone:     in.AllOrNone,
+		InitiatorUser: p.UserID,
+	})
+	if err != nil {
+		return nil, err
+	}
+	return &CreateOrderResult{Order: o}, nil
+}
+
+// createFundActorOrder is the shared insertion path used by the
+// fund-actor branch of CreateOrder and the auto-liquidation step of
+// the fund_withdraw saga. Skips the agent-limit / client-only
+// instrument checks (those are caller-scoped concerns); always
+// auto-approves (a supervisor placing on behalf of the bank doesn't
+// need themselves to approve their own decision).
+func (s *Service) createFundActorOrder(ctx context.Context, in fundActorOrderInput) (*domain.Order, error) {
+	if in.Quantity <= 0 {
+		return nil, apperr.Validation("količina mora biti pozitivna")
+	}
+	sec, err := s.Store.GetSecurity(ctx, in.SecurityID)
+	if err != nil {
+		return nil, err
+	}
+	if sec.Type == domain.SecurityForex || sec.Type == domain.SecurityOption {
+		// Funds settle through MARKET sells against listed stocks/futures.
+		return nil, apperr.Validation("fond ne podržava ovaj tip hartije")
+	}
+	if sec.SettlementDate != nil && !sec.SettlementDate.After(s.now()) {
+		return nil, apperr.FailedPrecondition("hartija je istekla — trgovina nije moguća")
+	}
+	listing, err := s.Store.GetListingBySecurityID(ctx, in.SecurityID)
+	if err != nil {
+		return nil, err
+	}
+	priceSnap := listing.Price
+	contractSize := listing.ContractSize
+	if contractSize == "" {
+		contractSize = "1"
+	}
+	// SELL: assert the fund's holding covers qty.
+	if in.Direction == domain.DirectionSell {
+		hs, err := s.Store.ListHoldings(ctx, store.HoldingFilter{
+			UserID: in.FundID, UserKind: domain.KindFund, SecurityID: sec.ID,
+		})
+		if err != nil {
+			return nil, err
+		}
+		var have int32
+		for _, h := range hs {
+			if h.AccountID == in.AccountID {
+				have += h.Quantity
+			}
+		}
+		if have < in.Quantity {
+			return nil, apperr.FailedPrecondition("fond nema dovoljno hartija za prodaju")
+		}
+	}
+	// BUY: assert the fund's bank account has enough RSD for the trade.
+	if in.Direction == domain.DirectionBuy {
+		if err := s.assertFundsAvailable(ctx, in.AccountID, sec, in.Quantity, priceSnap, contractSize); err != nil {
+			return nil, err
+		}
+	}
+	afterHours := false
+	if sec.ExchangeMIC != "" {
+		if ex, err := s.Store.GetExchange(ctx, sec.ExchangeMIC); err == nil {
+			ms := s.resolveMarketState(ex, s.now())
+			afterHours = ms.IsAfterHours
+		}
+	}
+	o := &domain.Order{
+		UserID:           in.FundID,
+		UserKind:         domain.KindFund,
+		ActorKind:        domain.KindFund,
+		OnBehalfOfFundID: in.FundID,
+		SecurityID:       in.SecurityID,
+		OrderType:        in.OrderType,
+		Direction:        in.Direction,
+		Quantity:         in.Quantity,
+		ContractSize:     contractSize,
+		PricePerUnit:     priceSnap,
+		LimitPrice:       in.LimitPrice,
+		StopPrice:        in.StopPrice,
+		AllOrNone:        in.AllOrNone,
+		IsActuary:        true, // bank-actor → no FX commission (spec p.55)
+		AccountID:        in.AccountID,
+		Status:           domain.OrderStatusApproved,
+		ApprovalRequired: false,
+		AfterHours:       afterHours,
+		ApprovedBy:       in.InitiatorUser,
+	}
+	return s.Store.CreateOrder(ctx, o)
 }

@@ -235,6 +235,13 @@ func Run() error {
 		return runOTCExpirySweep(gctx, log, svc, otcExpiryTick)
 	})
 
+	// c4 PR3 fund performance snapshot cron (FUND-6, spec p.74). One
+	// snapshot per active fund per day at 23:50 Europe/Belgrade. Feeds
+	// the FE chart in FE-FUND-2.
+	g.Go(func() error {
+		return runFundPerformanceCron(gctx, log, svc, belgrade)
+	})
+
 	probeSrv.MarkReady()
 	log.Info("trading service ready", "grpc", grpcAddr)
 

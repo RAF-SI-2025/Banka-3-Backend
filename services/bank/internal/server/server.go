@@ -178,6 +178,14 @@ func (s *Server) GetSystemAccount(ctx context.Context, in *bankpb.GetSystemAccou
 	return accountToProto(a), nil
 }
 
+func (s *Server) CreateFundAccount(ctx context.Context, in *bankpb.CreateFundAccountRequest) (*bankpb.Account, error) {
+	a, err := s.Svc.CreateFundAccount(ctx, in.GetName(), currencyFromProto(in.GetCurrency()))
+	if err != nil {
+		return nil, err
+	}
+	return accountToProto(a), nil
+}
+
 // =====================================================================
 // Conversions
 // =====================================================================
@@ -244,6 +252,8 @@ func kindToProto(k domain.AccountKind) bankpb.AccountKind {
 		return bankpb.AccountKind_ACCOUNT_KIND_FOREX_BOOK
 	case domain.KindStateTax:
 		return bankpb.AccountKind_ACCOUNT_KIND_STATE_TAX
+	case domain.KindFund:
+		return bankpb.AccountKind_ACCOUNT_KIND_FUND
 	}
 	return bankpb.AccountKind_ACCOUNT_KIND_UNSPECIFIED
 }
@@ -264,6 +274,8 @@ func kindFromProto(k bankpb.AccountKind) domain.AccountKind {
 		return domain.KindForexBook
 	case bankpb.AccountKind_ACCOUNT_KIND_STATE_TAX:
 		return domain.KindStateTax
+	case bankpb.AccountKind_ACCOUNT_KIND_FUND:
+		return domain.KindFund
 	}
 	return ""
 }

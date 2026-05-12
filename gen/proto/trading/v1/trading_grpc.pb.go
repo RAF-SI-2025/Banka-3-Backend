@@ -60,6 +60,14 @@ const (
 	TradingService_ListOTCContracts_FullMethodName       = "/banka.trading.v1.TradingService/ListOTCContracts"
 	TradingService_GetOTCContract_FullMethodName         = "/banka.trading.v1.TradingService/GetOTCContract"
 	TradingService_ExerciseOTCContract_FullMethodName    = "/banka.trading.v1.TradingService/ExerciseOTCContract"
+	TradingService_ListFunds_FullMethodName              = "/banka.trading.v1.TradingService/ListFunds"
+	TradingService_GetFund_FullMethodName                = "/banka.trading.v1.TradingService/GetFund"
+	TradingService_CreateFund_FullMethodName             = "/banka.trading.v1.TradingService/CreateFund"
+	TradingService_InvestInFund_FullMethodName           = "/banka.trading.v1.TradingService/InvestInFund"
+	TradingService_WithdrawFromFund_FullMethodName       = "/banka.trading.v1.TradingService/WithdrawFromFund"
+	TradingService_ListFundPositions_FullMethodName      = "/banka.trading.v1.TradingService/ListFundPositions"
+	TradingService_GetFundPerformance_FullMethodName     = "/banka.trading.v1.TradingService/GetFundPerformance"
+	TradingService_ListFundTransactions_FullMethodName   = "/banka.trading.v1.TradingService/ListFundTransactions"
 )
 
 // TradingServiceClient is the client API for TradingService service.
@@ -155,6 +163,38 @@ type TradingServiceClient interface {
 	// on the received shares is `strike_price`; seller writes a
 	// realized_gains row.
 	ExerciseOTCContract(ctx context.Context, in *ExerciseOTCContractRequest, opts ...grpc.CallOption) (*ExerciseOTCContractResponse, error)
+	// ListFunds returns the fund discovery list (spec p.71). Supervisors
+	// and clients with funds.read.* can browse; rows include total_value,
+	// profit, and minimum_contribution for sorting/filtering.
+	ListFunds(ctx context.Context, in *ListFundsRequest, opts ...grpc.CallOption) (*ListFundsResponse, error)
+	// GetFund returns the fund detail including its holdings list and the
+	// caller's position when one exists. Spec p.74.
+	GetFund(ctx context.Context, in *GetFundRequest, opts ...grpc.CallOption) (*GetFundResponse, error)
+	// CreateFund mints a new fund (supervisor only — spec p.74). Bank
+	// service is called internally to open the fund's RSD account; the
+	// creator becomes the default manager.
+	CreateFund(ctx context.Context, in *CreateFundRequest, opts ...grpc.CallOption) (*Fund, error)
+	// InvestInFund runs the fund_invest SAGA: reserves the source
+	// account, transfers to the fund's bank account (FX hop if needed),
+	// upserts the client_fund_positions row (units math) and writes a
+	// client_fund_transactions row. Verification-gated (FOUND-9).
+	InvestInFund(ctx context.Context, in *InvestInFundRequest, opts ...grpc.CallOption) (*FundTransactionResponse, error)
+	// WithdrawFromFund runs the fund_withdraw SAGA. Liquid path (fund
+	// has enough RSD on its bank account) reserves and transfers
+	// directly; illiquid path stays in `pending` while auto-liquidation
+	// orders settle the gap. Verification-gated.
+	WithdrawFromFund(ctx context.Context, in *WithdrawFromFundRequest, opts ...grpc.CallOption) (*FundTransactionResponse, error)
+	// ListFundPositions returns the caller's positions across all funds
+	// (clients) or a specified user's (supervisors/admin). Supervisors
+	// may pass the BankAsClient sentinel UUID to see the bank's stakes
+	// (FE-FUND-6, Profit Banke "Bank fund positions").
+	ListFundPositions(ctx context.Context, in *ListFundPositionsRequest, opts ...grpc.CallOption) (*ListFundPositionsResponse, error)
+	// GetFundPerformance returns the daily liquid_rsd + holdings_value_rsd
+	// time series for a fund. FE-FUND-2 chart.
+	GetFundPerformance(ctx context.Context, in *GetFundPerformanceRequest, opts ...grpc.CallOption) (*GetFundPerformanceResponse, error)
+	// ListFundTransactions returns the audit log of invest/withdraw rows
+	// for a fund. Supervisors see everything; clients see only their own.
+	ListFundTransactions(ctx context.Context, in *ListFundTransactionsRequest, opts ...grpc.CallOption) (*ListFundTransactionsResponse, error)
 }
 
 type tradingServiceClient struct {
@@ -565,6 +605,86 @@ func (c *tradingServiceClient) ExerciseOTCContract(ctx context.Context, in *Exer
 	return out, nil
 }
 
+func (c *tradingServiceClient) ListFunds(ctx context.Context, in *ListFundsRequest, opts ...grpc.CallOption) (*ListFundsResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(ListFundsResponse)
+	err := c.cc.Invoke(ctx, TradingService_ListFunds_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *tradingServiceClient) GetFund(ctx context.Context, in *GetFundRequest, opts ...grpc.CallOption) (*GetFundResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(GetFundResponse)
+	err := c.cc.Invoke(ctx, TradingService_GetFund_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *tradingServiceClient) CreateFund(ctx context.Context, in *CreateFundRequest, opts ...grpc.CallOption) (*Fund, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(Fund)
+	err := c.cc.Invoke(ctx, TradingService_CreateFund_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *tradingServiceClient) InvestInFund(ctx context.Context, in *InvestInFundRequest, opts ...grpc.CallOption) (*FundTransactionResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(FundTransactionResponse)
+	err := c.cc.Invoke(ctx, TradingService_InvestInFund_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *tradingServiceClient) WithdrawFromFund(ctx context.Context, in *WithdrawFromFundRequest, opts ...grpc.CallOption) (*FundTransactionResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(FundTransactionResponse)
+	err := c.cc.Invoke(ctx, TradingService_WithdrawFromFund_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *tradingServiceClient) ListFundPositions(ctx context.Context, in *ListFundPositionsRequest, opts ...grpc.CallOption) (*ListFundPositionsResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(ListFundPositionsResponse)
+	err := c.cc.Invoke(ctx, TradingService_ListFundPositions_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *tradingServiceClient) GetFundPerformance(ctx context.Context, in *GetFundPerformanceRequest, opts ...grpc.CallOption) (*GetFundPerformanceResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(GetFundPerformanceResponse)
+	err := c.cc.Invoke(ctx, TradingService_GetFundPerformance_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *tradingServiceClient) ListFundTransactions(ctx context.Context, in *ListFundTransactionsRequest, opts ...grpc.CallOption) (*ListFundTransactionsResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(ListFundTransactionsResponse)
+	err := c.cc.Invoke(ctx, TradingService_ListFundTransactions_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
 // TradingServiceServer is the server API for TradingService service.
 // All implementations should embed UnimplementedTradingServiceServer
 // for forward compatibility.
@@ -658,6 +778,38 @@ type TradingServiceServer interface {
 	// on the received shares is `strike_price`; seller writes a
 	// realized_gains row.
 	ExerciseOTCContract(context.Context, *ExerciseOTCContractRequest) (*ExerciseOTCContractResponse, error)
+	// ListFunds returns the fund discovery list (spec p.71). Supervisors
+	// and clients with funds.read.* can browse; rows include total_value,
+	// profit, and minimum_contribution for sorting/filtering.
+	ListFunds(context.Context, *ListFundsRequest) (*ListFundsResponse, error)
+	// GetFund returns the fund detail including its holdings list and the
+	// caller's position when one exists. Spec p.74.
+	GetFund(context.Context, *GetFundRequest) (*GetFundResponse, error)
+	// CreateFund mints a new fund (supervisor only — spec p.74). Bank
+	// service is called internally to open the fund's RSD account; the
+	// creator becomes the default manager.
+	CreateFund(context.Context, *CreateFundRequest) (*Fund, error)
+	// InvestInFund runs the fund_invest SAGA: reserves the source
+	// account, transfers to the fund's bank account (FX hop if needed),
+	// upserts the client_fund_positions row (units math) and writes a
+	// client_fund_transactions row. Verification-gated (FOUND-9).
+	InvestInFund(context.Context, *InvestInFundRequest) (*FundTransactionResponse, error)
+	// WithdrawFromFund runs the fund_withdraw SAGA. Liquid path (fund
+	// has enough RSD on its bank account) reserves and transfers
+	// directly; illiquid path stays in `pending` while auto-liquidation
+	// orders settle the gap. Verification-gated.
+	WithdrawFromFund(context.Context, *WithdrawFromFundRequest) (*FundTransactionResponse, error)
+	// ListFundPositions returns the caller's positions across all funds
+	// (clients) or a specified user's (supervisors/admin). Supervisors
+	// may pass the BankAsClient sentinel UUID to see the bank's stakes
+	// (FE-FUND-6, Profit Banke "Bank fund positions").
+	ListFundPositions(context.Context, *ListFundPositionsRequest) (*ListFundPositionsResponse, error)
+	// GetFundPerformance returns the daily liquid_rsd + holdings_value_rsd
+	// time series for a fund. FE-FUND-2 chart.
+	GetFundPerformance(context.Context, *GetFundPerformanceRequest) (*GetFundPerformanceResponse, error)
+	// ListFundTransactions returns the audit log of invest/withdraw rows
+	// for a fund. Supervisors see everything; clients see only their own.
+	ListFundTransactions(context.Context, *ListFundTransactionsRequest) (*ListFundTransactionsResponse, error)
 }
 
 // UnimplementedTradingServiceServer should be embedded to have
@@ -786,6 +938,30 @@ func (UnimplementedTradingServiceServer) GetOTCContract(context.Context, *GetOTC
 }
 func (UnimplementedTradingServiceServer) ExerciseOTCContract(context.Context, *ExerciseOTCContractRequest) (*ExerciseOTCContractResponse, error) {
 	return nil, status.Error(codes.Unimplemented, "method ExerciseOTCContract not implemented")
+}
+func (UnimplementedTradingServiceServer) ListFunds(context.Context, *ListFundsRequest) (*ListFundsResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method ListFunds not implemented")
+}
+func (UnimplementedTradingServiceServer) GetFund(context.Context, *GetFundRequest) (*GetFundResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method GetFund not implemented")
+}
+func (UnimplementedTradingServiceServer) CreateFund(context.Context, *CreateFundRequest) (*Fund, error) {
+	return nil, status.Error(codes.Unimplemented, "method CreateFund not implemented")
+}
+func (UnimplementedTradingServiceServer) InvestInFund(context.Context, *InvestInFundRequest) (*FundTransactionResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method InvestInFund not implemented")
+}
+func (UnimplementedTradingServiceServer) WithdrawFromFund(context.Context, *WithdrawFromFundRequest) (*FundTransactionResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method WithdrawFromFund not implemented")
+}
+func (UnimplementedTradingServiceServer) ListFundPositions(context.Context, *ListFundPositionsRequest) (*ListFundPositionsResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method ListFundPositions not implemented")
+}
+func (UnimplementedTradingServiceServer) GetFundPerformance(context.Context, *GetFundPerformanceRequest) (*GetFundPerformanceResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method GetFundPerformance not implemented")
+}
+func (UnimplementedTradingServiceServer) ListFundTransactions(context.Context, *ListFundTransactionsRequest) (*ListFundTransactionsResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method ListFundTransactions not implemented")
 }
 func (UnimplementedTradingServiceServer) testEmbeddedByValue() {}
 
@@ -1527,6 +1703,150 @@ func _TradingService_ExerciseOTCContract_Handler(srv interface{}, ctx context.Co
 	return interceptor(ctx, in, info, handler)
 }
 
+func _TradingService_ListFunds_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(ListFundsRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(TradingServiceServer).ListFunds(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: TradingService_ListFunds_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(TradingServiceServer).ListFunds(ctx, req.(*ListFundsRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _TradingService_GetFund_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(GetFundRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(TradingServiceServer).GetFund(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: TradingService_GetFund_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(TradingServiceServer).GetFund(ctx, req.(*GetFundRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _TradingService_CreateFund_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(CreateFundRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(TradingServiceServer).CreateFund(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: TradingService_CreateFund_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(TradingServiceServer).CreateFund(ctx, req.(*CreateFundRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _TradingService_InvestInFund_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(InvestInFundRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(TradingServiceServer).InvestInFund(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: TradingService_InvestInFund_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(TradingServiceServer).InvestInFund(ctx, req.(*InvestInFundRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _TradingService_WithdrawFromFund_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(WithdrawFromFundRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(TradingServiceServer).WithdrawFromFund(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: TradingService_WithdrawFromFund_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(TradingServiceServer).WithdrawFromFund(ctx, req.(*WithdrawFromFundRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _TradingService_ListFundPositions_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(ListFundPositionsRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(TradingServiceServer).ListFundPositions(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: TradingService_ListFundPositions_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(TradingServiceServer).ListFundPositions(ctx, req.(*ListFundPositionsRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _TradingService_GetFundPerformance_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(GetFundPerformanceRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(TradingServiceServer).GetFundPerformance(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: TradingService_GetFundPerformance_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(TradingServiceServer).GetFundPerformance(ctx, req.(*GetFundPerformanceRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _TradingService_ListFundTransactions_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(ListFundTransactionsRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(TradingServiceServer).ListFundTransactions(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: TradingService_ListFundTransactions_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(TradingServiceServer).ListFundTransactions(ctx, req.(*ListFundTransactionsRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
 // TradingService_ServiceDesc is the grpc.ServiceDesc for TradingService service.
 // It's only intended for direct use with grpc.RegisterService,
 // and not to be introspected or modified (even as a copy)
@@ -1693,6 +2013,38 @@ var TradingService_ServiceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "ExerciseOTCContract",
 			Handler:    _TradingService_ExerciseOTCContract_Handler,
+		},
+		{
+			MethodName: "ListFunds",
+			Handler:    _TradingService_ListFunds_Handler,
+		},
+		{
+			MethodName: "GetFund",
+			Handler:    _TradingService_GetFund_Handler,
+		},
+		{
+			MethodName: "CreateFund",
+			Handler:    _TradingService_CreateFund_Handler,
+		},
+		{
+			MethodName: "InvestInFund",
+			Handler:    _TradingService_InvestInFund_Handler,
+		},
+		{
+			MethodName: "WithdrawFromFund",
+			Handler:    _TradingService_WithdrawFromFund_Handler,
+		},
+		{
+			MethodName: "ListFundPositions",
+			Handler:    _TradingService_ListFundPositions_Handler,
+		},
+		{
+			MethodName: "GetFundPerformance",
+			Handler:    _TradingService_GetFundPerformance_Handler,
+		},
+		{
+			MethodName: "ListFundTransactions",
+			Handler:    _TradingService_ListFundTransactions_Handler,
 		},
 	},
 	Streams:  []grpc.StreamDesc{},

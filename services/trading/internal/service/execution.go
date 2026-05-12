@@ -463,6 +463,13 @@ func (s *Service) completeFill(
 			if err != nil {
 				return err
 			}
+			// EDGE-3 (c4 PR3, spec p.71-76): fund-actor sells are pre-tax;
+			// the tax bites the client at withdrawal time. Skip the
+			// realized_gain insert here so the monthly tax cron doesn't
+			// double-tax the fund.
+			if o.UserKind == domain.KindFund {
+				break
+			}
 			if err := s.recordRealizedGain(ctx, tx, o, sec, pending.Quantity, pending.PricePerUnit, avgPrice, contractSize); err != nil {
 				return err
 			}

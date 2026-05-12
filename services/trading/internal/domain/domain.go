@@ -40,6 +40,11 @@ type UserKind string
 const (
 	KindClient   UserKind = "client"
 	KindEmployee UserKind = "employee"
+	// KindFund identifies investment-fund-as-actor rows (c4 PR3, spec
+	// p.74-75). A fund-actor order books holdings to
+	// (user_id=fund.id, user_kind='fund') and skips realized_gains
+	// (funds are pre-tax; the client pays at withdrawal — EDGE-3).
+	KindFund UserKind = "fund"
 )
 
 // ActuaryType maps to the proto enum + DB check constraint.
@@ -240,6 +245,14 @@ type Order struct {
 	RemainingQuantity  int32
 	LastModification   time.Time
 	CreatedAt          time.Time
+
+	// c4 PR3 fund-actor (spec p.74-75). ActorKind discriminates whether
+	// the order was placed by a client/employee themselves or on behalf
+	// of an investment fund they manage. OnBehalfOfFundID is non-empty
+	// when ActorKind == KindFund; for backward compatibility the column
+	// defaults to KindClient/KindEmployee matching UserKind.
+	ActorKind        UserKind
+	OnBehalfOfFundID string
 }
 
 // OrderExecution is one partial fill. Spec p.55-56.
@@ -411,13 +424,98 @@ type OTCContract struct {
 	UpdatedAt time.Time
 }
 
+// =====================================================================
+// Investment funds (c4 PR3 — spec p.71-76)
+// =====================================================================
+
+// FundStatus is the lifecycle of an investment fund.
+type FundStatus string
+
+const (
+	FundActive FundStatus = "active"
+	FundClosed FundStatus = "closed"
+)
+
+// FundTransactionStatus is the lifecycle of an invest/withdraw row.
+//
+//   - pending   → SAGA is in flight (illiquid withdraw stays here while
+//     auto-liquidation orders settle).
+//   - completed → terminal success.
+//   - failed    → terminal failure (compensations ran).
+type FundTransactionStatus string
+
+const (
+	FundTxPending   FundTransactionStatus = "pending"
+	FundTxCompleted FundTransactionStatus = "completed"
+	FundTxFailed    FundTransactionStatus = "failed"
+)
+
+// Fund is one investment-fund row. total_value_rsd + profit_rsd are
+// derived at read time from the bank account balance (liquid) plus the
+// market value of the fund's holdings (Σ qty × current_price, all in
+// RSD via the rate provider's ASK).
+type Fund struct {
+	ID                  string
+	Name                string
+	Description         string
+	ManagerUserID       string
+	BankAccountID       string
+	MinimumContribution string
+	TotalUnits          string
+	Status              FundStatus
+	CreatedAt           time.Time
+	UpdatedAt           time.Time
+}
+
+// FundPosition is one client's stake in one fund. units is the
+// mutual-fund unit count; total_invested_rsd is the cash that bought
+// those units (cost basis for the EDGE-3 tax row at withdrawal time).
+type FundPosition struct {
+	ID                 string
+	FundID             string
+	ClientID           string
+	Units              string
+	TotalInvestedRSD   string
+	CreatedAt          time.Time
+	UpdatedAt          time.Time
+}
+
+// FundTransaction is one audit-log row for an invest/withdraw.
+type FundTransaction struct {
+	ID                       string
+	FundID                   string
+	ClientID                 string
+	InitiatorEmployeeID      string
+	AmountRSD                string
+	UnitsDelta               string // positive on invest, negative on withdraw
+	SourceOrDestAccountID    string
+	IsInflow                 bool
+	Status                   FundTransactionStatus
+	SagaID                   string
+	FailureReason            string
+	CreatedAt                time.Time
+	UpdatedAt                time.Time
+}
+
+// FundPerformanceSnapshot is one daily snapshot for the chart.
+type FundPerformanceSnapshot struct {
+	FundID           string
+	SnapshotAt       time.Time
+	LiquidRSD        string
+	HoldingsValueRSD string
+}
+
 // RealizedGain records one closing sell-execution for capital-gains
-// tax. Spec p.62.
+// tax. Spec p.62. SecurityID is empty on c4 PR3 fund-withdrawal rows
+// (EDGE-3); FundID is non-empty there instead. The tax cron is
+// agnostic — it groups by (user_id, account_id) and doesn't read
+// security_id.
 type RealizedGain struct {
 	ID            string
 	UserID        string
 	UserKind      UserKind
 	SecurityID    string
+	FundID        string
 	AccountID     string
 	Quantity      int32
 	CostBasisAmt  string

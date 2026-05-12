@@ -157,6 +157,13 @@ type BankReservations interface {
 	Release(ctx context.Context, opID string) (released bool, err error)
 	Commit(ctx context.Context, in CommitInput) (string, error)
 	Transfer(ctx context.Context, in TransferInput) (string, error)
+	// AccountAvailable returns (currency, available_balance) for an
+	// account. Re-exposed on this interface (also on MarginChecker) so
+	// fund flows don't need to depend on the c3 margin surface.
+	AccountAvailable(ctx context.Context, accountID string) (domain.Currency, string, error)
+	// CreateFundAccount mints the bank-side liquidity account for a
+	// fund. Called from CreateFund. Returns the new account's id.
+	CreateFundAccount(ctx context.Context, name string, currency domain.Currency) (accountID string, err error)
 }
 
 // ReserveInput mirrors the bank.ReserveFunds RPC fields the SAGA needs.

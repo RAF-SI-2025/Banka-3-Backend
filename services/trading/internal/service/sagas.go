@@ -15,13 +15,19 @@ import (
 // about with `reg`. Called once at app boot before the orchestrator
 // starts driving rows.
 //
-// c4-PR2 adds:
-//   - otc_accept   — accept saga (premium leg + contract mint).
-//   - otc_exercise — buyer exercises a contract (strike leg + shares
-//     transfer + seller realized_gain).
+// c4-PR2 added otc_accept + otc_exercise; c4-PR3 adds fund_invest +
+// fund_withdraw. PR4 will add profit-cascade.
 //
-// PR3/PR4 will add fund_invest, fund_withdraw, profit-cascade.
+//   - otc_accept    — accept saga (premium leg + contract mint).
+//   - otc_exercise  — buyer exercises a contract (strike leg + shares
+//     transfer + seller realized_gain).
+//   - fund_invest   — client/supervisor invests into a fund (reserve →
+//     transfer → position upsert + units mint).
+//   - fund_withdraw — liquid + illiquid withdraw (reserve / liquidate
+//     → transfer → position decrement + realized_gain).
 func RegisterSagas(reg *saga.Registry, svc *Service) {
 	registerOTCAcceptSaga(reg, svc)
 	registerOTCExerciseSaga(reg, svc)
+	registerFundInvestSaga(reg, svc)
+	registerFundWithdrawSaga(reg, svc)
 }

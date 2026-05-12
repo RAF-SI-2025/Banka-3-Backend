@@ -345,6 +345,92 @@ service TradingService {
       body: "*"
     };
   }
+
+  // -----------------------------------------------------------------
+  // Investment funds (c4 PR3 — spec p.71-76).
+  //
+  // A fund is a pre-tax pooled vehicle with a manager (supervisor),
+  // a bank account in RSD for liquidity, and a basket of holdings
+  // recorded in portfolio_holdings with user_kind='fund'. Clients
+  // (and the bank itself via the BankAsClient sentinel) buy units
+  // at the current unit price (total_value_rsd / total_units, with
+  // first investment minting amount_rsd units at price 1.0).
+  // -----------------------------------------------------------------
+
+  // ListFunds returns the fund discovery list (spec p.71). Supervisors
+  // and clients with funds.read.* can browse; rows include total_value,
+  // profit, and minimum_contribution for sorting/filtering.
+  rpc ListFunds(ListFundsRequest) returns (ListFundsResponse) {
+    option (google.api.http) = {
+      get: "/api/v1/funds"
+    };
+  }
+
+  // GetFund returns the fund detail including its holdings list and the
+  // caller's position when one exists. Spec p.74.
+  rpc GetFund(GetFundRequest) returns (GetFundResponse) {
+    option (google.api.http) = {
+      get: "/api/v1/funds/{id}"
+    };
+  }
+
+  // CreateFund mints a new fund (supervisor only — spec p.74). Bank
+  // service is called internally to open the fund's RSD account; the
+  // creator becomes the default manager.
+  rpc CreateFund(CreateFundRequest) returns (Fund) {
+    option (google.api.http) = {
+      post: "/api/v1/funds"
+      body: "*"
+    };
+  }
+
+  // InvestInFund runs the fund_invest SAGA: reserves the source
+  // account, transfers to the fund's bank account (FX hop if needed),
+  // upserts the client_fund_positions row (units math) and writes a
+  // client_fund_transactions row. Verification-gated (FOUND-9).
+  rpc InvestInFund(InvestInFundRequest) returns (FundTransactionResponse) {
+    option (google.api.http) = {
+      post: "/api/v1/funds/{id}/invest"
+      body: "*"
+    };
+  }
+
+  // WithdrawFromFund runs the fund_withdraw SAGA. Liquid path (fund
+  // has enough RSD on its bank account) reserves and transfers
+  // directly; illiquid path stays in `pending` while auto-liquidation
+  // orders settle the gap. Verification-gated.
+  rpc WithdrawFromFund(WithdrawFromFundRequest) returns (FundTransactionResponse) {
+    option (google.api.http) = {
+      post: "/api/v1/funds/{id}/withdraw"
+      body: "*"
+    };
+  }
+
+  // ListFundPositions returns the caller's positions across all funds
+  // (clients) or a specified user's (supervisors/admin). Supervisors
+  // may pass the BankAsClient sentinel UUID to see the bank's stakes
+  // (FE-FUND-6, Profit Banke "Bank fund positions").
+  rpc ListFundPositions(ListFundPositionsRequest) returns (ListFundPositionsResponse) {
+    option (google.api.http) = {
+      get: "/api/v1/funds/positions"
+    };
+  }
+
+  // GetFundPerformance returns the daily liquid_rsd + holdings_value_rsd
+  // time series for a fund. FE-FUND-2 chart.
+  rpc GetFundPerformance(GetFundPerformanceRequest) returns (GetFundPerformanceResponse) {
+    option (google.api.http) = {
+      get: "/api/v1/funds/{id}/performance"
+    };
+  }
+
+  // ListFundTransactions returns the audit log of invest/withdraw rows
+  // for a fund. Supervisors see everything; clients see only their own.
+  rpc ListFundTransactions(ListFundTransactionsRequest) returns (ListFundTransactionsResponse) {
+    option (google.api.http) = {
+      get: "/api/v1/funds/{id}/transactions"
+    };
+  }
 }
 
 // =====================================================================
@@ -408,6 +494,12 @@ enum UserKind {
   USER_KIND_UNSPECIFIED = 0;
   USER_KIND_CLIENT      = 1;
   USER_KIND_EMPLOYEE    = 2;
+  // USER_KIND_FUND identifies investment-fund-as-actor rows (c4 PR3,
+  // spec p.74-75). A fund-actor order's user_id is the fund's id; its
+  // settlement account is the fund's bank account. Fund-actor sells do
+  // not write realized_gains rows — funds are pre-tax vehicles; tax
+  // attaches to the client at withdrawal time (EDGE-3).
+  USER_KIND_FUND        = 3;
 }
 
 // =====================================================================
@@ -753,6 +845,14 @@ message Order {
   int32                     remaining_quantity  = 23;
   google.protobuf.Timestamp last_modification   = 24;
   google.protobuf.Timestamp created_at          = 25;
+
+  // c4 PR3 — actor_kind discriminates whether this order was placed on
+  // behalf of the user themselves or for an investment fund they
+  // manage. on_behalf_of_fund_id is non-empty when actor_kind == FUND.
+  // For backward compat, default actor_kind is whatever user_kind
+  // resolved to at create time (client or employee).
+  UserKind                  actor_kind           = 26;
+  string                    on_behalf_of_fund_id = 27;
 }
 
 message CreateOrderRequest {
@@ -765,6 +865,13 @@ message CreateOrderRequest {
   bool      all_or_none   = 7;
   bool      margin        = 8;
   string    account_id    = 9  [(buf.validate.field).string.uuid = true];
+
+  // c4 PR3 fund-actor (spec p.74-75). When set, the caller is acting on
+  // behalf of an investment fund they manage; the order's owner/account
+  // are the fund's. Validated against the fund row (caller is manager,
+  // account is fund.bank_account_id). Empty for normal client/employee
+  // orders.
+  string    on_behalf_of_fund_id = 10 [(buf.validate.field).string.uuid = true, (buf.validate.field).ignore = IGNORE_IF_ZERO_VALUE];
 }
 
 // CreateOrderResponse wraps the created Order plus advisory flags. Spec
@@ -1137,4 +1244,210 @@ message ExerciseOTCContractResponse {
   // Realized-gain row written for the seller (RSD, native).
   string seller_realized_gain_native = 3;
   string seller_realized_gain_rsd    = 4;
+}
+
+// =====================================================================
+// Investment funds (c4 PR3 — spec p.71-76)
+// =====================================================================
+
+enum FundStatus {
+  FUND_STATUS_UNSPECIFIED = 0;
+  FUND_STATUS_ACTIVE      = 1;
+  FUND_STATUS_CLOSED      = 2;
+}
+
+enum FundTransactionStatus {
+  FUND_TX_STATUS_UNSPECIFIED = 0;
+  FUND_TX_STATUS_PENDING     = 1;
+  FUND_TX_STATUS_COMPLETED   = 2;
+  FUND_TX_STATUS_FAILED      = 3;
+}
+
+// Fund is one investment-fund row. total_value_rsd + profit_rsd are
+// computed at read time (liquid_rsd + holdings_value_rsd; profit =
+// total_value − Σ total_invested_rsd across positions).
+message Fund {
+  string                    id                    = 1;
+  string                    name                  = 2;
+  string                    description           = 3;
+  string                    manager_user_id       = 4;
+  string                    manager_display_name  = 5;
+  string                    bank_account_id       = 6;
+  string                    bank_account_number   = 7;
+  string                    minimum_contribution  = 8;
+  string                    total_units           = 9;
+  // Computed at read time. RSD.
+  string                    liquid_rsd            = 10;
+  string                    holdings_value_rsd    = 11;
+  string                    total_value_rsd       = 12;
+  // profit_rsd = total_value_rsd − Σ total_invested_rsd across all
+  // positions. Negative when the fund is below contributed capital.
+  string                    profit_rsd            = 13;
+  string                    unit_price_rsd        = 14;
+  FundStatus                status                = 15;
+  google.protobuf.Timestamp created_at            = 16;
+  google.protobuf.Timestamp updated_at            = 17;
+}
+
+message FundHolding {
+  string                    holding_id           = 1;
+  Security                  security             = 2;
+  int32                     quantity             = 3;
+  string                    weighted_avg_price   = 4;
+  string                    current_price        = 5;
+  string                    market_value         = 6;
+  string                    profit_native        = 7;
+  Currency                  currency             = 8;
+  google.protobuf.Timestamp acquired_at          = 9;
+  google.protobuf.Timestamp updated_at           = 10;
+}
+
+message FundPosition {
+  string                    id                      = 1;
+  string                    fund_id                 = 2;
+  string                    fund_name               = 3;
+  string                    client_id               = 4;
+  string                    units                   = 5;
+  string                    total_invested_rsd      = 6;
+  string                    current_value_rsd       = 7;
+  // profit_rsd = current_value_rsd − total_invested_rsd. Negative when
+  // the fund has lost value since the client invested.
+  string                    profit_rsd              = 8;
+  string                    share_pct               = 9; // 0..100
+  google.protobuf.Timestamp created_at              = 10;
+  google.protobuf.Timestamp updated_at              = 11;
+}
+
+message FundTransaction {
+  string                    id                          = 1;
+  string                    fund_id                     = 2;
+  string                    client_id                   = 3;
+  string                    initiator_employee_id       = 4;
+  string                    amount_rsd                  = 5;
+  string                    units_delta                 = 6;
+  string                    source_or_dest_account_id   = 7;
+  bool                      is_inflow                   = 8;
+  FundTransactionStatus     status                      = 9;
+  string                    saga_id                     = 10;
+  string                    failure_reason              = 11;
+  google.protobuf.Timestamp created_at                  = 12;
+  google.protobuf.Timestamp updated_at                  = 13;
+}
+
+message FundPerformanceSnapshot {
+  google.protobuf.Timestamp snapshot_at          = 1;
+  string                    liquid_rsd           = 2;
+  string                    holdings_value_rsd   = 3;
+  string                    total_value_rsd      = 4;
+}
+
+message ListFundsRequest {
+  // status: "active" (default), "any".
+  string status                    = 1;
+  // Filter by manager (supervisor view).
+  string manager_user_id           = 2;
+  // Filter by minimum_contribution range (RSD, decimal strings).
+  // Empty disables the bound.
+  string min_contribution_at_least = 3;
+  string min_contribution_at_most  = 4;
+  // Sort: "name" (default), "total_value", "profit", "minimum_contribution".
+  string sort                      = 10;
+  // "asc" (default) or "desc".
+  string order                     = 11;
+}
+
+message ListFundsResponse {
+  repeated Fund funds = 1;
+}
+
+message GetFundRequest {
+  string id = 1 [(buf.validate.field).string.uuid = true];
+}
+
+message GetFundResponse {
+  Fund                  fund     = 1;
+  repeated FundHolding  holdings = 2;
+  // The caller's position in this fund, when one exists. For supervisors
+  // viewing the bank-as-client slice, pass `client_id` query param.
+  FundPosition          position = 3;
+}
+
+message CreateFundRequest {
+  string name                  = 1 [(buf.validate.field).string = {min_len: 1, max_len: 120}];
+  string description           = 2 [(buf.validate.field).string.max_len = 1000];
+  string minimum_contribution  = 3 [(buf.validate.field).string.pattern = "^[0-9]+(\\.[0-9]{1,4})?$"];
+  // Optional manager override (defaults to caller). Admin only.
+  string manager_user_id       = 4;
+}
+
+message InvestInFundRequest {
+  string id                = 1 [(buf.validate.field).string.uuid = true];
+  string amount            = 2 [(buf.validate.field).string.pattern = "^[0-9]+(\\.[0-9]{1,4})?$"];
+  // Source account. Client's own RSD/FX account, or — when supervisor
+  // is investing on behalf of the bank — a bank-side RSD/FX account.
+  string source_account_id = 3 [(buf.validate.field).string.uuid = true];
+  // When non-empty AND caller is supervisor, the supervisor is
+  // investing in the name of the bank (spec p.75 Napomena 2 — client_id
+  // = BankAsClient sentinel). UUID equality with the sentinel is
+  // enforced server-side.
+  string on_behalf_client_id = 4;
+}
+
+message WithdrawFromFundRequest {
+  string id              = 1 [(buf.validate.field).string.uuid = true];
+  string amount_rsd      = 2 [(buf.validate.field).string.pattern = "^[0-9]+(\\.[0-9]{1,4})?$"];
+  // Destination account. Same rules as InvestInFundRequest.
+  string dest_account_id = 3 [(buf.validate.field).string.uuid = true];
+  string on_behalf_client_id = 4;
+  // Optional convenience: when true, server ignores `amount_rsd` and
+  // withdraws the full current value of the caller's position.
+  bool   withdraw_all    = 5;
+}
+
+message FundTransactionResponse {
+  FundTransaction transaction = 1;
+  // saga_id of the invest/withdraw saga so the FE can poll progress on
+  // illiquid withdraws (PR8 tests rely on this).
+  string          saga_id     = 2;
+  // When true, the withdraw landed on the illiquid path (auto-liquidation
+  // in progress); the transaction stays in pending until orders settle.
+  bool            pending     = 3;
+}
+
+message ListFundPositionsRequest {
+  // Empty client_id = caller's own positions. Supervisors/admin may
+  // narrow to a specific client (or to the BankAsClient sentinel for
+  // Profit Banke).
+  string client_id = 1;
+  // status: "active" (default, units > 0), "any".
+  string status    = 2;
+}
+
+message ListFundPositionsResponse {
+  repeated FundPosition positions = 1;
+}
+
+message GetFundPerformanceRequest {
+  string id     = 1 [(buf.validate.field).string.uuid = true];
+  // Sliding window: defaults to 30d when zero.
+  int32  days   = 2 [(buf.validate.field).int32 = {gte: 0, lte: 3650}];
+}
+
+message GetFundPerformanceResponse {
+  repeated FundPerformanceSnapshot snapshots = 1;
+}
+
+message ListFundTransactionsRequest {
+  string id        = 1 [(buf.validate.field).string.uuid = true];
+  string client_id = 2;          // narrow when caller is supervisor
+  string status    = 3;          // "" / "pending" / "completed" / "failed"
+  int32  page      = 10 [(buf.validate.field).int32 = {gte: 0}];
+  int32  page_size = 11 [(buf.validate.field).int32 = {gte: 0, lte: 200}];
+}
+
+message ListFundTransactionsResponse {
+  repeated FundTransaction transactions = 1;
+  int32 page                            = 2;
+  int32 page_size                       = 3;
+  int64 total                           = 4;
 }

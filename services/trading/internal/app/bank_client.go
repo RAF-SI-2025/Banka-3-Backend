@@ -167,6 +167,24 @@ func (a *bankSettlerAdapter) Commit(ctx context.Context, in service.CommitInput)
 	return resp.GetOpId(), nil
 }
 
+// CreateFundAccount bridges service.BankReservations.CreateFundAccount
+// to bank.CreateFundAccount. Trading dials this at CreateFund time.
+func (a *bankSettlerAdapter) CreateFundAccount(ctx context.Context, name string, currency domain.Currency) (string, error) {
+	ctx = auth.AttachToOutgoing(ctx, auth.Principal{
+		UserID:      "00000000-0000-0000-0000-00000000fffe",
+		UserKind:    auth.KindEmployee,
+		Permissions: []string{permissions.Admin},
+	})
+	resp, err := a.c.CreateFundAccount(ctx, &bankpb.CreateFundAccountRequest{
+		Name:     name,
+		Currency: currencyToBankProto(currency),
+	})
+	if err != nil {
+		return "", fmt.Errorf("bank.CreateFundAccount: %w", err)
+	}
+	return resp.GetId(), nil
+}
+
 // Transfer bridges service.BankReservations.Transfer to
 // bank.TransferBetweenClients.
 func (a *bankSettlerAdapter) Transfer(ctx context.Context, in service.TransferInput) (string, error) {

@@ -54,7 +54,7 @@
           },
           {
             "name": "kind",
-            "description": " - ACCOUNT_KIND_PERSONAL_CHECKING_RSD: lični tekući RSD  (TT=11/13/14/15/16/17 by subtype)\n - ACCOUNT_KIND_PERSONAL_FX: lični devizni     (TT=21)\n - ACCOUNT_KIND_BUSINESS_CHECKING_RSD: poslovni tekući   (TT=12)\n - ACCOUNT_KIND_BUSINESS_FX: poslovni devizni  (TT=22)\n - ACCOUNT_KIND_SYSTEM: bank-owned house  (TT=99, internal)\n - ACCOUNT_KIND_FOREX_BOOK: bank's per-currency FX inventory book (internal, addressable for actuary trading)\n - ACCOUNT_KIND_STATE_TAX: RSD destination for capital-gains tax remittance (internal)",
+            "description": " - ACCOUNT_KIND_PERSONAL_CHECKING_RSD: lični tekući RSD  (TT=11/13/14/15/16/17 by subtype)\n - ACCOUNT_KIND_PERSONAL_FX: lični devizni     (TT=21)\n - ACCOUNT_KIND_BUSINESS_CHECKING_RSD: poslovni tekući   (TT=12)\n - ACCOUNT_KIND_BUSINESS_FX: poslovni devizni  (TT=22)\n - ACCOUNT_KIND_SYSTEM: bank-owned house  (TT=99, internal)\n - ACCOUNT_KIND_FOREX_BOOK: bank's per-currency FX inventory book (internal, addressable for actuary trading)\n - ACCOUNT_KIND_STATE_TAX: RSD destination for capital-gains tax remittance (internal)\n - ACCOUNT_KIND_FUND: investment fund's liquidity account (c4 PR3, spec p.74; FundsOwnerID sentinel as owner)",
             "in": "query",
             "required": false,
             "type": "string",
@@ -66,7 +66,8 @@
               "ACCOUNT_KIND_BUSINESS_FX",
               "ACCOUNT_KIND_SYSTEM",
               "ACCOUNT_KIND_FOREX_BOOK",
-              "ACCOUNT_KIND_STATE_TAX"
+              "ACCOUNT_KIND_STATE_TAX",
+              "ACCOUNT_KIND_FUND"
             ],
             "default": "ACCOUNT_KIND_UNSPECIFIED"
           },
@@ -1714,6 +1715,349 @@
         ]
       }
     },
+    "/api/v1/funds": {
+      "get": {
+        "summary": "ListFunds returns the fund discovery list (spec p.71). Supervisors\nand clients with funds.read.* can browse; rows include total_value,\nprofit, and minimum_contribution for sorting/filtering.",
+        "operationId": "TradingService_ListFunds",
+        "responses": {
+          "200": {
+            "description": "A successful response.",
+            "schema": {
+              "$ref": "#/definitions/v1ListFundsResponse"
+            }
+          },
+          "default": {
+            "description": "An unexpected error response.",
+            "schema": {
+              "$ref": "#/definitions/rpcStatus"
+            }
+          }
+        },
+        "parameters": [
+          {
+            "name": "status",
+            "description": "status: \"active\" (default), \"any\".",
+            "in": "query",
+            "required": false,
+            "type": "string"
+          },
+          {
+            "name": "managerUserId",
+            "description": "Filter by manager (supervisor view).",
+            "in": "query",
+            "required": false,
+            "type": "string"
+          },
+          {
+            "name": "minContributionAtLeast",
+            "description": "Filter by minimum_contribution range (RSD, decimal strings).\nEmpty disables the bound.",
+            "in": "query",
+            "required": false,
+            "type": "string"
+          },
+          {
+            "name": "minContributionAtMost",
+            "in": "query",
+            "required": false,
+            "type": "string"
+          },
+          {
+            "name": "sort",
+            "description": "Sort: \"name\" (default), \"total_value\", \"profit\", \"minimum_contribution\".",
+            "in": "query",
+            "required": false,
+            "type": "string"
+          },
+          {
+            "name": "order",
+            "description": "\"asc\" (default) or \"desc\".",
+            "in": "query",
+            "required": false,
+            "type": "string"
+          }
+        ],
+        "tags": [
+          "TradingService"
+        ]
+      },
+      "post": {
+        "summary": "CreateFund mints a new fund (supervisor only — spec p.74). Bank\nservice is called internally to open the fund's RSD account; the\ncreator becomes the default manager.",
+        "operationId": "TradingService_CreateFund",
+        "responses": {
+          "200": {
+            "description": "A successful response.",
+            "schema": {
+              "$ref": "#/definitions/v1Fund"
+            }
+          },
+          "default": {
+            "description": "An unexpected error response.",
+            "schema": {
+              "$ref": "#/definitions/rpcStatus"
+            }
+          }
+        },
+        "parameters": [
+          {
+            "name": "body",
+            "in": "body",
+            "required": true,
+            "schema": {
+              "$ref": "#/definitions/v1CreateFundRequest"
+            }
+          }
+        ],
+        "tags": [
+          "TradingService"
+        ]
+      }
+    },
+    "/api/v1/funds/positions": {
+      "get": {
+        "summary": "ListFundPositions returns the caller's positions across all funds\n(clients) or a specified user's (supervisors/admin). Supervisors\nmay pass the BankAsClient sentinel UUID to see the bank's stakes\n(FE-FUND-6, Profit Banke \"Bank fund positions\").",
+        "operationId": "TradingService_ListFundPositions",
+        "responses": {
+          "200": {
+            "description": "A successful response.",
+            "schema": {
+              "$ref": "#/definitions/v1ListFundPositionsResponse"
+            }
+          },
+          "default": {
+            "description": "An unexpected error response.",
+            "schema": {
+              "$ref": "#/definitions/rpcStatus"
+            }
+          }
+        },
+        "parameters": [
+          {
+            "name": "clientId",
+            "description": "Empty client_id = caller's own positions. Supervisors/admin may\nnarrow to a specific client (or to the BankAsClient sentinel for\nProfit Banke).",
+            "in": "query",
+            "required": false,
+            "type": "string"
+          },
+          {
+            "name": "status",
+            "description": "status: \"active\" (default, units \u003e 0), \"any\".",
+            "in": "query",
+            "required": false,
+            "type": "string"
+          }
+        ],
+        "tags": [
+          "TradingService"
+        ]
+      }
+    },
+    "/api/v1/funds/{id}": {
+      "get": {
+        "summary": "GetFund returns the fund detail including its holdings list and the\ncaller's position when one exists. Spec p.74.",
+        "operationId": "TradingService_GetFund",
+        "responses": {
+          "200": {
+            "description": "A successful response.",
+            "schema": {
+              "$ref": "#/definitions/v1GetFundResponse"
+            }
+          },
+          "default": {
+            "description": "An unexpected error response.",
+            "schema": {
+              "$ref": "#/definitions/rpcStatus"
+            }
+          }
+        },
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "type": "string"
+          }
+        ],
+        "tags": [
+          "TradingService"
+        ]
+      }
+    },
+    "/api/v1/funds/{id}/invest": {
+      "post": {
+        "summary": "InvestInFund runs the fund_invest SAGA: reserves the source\naccount, transfers to the fund's bank account (FX hop if needed),\nupserts the client_fund_positions row (units math) and writes a\nclient_fund_transactions row. Verification-gated (FOUND-9).",
+        "operationId": "TradingService_InvestInFund",
+        "responses": {
+          "200": {
+            "description": "A successful response.",
+            "schema": {
+              "$ref": "#/definitions/v1FundTransactionResponse"
+            }
+          },
+          "default": {
+            "description": "An unexpected error response.",
+            "schema": {
+              "$ref": "#/definitions/rpcStatus"
+            }
+          }
+        },
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "type": "string"
+          },
+          {
+            "name": "body",
+            "in": "body",
+            "required": true,
+            "schema": {
+              "$ref": "#/definitions/TradingServiceInvestInFundBody"
+            }
+          }
+        ],
+        "tags": [
+          "TradingService"
+        ]
+      }
+    },
+    "/api/v1/funds/{id}/performance": {
+      "get": {
+        "summary": "GetFundPerformance returns the daily liquid_rsd + holdings_value_rsd\ntime series for a fund. FE-FUND-2 chart.",
+        "operationId": "TradingService_GetFundPerformance",
+        "responses": {
+          "200": {
+            "description": "A successful response.",
+            "schema": {
+              "$ref": "#/definitions/v1GetFundPerformanceResponse"
+            }
+          },
+          "default": {
+            "description": "An unexpected error response.",
+            "schema": {
+              "$ref": "#/definitions/rpcStatus"
+            }
+          }
+        },
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "type": "string"
+          },
+          {
+            "name": "days",
+            "description": "Sliding window: defaults to 30d when zero.",
+            "in": "query",
+            "required": false,
+            "type": "integer",
+            "format": "int32"
+          }
+        ],
+        "tags": [
+          "TradingService"
+        ]
+      }
+    },
+    "/api/v1/funds/{id}/transactions": {
+      "get": {
+        "summary": "ListFundTransactions returns the audit log of invest/withdraw rows\nfor a fund. Supervisors see everything; clients see only their own.",
+        "operationId": "TradingService_ListFundTransactions",
+        "responses": {
+          "200": {
+            "description": "A successful response.",
+            "schema": {
+              "$ref": "#/definitions/v1ListFundTransactionsResponse"
+            }
+          },
+          "default": {
+            "description": "An unexpected error response.",
+            "schema": {
+              "$ref": "#/definitions/rpcStatus"
+            }
+          }
+        },
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "type": "string"
+          },
+          {
+            "name": "clientId",
+            "description": "narrow when caller is supervisor",
+            "in": "query",
+            "required": false,
+            "type": "string"
+          },
+          {
+            "name": "status",
+            "description": "\"\" / \"pending\" / \"completed\" / \"failed\"",
+            "in": "query",
+            "required": false,
+            "type": "string"
+          },
+          {
+            "name": "page",
+            "in": "query",
+            "required": false,
+            "type": "integer",
+            "format": "int32"
+          },
+          {
+            "name": "pageSize",
+            "in": "query",
+            "required": false,
+            "type": "integer",
+            "format": "int32"
+          }
+        ],
+        "tags": [
+          "TradingService"
+        ]
+      }
+    },
+    "/api/v1/funds/{id}/withdraw": {
+      "post": {
+        "summary": "WithdrawFromFund runs the fund_withdraw SAGA. Liquid path (fund\nhas enough RSD on its bank account) reserves and transfers\ndirectly; illiquid path stays in `pending` while auto-liquidation\norders settle the gap. Verification-gated.",
+        "operationId": "TradingService_WithdrawFromFund",
+        "responses": {
+          "200": {
+            "description": "A successful response.",
+            "schema": {
+              "$ref": "#/definitions/v1FundTransactionResponse"
+            }
+          },
+          "default": {
+            "description": "An unexpected error response.",
+            "schema": {
+              "$ref": "#/definitions/rpcStatus"
+            }
+          }
+        },
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "type": "string"
+          },
+          {
+            "name": "body",
+            "in": "body",
+            "required": true,
+            "schema": {
+              "$ref": "#/definitions/TradingServiceWithdrawFromFundBody"
+            }
+          }
+        ],
+        "tags": [
+          "TradingService"
+        ]
+      }
+    },
     "/api/v1/listings": {
       "get": {
         "operationId": "TradingService_ListListings",
@@ -2272,14 +2616,15 @@
           },
           {
             "name": "userKind",
-            "description": "employee/client filter (supervisor view)",
+            "description": "employee/client filter (supervisor view)\n\n - USER_KIND_FUND: USER_KIND_FUND identifies investment-fund-as-actor rows (c4 PR3,\nspec p.74-75). A fund-actor order's user_id is the fund's id; its\nsettlement account is the fund's bank account. Fund-actor sells do\nnot write realized_gains rows — funds are pre-tax vehicles; tax\nattaches to the client at withdrawal time (EDGE-3).",
             "in": "query",
             "required": false,
             "type": "string",
             "enum": [
               "USER_KIND_UNSPECIFIED",
               "USER_KIND_CLIENT",
-              "USER_KIND_EMPLOYEE"
+              "USER_KIND_EMPLOYEE",
+              "USER_KIND_FUND"
             ],
             "default": "USER_KIND_UNSPECIFIED"
           },
@@ -2518,13 +2863,15 @@
           },
           {
             "name": "partyUserKind",
+            "description": " - USER_KIND_FUND: USER_KIND_FUND identifies investment-fund-as-actor rows (c4 PR3,\nspec p.74-75). A fund-actor order's user_id is the fund's id; its\nsettlement account is the fund's bank account. Fund-actor sells do\nnot write realized_gains rows — funds are pre-tax vehicles; tax\nattaches to the client at withdrawal time (EDGE-3).",
             "in": "query",
             "required": false,
             "type": "string",
             "enum": [
               "USER_KIND_UNSPECIFIED",
               "USER_KIND_CLIENT",
-              "USER_KIND_EMPLOYEE"
+              "USER_KIND_EMPLOYEE",
+              "USER_KIND_FUND"
             ],
             "default": "USER_KIND_UNSPECIFIED"
           },
@@ -2670,13 +3017,15 @@
           },
           {
             "name": "partyUserKind",
+            "description": " - USER_KIND_FUND: USER_KIND_FUND identifies investment-fund-as-actor rows (c4 PR3,\nspec p.74-75). A fund-actor order's user_id is the fund's id; its\nsettlement account is the fund's bank account. Fund-actor sells do\nnot write realized_gains rows — funds are pre-tax vehicles; tax\nattaches to the client at withdrawal time (EDGE-3).",
             "in": "query",
             "required": false,
             "type": "string",
             "enum": [
               "USER_KIND_UNSPECIFIED",
               "USER_KIND_CLIENT",
-              "USER_KIND_EMPLOYEE"
+              "USER_KIND_EMPLOYEE",
+              "USER_KIND_FUND"
             ],
             "default": "USER_KIND_UNSPECIFIED"
           },
@@ -3050,13 +3399,15 @@
           },
           {
             "name": "userKind",
+            "description": " - USER_KIND_FUND: USER_KIND_FUND identifies investment-fund-as-actor rows (c4 PR3,\nspec p.74-75). A fund-actor order's user_id is the fund's id; its\nsettlement account is the fund's bank account. Fund-actor sells do\nnot write realized_gains rows — funds are pre-tax vehicles; tax\nattaches to the client at withdrawal time (EDGE-3).",
             "in": "query",
             "required": false,
             "type": "string",
             "enum": [
               "USER_KIND_UNSPECIFIED",
               "USER_KIND_CLIENT",
-              "USER_KIND_EMPLOYEE"
+              "USER_KIND_EMPLOYEE",
+              "USER_KIND_FUND"
             ],
             "default": "USER_KIND_UNSPECIFIED"
           },
@@ -3426,13 +3777,15 @@
         "parameters": [
           {
             "name": "userKind",
+            "description": " - USER_KIND_FUND: USER_KIND_FUND identifies investment-fund-as-actor rows (c4 PR3,\nspec p.74-75). A fund-actor order's user_id is the fund's id; its\nsettlement account is the fund's bank account. Fund-actor sells do\nnot write realized_gains rows — funds are pre-tax vehicles; tax\nattaches to the client at withdrawal time (EDGE-3).",
             "in": "query",
             "required": false,
             "type": "string",
             "enum": [
               "USER_KIND_UNSPECIFIED",
               "USER_KIND_CLIENT",
-              "USER_KIND_EMPLOYEE"
+              "USER_KIND_EMPLOYEE",
+              "USER_KIND_FUND"
             ],
             "default": "USER_KIND_UNSPECIFIED"
           },
@@ -3474,13 +3827,15 @@
           },
           {
             "name": "userKind",
+            "description": " - USER_KIND_FUND: USER_KIND_FUND identifies investment-fund-as-actor rows (c4 PR3,\nspec p.74-75). A fund-actor order's user_id is the fund's id; its\nsettlement account is the fund's bank account. Fund-actor sells do\nnot write realized_gains rows — funds are pre-tax vehicles; tax\nattaches to the client at withdrawal time (EDGE-3).",
             "in": "query",
             "required": false,
             "type": "string",
             "enum": [
               "USER_KIND_UNSPECIFIED",
               "USER_KIND_CLIENT",
-              "USER_KIND_EMPLOYEE"
+              "USER_KIND_EMPLOYEE",
+              "USER_KIND_FUND"
             ],
             "default": "USER_KIND_UNSPECIFIED"
           },
@@ -3762,6 +4117,22 @@
         }
       }
     },
+    "TradingServiceInvestInFundBody": {
+      "type": "object",
+      "properties": {
+        "amount": {
+          "type": "string"
+        },
+        "sourceAccountId": {
+          "type": "string",
+          "description": "Source account. Client's own RSD/FX account, or — when supervisor\nis investing on behalf of the bank — a bank-side RSD/FX account."
+        },
+        "onBehalfClientId": {
+          "type": "string",
+          "description": "When non-empty AND caller is supervisor, the supervisor is\ninvesting in the name of the bank (spec p.75 Napomena 2 — client_id\n= BankAsClient sentinel). UUID equality with the sentinel is\nenforced server-side."
+        }
+      }
+    },
     "TradingServiceResetActuaryUsedLimitBody": {
       "type": "object"
     },
@@ -3836,6 +4207,25 @@
         },
         "closeLocal": {
           "type": "string"
+        }
+      }
+    },
+    "TradingServiceWithdrawFromFundBody": {
+      "type": "object",
+      "properties": {
+        "amountRsd": {
+          "type": "string"
+        },
+        "destAccountId": {
+          "type": "string",
+          "description": "Destination account. Same rules as InvestInFundRequest."
+        },
+        "onBehalfClientId": {
+          "type": "string"
+        },
+        "withdrawAll": {
+          "type": "boolean",
+          "description": "Optional convenience: when true, server ignores `amount_rsd` and\nwithdraws the full current value of the caller's position."
         }
       }
     },
@@ -3983,9 +4373,11 @@
       "enum": [
         "USER_KIND_UNSPECIFIED",
         "USER_KIND_CLIENT",
-        "USER_KIND_EMPLOYEE"
+        "USER_KIND_EMPLOYEE",
+        "USER_KIND_FUND"
       ],
-      "default": "USER_KIND_UNSPECIFIED"
+      "default": "USER_KIND_UNSPECIFIED",
+      "description": " - USER_KIND_FUND: USER_KIND_FUND identifies investment-fund-as-actor rows (c4 PR3,\nspec p.74-75). A fund-actor order's user_id is the fund's id; its\nsettlement account is the fund's bank account. Fund-actor sells do\nnot write realized_gains rows — funds are pre-tax vehicles; tax\nattaches to the client at withdrawal time (EDGE-3)."
     },
     "bankaUserV1Gender": {
       "type": "string",
@@ -4132,10 +4524,11 @@
         "ACCOUNT_KIND_BUSINESS_FX",
         "ACCOUNT_KIND_SYSTEM",
         "ACCOUNT_KIND_FOREX_BOOK",
-        "ACCOUNT_KIND_STATE_TAX"
+        "ACCOUNT_KIND_STATE_TAX",
+        "ACCOUNT_KIND_FUND"
       ],
       "default": "ACCOUNT_KIND_UNSPECIFIED",
-      "description": "AccountKind picks the broad bucket; the trailing TT in the 18-digit\naccount number depends on (kind, subtype) per spec p.16. See\npkg/account.Type for the exact mapping.\n\n - ACCOUNT_KIND_PERSONAL_CHECKING_RSD: lični tekući RSD  (TT=11/13/14/15/16/17 by subtype)\n - ACCOUNT_KIND_PERSONAL_FX: lični devizni     (TT=21)\n - ACCOUNT_KIND_BUSINESS_CHECKING_RSD: poslovni tekući   (TT=12)\n - ACCOUNT_KIND_BUSINESS_FX: poslovni devizni  (TT=22)\n - ACCOUNT_KIND_SYSTEM: bank-owned house  (TT=99, internal)\n - ACCOUNT_KIND_FOREX_BOOK: bank's per-currency FX inventory book (internal, addressable for actuary trading)\n - ACCOUNT_KIND_STATE_TAX: RSD destination for capital-gains tax remittance (internal)"
+      "description": "AccountKind picks the broad bucket; the trailing TT in the 18-digit\naccount number depends on (kind, subtype) per spec p.16. See\npkg/account.Type for the exact mapping.\n\n - ACCOUNT_KIND_PERSONAL_CHECKING_RSD: lični tekući RSD  (TT=11/13/14/15/16/17 by subtype)\n - ACCOUNT_KIND_PERSONAL_FX: lični devizni     (TT=21)\n - ACCOUNT_KIND_BUSINESS_CHECKING_RSD: poslovni tekući   (TT=12)\n - ACCOUNT_KIND_BUSINESS_FX: poslovni devizni  (TT=22)\n - ACCOUNT_KIND_SYSTEM: bank-owned house  (TT=99, internal)\n - ACCOUNT_KIND_FOREX_BOOK: bank's per-currency FX inventory book (internal, addressable for actuary trading)\n - ACCOUNT_KIND_STATE_TAX: RSD destination for capital-gains tax remittance (internal)\n - ACCOUNT_KIND_FUND: investment fund's liquidity account (c4 PR3, spec p.74; FundsOwnerID sentinel as owner)"
     },
     "v1AccountStatus": {
       "type": "string",
@@ -4596,6 +4989,24 @@
         }
       }
     },
+    "v1CreateFundRequest": {
+      "type": "object",
+      "properties": {
+        "name": {
+          "type": "string"
+        },
+        "description": {
+          "type": "string"
+        },
+        "minimumContribution": {
+          "type": "string"
+        },
+        "managerUserId": {
+          "type": "string",
+          "description": "Optional manager override (defaults to caller). Admin only."
+        }
+      }
+    },
     "v1CreateOTCOfferRequest": {
       "type": "object",
       "properties": {
@@ -4656,6 +5067,10 @@
         },
         "accountId": {
           "type": "string"
+        },
+        "onBehalfOfFundId": {
+          "type": "string",
+          "description": "c4 PR3 fund-actor (spec p.74-75). When set, the caller is acting on\nbehalf of an investment fund they manage; the order's owner/account\nare the fund's. Validated against the fund row (caller is manager,\naccount is fund.bank_account_id). Empty for normal client/employee\norders."
         }
       }
     },
@@ -4901,6 +5316,277 @@
         },
         "realizedGainCurrency": {
           "$ref": "#/definitions/bankaTradingV1Currency"
+        }
+      }
+    },
+    "v1Fund": {
+      "type": "object",
+      "properties": {
+        "id": {
+          "type": "string"
+        },
+        "name": {
+          "type": "string"
+        },
+        "description": {
+          "type": "string"
+        },
+        "managerUserId": {
+          "type": "string"
+        },
+        "managerDisplayName": {
+          "type": "string"
+        },
+        "bankAccountId": {
+          "type": "string"
+        },
+        "bankAccountNumber": {
+          "type": "string"
+        },
+        "minimumContribution": {
+          "type": "string"
+        },
+        "totalUnits": {
+          "type": "string"
+        },
+        "liquidRsd": {
+          "type": "string",
+          "description": "Computed at read time. RSD."
+        },
+        "holdingsValueRsd": {
+          "type": "string"
+        },
+        "totalValueRsd": {
+          "type": "string"
+        },
+        "profitRsd": {
+          "type": "string",
+          "description": "profit_rsd = total_value_rsd − Σ total_invested_rsd across all\npositions. Negative when the fund is below contributed capital."
+        },
+        "unitPriceRsd": {
+          "type": "string"
+        },
+        "status": {
+          "$ref": "#/definitions/v1FundStatus"
+        },
+        "createdAt": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "updatedAt": {
+          "type": "string",
+          "format": "date-time"
+        }
+      },
+      "description": "Fund is one investment-fund row. total_value_rsd + profit_rsd are\ncomputed at read time (liquid_rsd + holdings_value_rsd; profit =\ntotal_value − Σ total_invested_rsd across positions)."
+    },
+    "v1FundHolding": {
+      "type": "object",
+      "properties": {
+        "holdingId": {
+          "type": "string"
+        },
+        "security": {
+          "$ref": "#/definitions/v1Security"
+        },
+        "quantity": {
+          "type": "integer",
+          "format": "int32"
+        },
+        "weightedAvgPrice": {
+          "type": "string"
+        },
+        "currentPrice": {
+          "type": "string"
+        },
+        "marketValue": {
+          "type": "string"
+        },
+        "profitNative": {
+          "type": "string"
+        },
+        "currency": {
+          "$ref": "#/definitions/bankaTradingV1Currency"
+        },
+        "acquiredAt": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "updatedAt": {
+          "type": "string",
+          "format": "date-time"
+        }
+      }
+    },
+    "v1FundPerformanceSnapshot": {
+      "type": "object",
+      "properties": {
+        "snapshotAt": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "liquidRsd": {
+          "type": "string"
+        },
+        "holdingsValueRsd": {
+          "type": "string"
+        },
+        "totalValueRsd": {
+          "type": "string"
+        }
+      }
+    },
+    "v1FundPosition": {
+      "type": "object",
+      "properties": {
+        "id": {
+          "type": "string"
+        },
+        "fundId": {
+          "type": "string"
+        },
+        "fundName": {
+          "type": "string"
+        },
+        "clientId": {
+          "type": "string"
+        },
+        "units": {
+          "type": "string"
+        },
+        "totalInvestedRsd": {
+          "type": "string"
+        },
+        "currentValueRsd": {
+          "type": "string"
+        },
+        "profitRsd": {
+          "type": "string",
+          "description": "profit_rsd = current_value_rsd − total_invested_rsd. Negative when\nthe fund has lost value since the client invested."
+        },
+        "sharePct": {
+          "type": "string",
+          "title": "0..100"
+        },
+        "createdAt": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "updatedAt": {
+          "type": "string",
+          "format": "date-time"
+        }
+      }
+    },
+    "v1FundStatus": {
+      "type": "string",
+      "enum": [
+        "FUND_STATUS_UNSPECIFIED",
+        "FUND_STATUS_ACTIVE",
+        "FUND_STATUS_CLOSED"
+      ],
+      "default": "FUND_STATUS_UNSPECIFIED"
+    },
+    "v1FundTransaction": {
+      "type": "object",
+      "properties": {
+        "id": {
+          "type": "string"
+        },
+        "fundId": {
+          "type": "string"
+        },
+        "clientId": {
+          "type": "string"
+        },
+        "initiatorEmployeeId": {
+          "type": "string"
+        },
+        "amountRsd": {
+          "type": "string"
+        },
+        "unitsDelta": {
+          "type": "string"
+        },
+        "sourceOrDestAccountId": {
+          "type": "string"
+        },
+        "isInflow": {
+          "type": "boolean"
+        },
+        "status": {
+          "$ref": "#/definitions/v1FundTransactionStatus"
+        },
+        "sagaId": {
+          "type": "string"
+        },
+        "failureReason": {
+          "type": "string"
+        },
+        "createdAt": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "updatedAt": {
+          "type": "string",
+          "format": "date-time"
+        }
+      }
+    },
+    "v1FundTransactionResponse": {
+      "type": "object",
+      "properties": {
+        "transaction": {
+          "$ref": "#/definitions/v1FundTransaction"
+        },
+        "sagaId": {
+          "type": "string",
+          "description": "saga_id of the invest/withdraw saga so the FE can poll progress on\nilliquid withdraws (PR8 tests rely on this)."
+        },
+        "pending": {
+          "type": "boolean",
+          "description": "When true, the withdraw landed on the illiquid path (auto-liquidation\nin progress); the transaction stays in pending until orders settle."
+        }
+      }
+    },
+    "v1FundTransactionStatus": {
+      "type": "string",
+      "enum": [
+        "FUND_TX_STATUS_UNSPECIFIED",
+        "FUND_TX_STATUS_PENDING",
+        "FUND_TX_STATUS_COMPLETED",
+        "FUND_TX_STATUS_FAILED"
+      ],
+      "default": "FUND_TX_STATUS_UNSPECIFIED"
+    },
+    "v1GetFundPerformanceResponse": {
+      "type": "object",
+      "properties": {
+        "snapshots": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "$ref": "#/definitions/v1FundPerformanceSnapshot"
+          }
+        }
+      }
+    },
+    "v1GetFundResponse": {
+      "type": "object",
+      "properties": {
+        "fund": {
+          "$ref": "#/definitions/v1Fund"
+        },
+        "holdings": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "$ref": "#/definitions/v1FundHolding"
+          }
+        },
+        "position": {
+          "$ref": "#/definitions/v1FundPosition",
+          "description": "The caller's position in this fund, when one exists. For supervisors\nviewing the bank-as-client slice, pass `client_id` query param."
         }
       }
     },
@@ -5170,6 +5856,54 @@
           "items": {
             "type": "object",
             "$ref": "#/definitions/v1Exchange"
+          }
+        }
+      }
+    },
+    "v1ListFundPositionsResponse": {
+      "type": "object",
+      "properties": {
+        "positions": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "$ref": "#/definitions/v1FundPosition"
+          }
+        }
+      }
+    },
+    "v1ListFundTransactionsResponse": {
+      "type": "object",
+      "properties": {
+        "transactions": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "$ref": "#/definitions/v1FundTransaction"
+          }
+        },
+        "page": {
+          "type": "integer",
+          "format": "int32"
+        },
+        "pageSize": {
+          "type": "integer",
+          "format": "int32"
+        },
+        "total": {
+          "type": "string",
+          "format": "int64"
+        }
+      }
+    },
+    "v1ListFundsResponse": {
+      "type": "object",
+      "properties": {
+        "funds": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "$ref": "#/definitions/v1Fund"
           }
         }
       }
@@ -6070,6 +6804,13 @@
         "createdAt": {
           "type": "string",
           "format": "date-time"
+        },
+        "actorKind": {
+          "$ref": "#/definitions/bankaTradingV1UserKind",
+          "description": "c4 PR3 — actor_kind discriminates whether this order was placed on\nbehalf of the user themselves or for an investment fund they\nmanage. on_behalf_of_fund_id is non-empty when actor_kind == FUND.\nFor backward compat, default actor_kind is whatever user_kind\nresolved to at create time (client or employee)."
+        },
+        "onBehalfOfFundId": {
+          "type": "string"
         }
       }
     },

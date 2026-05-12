@@ -11,26 +11,30 @@ import (
 )
 
 const realizedGainCols = `
-    id, user_id, user_kind, security_id, account_id, quantity,
+    id, user_id, user_kind, coalesce(security_id::text, ''),
+    coalesce(fund_id::text, ''), account_id, quantity,
     cost_basis_amt::text, proceeds_amt::text, currency,
     gain_native::text, gain_rsd::text,
     realized_at, taxed, taxed_at, coalesce(tax_op_id::text, '')`
 
 // InsertRealizedGain writes one closing-sell row inside the caller's
 // tx. The caller has already computed both native + RSD values so the
-// store stays I/O-only.
+// store stays I/O-only. Either SecurityID or FundID is non-empty,
+// never both (FK constraints permit one or the other).
 func (s *Store) InsertRealizedGain(ctx context.Context, tx pgx.Tx, g *domain.RealizedGain) (*domain.RealizedGain, error) {
 	const q = `
         insert into "trading".realized_gains
-            (user_id, user_kind, security_id, account_id, quantity,
+            (user_id, user_kind, security_id, fund_id, account_id, quantity,
              cost_basis_amt, proceeds_amt, currency,
              gain_native, gain_rsd)
-        values ($1,$2,$3,$4,$5,
-                $6::numeric,$7::numeric,$8,
-                $9::numeric,$10::numeric)
+        values ($1, $2,
+                nullif($3, '')::uuid, nullif($4, '')::uuid,
+                $5, $6,
+                $7::numeric, $8::numeric, $9,
+                $10::numeric, $11::numeric)
         returning ` + realizedGainCols
 	row := tx.QueryRow(ctx, q,
-		g.UserID, string(g.UserKind), g.SecurityID, g.AccountID, g.Quantity,
+		g.UserID, string(g.UserKind), g.SecurityID, g.FundID, g.AccountID, g.Quantity,
 		g.CostBasisAmt, g.ProceedsAmt, string(g.Currency),
 		g.GainNative, g.GainRSD,
 	)
@@ -192,7 +196,7 @@ func scanRealizedGain(row pgx.Row) (*domain.RealizedGain, error) {
 		cur string
 	)
 	if err := row.Scan(
-		&g.ID, &g.UserID, &t, &g.SecurityID, &g.AccountID, &g.Quantity,
+		&g.ID, &g.UserID, &t, &g.SecurityID, &g.FundID, &g.AccountID, &g.Quantity,
 		&g.CostBasisAmt, &g.ProceedsAmt, &cur,
 		&g.GainNative, &g.GainRSD,
 		&g.RealizedAt, &g.Taxed, &g.TaxedAt, &g.TaxOpID,

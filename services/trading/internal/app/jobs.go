@@ -292,3 +292,28 @@ func runSagaRecoveryWorker(ctx context.Context, log *slog.Logger, svc *service.S
 		}
 	}
 }
+
+// runFundPerformanceCron writes one snapshot per active fund per day
+// at 23:50 Europe/Belgrade. The snapshot captures (liquid_rsd,
+// holdings_value_rsd) so the FE chart can render a time series; the
+// total_value column is derived by the conversion helper at read time.
+func runFundPerformanceCron(ctx context.Context, log *slog.Logger, svc *service.Service, loc *time.Location) error {
+	for {
+		next := nextDailyOccurrence(time.Now().In(loc), 23, 50)
+		wait := time.Until(next)
+		log.Info("fund snapshot cron scheduled", "next", next.Format(time.RFC3339))
+		t := time.NewTimer(wait)
+		select {
+		case <-ctx.Done():
+			t.Stop()
+			return nil
+		case <-t.C:
+			n, err := svc.SnapshotAllFunds(ctx, time.Now().In(loc))
+			if err != nil {
+				log.Warn("fund snapshot cron failed", "err", err.Error())
+				continue
+			}
+			log.Info("fund snapshot cron ran", "funds", n)
+		}
+	}
+}

@@ -18,7 +18,8 @@ const orderCols = `
     status, coalesce(approved_by::text, ''),
     approval_required, approved_at,
     is_done, cancelled, triggered, after_hours,
-    remaining_quantity, last_modification, created_at`
+    remaining_quantity, last_modification, created_at,
+    actor_kind, coalesce(on_behalf_of_fund_id::text, '')`
 
 // CreateOrder inserts the order row and returns it. When the caller
 // auto-approved the order (status='approved' with ApprovedBy set), the
@@ -32,7 +33,8 @@ func (s *Store) CreateOrder(ctx context.Context, o *domain.Order) (*domain.Order
             all_or_none, margin, is_actuary, account_id,
             status, approval_required, after_hours,
             remaining_quantity, last_modification,
-            approved_by, approved_at
+            approved_by, approved_at,
+            actor_kind, on_behalf_of_fund_id
         ) values (
             $1, $2, $3, $4, $5,
             $6, $7::numeric, $8::numeric,
@@ -41,9 +43,14 @@ func (s *Store) CreateOrder(ctx context.Context, o *domain.Order) (*domain.Order
             $15, $16, $17,
             $18, now(),
             nullif($19, '')::uuid,
-            case when $20 then now() else null end
+            case when $20 then now() else null end,
+            $21, nullif($22, '')::uuid
         ) returning ` + orderCols
 	autoApproved := o.Status == domain.OrderStatusApproved && o.ApprovedBy != ""
+	actor := string(o.ActorKind)
+	if actor == "" {
+		actor = string(o.UserKind)
+	}
 	row := s.Pool.QueryRow(ctx, q,
 		o.UserID, string(o.UserKind), o.SecurityID, string(o.OrderType), string(o.Direction),
 		o.Quantity, o.ContractSize, o.PricePerUnit, o.LimitPrice, o.StopPrice,
@@ -51,6 +58,7 @@ func (s *Store) CreateOrder(ctx context.Context, o *domain.Order) (*domain.Order
 		string(o.Status), o.ApprovalRequired, o.AfterHours,
 		o.Quantity, // remaining_quantity = quantity at create time
 		o.ApprovedBy, autoApproved,
+		actor, o.OnBehalfOfFundID,
 	)
 	out, err := scanOrder(row)
 	if err != nil {
@@ -259,6 +267,7 @@ func scanOrder(row pgx.Row) (*domain.Order, error) {
 		typ        string
 		dir        string
 		status     string
+		actor      string
 		approvedAt *time.Time
 	)
 	if err := row.Scan(
@@ -270,6 +279,7 @@ func scanOrder(row pgx.Row) (*domain.Order, error) {
 		&o.ApprovalRequired, &approvedAt,
 		&o.IsDone, &o.Cancelled, &o.Triggered, &o.AfterHours,
 		&o.RemainingQuantity, &o.LastModification, &o.CreatedAt,
+		&actor, &o.OnBehalfOfFundID,
 	); err != nil {
 		return nil, err
 	}
@@ -277,6 +287,7 @@ func scanOrder(row pgx.Row) (*domain.Order, error) {
 	o.OrderType = domain.OrderType(typ)
 	o.Direction = domain.Direction(dir)
 	o.Status = domain.OrderStatus(status)
+	o.ActorKind = domain.UserKind(actor)
 	o.ApprovedAt = approvedAt
 	return &o, nil
 }

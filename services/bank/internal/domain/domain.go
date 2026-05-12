@@ -89,6 +89,7 @@ const (
 	KindSystem              AccountKind = "system"
 	KindStateTax            AccountKind = "state_tax"
 	KindForexBook           AccountKind = "forex_book"
+	KindFund                AccountKind = "fund"
 )
 
 func (k AccountKind) IsBusiness() bool {
