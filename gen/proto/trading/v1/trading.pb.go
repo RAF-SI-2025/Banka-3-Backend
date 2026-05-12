@@ -450,6 +450,119 @@ func (UserKind) EnumDescriptor() ([]byte, []int) {
 	return file_trading_v1_trading_proto_rawDescGZIP(), []int{7}
 }
 
+type OTCStatus int32
+
+const (
+	OTCStatus_OTC_STATUS_UNSPECIFIED OTCStatus = 0
+	OTCStatus_OTC_STATUS_OPEN        OTCStatus = 1
+	OTCStatus_OTC_STATUS_SUPERSEDED  OTCStatus = 2
+	OTCStatus_OTC_STATUS_ACCEPTED    OTCStatus = 3
+	OTCStatus_OTC_STATUS_WITHDRAWN   OTCStatus = 4
+	OTCStatus_OTC_STATUS_EXPIRED     OTCStatus = 5
+)
+
+// Enum value maps for OTCStatus.
+var (
+	OTCStatus_name = map[int32]string{
+		0: "OTC_STATUS_UNSPECIFIED",
+		1: "OTC_STATUS_OPEN",
+		2: "OTC_STATUS_SUPERSEDED",
+		3: "OTC_STATUS_ACCEPTED",
+		4: "OTC_STATUS_WITHDRAWN",
+		5: "OTC_STATUS_EXPIRED",
+	}
+	OTCStatus_value = map[string]int32{
+		"OTC_STATUS_UNSPECIFIED": 0,
+		"OTC_STATUS_OPEN":        1,
+		"OTC_STATUS_SUPERSEDED":  2,
+		"OTC_STATUS_ACCEPTED":    3,
+		"OTC_STATUS_WITHDRAWN":   4,
+		"OTC_STATUS_EXPIRED":     5,
+	}
+)
+
+func (x OTCStatus) Enum() *OTCStatus {
+	p := new(OTCStatus)
+	*p = x
+	return p
+}
+
+func (x OTCStatus) String() string {
+	return protoimpl.X.EnumStringOf(x.Descriptor(), protoreflect.EnumNumber(x))
+}
+
+func (OTCStatus) Descriptor() protoreflect.EnumDescriptor {
+	return file_trading_v1_trading_proto_enumTypes[8].Descriptor()
+}
+
+func (OTCStatus) Type() protoreflect.EnumType {
+	return &file_trading_v1_trading_proto_enumTypes[8]
+}
+
+func (x OTCStatus) Number() protoreflect.EnumNumber {
+	return protoreflect.EnumNumber(x)
+}
+
+// Deprecated: Use OTCStatus.Descriptor instead.
+func (OTCStatus) EnumDescriptor() ([]byte, []int) {
+	return file_trading_v1_trading_proto_rawDescGZIP(), []int{8}
+}
+
+type OTCContractStatus int32
+
+const (
+	OTCContractStatus_OTC_CONTRACT_STATUS_UNSPECIFIED OTCContractStatus = 0
+	OTCContractStatus_OTC_CONTRACT_STATUS_ACTIVE      OTCContractStatus = 1
+	OTCContractStatus_OTC_CONTRACT_STATUS_EXERCISED   OTCContractStatus = 2
+	OTCContractStatus_OTC_CONTRACT_STATUS_EXPIRED     OTCContractStatus = 3
+	OTCContractStatus_OTC_CONTRACT_STATUS_SETTLING    OTCContractStatus = 4
+)
+
+// Enum value maps for OTCContractStatus.
+var (
+	OTCContractStatus_name = map[int32]string{
+		0: "OTC_CONTRACT_STATUS_UNSPECIFIED",
+		1: "OTC_CONTRACT_STATUS_ACTIVE",
+		2: "OTC_CONTRACT_STATUS_EXERCISED",
+		3: "OTC_CONTRACT_STATUS_EXPIRED",
+		4: "OTC_CONTRACT_STATUS_SETTLING",
+	}
+	OTCContractStatus_value = map[string]int32{
+		"OTC_CONTRACT_STATUS_UNSPECIFIED": 0,
+		"OTC_CONTRACT_STATUS_ACTIVE":      1,
+		"OTC_CONTRACT_STATUS_EXERCISED":   2,
+		"OTC_CONTRACT_STATUS_EXPIRED":     3,
+		"OTC_CONTRACT_STATUS_SETTLING":    4,
+	}
+)
+
+func (x OTCContractStatus) Enum() *OTCContractStatus {
+	p := new(OTCContractStatus)
+	*p = x
+	return p
+}
+
+func (x OTCContractStatus) String() string {
+	return protoimpl.X.EnumStringOf(x.Descriptor(), protoreflect.EnumNumber(x))
+}
+
+func (OTCContractStatus) Descriptor() protoreflect.EnumDescriptor {
+	return file_trading_v1_trading_proto_enumTypes[9].Descriptor()
+}
+
+func (OTCContractStatus) Type() protoreflect.EnumType {
+	return &file_trading_v1_trading_proto_enumTypes[9]
+}
+
+func (x OTCContractStatus) Number() protoreflect.EnumNumber {
+	return protoreflect.EnumNumber(x)
+}
+
+// Deprecated: Use OTCContractStatus.Descriptor instead.
+func (OTCContractStatus) EnumDescriptor() ([]byte, []int) {
+	return file_trading_v1_trading_proto_rawDescGZIP(), []int{9}
+}
+
 type ActuaryInfo struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
 	EmployeeId    string                 `protobuf:"bytes,1,opt,name=employee_id,json=employeeId,proto3" json:"employee_id,omitempty"`
@@ -4745,6 +4858,1416 @@ func (x *ListRealizedPnLResponse) GetRows() []*RealizedPnLRow {
 	return nil
 }
 
+// PublicHoldingItem is one row on the OTC discovery board. The
+// "available_count" field is the share count visible to negotiations —
+// public_count minus reserved_count, clamped to zero.
+type PublicHoldingItem struct {
+	state             protoimpl.MessageState `protogen:"open.v1"`
+	HoldingId         string                 `protobuf:"bytes,1,opt,name=holding_id,json=holdingId,proto3" json:"holding_id,omitempty"`
+	SellerId          string                 `protobuf:"bytes,2,opt,name=seller_id,json=sellerId,proto3" json:"seller_id,omitempty"`
+	SellerKind        UserKind               `protobuf:"varint,3,opt,name=seller_kind,json=sellerKind,proto3,enum=banka.trading.v1.UserKind" json:"seller_kind,omitempty"`
+	SellerAccountId   string                 `protobuf:"bytes,4,opt,name=seller_account_id,json=sellerAccountId,proto3" json:"seller_account_id,omitempty"`
+	SellerDisplayName string                 `protobuf:"bytes,5,opt,name=seller_display_name,json=sellerDisplayName,proto3" json:"seller_display_name,omitempty"`
+	Security          *Security              `protobuf:"bytes,6,opt,name=security,proto3" json:"security,omitempty"`
+	AvailableCount    int32                  `protobuf:"varint,7,opt,name=available_count,json=availableCount,proto3" json:"available_count,omitempty"`
+	PublicCount       int32                  `protobuf:"varint,8,opt,name=public_count,json=publicCount,proto3" json:"public_count,omitempty"`
+	ReservedCount     int32                  `protobuf:"varint,9,opt,name=reserved_count,json=reservedCount,proto3" json:"reserved_count,omitempty"`
+	CurrentPrice      string                 `protobuf:"bytes,10,opt,name=current_price,json=currentPrice,proto3" json:"current_price,omitempty"`
+	Currency          Currency               `protobuf:"varint,11,opt,name=currency,proto3,enum=banka.trading.v1.Currency" json:"currency,omitempty"`
+	unknownFields     protoimpl.UnknownFields
+	sizeCache         protoimpl.SizeCache
+}
+
+func (x *PublicHoldingItem) Reset() {
+	*x = PublicHoldingItem{}
+	mi := &file_trading_v1_trading_proto_msgTypes[55]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *PublicHoldingItem) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*PublicHoldingItem) ProtoMessage() {}
+
+func (x *PublicHoldingItem) ProtoReflect() protoreflect.Message {
+	mi := &file_trading_v1_trading_proto_msgTypes[55]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use PublicHoldingItem.ProtoReflect.Descriptor instead.
+func (*PublicHoldingItem) Descriptor() ([]byte, []int) {
+	return file_trading_v1_trading_proto_rawDescGZIP(), []int{55}
+}
+
+func (x *PublicHoldingItem) GetHoldingId() string {
+	if x != nil {
+		return x.HoldingId
+	}
+	return ""
+}
+
+func (x *PublicHoldingItem) GetSellerId() string {
+	if x != nil {
+		return x.SellerId
+	}
+	return ""
+}
+
+func (x *PublicHoldingItem) GetSellerKind() UserKind {
+	if x != nil {
+		return x.SellerKind
+	}
+	return UserKind_USER_KIND_UNSPECIFIED
+}
+
+func (x *PublicHoldingItem) GetSellerAccountId() string {
+	if x != nil {
+		return x.SellerAccountId
+	}
+	return ""
+}
+
+func (x *PublicHoldingItem) GetSellerDisplayName() string {
+	if x != nil {
+		return x.SellerDisplayName
+	}
+	return ""
+}
+
+func (x *PublicHoldingItem) GetSecurity() *Security {
+	if x != nil {
+		return x.Security
+	}
+	return nil
+}
+
+func (x *PublicHoldingItem) GetAvailableCount() int32 {
+	if x != nil {
+		return x.AvailableCount
+	}
+	return 0
+}
+
+func (x *PublicHoldingItem) GetPublicCount() int32 {
+	if x != nil {
+		return x.PublicCount
+	}
+	return 0
+}
+
+func (x *PublicHoldingItem) GetReservedCount() int32 {
+	if x != nil {
+		return x.ReservedCount
+	}
+	return 0
+}
+
+func (x *PublicHoldingItem) GetCurrentPrice() string {
+	if x != nil {
+		return x.CurrentPrice
+	}
+	return ""
+}
+
+func (x *PublicHoldingItem) GetCurrency() Currency {
+	if x != nil {
+		return x.Currency
+	}
+	return Currency_CURRENCY_UNSPECIFIED
+}
+
+type ListPublicHoldingsRequest struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	Ticker        string                 `protobuf:"bytes,1,opt,name=ticker,proto3" json:"ticker,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *ListPublicHoldingsRequest) Reset() {
+	*x = ListPublicHoldingsRequest{}
+	mi := &file_trading_v1_trading_proto_msgTypes[56]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *ListPublicHoldingsRequest) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*ListPublicHoldingsRequest) ProtoMessage() {}
+
+func (x *ListPublicHoldingsRequest) ProtoReflect() protoreflect.Message {
+	mi := &file_trading_v1_trading_proto_msgTypes[56]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use ListPublicHoldingsRequest.ProtoReflect.Descriptor instead.
+func (*ListPublicHoldingsRequest) Descriptor() ([]byte, []int) {
+	return file_trading_v1_trading_proto_rawDescGZIP(), []int{56}
+}
+
+func (x *ListPublicHoldingsRequest) GetTicker() string {
+	if x != nil {
+		return x.Ticker
+	}
+	return ""
+}
+
+type ListPublicHoldingsResponse struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	Items         []*PublicHoldingItem   `protobuf:"bytes,1,rep,name=items,proto3" json:"items,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *ListPublicHoldingsResponse) Reset() {
+	*x = ListPublicHoldingsResponse{}
+	mi := &file_trading_v1_trading_proto_msgTypes[57]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *ListPublicHoldingsResponse) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*ListPublicHoldingsResponse) ProtoMessage() {}
+
+func (x *ListPublicHoldingsResponse) ProtoReflect() protoreflect.Message {
+	mi := &file_trading_v1_trading_proto_msgTypes[57]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use ListPublicHoldingsResponse.ProtoReflect.Descriptor instead.
+func (*ListPublicHoldingsResponse) Descriptor() ([]byte, []int) {
+	return file_trading_v1_trading_proto_rawDescGZIP(), []int{57}
+}
+
+func (x *ListPublicHoldingsResponse) GetItems() []*PublicHoldingItem {
+	if x != nil {
+		return x.Items
+	}
+	return nil
+}
+
+type OTCOffer struct {
+	state           protoimpl.MessageState `protogen:"open.v1"`
+	Id              string                 `protobuf:"bytes,1,opt,name=id,proto3" json:"id,omitempty"`
+	ThreadId        string                 `protobuf:"bytes,2,opt,name=thread_id,json=threadId,proto3" json:"thread_id,omitempty"`
+	SecurityId      string                 `protobuf:"bytes,3,opt,name=security_id,json=securityId,proto3" json:"security_id,omitempty"`
+	SecurityTicker  string                 `protobuf:"bytes,4,opt,name=security_ticker,json=securityTicker,proto3" json:"security_ticker,omitempty"`
+	SellerHoldingId string                 `protobuf:"bytes,5,opt,name=seller_holding_id,json=sellerHoldingId,proto3" json:"seller_holding_id,omitempty"`
+	BuyerId         string                 `protobuf:"bytes,10,opt,name=buyer_id,json=buyerId,proto3" json:"buyer_id,omitempty"`
+	BuyerKind       UserKind               `protobuf:"varint,11,opt,name=buyer_kind,json=buyerKind,proto3,enum=banka.trading.v1.UserKind" json:"buyer_kind,omitempty"`
+	BuyerAccountId  string                 `protobuf:"bytes,12,opt,name=buyer_account_id,json=buyerAccountId,proto3" json:"buyer_account_id,omitempty"`
+	SellerId        string                 `protobuf:"bytes,20,opt,name=seller_id,json=sellerId,proto3" json:"seller_id,omitempty"`
+	SellerKind      UserKind               `protobuf:"varint,21,opt,name=seller_kind,json=sellerKind,proto3,enum=banka.trading.v1.UserKind" json:"seller_kind,omitempty"`
+	SellerAccountId string                 `protobuf:"bytes,22,opt,name=seller_account_id,json=sellerAccountId,proto3" json:"seller_account_id,omitempty"`
+	Quantity        int32                  `protobuf:"varint,30,opt,name=quantity,proto3" json:"quantity,omitempty"`
+	PricePerUnit    string                 `protobuf:"bytes,31,opt,name=price_per_unit,json=pricePerUnit,proto3" json:"price_per_unit,omitempty"`
+	Premium         string                 `protobuf:"bytes,32,opt,name=premium,proto3" json:"premium,omitempty"`
+	Currency        Currency               `protobuf:"varint,33,opt,name=currency,proto3,enum=banka.trading.v1.Currency" json:"currency,omitempty"`
+	SettlementDate  *timestamppb.Timestamp `protobuf:"bytes,34,opt,name=settlement_date,json=settlementDate,proto3" json:"settlement_date,omitempty"`
+	ModifiedBy      string                 `protobuf:"bytes,40,opt,name=modified_by,json=modifiedBy,proto3" json:"modified_by,omitempty"`
+	Status          OTCStatus              `protobuf:"varint,41,opt,name=status,proto3,enum=banka.trading.v1.OTCStatus" json:"status,omitempty"`
+	CreatedAt       *timestamppb.Timestamp `protobuf:"bytes,90,opt,name=created_at,json=createdAt,proto3" json:"created_at,omitempty"`
+	UpdatedAt       *timestamppb.Timestamp `protobuf:"bytes,91,opt,name=updated_at,json=updatedAt,proto3" json:"updated_at,omitempty"`
+	unknownFields   protoimpl.UnknownFields
+	sizeCache       protoimpl.SizeCache
+}
+
+func (x *OTCOffer) Reset() {
+	*x = OTCOffer{}
+	mi := &file_trading_v1_trading_proto_msgTypes[58]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *OTCOffer) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*OTCOffer) ProtoMessage() {}
+
+func (x *OTCOffer) ProtoReflect() protoreflect.Message {
+	mi := &file_trading_v1_trading_proto_msgTypes[58]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use OTCOffer.ProtoReflect.Descriptor instead.
+func (*OTCOffer) Descriptor() ([]byte, []int) {
+	return file_trading_v1_trading_proto_rawDescGZIP(), []int{58}
+}
+
+func (x *OTCOffer) GetId() string {
+	if x != nil {
+		return x.Id
+	}
+	return ""
+}
+
+func (x *OTCOffer) GetThreadId() string {
+	if x != nil {
+		return x.ThreadId
+	}
+	return ""
+}
+
+func (x *OTCOffer) GetSecurityId() string {
+	if x != nil {
+		return x.SecurityId
+	}
+	return ""
+}
+
+func (x *OTCOffer) GetSecurityTicker() string {
+	if x != nil {
+		return x.SecurityTicker
+	}
+	return ""
+}
+
+func (x *OTCOffer) GetSellerHoldingId() string {
+	if x != nil {
+		return x.SellerHoldingId
+	}
+	return ""
+}
+
+func (x *OTCOffer) GetBuyerId() string {
+	if x != nil {
+		return x.BuyerId
+	}
+	return ""
+}
+
+func (x *OTCOffer) GetBuyerKind() UserKind {
+	if x != nil {
+		return x.BuyerKind
+	}
+	return UserKind_USER_KIND_UNSPECIFIED
+}
+
+func (x *OTCOffer) GetBuyerAccountId() string {
+	if x != nil {
+		return x.BuyerAccountId
+	}
+	return ""
+}
+
+func (x *OTCOffer) GetSellerId() string {
+	if x != nil {
+		return x.SellerId
+	}
+	return ""
+}
+
+func (x *OTCOffer) GetSellerKind() UserKind {
+	if x != nil {
+		return x.SellerKind
+	}
+	return UserKind_USER_KIND_UNSPECIFIED
+}
+
+func (x *OTCOffer) GetSellerAccountId() string {
+	if x != nil {
+		return x.SellerAccountId
+	}
+	return ""
+}
+
+func (x *OTCOffer) GetQuantity() int32 {
+	if x != nil {
+		return x.Quantity
+	}
+	return 0
+}
+
+func (x *OTCOffer) GetPricePerUnit() string {
+	if x != nil {
+		return x.PricePerUnit
+	}
+	return ""
+}
+
+func (x *OTCOffer) GetPremium() string {
+	if x != nil {
+		return x.Premium
+	}
+	return ""
+}
+
+func (x *OTCOffer) GetCurrency() Currency {
+	if x != nil {
+		return x.Currency
+	}
+	return Currency_CURRENCY_UNSPECIFIED
+}
+
+func (x *OTCOffer) GetSettlementDate() *timestamppb.Timestamp {
+	if x != nil {
+		return x.SettlementDate
+	}
+	return nil
+}
+
+func (x *OTCOffer) GetModifiedBy() string {
+	if x != nil {
+		return x.ModifiedBy
+	}
+	return ""
+}
+
+func (x *OTCOffer) GetStatus() OTCStatus {
+	if x != nil {
+		return x.Status
+	}
+	return OTCStatus_OTC_STATUS_UNSPECIFIED
+}
+
+func (x *OTCOffer) GetCreatedAt() *timestamppb.Timestamp {
+	if x != nil {
+		return x.CreatedAt
+	}
+	return nil
+}
+
+func (x *OTCOffer) GetUpdatedAt() *timestamppb.Timestamp {
+	if x != nil {
+		return x.UpdatedAt
+	}
+	return nil
+}
+
+type CreateOTCOfferRequest struct {
+	state           protoimpl.MessageState `protogen:"open.v1"`
+	SellerHoldingId string                 `protobuf:"bytes,1,opt,name=seller_holding_id,json=sellerHoldingId,proto3" json:"seller_holding_id,omitempty"`
+	BuyerAccountId  string                 `protobuf:"bytes,2,opt,name=buyer_account_id,json=buyerAccountId,proto3" json:"buyer_account_id,omitempty"`
+	SellerAccountId string                 `protobuf:"bytes,3,opt,name=seller_account_id,json=sellerAccountId,proto3" json:"seller_account_id,omitempty"`
+	Quantity        int32                  `protobuf:"varint,4,opt,name=quantity,proto3" json:"quantity,omitempty"`
+	PricePerUnit    string                 `protobuf:"bytes,5,opt,name=price_per_unit,json=pricePerUnit,proto3" json:"price_per_unit,omitempty"`
+	Premium         string                 `protobuf:"bytes,6,opt,name=premium,proto3" json:"premium,omitempty"`
+	SettlementDate  *timestamppb.Timestamp `protobuf:"bytes,7,opt,name=settlement_date,json=settlementDate,proto3" json:"settlement_date,omitempty"`
+	unknownFields   protoimpl.UnknownFields
+	sizeCache       protoimpl.SizeCache
+}
+
+func (x *CreateOTCOfferRequest) Reset() {
+	*x = CreateOTCOfferRequest{}
+	mi := &file_trading_v1_trading_proto_msgTypes[59]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *CreateOTCOfferRequest) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*CreateOTCOfferRequest) ProtoMessage() {}
+
+func (x *CreateOTCOfferRequest) ProtoReflect() protoreflect.Message {
+	mi := &file_trading_v1_trading_proto_msgTypes[59]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use CreateOTCOfferRequest.ProtoReflect.Descriptor instead.
+func (*CreateOTCOfferRequest) Descriptor() ([]byte, []int) {
+	return file_trading_v1_trading_proto_rawDescGZIP(), []int{59}
+}
+
+func (x *CreateOTCOfferRequest) GetSellerHoldingId() string {
+	if x != nil {
+		return x.SellerHoldingId
+	}
+	return ""
+}
+
+func (x *CreateOTCOfferRequest) GetBuyerAccountId() string {
+	if x != nil {
+		return x.BuyerAccountId
+	}
+	return ""
+}
+
+func (x *CreateOTCOfferRequest) GetSellerAccountId() string {
+	if x != nil {
+		return x.SellerAccountId
+	}
+	return ""
+}
+
+func (x *CreateOTCOfferRequest) GetQuantity() int32 {
+	if x != nil {
+		return x.Quantity
+	}
+	return 0
+}
+
+func (x *CreateOTCOfferRequest) GetPricePerUnit() string {
+	if x != nil {
+		return x.PricePerUnit
+	}
+	return ""
+}
+
+func (x *CreateOTCOfferRequest) GetPremium() string {
+	if x != nil {
+		return x.Premium
+	}
+	return ""
+}
+
+func (x *CreateOTCOfferRequest) GetSettlementDate() *timestamppb.Timestamp {
+	if x != nil {
+		return x.SettlementDate
+	}
+	return nil
+}
+
+type CounterOfferOTCRequest struct {
+	state          protoimpl.MessageState `protogen:"open.v1"`
+	ThreadId       string                 `protobuf:"bytes,1,opt,name=thread_id,json=threadId,proto3" json:"thread_id,omitempty"`
+	Quantity       int32                  `protobuf:"varint,2,opt,name=quantity,proto3" json:"quantity,omitempty"`
+	PricePerUnit   string                 `protobuf:"bytes,3,opt,name=price_per_unit,json=pricePerUnit,proto3" json:"price_per_unit,omitempty"`
+	Premium        string                 `protobuf:"bytes,4,opt,name=premium,proto3" json:"premium,omitempty"`
+	SettlementDate *timestamppb.Timestamp `protobuf:"bytes,5,opt,name=settlement_date,json=settlementDate,proto3" json:"settlement_date,omitempty"`
+	unknownFields  protoimpl.UnknownFields
+	sizeCache      protoimpl.SizeCache
+}
+
+func (x *CounterOfferOTCRequest) Reset() {
+	*x = CounterOfferOTCRequest{}
+	mi := &file_trading_v1_trading_proto_msgTypes[60]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *CounterOfferOTCRequest) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*CounterOfferOTCRequest) ProtoMessage() {}
+
+func (x *CounterOfferOTCRequest) ProtoReflect() protoreflect.Message {
+	mi := &file_trading_v1_trading_proto_msgTypes[60]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use CounterOfferOTCRequest.ProtoReflect.Descriptor instead.
+func (*CounterOfferOTCRequest) Descriptor() ([]byte, []int) {
+	return file_trading_v1_trading_proto_rawDescGZIP(), []int{60}
+}
+
+func (x *CounterOfferOTCRequest) GetThreadId() string {
+	if x != nil {
+		return x.ThreadId
+	}
+	return ""
+}
+
+func (x *CounterOfferOTCRequest) GetQuantity() int32 {
+	if x != nil {
+		return x.Quantity
+	}
+	return 0
+}
+
+func (x *CounterOfferOTCRequest) GetPricePerUnit() string {
+	if x != nil {
+		return x.PricePerUnit
+	}
+	return ""
+}
+
+func (x *CounterOfferOTCRequest) GetPremium() string {
+	if x != nil {
+		return x.Premium
+	}
+	return ""
+}
+
+func (x *CounterOfferOTCRequest) GetSettlementDate() *timestamppb.Timestamp {
+	if x != nil {
+		return x.SettlementDate
+	}
+	return nil
+}
+
+type WithdrawOTCOfferRequest struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	ThreadId      string                 `protobuf:"bytes,1,opt,name=thread_id,json=threadId,proto3" json:"thread_id,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *WithdrawOTCOfferRequest) Reset() {
+	*x = WithdrawOTCOfferRequest{}
+	mi := &file_trading_v1_trading_proto_msgTypes[61]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *WithdrawOTCOfferRequest) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*WithdrawOTCOfferRequest) ProtoMessage() {}
+
+func (x *WithdrawOTCOfferRequest) ProtoReflect() protoreflect.Message {
+	mi := &file_trading_v1_trading_proto_msgTypes[61]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use WithdrawOTCOfferRequest.ProtoReflect.Descriptor instead.
+func (*WithdrawOTCOfferRequest) Descriptor() ([]byte, []int) {
+	return file_trading_v1_trading_proto_rawDescGZIP(), []int{61}
+}
+
+func (x *WithdrawOTCOfferRequest) GetThreadId() string {
+	if x != nil {
+		return x.ThreadId
+	}
+	return ""
+}
+
+type ListOTCThreadsRequest struct {
+	state protoimpl.MessageState `protogen:"open.v1"`
+	// For supervisor/admin views — narrow to a single party. Empty for
+	// self.
+	PartyUserId   string   `protobuf:"bytes,1,opt,name=party_user_id,json=partyUserId,proto3" json:"party_user_id,omitempty"`
+	PartyUserKind UserKind `protobuf:"varint,2,opt,name=party_user_kind,json=partyUserKind,proto3,enum=banka.trading.v1.UserKind" json:"party_user_kind,omitempty"`
+	// "open" / "any" / "" (default "open").
+	Status        string `protobuf:"bytes,3,opt,name=status,proto3" json:"status,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *ListOTCThreadsRequest) Reset() {
+	*x = ListOTCThreadsRequest{}
+	mi := &file_trading_v1_trading_proto_msgTypes[62]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *ListOTCThreadsRequest) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*ListOTCThreadsRequest) ProtoMessage() {}
+
+func (x *ListOTCThreadsRequest) ProtoReflect() protoreflect.Message {
+	mi := &file_trading_v1_trading_proto_msgTypes[62]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use ListOTCThreadsRequest.ProtoReflect.Descriptor instead.
+func (*ListOTCThreadsRequest) Descriptor() ([]byte, []int) {
+	return file_trading_v1_trading_proto_rawDescGZIP(), []int{62}
+}
+
+func (x *ListOTCThreadsRequest) GetPartyUserId() string {
+	if x != nil {
+		return x.PartyUserId
+	}
+	return ""
+}
+
+func (x *ListOTCThreadsRequest) GetPartyUserKind() UserKind {
+	if x != nil {
+		return x.PartyUserKind
+	}
+	return UserKind_USER_KIND_UNSPECIFIED
+}
+
+func (x *ListOTCThreadsRequest) GetStatus() string {
+	if x != nil {
+		return x.Status
+	}
+	return ""
+}
+
+type ListOTCThreadsResponse struct {
+	state protoimpl.MessageState `protogen:"open.v1"`
+	// Latest iteration per thread. Sorted newest-first by updated_at.
+	Threads       []*OTCOffer `protobuf:"bytes,1,rep,name=threads,proto3" json:"threads,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *ListOTCThreadsResponse) Reset() {
+	*x = ListOTCThreadsResponse{}
+	mi := &file_trading_v1_trading_proto_msgTypes[63]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *ListOTCThreadsResponse) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*ListOTCThreadsResponse) ProtoMessage() {}
+
+func (x *ListOTCThreadsResponse) ProtoReflect() protoreflect.Message {
+	mi := &file_trading_v1_trading_proto_msgTypes[63]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use ListOTCThreadsResponse.ProtoReflect.Descriptor instead.
+func (*ListOTCThreadsResponse) Descriptor() ([]byte, []int) {
+	return file_trading_v1_trading_proto_rawDescGZIP(), []int{63}
+}
+
+func (x *ListOTCThreadsResponse) GetThreads() []*OTCOffer {
+	if x != nil {
+		return x.Threads
+	}
+	return nil
+}
+
+type GetOTCThreadRequest struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	ThreadId      string                 `protobuf:"bytes,1,opt,name=thread_id,json=threadId,proto3" json:"thread_id,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *GetOTCThreadRequest) Reset() {
+	*x = GetOTCThreadRequest{}
+	mi := &file_trading_v1_trading_proto_msgTypes[64]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *GetOTCThreadRequest) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*GetOTCThreadRequest) ProtoMessage() {}
+
+func (x *GetOTCThreadRequest) ProtoReflect() protoreflect.Message {
+	mi := &file_trading_v1_trading_proto_msgTypes[64]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use GetOTCThreadRequest.ProtoReflect.Descriptor instead.
+func (*GetOTCThreadRequest) Descriptor() ([]byte, []int) {
+	return file_trading_v1_trading_proto_rawDescGZIP(), []int{64}
+}
+
+func (x *GetOTCThreadRequest) GetThreadId() string {
+	if x != nil {
+		return x.ThreadId
+	}
+	return ""
+}
+
+type GetOTCThreadResponse struct {
+	state protoimpl.MessageState `protogen:"open.v1"`
+	// Every iteration in the thread, oldest first.
+	Iterations []*OTCOffer `protobuf:"bytes,1,rep,name=iterations,proto3" json:"iterations,omitempty"`
+	// The signed contract if accept already ran.
+	Contract      *OTCContract `protobuf:"bytes,2,opt,name=contract,proto3" json:"contract,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *GetOTCThreadResponse) Reset() {
+	*x = GetOTCThreadResponse{}
+	mi := &file_trading_v1_trading_proto_msgTypes[65]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *GetOTCThreadResponse) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*GetOTCThreadResponse) ProtoMessage() {}
+
+func (x *GetOTCThreadResponse) ProtoReflect() protoreflect.Message {
+	mi := &file_trading_v1_trading_proto_msgTypes[65]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use GetOTCThreadResponse.ProtoReflect.Descriptor instead.
+func (*GetOTCThreadResponse) Descriptor() ([]byte, []int) {
+	return file_trading_v1_trading_proto_rawDescGZIP(), []int{65}
+}
+
+func (x *GetOTCThreadResponse) GetIterations() []*OTCOffer {
+	if x != nil {
+		return x.Iterations
+	}
+	return nil
+}
+
+func (x *GetOTCThreadResponse) GetContract() *OTCContract {
+	if x != nil {
+		return x.Contract
+	}
+	return nil
+}
+
+type AcceptOTCOfferRequest struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	ThreadId      string                 `protobuf:"bytes,1,opt,name=thread_id,json=threadId,proto3" json:"thread_id,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *AcceptOTCOfferRequest) Reset() {
+	*x = AcceptOTCOfferRequest{}
+	mi := &file_trading_v1_trading_proto_msgTypes[66]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *AcceptOTCOfferRequest) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*AcceptOTCOfferRequest) ProtoMessage() {}
+
+func (x *AcceptOTCOfferRequest) ProtoReflect() protoreflect.Message {
+	mi := &file_trading_v1_trading_proto_msgTypes[66]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use AcceptOTCOfferRequest.ProtoReflect.Descriptor instead.
+func (*AcceptOTCOfferRequest) Descriptor() ([]byte, []int) {
+	return file_trading_v1_trading_proto_rawDescGZIP(), []int{66}
+}
+
+func (x *AcceptOTCOfferRequest) GetThreadId() string {
+	if x != nil {
+		return x.ThreadId
+	}
+	return ""
+}
+
+type AcceptOTCOfferResponse struct {
+	state    protoimpl.MessageState `protogen:"open.v1"`
+	Contract *OTCContract           `protobuf:"bytes,1,opt,name=contract,proto3" json:"contract,omitempty"`
+	// Bank op_id of the premium leg, for ops correlation.
+	PremiumOpId   string `protobuf:"bytes,2,opt,name=premium_op_id,json=premiumOpId,proto3" json:"premium_op_id,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *AcceptOTCOfferResponse) Reset() {
+	*x = AcceptOTCOfferResponse{}
+	mi := &file_trading_v1_trading_proto_msgTypes[67]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *AcceptOTCOfferResponse) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*AcceptOTCOfferResponse) ProtoMessage() {}
+
+func (x *AcceptOTCOfferResponse) ProtoReflect() protoreflect.Message {
+	mi := &file_trading_v1_trading_proto_msgTypes[67]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use AcceptOTCOfferResponse.ProtoReflect.Descriptor instead.
+func (*AcceptOTCOfferResponse) Descriptor() ([]byte, []int) {
+	return file_trading_v1_trading_proto_rawDescGZIP(), []int{67}
+}
+
+func (x *AcceptOTCOfferResponse) GetContract() *OTCContract {
+	if x != nil {
+		return x.Contract
+	}
+	return nil
+}
+
+func (x *AcceptOTCOfferResponse) GetPremiumOpId() string {
+	if x != nil {
+		return x.PremiumOpId
+	}
+	return ""
+}
+
+type OTCContract struct {
+	state           protoimpl.MessageState `protogen:"open.v1"`
+	Id              string                 `protobuf:"bytes,1,opt,name=id,proto3" json:"id,omitempty"`
+	ThreadId        string                 `protobuf:"bytes,2,opt,name=thread_id,json=threadId,proto3" json:"thread_id,omitempty"`
+	SecurityId      string                 `protobuf:"bytes,3,opt,name=security_id,json=securityId,proto3" json:"security_id,omitempty"`
+	SecurityTicker  string                 `protobuf:"bytes,4,opt,name=security_ticker,json=securityTicker,proto3" json:"security_ticker,omitempty"`
+	SellerHoldingId string                 `protobuf:"bytes,5,opt,name=seller_holding_id,json=sellerHoldingId,proto3" json:"seller_holding_id,omitempty"`
+	BuyerId         string                 `protobuf:"bytes,10,opt,name=buyer_id,json=buyerId,proto3" json:"buyer_id,omitempty"`
+	BuyerKind       UserKind               `protobuf:"varint,11,opt,name=buyer_kind,json=buyerKind,proto3,enum=banka.trading.v1.UserKind" json:"buyer_kind,omitempty"`
+	BuyerAccountId  string                 `protobuf:"bytes,12,opt,name=buyer_account_id,json=buyerAccountId,proto3" json:"buyer_account_id,omitempty"`
+	SellerId        string                 `protobuf:"bytes,20,opt,name=seller_id,json=sellerId,proto3" json:"seller_id,omitempty"`
+	SellerKind      UserKind               `protobuf:"varint,21,opt,name=seller_kind,json=sellerKind,proto3,enum=banka.trading.v1.UserKind" json:"seller_kind,omitempty"`
+	SellerAccountId string                 `protobuf:"bytes,22,opt,name=seller_account_id,json=sellerAccountId,proto3" json:"seller_account_id,omitempty"`
+	Quantity        int32                  `protobuf:"varint,30,opt,name=quantity,proto3" json:"quantity,omitempty"`
+	StrikePrice     string                 `protobuf:"bytes,31,opt,name=strike_price,json=strikePrice,proto3" json:"strike_price,omitempty"`
+	PremiumPaid     string                 `protobuf:"bytes,32,opt,name=premium_paid,json=premiumPaid,proto3" json:"premium_paid,omitempty"`
+	Currency        Currency               `protobuf:"varint,33,opt,name=currency,proto3,enum=banka.trading.v1.Currency" json:"currency,omitempty"`
+	SettlementDate  *timestamppb.Timestamp `protobuf:"bytes,34,opt,name=settlement_date,json=settlementDate,proto3" json:"settlement_date,omitempty"`
+	PremiumOpId     string                 `protobuf:"bytes,40,opt,name=premium_op_id,json=premiumOpId,proto3" json:"premium_op_id,omitempty"`
+	Status          OTCContractStatus      `protobuf:"varint,41,opt,name=status,proto3,enum=banka.trading.v1.OTCContractStatus" json:"status,omitempty"`
+	ExercisedOpId   string                 `protobuf:"bytes,42,opt,name=exercised_op_id,json=exercisedOpId,proto3" json:"exercised_op_id,omitempty"`
+	ExerciseSagaId  string                 `protobuf:"bytes,43,opt,name=exercise_saga_id,json=exerciseSagaId,proto3" json:"exercise_saga_id,omitempty"`
+	ExercisedAt     *timestamppb.Timestamp `protobuf:"bytes,44,opt,name=exercised_at,json=exercisedAt,proto3" json:"exercised_at,omitempty"`
+	CreatedAt       *timestamppb.Timestamp `protobuf:"bytes,90,opt,name=created_at,json=createdAt,proto3" json:"created_at,omitempty"`
+	UpdatedAt       *timestamppb.Timestamp `protobuf:"bytes,91,opt,name=updated_at,json=updatedAt,proto3" json:"updated_at,omitempty"`
+	unknownFields   protoimpl.UnknownFields
+	sizeCache       protoimpl.SizeCache
+}
+
+func (x *OTCContract) Reset() {
+	*x = OTCContract{}
+	mi := &file_trading_v1_trading_proto_msgTypes[68]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *OTCContract) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*OTCContract) ProtoMessage() {}
+
+func (x *OTCContract) ProtoReflect() protoreflect.Message {
+	mi := &file_trading_v1_trading_proto_msgTypes[68]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use OTCContract.ProtoReflect.Descriptor instead.
+func (*OTCContract) Descriptor() ([]byte, []int) {
+	return file_trading_v1_trading_proto_rawDescGZIP(), []int{68}
+}
+
+func (x *OTCContract) GetId() string {
+	if x != nil {
+		return x.Id
+	}
+	return ""
+}
+
+func (x *OTCContract) GetThreadId() string {
+	if x != nil {
+		return x.ThreadId
+	}
+	return ""
+}
+
+func (x *OTCContract) GetSecurityId() string {
+	if x != nil {
+		return x.SecurityId
+	}
+	return ""
+}
+
+func (x *OTCContract) GetSecurityTicker() string {
+	if x != nil {
+		return x.SecurityTicker
+	}
+	return ""
+}
+
+func (x *OTCContract) GetSellerHoldingId() string {
+	if x != nil {
+		return x.SellerHoldingId
+	}
+	return ""
+}
+
+func (x *OTCContract) GetBuyerId() string {
+	if x != nil {
+		return x.BuyerId
+	}
+	return ""
+}
+
+func (x *OTCContract) GetBuyerKind() UserKind {
+	if x != nil {
+		return x.BuyerKind
+	}
+	return UserKind_USER_KIND_UNSPECIFIED
+}
+
+func (x *OTCContract) GetBuyerAccountId() string {
+	if x != nil {
+		return x.BuyerAccountId
+	}
+	return ""
+}
+
+func (x *OTCContract) GetSellerId() string {
+	if x != nil {
+		return x.SellerId
+	}
+	return ""
+}
+
+func (x *OTCContract) GetSellerKind() UserKind {
+	if x != nil {
+		return x.SellerKind
+	}
+	return UserKind_USER_KIND_UNSPECIFIED
+}
+
+func (x *OTCContract) GetSellerAccountId() string {
+	if x != nil {
+		return x.SellerAccountId
+	}
+	return ""
+}
+
+func (x *OTCContract) GetQuantity() int32 {
+	if x != nil {
+		return x.Quantity
+	}
+	return 0
+}
+
+func (x *OTCContract) GetStrikePrice() string {
+	if x != nil {
+		return x.StrikePrice
+	}
+	return ""
+}
+
+func (x *OTCContract) GetPremiumPaid() string {
+	if x != nil {
+		return x.PremiumPaid
+	}
+	return ""
+}
+
+func (x *OTCContract) GetCurrency() Currency {
+	if x != nil {
+		return x.Currency
+	}
+	return Currency_CURRENCY_UNSPECIFIED
+}
+
+func (x *OTCContract) GetSettlementDate() *timestamppb.Timestamp {
+	if x != nil {
+		return x.SettlementDate
+	}
+	return nil
+}
+
+func (x *OTCContract) GetPremiumOpId() string {
+	if x != nil {
+		return x.PremiumOpId
+	}
+	return ""
+}
+
+func (x *OTCContract) GetStatus() OTCContractStatus {
+	if x != nil {
+		return x.Status
+	}
+	return OTCContractStatus_OTC_CONTRACT_STATUS_UNSPECIFIED
+}
+
+func (x *OTCContract) GetExercisedOpId() string {
+	if x != nil {
+		return x.ExercisedOpId
+	}
+	return ""
+}
+
+func (x *OTCContract) GetExerciseSagaId() string {
+	if x != nil {
+		return x.ExerciseSagaId
+	}
+	return ""
+}
+
+func (x *OTCContract) GetExercisedAt() *timestamppb.Timestamp {
+	if x != nil {
+		return x.ExercisedAt
+	}
+	return nil
+}
+
+func (x *OTCContract) GetCreatedAt() *timestamppb.Timestamp {
+	if x != nil {
+		return x.CreatedAt
+	}
+	return nil
+}
+
+func (x *OTCContract) GetUpdatedAt() *timestamppb.Timestamp {
+	if x != nil {
+		return x.UpdatedAt
+	}
+	return nil
+}
+
+type ListOTCContractsRequest struct {
+	state protoimpl.MessageState `protogen:"open.v1"`
+	// Supervisor/admin: empty user_id returns all; non-empty narrows.
+	PartyUserId   string   `protobuf:"bytes,1,opt,name=party_user_id,json=partyUserId,proto3" json:"party_user_id,omitempty"`
+	PartyUserKind UserKind `protobuf:"varint,2,opt,name=party_user_kind,json=partyUserKind,proto3,enum=banka.trading.v1.UserKind" json:"party_user_kind,omitempty"`
+	// "active"/"any"/"" (default "active").
+	Status        string `protobuf:"bytes,3,opt,name=status,proto3" json:"status,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *ListOTCContractsRequest) Reset() {
+	*x = ListOTCContractsRequest{}
+	mi := &file_trading_v1_trading_proto_msgTypes[69]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *ListOTCContractsRequest) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*ListOTCContractsRequest) ProtoMessage() {}
+
+func (x *ListOTCContractsRequest) ProtoReflect() protoreflect.Message {
+	mi := &file_trading_v1_trading_proto_msgTypes[69]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use ListOTCContractsRequest.ProtoReflect.Descriptor instead.
+func (*ListOTCContractsRequest) Descriptor() ([]byte, []int) {
+	return file_trading_v1_trading_proto_rawDescGZIP(), []int{69}
+}
+
+func (x *ListOTCContractsRequest) GetPartyUserId() string {
+	if x != nil {
+		return x.PartyUserId
+	}
+	return ""
+}
+
+func (x *ListOTCContractsRequest) GetPartyUserKind() UserKind {
+	if x != nil {
+		return x.PartyUserKind
+	}
+	return UserKind_USER_KIND_UNSPECIFIED
+}
+
+func (x *ListOTCContractsRequest) GetStatus() string {
+	if x != nil {
+		return x.Status
+	}
+	return ""
+}
+
+type ListOTCContractsResponse struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	Contracts     []*OTCContract         `protobuf:"bytes,1,rep,name=contracts,proto3" json:"contracts,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *ListOTCContractsResponse) Reset() {
+	*x = ListOTCContractsResponse{}
+	mi := &file_trading_v1_trading_proto_msgTypes[70]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *ListOTCContractsResponse) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*ListOTCContractsResponse) ProtoMessage() {}
+
+func (x *ListOTCContractsResponse) ProtoReflect() protoreflect.Message {
+	mi := &file_trading_v1_trading_proto_msgTypes[70]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use ListOTCContractsResponse.ProtoReflect.Descriptor instead.
+func (*ListOTCContractsResponse) Descriptor() ([]byte, []int) {
+	return file_trading_v1_trading_proto_rawDescGZIP(), []int{70}
+}
+
+func (x *ListOTCContractsResponse) GetContracts() []*OTCContract {
+	if x != nil {
+		return x.Contracts
+	}
+	return nil
+}
+
+type GetOTCContractRequest struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	Id            string                 `protobuf:"bytes,1,opt,name=id,proto3" json:"id,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *GetOTCContractRequest) Reset() {
+	*x = GetOTCContractRequest{}
+	mi := &file_trading_v1_trading_proto_msgTypes[71]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *GetOTCContractRequest) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*GetOTCContractRequest) ProtoMessage() {}
+
+func (x *GetOTCContractRequest) ProtoReflect() protoreflect.Message {
+	mi := &file_trading_v1_trading_proto_msgTypes[71]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use GetOTCContractRequest.ProtoReflect.Descriptor instead.
+func (*GetOTCContractRequest) Descriptor() ([]byte, []int) {
+	return file_trading_v1_trading_proto_rawDescGZIP(), []int{71}
+}
+
+func (x *GetOTCContractRequest) GetId() string {
+	if x != nil {
+		return x.Id
+	}
+	return ""
+}
+
+type ExerciseOTCContractRequest struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	Id            string                 `protobuf:"bytes,1,opt,name=id,proto3" json:"id,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *ExerciseOTCContractRequest) Reset() {
+	*x = ExerciseOTCContractRequest{}
+	mi := &file_trading_v1_trading_proto_msgTypes[72]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *ExerciseOTCContractRequest) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*ExerciseOTCContractRequest) ProtoMessage() {}
+
+func (x *ExerciseOTCContractRequest) ProtoReflect() protoreflect.Message {
+	mi := &file_trading_v1_trading_proto_msgTypes[72]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use ExerciseOTCContractRequest.ProtoReflect.Descriptor instead.
+func (*ExerciseOTCContractRequest) Descriptor() ([]byte, []int) {
+	return file_trading_v1_trading_proto_rawDescGZIP(), []int{72}
+}
+
+func (x *ExerciseOTCContractRequest) GetId() string {
+	if x != nil {
+		return x.Id
+	}
+	return ""
+}
+
+type ExerciseOTCContractResponse struct {
+	state    protoimpl.MessageState `protogen:"open.v1"`
+	Contract *OTCContract           `protobuf:"bytes,1,opt,name=contract,proto3" json:"contract,omitempty"`
+	// Bank op_id of the strike-leg cash transfer.
+	StrikeOpId string `protobuf:"bytes,2,opt,name=strike_op_id,json=strikeOpId,proto3" json:"strike_op_id,omitempty"`
+	// Realized-gain row written for the seller (RSD, native).
+	SellerRealizedGainNative string `protobuf:"bytes,3,opt,name=seller_realized_gain_native,json=sellerRealizedGainNative,proto3" json:"seller_realized_gain_native,omitempty"`
+	SellerRealizedGainRsd    string `protobuf:"bytes,4,opt,name=seller_realized_gain_rsd,json=sellerRealizedGainRsd,proto3" json:"seller_realized_gain_rsd,omitempty"`
+	unknownFields            protoimpl.UnknownFields
+	sizeCache                protoimpl.SizeCache
+}
+
+func (x *ExerciseOTCContractResponse) Reset() {
+	*x = ExerciseOTCContractResponse{}
+	mi := &file_trading_v1_trading_proto_msgTypes[73]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *ExerciseOTCContractResponse) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*ExerciseOTCContractResponse) ProtoMessage() {}
+
+func (x *ExerciseOTCContractResponse) ProtoReflect() protoreflect.Message {
+	mi := &file_trading_v1_trading_proto_msgTypes[73]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use ExerciseOTCContractResponse.ProtoReflect.Descriptor instead.
+func (*ExerciseOTCContractResponse) Descriptor() ([]byte, []int) {
+	return file_trading_v1_trading_proto_rawDescGZIP(), []int{73}
+}
+
+func (x *ExerciseOTCContractResponse) GetContract() *OTCContract {
+	if x != nil {
+		return x.Contract
+	}
+	return nil
+}
+
+func (x *ExerciseOTCContractResponse) GetStrikeOpId() string {
+	if x != nil {
+		return x.StrikeOpId
+	}
+	return ""
+}
+
+func (x *ExerciseOTCContractResponse) GetSellerRealizedGainNative() string {
+	if x != nil {
+		return x.SellerRealizedGainNative
+	}
+	return ""
+}
+
+func (x *ExerciseOTCContractResponse) GetSellerRealizedGainRsd() string {
+	if x != nil {
+		return x.SellerRealizedGainRsd
+	}
+	return ""
+}
+
 var File_trading_v1_trading_proto protoreflect.FileDescriptor
 
 const file_trading_v1_trading_proto_rawDesc = "" +
@@ -5162,7 +6685,134 @@ const file_trading_v1_trading_proto_rawDesc = "" +
 	"\x04from\x18\x03 \x01(\v2\x1a.google.protobuf.TimestampR\x04from\x12*\n" +
 	"\x02to\x18\x04 \x01(\v2\x1a.google.protobuf.TimestampR\x02to\"O\n" +
 	"\x17ListRealizedPnLResponse\x124\n" +
-	"\x04rows\x18\x01 \x03(\v2 .banka.trading.v1.RealizedPnLRowR\x04rows*\xb4\x01\n" +
+	"\x04rows\x18\x01 \x03(\v2 .banka.trading.v1.RealizedPnLRowR\x04rows\"\xf0\x03\n" +
+	"\x11PublicHoldingItem\x12\x1d\n" +
+	"\n" +
+	"holding_id\x18\x01 \x01(\tR\tholdingId\x12\x1b\n" +
+	"\tseller_id\x18\x02 \x01(\tR\bsellerId\x12;\n" +
+	"\vseller_kind\x18\x03 \x01(\x0e2\x1a.banka.trading.v1.UserKindR\n" +
+	"sellerKind\x12*\n" +
+	"\x11seller_account_id\x18\x04 \x01(\tR\x0fsellerAccountId\x12.\n" +
+	"\x13seller_display_name\x18\x05 \x01(\tR\x11sellerDisplayName\x126\n" +
+	"\bsecurity\x18\x06 \x01(\v2\x1a.banka.trading.v1.SecurityR\bsecurity\x12'\n" +
+	"\x0favailable_count\x18\a \x01(\x05R\x0eavailableCount\x12!\n" +
+	"\fpublic_count\x18\b \x01(\x05R\vpublicCount\x12%\n" +
+	"\x0ereserved_count\x18\t \x01(\x05R\rreservedCount\x12#\n" +
+	"\rcurrent_price\x18\n" +
+	" \x01(\tR\fcurrentPrice\x126\n" +
+	"\bcurrency\x18\v \x01(\x0e2\x1a.banka.trading.v1.CurrencyR\bcurrency\"3\n" +
+	"\x19ListPublicHoldingsRequest\x12\x16\n" +
+	"\x06ticker\x18\x01 \x01(\tR\x06ticker\"W\n" +
+	"\x1aListPublicHoldingsResponse\x129\n" +
+	"\x05items\x18\x01 \x03(\v2#.banka.trading.v1.PublicHoldingItemR\x05items\"\xd8\x06\n" +
+	"\bOTCOffer\x12\x0e\n" +
+	"\x02id\x18\x01 \x01(\tR\x02id\x12\x1b\n" +
+	"\tthread_id\x18\x02 \x01(\tR\bthreadId\x12\x1f\n" +
+	"\vsecurity_id\x18\x03 \x01(\tR\n" +
+	"securityId\x12'\n" +
+	"\x0fsecurity_ticker\x18\x04 \x01(\tR\x0esecurityTicker\x12*\n" +
+	"\x11seller_holding_id\x18\x05 \x01(\tR\x0fsellerHoldingId\x12\x19\n" +
+	"\bbuyer_id\x18\n" +
+	" \x01(\tR\abuyerId\x129\n" +
+	"\n" +
+	"buyer_kind\x18\v \x01(\x0e2\x1a.banka.trading.v1.UserKindR\tbuyerKind\x12(\n" +
+	"\x10buyer_account_id\x18\f \x01(\tR\x0ebuyerAccountId\x12\x1b\n" +
+	"\tseller_id\x18\x14 \x01(\tR\bsellerId\x12;\n" +
+	"\vseller_kind\x18\x15 \x01(\x0e2\x1a.banka.trading.v1.UserKindR\n" +
+	"sellerKind\x12*\n" +
+	"\x11seller_account_id\x18\x16 \x01(\tR\x0fsellerAccountId\x12\x1a\n" +
+	"\bquantity\x18\x1e \x01(\x05R\bquantity\x12$\n" +
+	"\x0eprice_per_unit\x18\x1f \x01(\tR\fpricePerUnit\x12\x18\n" +
+	"\apremium\x18  \x01(\tR\apremium\x126\n" +
+	"\bcurrency\x18! \x01(\x0e2\x1a.banka.trading.v1.CurrencyR\bcurrency\x12C\n" +
+	"\x0fsettlement_date\x18\" \x01(\v2\x1a.google.protobuf.TimestampR\x0esettlementDate\x12\x1f\n" +
+	"\vmodified_by\x18( \x01(\tR\n" +
+	"modifiedBy\x123\n" +
+	"\x06status\x18) \x01(\x0e2\x1b.banka.trading.v1.OTCStatusR\x06status\x129\n" +
+	"\n" +
+	"created_at\x18Z \x01(\v2\x1a.google.protobuf.TimestampR\tcreatedAt\x129\n" +
+	"\n" +
+	"updated_at\x18[ \x01(\v2\x1a.google.protobuf.TimestampR\tupdatedAt\"\xf3\x02\n" +
+	"\x15CreateOTCOfferRequest\x124\n" +
+	"\x11seller_holding_id\x18\x01 \x01(\tB\b\xbaH\x05r\x03\xb0\x01\x01R\x0fsellerHoldingId\x122\n" +
+	"\x10buyer_account_id\x18\x02 \x01(\tB\b\xbaH\x05r\x03\xb0\x01\x01R\x0ebuyerAccountId\x124\n" +
+	"\x11seller_account_id\x18\x03 \x01(\tB\b\xbaH\x05r\x03\xb0\x01\x01R\x0fsellerAccountId\x12#\n" +
+	"\bquantity\x18\x04 \x01(\x05B\a\xbaH\x04\x1a\x02 \x00R\bquantity\x12-\n" +
+	"\x0eprice_per_unit\x18\x05 \x01(\tB\a\xbaH\x04r\x02\x10\x01R\fpricePerUnit\x12!\n" +
+	"\apremium\x18\x06 \x01(\tB\a\xbaH\x04r\x02\x10\x01R\apremium\x12C\n" +
+	"\x0fsettlement_date\x18\a \x01(\v2\x1a.google.protobuf.TimestampR\x0esettlementDate\"\xfb\x01\n" +
+	"\x16CounterOfferOTCRequest\x12%\n" +
+	"\tthread_id\x18\x01 \x01(\tB\b\xbaH\x05r\x03\xb0\x01\x01R\bthreadId\x12#\n" +
+	"\bquantity\x18\x02 \x01(\x05B\a\xbaH\x04\x1a\x02 \x00R\bquantity\x12-\n" +
+	"\x0eprice_per_unit\x18\x03 \x01(\tB\a\xbaH\x04r\x02\x10\x01R\fpricePerUnit\x12!\n" +
+	"\apremium\x18\x04 \x01(\tB\a\xbaH\x04r\x02\x10\x01R\apremium\x12C\n" +
+	"\x0fsettlement_date\x18\x05 \x01(\v2\x1a.google.protobuf.TimestampR\x0esettlementDate\"@\n" +
+	"\x17WithdrawOTCOfferRequest\x12%\n" +
+	"\tthread_id\x18\x01 \x01(\tB\b\xbaH\x05r\x03\xb0\x01\x01R\bthreadId\"\x97\x01\n" +
+	"\x15ListOTCThreadsRequest\x12\"\n" +
+	"\rparty_user_id\x18\x01 \x01(\tR\vpartyUserId\x12B\n" +
+	"\x0fparty_user_kind\x18\x02 \x01(\x0e2\x1a.banka.trading.v1.UserKindR\rpartyUserKind\x12\x16\n" +
+	"\x06status\x18\x03 \x01(\tR\x06status\"N\n" +
+	"\x16ListOTCThreadsResponse\x124\n" +
+	"\athreads\x18\x01 \x03(\v2\x1a.banka.trading.v1.OTCOfferR\athreads\"<\n" +
+	"\x13GetOTCThreadRequest\x12%\n" +
+	"\tthread_id\x18\x01 \x01(\tB\b\xbaH\x05r\x03\xb0\x01\x01R\bthreadId\"\x8d\x01\n" +
+	"\x14GetOTCThreadResponse\x12:\n" +
+	"\n" +
+	"iterations\x18\x01 \x03(\v2\x1a.banka.trading.v1.OTCOfferR\n" +
+	"iterations\x129\n" +
+	"\bcontract\x18\x02 \x01(\v2\x1d.banka.trading.v1.OTCContractR\bcontract\">\n" +
+	"\x15AcceptOTCOfferRequest\x12%\n" +
+	"\tthread_id\x18\x01 \x01(\tB\b\xbaH\x05r\x03\xb0\x01\x01R\bthreadId\"w\n" +
+	"\x16AcceptOTCOfferResponse\x129\n" +
+	"\bcontract\x18\x01 \x01(\v2\x1d.banka.trading.v1.OTCContractR\bcontract\x12\"\n" +
+	"\rpremium_op_id\x18\x02 \x01(\tR\vpremiumOpId\"\xfd\a\n" +
+	"\vOTCContract\x12\x0e\n" +
+	"\x02id\x18\x01 \x01(\tR\x02id\x12\x1b\n" +
+	"\tthread_id\x18\x02 \x01(\tR\bthreadId\x12\x1f\n" +
+	"\vsecurity_id\x18\x03 \x01(\tR\n" +
+	"securityId\x12'\n" +
+	"\x0fsecurity_ticker\x18\x04 \x01(\tR\x0esecurityTicker\x12*\n" +
+	"\x11seller_holding_id\x18\x05 \x01(\tR\x0fsellerHoldingId\x12\x19\n" +
+	"\bbuyer_id\x18\n" +
+	" \x01(\tR\abuyerId\x129\n" +
+	"\n" +
+	"buyer_kind\x18\v \x01(\x0e2\x1a.banka.trading.v1.UserKindR\tbuyerKind\x12(\n" +
+	"\x10buyer_account_id\x18\f \x01(\tR\x0ebuyerAccountId\x12\x1b\n" +
+	"\tseller_id\x18\x14 \x01(\tR\bsellerId\x12;\n" +
+	"\vseller_kind\x18\x15 \x01(\x0e2\x1a.banka.trading.v1.UserKindR\n" +
+	"sellerKind\x12*\n" +
+	"\x11seller_account_id\x18\x16 \x01(\tR\x0fsellerAccountId\x12\x1a\n" +
+	"\bquantity\x18\x1e \x01(\x05R\bquantity\x12!\n" +
+	"\fstrike_price\x18\x1f \x01(\tR\vstrikePrice\x12!\n" +
+	"\fpremium_paid\x18  \x01(\tR\vpremiumPaid\x126\n" +
+	"\bcurrency\x18! \x01(\x0e2\x1a.banka.trading.v1.CurrencyR\bcurrency\x12C\n" +
+	"\x0fsettlement_date\x18\" \x01(\v2\x1a.google.protobuf.TimestampR\x0esettlementDate\x12\"\n" +
+	"\rpremium_op_id\x18( \x01(\tR\vpremiumOpId\x12;\n" +
+	"\x06status\x18) \x01(\x0e2#.banka.trading.v1.OTCContractStatusR\x06status\x12&\n" +
+	"\x0fexercised_op_id\x18* \x01(\tR\rexercisedOpId\x12(\n" +
+	"\x10exercise_saga_id\x18+ \x01(\tR\x0eexerciseSagaId\x12=\n" +
+	"\fexercised_at\x18, \x01(\v2\x1a.google.protobuf.TimestampR\vexercisedAt\x129\n" +
+	"\n" +
+	"created_at\x18Z \x01(\v2\x1a.google.protobuf.TimestampR\tcreatedAt\x129\n" +
+	"\n" +
+	"updated_at\x18[ \x01(\v2\x1a.google.protobuf.TimestampR\tupdatedAt\"\x99\x01\n" +
+	"\x17ListOTCContractsRequest\x12\"\n" +
+	"\rparty_user_id\x18\x01 \x01(\tR\vpartyUserId\x12B\n" +
+	"\x0fparty_user_kind\x18\x02 \x01(\x0e2\x1a.banka.trading.v1.UserKindR\rpartyUserKind\x12\x16\n" +
+	"\x06status\x18\x03 \x01(\tR\x06status\"W\n" +
+	"\x18ListOTCContractsResponse\x12;\n" +
+	"\tcontracts\x18\x01 \x03(\v2\x1d.banka.trading.v1.OTCContractR\tcontracts\"1\n" +
+	"\x15GetOTCContractRequest\x12\x18\n" +
+	"\x02id\x18\x01 \x01(\tB\b\xbaH\x05r\x03\xb0\x01\x01R\x02id\"6\n" +
+	"\x1aExerciseOTCContractRequest\x12\x18\n" +
+	"\x02id\x18\x01 \x01(\tB\b\xbaH\x05r\x03\xb0\x01\x01R\x02id\"\xf2\x01\n" +
+	"\x1bExerciseOTCContractResponse\x129\n" +
+	"\bcontract\x18\x01 \x01(\v2\x1d.banka.trading.v1.OTCContractR\bcontract\x12 \n" +
+	"\fstrike_op_id\x18\x02 \x01(\tR\n" +
+	"strikeOpId\x12=\n" +
+	"\x1bseller_realized_gain_native\x18\x03 \x01(\tR\x18sellerRealizedGainNative\x127\n" +
+	"\x18seller_realized_gain_rsd\x18\x04 \x01(\tR\x15sellerRealizedGainRsd*\xb4\x01\n" +
 	"\bCurrency\x12\x18\n" +
 	"\x14CURRENCY_UNSPECIFIED\x10\x00\x12\x10\n" +
 	"\fCURRENCY_RSD\x10\x01\x12\x10\n" +
@@ -5206,7 +6856,20 @@ const file_trading_v1_trading_proto_rawDesc = "" +
 	"\bUserKind\x12\x19\n" +
 	"\x15USER_KIND_UNSPECIFIED\x10\x00\x12\x14\n" +
 	"\x10USER_KIND_CLIENT\x10\x01\x12\x16\n" +
-	"\x12USER_KIND_EMPLOYEE\x10\x022\xec\x1e\n" +
+	"\x12USER_KIND_EMPLOYEE\x10\x02*\xa2\x01\n" +
+	"\tOTCStatus\x12\x1a\n" +
+	"\x16OTC_STATUS_UNSPECIFIED\x10\x00\x12\x13\n" +
+	"\x0fOTC_STATUS_OPEN\x10\x01\x12\x19\n" +
+	"\x15OTC_STATUS_SUPERSEDED\x10\x02\x12\x17\n" +
+	"\x13OTC_STATUS_ACCEPTED\x10\x03\x12\x18\n" +
+	"\x14OTC_STATUS_WITHDRAWN\x10\x04\x12\x16\n" +
+	"\x12OTC_STATUS_EXPIRED\x10\x05*\xbe\x01\n" +
+	"\x11OTCContractStatus\x12#\n" +
+	"\x1fOTC_CONTRACT_STATUS_UNSPECIFIED\x10\x00\x12\x1e\n" +
+	"\x1aOTC_CONTRACT_STATUS_ACTIVE\x10\x01\x12!\n" +
+	"\x1dOTC_CONTRACT_STATUS_EXERCISED\x10\x02\x12\x1f\n" +
+	"\x1bOTC_CONTRACT_STATUS_EXPIRED\x10\x03\x12 \n" +
+	"\x1cOTC_CONTRACT_STATUS_SETTLING\x10\x042\xdf)\n" +
 	"\x0eTradingService\x12\x81\x01\n" +
 	"\x0eGetActuaryInfo\x12'.banka.trading.v1.GetActuaryInfoRequest\x1a\x1d.banka.trading.v1.ActuaryInfo\"'\x82\xd3\xe4\x93\x02!\x12\x1f/api/v1/actuaries/{employee_id}\x12{\n" +
 	"\rListActuaries\x12&.banka.trading.v1.ListActuariesRequest\x1a'.banka.trading.v1.ListActuariesResponse\"\x19\x82\xd3\xe4\x93\x02\x13\x12\x11/api/v1/actuaries\x12\x8a\x01\n" +
@@ -5239,7 +6902,17 @@ const file_trading_v1_trading_proto_rawDesc = "" +
 	"\x0eExerciseOption\x12'.banka.trading.v1.ExerciseOptionRequest\x1a(.banka.trading.v1.ExerciseOptionResponse\"2\x82\xd3\xe4\x93\x02,:\x01*\"'/api/v1/portfolio/{holding_id}/exercise\x12\x88\x01\n" +
 	"\x10ListTaxPositions\x12).banka.trading.v1.ListTaxPositionsRequest\x1a*.banka.trading.v1.ListTaxPositionsResponse\"\x1d\x82\xd3\xe4\x93\x02\x17\x12\x15/api/v1/tax/positions\x12g\n" +
 	"\x06RunTax\x12\x1f.banka.trading.v1.RunTaxRequest\x1a .banka.trading.v1.RunTaxResponse\"\x1a\x82\xd3\xe4\x93\x02\x14:\x01*\"\x0f/api/v1/tax/run\x12\x84\x01\n" +
-	"\x0fListRealizedPnL\x12(.banka.trading.v1.ListRealizedPnLRequest\x1a).banka.trading.v1.ListRealizedPnLResponse\"\x1c\x82\xd3\xe4\x93\x02\x16\x12\x14/api/v1/tax/realizedB\xcd\x01\n" +
+	"\x0fListRealizedPnL\x12(.banka.trading.v1.ListRealizedPnLRequest\x1a).banka.trading.v1.ListRealizedPnLResponse\"\x1c\x82\xd3\xe4\x93\x02\x16\x12\x14/api/v1/tax/realized\x12\x8e\x01\n" +
+	"\x12ListPublicHoldings\x12+.banka.trading.v1.ListPublicHoldingsRequest\x1a,.banka.trading.v1.ListPublicHoldingsResponse\"\x1d\x82\xd3\xe4\x93\x02\x17\x12\x15/api/v1/otc/discovery\x12t\n" +
+	"\x0eCreateOTCOffer\x12'.banka.trading.v1.CreateOTCOfferRequest\x1a\x1a.banka.trading.v1.OTCOffer\"\x1d\x82\xd3\xe4\x93\x02\x17:\x01*\"\x12/api/v1/otc/offers\x12\x8a\x01\n" +
+	"\x0fCounterOfferOTC\x12(.banka.trading.v1.CounterOfferOTCRequest\x1a\x1a.banka.trading.v1.OTCOffer\"1\x82\xd3\xe4\x93\x02+:\x01*\"&/api/v1/otc/offers/{thread_id}/counter\x12\x8d\x01\n" +
+	"\x10WithdrawOTCOffer\x12).banka.trading.v1.WithdrawOTCOfferRequest\x1a\x1a.banka.trading.v1.OTCOffer\"2\x82\xd3\xe4\x93\x02,:\x01*\"'/api/v1/otc/offers/{thread_id}/withdraw\x12\x7f\n" +
+	"\x0eListOTCThreads\x12'.banka.trading.v1.ListOTCThreadsRequest\x1a(.banka.trading.v1.ListOTCThreadsResponse\"\x1a\x82\xd3\xe4\x93\x02\x14\x12\x12/api/v1/otc/offers\x12\x85\x01\n" +
+	"\fGetOTCThread\x12%.banka.trading.v1.GetOTCThreadRequest\x1a&.banka.trading.v1.GetOTCThreadResponse\"&\x82\xd3\xe4\x93\x02 \x12\x1e/api/v1/otc/offers/{thread_id}\x12\x95\x01\n" +
+	"\x0eAcceptOTCOffer\x12'.banka.trading.v1.AcceptOTCOfferRequest\x1a(.banka.trading.v1.AcceptOTCOfferResponse\"0\x82\xd3\xe4\x93\x02*:\x01*\"%/api/v1/otc/offers/{thread_id}/accept\x12\x88\x01\n" +
+	"\x10ListOTCContracts\x12).banka.trading.v1.ListOTCContractsRequest\x1a*.banka.trading.v1.ListOTCContractsResponse\"\x1d\x82\xd3\xe4\x93\x02\x17\x12\x15/api/v1/otc/contracts\x12|\n" +
+	"\x0eGetOTCContract\x12'.banka.trading.v1.GetOTCContractRequest\x1a\x1d.banka.trading.v1.OTCContract\"\"\x82\xd3\xe4\x93\x02\x1c\x12\x1a/api/v1/otc/contracts/{id}\x12\xa2\x01\n" +
+	"\x13ExerciseOTCContract\x12,.banka.trading.v1.ExerciseOTCContractRequest\x1a-.banka.trading.v1.ExerciseOTCContractResponse\".\x82\xd3\xe4\x93\x02(:\x01*\"#/api/v1/otc/contracts/{id}/exerciseB\xcd\x01\n" +
 	"\x14com.banka.trading.v1B\fTradingProtoP\x01ZEgithub.com/RAF-SI-2025/Banka-3-Backend/gen/proto/trading/v1;tradingv1\xa2\x02\x03BTX\xaa\x02\x10Banka.Trading.V1\xca\x02\x10Banka\\Trading\\V1\xe2\x02\x1cBanka\\Trading\\V1\\GPBMetadata\xea\x02\x12Banka::Trading::V1b\x06proto3"
 
 var (
@@ -5254,8 +6927,8 @@ func file_trading_v1_trading_proto_rawDescGZIP() []byte {
 	return file_trading_v1_trading_proto_rawDescData
 }
 
-var file_trading_v1_trading_proto_enumTypes = make([]protoimpl.EnumInfo, 8)
-var file_trading_v1_trading_proto_msgTypes = make([]protoimpl.MessageInfo, 55)
+var file_trading_v1_trading_proto_enumTypes = make([]protoimpl.EnumInfo, 10)
+var file_trading_v1_trading_proto_msgTypes = make([]protoimpl.MessageInfo, 74)
 var file_trading_v1_trading_proto_goTypes = []any{
 	(Currency)(0),                          // 0: banka.trading.v1.Currency
 	(SecurityType)(0),                      // 1: banka.trading.v1.SecurityType
@@ -5265,207 +6938,277 @@ var file_trading_v1_trading_proto_goTypes = []any{
 	(OrderStatus)(0),                       // 5: banka.trading.v1.OrderStatus
 	(OptionType)(0),                        // 6: banka.trading.v1.OptionType
 	(UserKind)(0),                          // 7: banka.trading.v1.UserKind
-	(*ActuaryInfo)(nil),                    // 8: banka.trading.v1.ActuaryInfo
-	(*GetActuaryInfoRequest)(nil),          // 9: banka.trading.v1.GetActuaryInfoRequest
-	(*ListActuariesRequest)(nil),           // 10: banka.trading.v1.ListActuariesRequest
-	(*ListActuariesResponse)(nil),          // 11: banka.trading.v1.ListActuariesResponse
-	(*UpsertActuaryInfoRequest)(nil),       // 12: banka.trading.v1.UpsertActuaryInfoRequest
-	(*UpdateActuaryLimitRequest)(nil),      // 13: banka.trading.v1.UpdateActuaryLimitRequest
-	(*ResetActuaryUsedLimitRequest)(nil),   // 14: banka.trading.v1.ResetActuaryUsedLimitRequest
-	(*SetActuaryNeedApprovalRequest)(nil),  // 15: banka.trading.v1.SetActuaryNeedApprovalRequest
-	(*RunDailyResetActuariesResponse)(nil), // 16: banka.trading.v1.RunDailyResetActuariesResponse
-	(*Exchange)(nil),                       // 17: banka.trading.v1.Exchange
-	(*ListExchangesRequest)(nil),           // 18: banka.trading.v1.ListExchangesRequest
-	(*ListExchangesResponse)(nil),          // 19: banka.trading.v1.ListExchangesResponse
-	(*UpsertExchangeRequest)(nil),          // 20: banka.trading.v1.UpsertExchangeRequest
-	(*SetExchangeOverrideRequest)(nil),     // 21: banka.trading.v1.SetExchangeOverrideRequest
-	(*Security)(nil),                       // 22: banka.trading.v1.Security
-	(*UpsertSecurityRequest)(nil),          // 23: banka.trading.v1.UpsertSecurityRequest
-	(*ListSecuritiesRequest)(nil),          // 24: banka.trading.v1.ListSecuritiesRequest
-	(*ListSecuritiesResponse)(nil),         // 25: banka.trading.v1.ListSecuritiesResponse
-	(*SecurityWithListing)(nil),            // 26: banka.trading.v1.SecurityWithListing
-	(*GetSecurityRequest)(nil),             // 27: banka.trading.v1.GetSecurityRequest
-	(*Listing)(nil),                        // 28: banka.trading.v1.Listing
-	(*UpsertListingRequest)(nil),           // 29: banka.trading.v1.UpsertListingRequest
-	(*ListListingsRequest)(nil),            // 30: banka.trading.v1.ListListingsRequest
-	(*ListListingsResponse)(nil),           // 31: banka.trading.v1.ListListingsResponse
-	(*GetListingRequest)(nil),              // 32: banka.trading.v1.GetListingRequest
-	(*GetListingDailyHistoryRequest)(nil),  // 33: banka.trading.v1.GetListingDailyHistoryRequest
-	(*ListingDailyPrice)(nil),              // 34: banka.trading.v1.ListingDailyPrice
-	(*GetListingDailyHistoryResponse)(nil), // 35: banka.trading.v1.GetListingDailyHistoryResponse
-	(*GetOptionChainRequest)(nil),          // 36: banka.trading.v1.GetOptionChainRequest
-	(*OptionChainRow)(nil),                 // 37: banka.trading.v1.OptionChainRow
-	(*OptionChainGroup)(nil),               // 38: banka.trading.v1.OptionChainGroup
-	(*GetOptionChainResponse)(nil),         // 39: banka.trading.v1.GetOptionChainResponse
-	(*Order)(nil),                          // 40: banka.trading.v1.Order
-	(*CreateOrderRequest)(nil),             // 41: banka.trading.v1.CreateOrderRequest
-	(*CreateOrderResponse)(nil),            // 42: banka.trading.v1.CreateOrderResponse
-	(*ListOrdersRequest)(nil),              // 43: banka.trading.v1.ListOrdersRequest
-	(*ListOrdersResponse)(nil),             // 44: banka.trading.v1.ListOrdersResponse
-	(*GetOrderRequest)(nil),                // 45: banka.trading.v1.GetOrderRequest
-	(*ApproveOrderRequest)(nil),            // 46: banka.trading.v1.ApproveOrderRequest
-	(*DeclineOrderRequest)(nil),            // 47: banka.trading.v1.DeclineOrderRequest
-	(*CancelOrderRequest)(nil),             // 48: banka.trading.v1.CancelOrderRequest
-	(*Holding)(nil),                        // 49: banka.trading.v1.Holding
-	(*ListHoldingsRequest)(nil),            // 50: banka.trading.v1.ListHoldingsRequest
-	(*ListHoldingsResponse)(nil),           // 51: banka.trading.v1.ListHoldingsResponse
-	(*SetPublicCountRequest)(nil),          // 52: banka.trading.v1.SetPublicCountRequest
-	(*ExerciseOptionRequest)(nil),          // 53: banka.trading.v1.ExerciseOptionRequest
-	(*ExerciseOptionResponse)(nil),         // 54: banka.trading.v1.ExerciseOptionResponse
-	(*TaxPosition)(nil),                    // 55: banka.trading.v1.TaxPosition
-	(*ListTaxPositionsRequest)(nil),        // 56: banka.trading.v1.ListTaxPositionsRequest
-	(*ListTaxPositionsResponse)(nil),       // 57: banka.trading.v1.ListTaxPositionsResponse
-	(*RunTaxRequest)(nil),                  // 58: banka.trading.v1.RunTaxRequest
-	(*RunTaxResponse)(nil),                 // 59: banka.trading.v1.RunTaxResponse
-	(*RealizedPnLRow)(nil),                 // 60: banka.trading.v1.RealizedPnLRow
-	(*ListRealizedPnLRequest)(nil),         // 61: banka.trading.v1.ListRealizedPnLRequest
-	(*ListRealizedPnLResponse)(nil),        // 62: banka.trading.v1.ListRealizedPnLResponse
-	(*timestamppb.Timestamp)(nil),          // 63: google.protobuf.Timestamp
-	(*emptypb.Empty)(nil),                  // 64: google.protobuf.Empty
+	(OTCStatus)(0),                         // 8: banka.trading.v1.OTCStatus
+	(OTCContractStatus)(0),                 // 9: banka.trading.v1.OTCContractStatus
+	(*ActuaryInfo)(nil),                    // 10: banka.trading.v1.ActuaryInfo
+	(*GetActuaryInfoRequest)(nil),          // 11: banka.trading.v1.GetActuaryInfoRequest
+	(*ListActuariesRequest)(nil),           // 12: banka.trading.v1.ListActuariesRequest
+	(*ListActuariesResponse)(nil),          // 13: banka.trading.v1.ListActuariesResponse
+	(*UpsertActuaryInfoRequest)(nil),       // 14: banka.trading.v1.UpsertActuaryInfoRequest
+	(*UpdateActuaryLimitRequest)(nil),      // 15: banka.trading.v1.UpdateActuaryLimitRequest
+	(*ResetActuaryUsedLimitRequest)(nil),   // 16: banka.trading.v1.ResetActuaryUsedLimitRequest
+	(*SetActuaryNeedApprovalRequest)(nil),  // 17: banka.trading.v1.SetActuaryNeedApprovalRequest
+	(*RunDailyResetActuariesResponse)(nil), // 18: banka.trading.v1.RunDailyResetActuariesResponse
+	(*Exchange)(nil),                       // 19: banka.trading.v1.Exchange
+	(*ListExchangesRequest)(nil),           // 20: banka.trading.v1.ListExchangesRequest
+	(*ListExchangesResponse)(nil),          // 21: banka.trading.v1.ListExchangesResponse
+	(*UpsertExchangeRequest)(nil),          // 22: banka.trading.v1.UpsertExchangeRequest
+	(*SetExchangeOverrideRequest)(nil),     // 23: banka.trading.v1.SetExchangeOverrideRequest
+	(*Security)(nil),                       // 24: banka.trading.v1.Security
+	(*UpsertSecurityRequest)(nil),          // 25: banka.trading.v1.UpsertSecurityRequest
+	(*ListSecuritiesRequest)(nil),          // 26: banka.trading.v1.ListSecuritiesRequest
+	(*ListSecuritiesResponse)(nil),         // 27: banka.trading.v1.ListSecuritiesResponse
+	(*SecurityWithListing)(nil),            // 28: banka.trading.v1.SecurityWithListing
+	(*GetSecurityRequest)(nil),             // 29: banka.trading.v1.GetSecurityRequest
+	(*Listing)(nil),                        // 30: banka.trading.v1.Listing
+	(*UpsertListingRequest)(nil),           // 31: banka.trading.v1.UpsertListingRequest
+	(*ListListingsRequest)(nil),            // 32: banka.trading.v1.ListListingsRequest
+	(*ListListingsResponse)(nil),           // 33: banka.trading.v1.ListListingsResponse
+	(*GetListingRequest)(nil),              // 34: banka.trading.v1.GetListingRequest
+	(*GetListingDailyHistoryRequest)(nil),  // 35: banka.trading.v1.GetListingDailyHistoryRequest
+	(*ListingDailyPrice)(nil),              // 36: banka.trading.v1.ListingDailyPrice
+	(*GetListingDailyHistoryResponse)(nil), // 37: banka.trading.v1.GetListingDailyHistoryResponse
+	(*GetOptionChainRequest)(nil),          // 38: banka.trading.v1.GetOptionChainRequest
+	(*OptionChainRow)(nil),                 // 39: banka.trading.v1.OptionChainRow
+	(*OptionChainGroup)(nil),               // 40: banka.trading.v1.OptionChainGroup
+	(*GetOptionChainResponse)(nil),         // 41: banka.trading.v1.GetOptionChainResponse
+	(*Order)(nil),                          // 42: banka.trading.v1.Order
+	(*CreateOrderRequest)(nil),             // 43: banka.trading.v1.CreateOrderRequest
+	(*CreateOrderResponse)(nil),            // 44: banka.trading.v1.CreateOrderResponse
+	(*ListOrdersRequest)(nil),              // 45: banka.trading.v1.ListOrdersRequest
+	(*ListOrdersResponse)(nil),             // 46: banka.trading.v1.ListOrdersResponse
+	(*GetOrderRequest)(nil),                // 47: banka.trading.v1.GetOrderRequest
+	(*ApproveOrderRequest)(nil),            // 48: banka.trading.v1.ApproveOrderRequest
+	(*DeclineOrderRequest)(nil),            // 49: banka.trading.v1.DeclineOrderRequest
+	(*CancelOrderRequest)(nil),             // 50: banka.trading.v1.CancelOrderRequest
+	(*Holding)(nil),                        // 51: banka.trading.v1.Holding
+	(*ListHoldingsRequest)(nil),            // 52: banka.trading.v1.ListHoldingsRequest
+	(*ListHoldingsResponse)(nil),           // 53: banka.trading.v1.ListHoldingsResponse
+	(*SetPublicCountRequest)(nil),          // 54: banka.trading.v1.SetPublicCountRequest
+	(*ExerciseOptionRequest)(nil),          // 55: banka.trading.v1.ExerciseOptionRequest
+	(*ExerciseOptionResponse)(nil),         // 56: banka.trading.v1.ExerciseOptionResponse
+	(*TaxPosition)(nil),                    // 57: banka.trading.v1.TaxPosition
+	(*ListTaxPositionsRequest)(nil),        // 58: banka.trading.v1.ListTaxPositionsRequest
+	(*ListTaxPositionsResponse)(nil),       // 59: banka.trading.v1.ListTaxPositionsResponse
+	(*RunTaxRequest)(nil),                  // 60: banka.trading.v1.RunTaxRequest
+	(*RunTaxResponse)(nil),                 // 61: banka.trading.v1.RunTaxResponse
+	(*RealizedPnLRow)(nil),                 // 62: banka.trading.v1.RealizedPnLRow
+	(*ListRealizedPnLRequest)(nil),         // 63: banka.trading.v1.ListRealizedPnLRequest
+	(*ListRealizedPnLResponse)(nil),        // 64: banka.trading.v1.ListRealizedPnLResponse
+	(*PublicHoldingItem)(nil),              // 65: banka.trading.v1.PublicHoldingItem
+	(*ListPublicHoldingsRequest)(nil),      // 66: banka.trading.v1.ListPublicHoldingsRequest
+	(*ListPublicHoldingsResponse)(nil),     // 67: banka.trading.v1.ListPublicHoldingsResponse
+	(*OTCOffer)(nil),                       // 68: banka.trading.v1.OTCOffer
+	(*CreateOTCOfferRequest)(nil),          // 69: banka.trading.v1.CreateOTCOfferRequest
+	(*CounterOfferOTCRequest)(nil),         // 70: banka.trading.v1.CounterOfferOTCRequest
+	(*WithdrawOTCOfferRequest)(nil),        // 71: banka.trading.v1.WithdrawOTCOfferRequest
+	(*ListOTCThreadsRequest)(nil),          // 72: banka.trading.v1.ListOTCThreadsRequest
+	(*ListOTCThreadsResponse)(nil),         // 73: banka.trading.v1.ListOTCThreadsResponse
+	(*GetOTCThreadRequest)(nil),            // 74: banka.trading.v1.GetOTCThreadRequest
+	(*GetOTCThreadResponse)(nil),           // 75: banka.trading.v1.GetOTCThreadResponse
+	(*AcceptOTCOfferRequest)(nil),          // 76: banka.trading.v1.AcceptOTCOfferRequest
+	(*AcceptOTCOfferResponse)(nil),         // 77: banka.trading.v1.AcceptOTCOfferResponse
+	(*OTCContract)(nil),                    // 78: banka.trading.v1.OTCContract
+	(*ListOTCContractsRequest)(nil),        // 79: banka.trading.v1.ListOTCContractsRequest
+	(*ListOTCContractsResponse)(nil),       // 80: banka.trading.v1.ListOTCContractsResponse
+	(*GetOTCContractRequest)(nil),          // 81: banka.trading.v1.GetOTCContractRequest
+	(*ExerciseOTCContractRequest)(nil),     // 82: banka.trading.v1.ExerciseOTCContractRequest
+	(*ExerciseOTCContractResponse)(nil),    // 83: banka.trading.v1.ExerciseOTCContractResponse
+	(*timestamppb.Timestamp)(nil),          // 84: google.protobuf.Timestamp
+	(*emptypb.Empty)(nil),                  // 85: google.protobuf.Empty
 }
 var file_trading_v1_trading_proto_depIdxs = []int32{
 	2,   // 0: banka.trading.v1.ActuaryInfo.type:type_name -> banka.trading.v1.ActuaryType
-	63,  // 1: banka.trading.v1.ActuaryInfo.created_at:type_name -> google.protobuf.Timestamp
-	63,  // 2: banka.trading.v1.ActuaryInfo.updated_at:type_name -> google.protobuf.Timestamp
+	84,  // 1: banka.trading.v1.ActuaryInfo.created_at:type_name -> google.protobuf.Timestamp
+	84,  // 2: banka.trading.v1.ActuaryInfo.updated_at:type_name -> google.protobuf.Timestamp
 	2,   // 3: banka.trading.v1.ListActuariesRequest.type:type_name -> banka.trading.v1.ActuaryType
-	8,   // 4: banka.trading.v1.ListActuariesResponse.actuaries:type_name -> banka.trading.v1.ActuaryInfo
+	10,  // 4: banka.trading.v1.ListActuariesResponse.actuaries:type_name -> banka.trading.v1.ActuaryInfo
 	2,   // 5: banka.trading.v1.UpsertActuaryInfoRequest.type:type_name -> banka.trading.v1.ActuaryType
 	0,   // 6: banka.trading.v1.Exchange.currency:type_name -> banka.trading.v1.Currency
-	63,  // 7: banka.trading.v1.Exchange.updated_at:type_name -> google.protobuf.Timestamp
-	17,  // 8: banka.trading.v1.ListExchangesResponse.exchanges:type_name -> banka.trading.v1.Exchange
+	84,  // 7: banka.trading.v1.Exchange.updated_at:type_name -> google.protobuf.Timestamp
+	19,  // 8: banka.trading.v1.ListExchangesResponse.exchanges:type_name -> banka.trading.v1.Exchange
 	0,   // 9: banka.trading.v1.UpsertExchangeRequest.currency:type_name -> banka.trading.v1.Currency
 	1,   // 10: banka.trading.v1.Security.type:type_name -> banka.trading.v1.SecurityType
 	0,   // 11: banka.trading.v1.Security.currency:type_name -> banka.trading.v1.Currency
-	63,  // 12: banka.trading.v1.Security.settlement_date:type_name -> google.protobuf.Timestamp
+	84,  // 12: banka.trading.v1.Security.settlement_date:type_name -> google.protobuf.Timestamp
 	0,   // 13: banka.trading.v1.Security.base_currency:type_name -> banka.trading.v1.Currency
 	0,   // 14: banka.trading.v1.Security.quote_currency:type_name -> banka.trading.v1.Currency
 	6,   // 15: banka.trading.v1.Security.option_type:type_name -> banka.trading.v1.OptionType
-	63,  // 16: banka.trading.v1.Security.created_at:type_name -> google.protobuf.Timestamp
-	63,  // 17: banka.trading.v1.Security.updated_at:type_name -> google.protobuf.Timestamp
+	84,  // 16: banka.trading.v1.Security.created_at:type_name -> google.protobuf.Timestamp
+	84,  // 17: banka.trading.v1.Security.updated_at:type_name -> google.protobuf.Timestamp
 	1,   // 18: banka.trading.v1.UpsertSecurityRequest.type:type_name -> banka.trading.v1.SecurityType
 	0,   // 19: banka.trading.v1.UpsertSecurityRequest.currency:type_name -> banka.trading.v1.Currency
-	63,  // 20: banka.trading.v1.UpsertSecurityRequest.settlement_date:type_name -> google.protobuf.Timestamp
+	84,  // 20: banka.trading.v1.UpsertSecurityRequest.settlement_date:type_name -> google.protobuf.Timestamp
 	0,   // 21: banka.trading.v1.UpsertSecurityRequest.base_currency:type_name -> banka.trading.v1.Currency
 	0,   // 22: banka.trading.v1.UpsertSecurityRequest.quote_currency:type_name -> banka.trading.v1.Currency
 	6,   // 23: banka.trading.v1.UpsertSecurityRequest.option_type:type_name -> banka.trading.v1.OptionType
 	1,   // 24: banka.trading.v1.ListSecuritiesRequest.type:type_name -> banka.trading.v1.SecurityType
-	63,  // 25: banka.trading.v1.ListSecuritiesRequest.min_settlement:type_name -> google.protobuf.Timestamp
-	63,  // 26: banka.trading.v1.ListSecuritiesRequest.max_settlement:type_name -> google.protobuf.Timestamp
-	26,  // 27: banka.trading.v1.ListSecuritiesResponse.items:type_name -> banka.trading.v1.SecurityWithListing
-	22,  // 28: banka.trading.v1.SecurityWithListing.security:type_name -> banka.trading.v1.Security
-	28,  // 29: banka.trading.v1.SecurityWithListing.listing:type_name -> banka.trading.v1.Listing
-	63,  // 30: banka.trading.v1.Listing.last_refresh:type_name -> google.protobuf.Timestamp
-	63,  // 31: banka.trading.v1.Listing.created_at:type_name -> google.protobuf.Timestamp
+	84,  // 25: banka.trading.v1.ListSecuritiesRequest.min_settlement:type_name -> google.protobuf.Timestamp
+	84,  // 26: banka.trading.v1.ListSecuritiesRequest.max_settlement:type_name -> google.protobuf.Timestamp
+	28,  // 27: banka.trading.v1.ListSecuritiesResponse.items:type_name -> banka.trading.v1.SecurityWithListing
+	24,  // 28: banka.trading.v1.SecurityWithListing.security:type_name -> banka.trading.v1.Security
+	30,  // 29: banka.trading.v1.SecurityWithListing.listing:type_name -> banka.trading.v1.Listing
+	84,  // 30: banka.trading.v1.Listing.last_refresh:type_name -> google.protobuf.Timestamp
+	84,  // 31: banka.trading.v1.Listing.created_at:type_name -> google.protobuf.Timestamp
 	1,   // 32: banka.trading.v1.ListListingsRequest.type:type_name -> banka.trading.v1.SecurityType
-	26,  // 33: banka.trading.v1.ListListingsResponse.items:type_name -> banka.trading.v1.SecurityWithListing
-	63,  // 34: banka.trading.v1.GetListingDailyHistoryRequest.from:type_name -> google.protobuf.Timestamp
-	63,  // 35: banka.trading.v1.GetListingDailyHistoryRequest.to:type_name -> google.protobuf.Timestamp
-	63,  // 36: banka.trading.v1.ListingDailyPrice.date:type_name -> google.protobuf.Timestamp
-	34,  // 37: banka.trading.v1.GetListingDailyHistoryResponse.rows:type_name -> banka.trading.v1.ListingDailyPrice
-	63,  // 38: banka.trading.v1.GetOptionChainRequest.settlement_date:type_name -> google.protobuf.Timestamp
-	22,  // 39: banka.trading.v1.OptionChainRow.call:type_name -> banka.trading.v1.Security
-	22,  // 40: banka.trading.v1.OptionChainRow.put:type_name -> banka.trading.v1.Security
-	63,  // 41: banka.trading.v1.OptionChainGroup.settlement_date:type_name -> google.protobuf.Timestamp
-	37,  // 42: banka.trading.v1.OptionChainGroup.rows:type_name -> banka.trading.v1.OptionChainRow
-	38,  // 43: banka.trading.v1.GetOptionChainResponse.groups:type_name -> banka.trading.v1.OptionChainGroup
+	28,  // 33: banka.trading.v1.ListListingsResponse.items:type_name -> banka.trading.v1.SecurityWithListing
+	84,  // 34: banka.trading.v1.GetListingDailyHistoryRequest.from:type_name -> google.protobuf.Timestamp
+	84,  // 35: banka.trading.v1.GetListingDailyHistoryRequest.to:type_name -> google.protobuf.Timestamp
+	84,  // 36: banka.trading.v1.ListingDailyPrice.date:type_name -> google.protobuf.Timestamp
+	36,  // 37: banka.trading.v1.GetListingDailyHistoryResponse.rows:type_name -> banka.trading.v1.ListingDailyPrice
+	84,  // 38: banka.trading.v1.GetOptionChainRequest.settlement_date:type_name -> google.protobuf.Timestamp
+	24,  // 39: banka.trading.v1.OptionChainRow.call:type_name -> banka.trading.v1.Security
+	24,  // 40: banka.trading.v1.OptionChainRow.put:type_name -> banka.trading.v1.Security
+	84,  // 41: banka.trading.v1.OptionChainGroup.settlement_date:type_name -> google.protobuf.Timestamp
+	39,  // 42: banka.trading.v1.OptionChainGroup.rows:type_name -> banka.trading.v1.OptionChainRow
+	40,  // 43: banka.trading.v1.GetOptionChainResponse.groups:type_name -> banka.trading.v1.OptionChainGroup
 	7,   // 44: banka.trading.v1.Order.user_kind:type_name -> banka.trading.v1.UserKind
 	3,   // 45: banka.trading.v1.Order.order_type:type_name -> banka.trading.v1.OrderType
 	4,   // 46: banka.trading.v1.Order.direction:type_name -> banka.trading.v1.Direction
 	5,   // 47: banka.trading.v1.Order.status:type_name -> banka.trading.v1.OrderStatus
-	63,  // 48: banka.trading.v1.Order.approved_at:type_name -> google.protobuf.Timestamp
-	63,  // 49: banka.trading.v1.Order.last_modification:type_name -> google.protobuf.Timestamp
-	63,  // 50: banka.trading.v1.Order.created_at:type_name -> google.protobuf.Timestamp
+	84,  // 48: banka.trading.v1.Order.approved_at:type_name -> google.protobuf.Timestamp
+	84,  // 49: banka.trading.v1.Order.last_modification:type_name -> google.protobuf.Timestamp
+	84,  // 50: banka.trading.v1.Order.created_at:type_name -> google.protobuf.Timestamp
 	3,   // 51: banka.trading.v1.CreateOrderRequest.order_type:type_name -> banka.trading.v1.OrderType
 	4,   // 52: banka.trading.v1.CreateOrderRequest.direction:type_name -> banka.trading.v1.Direction
-	40,  // 53: banka.trading.v1.CreateOrderResponse.order:type_name -> banka.trading.v1.Order
+	42,  // 53: banka.trading.v1.CreateOrderResponse.order:type_name -> banka.trading.v1.Order
 	7,   // 54: banka.trading.v1.ListOrdersRequest.user_kind:type_name -> banka.trading.v1.UserKind
-	40,  // 55: banka.trading.v1.ListOrdersResponse.orders:type_name -> banka.trading.v1.Order
+	42,  // 55: banka.trading.v1.ListOrdersResponse.orders:type_name -> banka.trading.v1.Order
 	7,   // 56: banka.trading.v1.Holding.user_kind:type_name -> banka.trading.v1.UserKind
-	22,  // 57: banka.trading.v1.Holding.security:type_name -> banka.trading.v1.Security
-	63,  // 58: banka.trading.v1.Holding.acquired_at:type_name -> google.protobuf.Timestamp
-	63,  // 59: banka.trading.v1.Holding.updated_at:type_name -> google.protobuf.Timestamp
+	24,  // 57: banka.trading.v1.Holding.security:type_name -> banka.trading.v1.Security
+	84,  // 58: banka.trading.v1.Holding.acquired_at:type_name -> google.protobuf.Timestamp
+	84,  // 59: banka.trading.v1.Holding.updated_at:type_name -> google.protobuf.Timestamp
 	7,   // 60: banka.trading.v1.ListHoldingsRequest.user_kind:type_name -> banka.trading.v1.UserKind
 	1,   // 61: banka.trading.v1.ListHoldingsRequest.type:type_name -> banka.trading.v1.SecurityType
-	49,  // 62: banka.trading.v1.ListHoldingsResponse.holdings:type_name -> banka.trading.v1.Holding
-	49,  // 63: banka.trading.v1.ExerciseOptionResponse.option_holding:type_name -> banka.trading.v1.Holding
-	49,  // 64: banka.trading.v1.ExerciseOptionResponse.underlying_holding:type_name -> banka.trading.v1.Holding
+	51,  // 62: banka.trading.v1.ListHoldingsResponse.holdings:type_name -> banka.trading.v1.Holding
+	51,  // 63: banka.trading.v1.ExerciseOptionResponse.option_holding:type_name -> banka.trading.v1.Holding
+	51,  // 64: banka.trading.v1.ExerciseOptionResponse.underlying_holding:type_name -> banka.trading.v1.Holding
 	0,   // 65: banka.trading.v1.ExerciseOptionResponse.realized_gain_currency:type_name -> banka.trading.v1.Currency
 	7,   // 66: banka.trading.v1.TaxPosition.user_kind:type_name -> banka.trading.v1.UserKind
 	7,   // 67: banka.trading.v1.ListTaxPositionsRequest.user_kind:type_name -> banka.trading.v1.UserKind
-	55,  // 68: banka.trading.v1.ListTaxPositionsResponse.positions:type_name -> banka.trading.v1.TaxPosition
+	57,  // 68: banka.trading.v1.ListTaxPositionsResponse.positions:type_name -> banka.trading.v1.TaxPosition
 	7,   // 69: banka.trading.v1.RunTaxRequest.user_kind:type_name -> banka.trading.v1.UserKind
-	63,  // 70: banka.trading.v1.RealizedPnLRow.sale_at:type_name -> google.protobuf.Timestamp
+	84,  // 70: banka.trading.v1.RealizedPnLRow.sale_at:type_name -> google.protobuf.Timestamp
 	0,   // 71: banka.trading.v1.RealizedPnLRow.currency:type_name -> banka.trading.v1.Currency
-	63,  // 72: banka.trading.v1.RealizedPnLRow.taxed_at:type_name -> google.protobuf.Timestamp
+	84,  // 72: banka.trading.v1.RealizedPnLRow.taxed_at:type_name -> google.protobuf.Timestamp
 	7,   // 73: banka.trading.v1.ListRealizedPnLRequest.user_kind:type_name -> banka.trading.v1.UserKind
-	63,  // 74: banka.trading.v1.ListRealizedPnLRequest.from:type_name -> google.protobuf.Timestamp
-	63,  // 75: banka.trading.v1.ListRealizedPnLRequest.to:type_name -> google.protobuf.Timestamp
-	60,  // 76: banka.trading.v1.ListRealizedPnLResponse.rows:type_name -> banka.trading.v1.RealizedPnLRow
-	9,   // 77: banka.trading.v1.TradingService.GetActuaryInfo:input_type -> banka.trading.v1.GetActuaryInfoRequest
-	10,  // 78: banka.trading.v1.TradingService.ListActuaries:input_type -> banka.trading.v1.ListActuariesRequest
-	12,  // 79: banka.trading.v1.TradingService.UpsertActuaryInfo:input_type -> banka.trading.v1.UpsertActuaryInfoRequest
-	13,  // 80: banka.trading.v1.TradingService.UpdateActuaryLimit:input_type -> banka.trading.v1.UpdateActuaryLimitRequest
-	14,  // 81: banka.trading.v1.TradingService.ResetActuaryUsedLimit:input_type -> banka.trading.v1.ResetActuaryUsedLimitRequest
-	15,  // 82: banka.trading.v1.TradingService.SetActuaryNeedApproval:input_type -> banka.trading.v1.SetActuaryNeedApprovalRequest
-	64,  // 83: banka.trading.v1.TradingService.RunDailyResetActuaries:input_type -> google.protobuf.Empty
-	18,  // 84: banka.trading.v1.TradingService.ListExchanges:input_type -> banka.trading.v1.ListExchangesRequest
-	20,  // 85: banka.trading.v1.TradingService.UpsertExchange:input_type -> banka.trading.v1.UpsertExchangeRequest
-	21,  // 86: banka.trading.v1.TradingService.SetExchangeOverride:input_type -> banka.trading.v1.SetExchangeOverrideRequest
-	23,  // 87: banka.trading.v1.TradingService.UpsertSecurity:input_type -> banka.trading.v1.UpsertSecurityRequest
-	24,  // 88: banka.trading.v1.TradingService.ListSecurities:input_type -> banka.trading.v1.ListSecuritiesRequest
-	27,  // 89: banka.trading.v1.TradingService.GetSecurity:input_type -> banka.trading.v1.GetSecurityRequest
-	29,  // 90: banka.trading.v1.TradingService.UpsertListing:input_type -> banka.trading.v1.UpsertListingRequest
-	30,  // 91: banka.trading.v1.TradingService.ListListings:input_type -> banka.trading.v1.ListListingsRequest
-	32,  // 92: banka.trading.v1.TradingService.GetListing:input_type -> banka.trading.v1.GetListingRequest
-	36,  // 93: banka.trading.v1.TradingService.GetOptionChain:input_type -> banka.trading.v1.GetOptionChainRequest
-	33,  // 94: banka.trading.v1.TradingService.GetListingDailyHistory:input_type -> banka.trading.v1.GetListingDailyHistoryRequest
-	41,  // 95: banka.trading.v1.TradingService.CreateOrder:input_type -> banka.trading.v1.CreateOrderRequest
-	43,  // 96: banka.trading.v1.TradingService.ListOrders:input_type -> banka.trading.v1.ListOrdersRequest
-	45,  // 97: banka.trading.v1.TradingService.GetOrder:input_type -> banka.trading.v1.GetOrderRequest
-	46,  // 98: banka.trading.v1.TradingService.ApproveOrder:input_type -> banka.trading.v1.ApproveOrderRequest
-	47,  // 99: banka.trading.v1.TradingService.DeclineOrder:input_type -> banka.trading.v1.DeclineOrderRequest
-	48,  // 100: banka.trading.v1.TradingService.CancelOrder:input_type -> banka.trading.v1.CancelOrderRequest
-	50,  // 101: banka.trading.v1.TradingService.ListHoldings:input_type -> banka.trading.v1.ListHoldingsRequest
-	52,  // 102: banka.trading.v1.TradingService.SetPublicCount:input_type -> banka.trading.v1.SetPublicCountRequest
-	53,  // 103: banka.trading.v1.TradingService.ExerciseOption:input_type -> banka.trading.v1.ExerciseOptionRequest
-	56,  // 104: banka.trading.v1.TradingService.ListTaxPositions:input_type -> banka.trading.v1.ListTaxPositionsRequest
-	58,  // 105: banka.trading.v1.TradingService.RunTax:input_type -> banka.trading.v1.RunTaxRequest
-	61,  // 106: banka.trading.v1.TradingService.ListRealizedPnL:input_type -> banka.trading.v1.ListRealizedPnLRequest
-	8,   // 107: banka.trading.v1.TradingService.GetActuaryInfo:output_type -> banka.trading.v1.ActuaryInfo
-	11,  // 108: banka.trading.v1.TradingService.ListActuaries:output_type -> banka.trading.v1.ListActuariesResponse
-	8,   // 109: banka.trading.v1.TradingService.UpsertActuaryInfo:output_type -> banka.trading.v1.ActuaryInfo
-	8,   // 110: banka.trading.v1.TradingService.UpdateActuaryLimit:output_type -> banka.trading.v1.ActuaryInfo
-	8,   // 111: banka.trading.v1.TradingService.ResetActuaryUsedLimit:output_type -> banka.trading.v1.ActuaryInfo
-	8,   // 112: banka.trading.v1.TradingService.SetActuaryNeedApproval:output_type -> banka.trading.v1.ActuaryInfo
-	16,  // 113: banka.trading.v1.TradingService.RunDailyResetActuaries:output_type -> banka.trading.v1.RunDailyResetActuariesResponse
-	19,  // 114: banka.trading.v1.TradingService.ListExchanges:output_type -> banka.trading.v1.ListExchangesResponse
-	17,  // 115: banka.trading.v1.TradingService.UpsertExchange:output_type -> banka.trading.v1.Exchange
-	17,  // 116: banka.trading.v1.TradingService.SetExchangeOverride:output_type -> banka.trading.v1.Exchange
-	22,  // 117: banka.trading.v1.TradingService.UpsertSecurity:output_type -> banka.trading.v1.Security
-	25,  // 118: banka.trading.v1.TradingService.ListSecurities:output_type -> banka.trading.v1.ListSecuritiesResponse
-	26,  // 119: banka.trading.v1.TradingService.GetSecurity:output_type -> banka.trading.v1.SecurityWithListing
-	28,  // 120: banka.trading.v1.TradingService.UpsertListing:output_type -> banka.trading.v1.Listing
-	31,  // 121: banka.trading.v1.TradingService.ListListings:output_type -> banka.trading.v1.ListListingsResponse
-	28,  // 122: banka.trading.v1.TradingService.GetListing:output_type -> banka.trading.v1.Listing
-	39,  // 123: banka.trading.v1.TradingService.GetOptionChain:output_type -> banka.trading.v1.GetOptionChainResponse
-	35,  // 124: banka.trading.v1.TradingService.GetListingDailyHistory:output_type -> banka.trading.v1.GetListingDailyHistoryResponse
-	42,  // 125: banka.trading.v1.TradingService.CreateOrder:output_type -> banka.trading.v1.CreateOrderResponse
-	44,  // 126: banka.trading.v1.TradingService.ListOrders:output_type -> banka.trading.v1.ListOrdersResponse
-	40,  // 127: banka.trading.v1.TradingService.GetOrder:output_type -> banka.trading.v1.Order
-	40,  // 128: banka.trading.v1.TradingService.ApproveOrder:output_type -> banka.trading.v1.Order
-	40,  // 129: banka.trading.v1.TradingService.DeclineOrder:output_type -> banka.trading.v1.Order
-	40,  // 130: banka.trading.v1.TradingService.CancelOrder:output_type -> banka.trading.v1.Order
-	51,  // 131: banka.trading.v1.TradingService.ListHoldings:output_type -> banka.trading.v1.ListHoldingsResponse
-	49,  // 132: banka.trading.v1.TradingService.SetPublicCount:output_type -> banka.trading.v1.Holding
-	54,  // 133: banka.trading.v1.TradingService.ExerciseOption:output_type -> banka.trading.v1.ExerciseOptionResponse
-	57,  // 134: banka.trading.v1.TradingService.ListTaxPositions:output_type -> banka.trading.v1.ListTaxPositionsResponse
-	59,  // 135: banka.trading.v1.TradingService.RunTax:output_type -> banka.trading.v1.RunTaxResponse
-	62,  // 136: banka.trading.v1.TradingService.ListRealizedPnL:output_type -> banka.trading.v1.ListRealizedPnLResponse
-	107, // [107:137] is the sub-list for method output_type
-	77,  // [77:107] is the sub-list for method input_type
-	77,  // [77:77] is the sub-list for extension type_name
-	77,  // [77:77] is the sub-list for extension extendee
-	0,   // [0:77] is the sub-list for field type_name
+	84,  // 74: banka.trading.v1.ListRealizedPnLRequest.from:type_name -> google.protobuf.Timestamp
+	84,  // 75: banka.trading.v1.ListRealizedPnLRequest.to:type_name -> google.protobuf.Timestamp
+	62,  // 76: banka.trading.v1.ListRealizedPnLResponse.rows:type_name -> banka.trading.v1.RealizedPnLRow
+	7,   // 77: banka.trading.v1.PublicHoldingItem.seller_kind:type_name -> banka.trading.v1.UserKind
+	24,  // 78: banka.trading.v1.PublicHoldingItem.security:type_name -> banka.trading.v1.Security
+	0,   // 79: banka.trading.v1.PublicHoldingItem.currency:type_name -> banka.trading.v1.Currency
+	65,  // 80: banka.trading.v1.ListPublicHoldingsResponse.items:type_name -> banka.trading.v1.PublicHoldingItem
+	7,   // 81: banka.trading.v1.OTCOffer.buyer_kind:type_name -> banka.trading.v1.UserKind
+	7,   // 82: banka.trading.v1.OTCOffer.seller_kind:type_name -> banka.trading.v1.UserKind
+	0,   // 83: banka.trading.v1.OTCOffer.currency:type_name -> banka.trading.v1.Currency
+	84,  // 84: banka.trading.v1.OTCOffer.settlement_date:type_name -> google.protobuf.Timestamp
+	8,   // 85: banka.trading.v1.OTCOffer.status:type_name -> banka.trading.v1.OTCStatus
+	84,  // 86: banka.trading.v1.OTCOffer.created_at:type_name -> google.protobuf.Timestamp
+	84,  // 87: banka.trading.v1.OTCOffer.updated_at:type_name -> google.protobuf.Timestamp
+	84,  // 88: banka.trading.v1.CreateOTCOfferRequest.settlement_date:type_name -> google.protobuf.Timestamp
+	84,  // 89: banka.trading.v1.CounterOfferOTCRequest.settlement_date:type_name -> google.protobuf.Timestamp
+	7,   // 90: banka.trading.v1.ListOTCThreadsRequest.party_user_kind:type_name -> banka.trading.v1.UserKind
+	68,  // 91: banka.trading.v1.ListOTCThreadsResponse.threads:type_name -> banka.trading.v1.OTCOffer
+	68,  // 92: banka.trading.v1.GetOTCThreadResponse.iterations:type_name -> banka.trading.v1.OTCOffer
+	78,  // 93: banka.trading.v1.GetOTCThreadResponse.contract:type_name -> banka.trading.v1.OTCContract
+	78,  // 94: banka.trading.v1.AcceptOTCOfferResponse.contract:type_name -> banka.trading.v1.OTCContract
+	7,   // 95: banka.trading.v1.OTCContract.buyer_kind:type_name -> banka.trading.v1.UserKind
+	7,   // 96: banka.trading.v1.OTCContract.seller_kind:type_name -> banka.trading.v1.UserKind
+	0,   // 97: banka.trading.v1.OTCContract.currency:type_name -> banka.trading.v1.Currency
+	84,  // 98: banka.trading.v1.OTCContract.settlement_date:type_name -> google.protobuf.Timestamp
+	9,   // 99: banka.trading.v1.OTCContract.status:type_name -> banka.trading.v1.OTCContractStatus
+	84,  // 100: banka.trading.v1.OTCContract.exercised_at:type_name -> google.protobuf.Timestamp
+	84,  // 101: banka.trading.v1.OTCContract.created_at:type_name -> google.protobuf.Timestamp
+	84,  // 102: banka.trading.v1.OTCContract.updated_at:type_name -> google.protobuf.Timestamp
+	7,   // 103: banka.trading.v1.ListOTCContractsRequest.party_user_kind:type_name -> banka.trading.v1.UserKind
+	78,  // 104: banka.trading.v1.ListOTCContractsResponse.contracts:type_name -> banka.trading.v1.OTCContract
+	78,  // 105: banka.trading.v1.ExerciseOTCContractResponse.contract:type_name -> banka.trading.v1.OTCContract
+	11,  // 106: banka.trading.v1.TradingService.GetActuaryInfo:input_type -> banka.trading.v1.GetActuaryInfoRequest
+	12,  // 107: banka.trading.v1.TradingService.ListActuaries:input_type -> banka.trading.v1.ListActuariesRequest
+	14,  // 108: banka.trading.v1.TradingService.UpsertActuaryInfo:input_type -> banka.trading.v1.UpsertActuaryInfoRequest
+	15,  // 109: banka.trading.v1.TradingService.UpdateActuaryLimit:input_type -> banka.trading.v1.UpdateActuaryLimitRequest
+	16,  // 110: banka.trading.v1.TradingService.ResetActuaryUsedLimit:input_type -> banka.trading.v1.ResetActuaryUsedLimitRequest
+	17,  // 111: banka.trading.v1.TradingService.SetActuaryNeedApproval:input_type -> banka.trading.v1.SetActuaryNeedApprovalRequest
+	85,  // 112: banka.trading.v1.TradingService.RunDailyResetActuaries:input_type -> google.protobuf.Empty
+	20,  // 113: banka.trading.v1.TradingService.ListExchanges:input_type -> banka.trading.v1.ListExchangesRequest
+	22,  // 114: banka.trading.v1.TradingService.UpsertExchange:input_type -> banka.trading.v1.UpsertExchangeRequest
+	23,  // 115: banka.trading.v1.TradingService.SetExchangeOverride:input_type -> banka.trading.v1.SetExchangeOverrideRequest
+	25,  // 116: banka.trading.v1.TradingService.UpsertSecurity:input_type -> banka.trading.v1.UpsertSecurityRequest
+	26,  // 117: banka.trading.v1.TradingService.ListSecurities:input_type -> banka.trading.v1.ListSecuritiesRequest
+	29,  // 118: banka.trading.v1.TradingService.GetSecurity:input_type -> banka.trading.v1.GetSecurityRequest
+	31,  // 119: banka.trading.v1.TradingService.UpsertListing:input_type -> banka.trading.v1.UpsertListingRequest
+	32,  // 120: banka.trading.v1.TradingService.ListListings:input_type -> banka.trading.v1.ListListingsRequest
+	34,  // 121: banka.trading.v1.TradingService.GetListing:input_type -> banka.trading.v1.GetListingRequest
+	38,  // 122: banka.trading.v1.TradingService.GetOptionChain:input_type -> banka.trading.v1.GetOptionChainRequest
+	35,  // 123: banka.trading.v1.TradingService.GetListingDailyHistory:input_type -> banka.trading.v1.GetListingDailyHistoryRequest
+	43,  // 124: banka.trading.v1.TradingService.CreateOrder:input_type -> banka.trading.v1.CreateOrderRequest
+	45,  // 125: banka.trading.v1.TradingService.ListOrders:input_type -> banka.trading.v1.ListOrdersRequest
+	47,  // 126: banka.trading.v1.TradingService.GetOrder:input_type -> banka.trading.v1.GetOrderRequest
+	48,  // 127: banka.trading.v1.TradingService.ApproveOrder:input_type -> banka.trading.v1.ApproveOrderRequest
+	49,  // 128: banka.trading.v1.TradingService.DeclineOrder:input_type -> banka.trading.v1.DeclineOrderRequest
+	50,  // 129: banka.trading.v1.TradingService.CancelOrder:input_type -> banka.trading.v1.CancelOrderRequest
+	52,  // 130: banka.trading.v1.TradingService.ListHoldings:input_type -> banka.trading.v1.ListHoldingsRequest
+	54,  // 131: banka.trading.v1.TradingService.SetPublicCount:input_type -> banka.trading.v1.SetPublicCountRequest
+	55,  // 132: banka.trading.v1.TradingService.ExerciseOption:input_type -> banka.trading.v1.ExerciseOptionRequest
+	58,  // 133: banka.trading.v1.TradingService.ListTaxPositions:input_type -> banka.trading.v1.ListTaxPositionsRequest
+	60,  // 134: banka.trading.v1.TradingService.RunTax:input_type -> banka.trading.v1.RunTaxRequest
+	63,  // 135: banka.trading.v1.TradingService.ListRealizedPnL:input_type -> banka.trading.v1.ListRealizedPnLRequest
+	66,  // 136: banka.trading.v1.TradingService.ListPublicHoldings:input_type -> banka.trading.v1.ListPublicHoldingsRequest
+	69,  // 137: banka.trading.v1.TradingService.CreateOTCOffer:input_type -> banka.trading.v1.CreateOTCOfferRequest
+	70,  // 138: banka.trading.v1.TradingService.CounterOfferOTC:input_type -> banka.trading.v1.CounterOfferOTCRequest
+	71,  // 139: banka.trading.v1.TradingService.WithdrawOTCOffer:input_type -> banka.trading.v1.WithdrawOTCOfferRequest
+	72,  // 140: banka.trading.v1.TradingService.ListOTCThreads:input_type -> banka.trading.v1.ListOTCThreadsRequest
+	74,  // 141: banka.trading.v1.TradingService.GetOTCThread:input_type -> banka.trading.v1.GetOTCThreadRequest
+	76,  // 142: banka.trading.v1.TradingService.AcceptOTCOffer:input_type -> banka.trading.v1.AcceptOTCOfferRequest
+	79,  // 143: banka.trading.v1.TradingService.ListOTCContracts:input_type -> banka.trading.v1.ListOTCContractsRequest
+	81,  // 144: banka.trading.v1.TradingService.GetOTCContract:input_type -> banka.trading.v1.GetOTCContractRequest
+	82,  // 145: banka.trading.v1.TradingService.ExerciseOTCContract:input_type -> banka.trading.v1.ExerciseOTCContractRequest
+	10,  // 146: banka.trading.v1.TradingService.GetActuaryInfo:output_type -> banka.trading.v1.ActuaryInfo
+	13,  // 147: banka.trading.v1.TradingService.ListActuaries:output_type -> banka.trading.v1.ListActuariesResponse
+	10,  // 148: banka.trading.v1.TradingService.UpsertActuaryInfo:output_type -> banka.trading.v1.ActuaryInfo
+	10,  // 149: banka.trading.v1.TradingService.UpdateActuaryLimit:output_type -> banka.trading.v1.ActuaryInfo
+	10,  // 150: banka.trading.v1.TradingService.ResetActuaryUsedLimit:output_type -> banka.trading.v1.ActuaryInfo
+	10,  // 151: banka.trading.v1.TradingService.SetActuaryNeedApproval:output_type -> banka.trading.v1.ActuaryInfo
+	18,  // 152: banka.trading.v1.TradingService.RunDailyResetActuaries:output_type -> banka.trading.v1.RunDailyResetActuariesResponse
+	21,  // 153: banka.trading.v1.TradingService.ListExchanges:output_type -> banka.trading.v1.ListExchangesResponse
+	19,  // 154: banka.trading.v1.TradingService.UpsertExchange:output_type -> banka.trading.v1.Exchange
+	19,  // 155: banka.trading.v1.TradingService.SetExchangeOverride:output_type -> banka.trading.v1.Exchange
+	24,  // 156: banka.trading.v1.TradingService.UpsertSecurity:output_type -> banka.trading.v1.Security
+	27,  // 157: banka.trading.v1.TradingService.ListSecurities:output_type -> banka.trading.v1.ListSecuritiesResponse
+	28,  // 158: banka.trading.v1.TradingService.GetSecurity:output_type -> banka.trading.v1.SecurityWithListing
+	30,  // 159: banka.trading.v1.TradingService.UpsertListing:output_type -> banka.trading.v1.Listing
+	33,  // 160: banka.trading.v1.TradingService.ListListings:output_type -> banka.trading.v1.ListListingsResponse
+	30,  // 161: banka.trading.v1.TradingService.GetListing:output_type -> banka.trading.v1.Listing
+	41,  // 162: banka.trading.v1.TradingService.GetOptionChain:output_type -> banka.trading.v1.GetOptionChainResponse
+	37,  // 163: banka.trading.v1.TradingService.GetListingDailyHistory:output_type -> banka.trading.v1.GetListingDailyHistoryResponse
+	44,  // 164: banka.trading.v1.TradingService.CreateOrder:output_type -> banka.trading.v1.CreateOrderResponse
+	46,  // 165: banka.trading.v1.TradingService.ListOrders:output_type -> banka.trading.v1.ListOrdersResponse
+	42,  // 166: banka.trading.v1.TradingService.GetOrder:output_type -> banka.trading.v1.Order
+	42,  // 167: banka.trading.v1.TradingService.ApproveOrder:output_type -> banka.trading.v1.Order
+	42,  // 168: banka.trading.v1.TradingService.DeclineOrder:output_type -> banka.trading.v1.Order
+	42,  // 169: banka.trading.v1.TradingService.CancelOrder:output_type -> banka.trading.v1.Order
+	53,  // 170: banka.trading.v1.TradingService.ListHoldings:output_type -> banka.trading.v1.ListHoldingsResponse
+	51,  // 171: banka.trading.v1.TradingService.SetPublicCount:output_type -> banka.trading.v1.Holding
+	56,  // 172: banka.trading.v1.TradingService.ExerciseOption:output_type -> banka.trading.v1.ExerciseOptionResponse
+	59,  // 173: banka.trading.v1.TradingService.ListTaxPositions:output_type -> banka.trading.v1.ListTaxPositionsResponse
+	61,  // 174: banka.trading.v1.TradingService.RunTax:output_type -> banka.trading.v1.RunTaxResponse
+	64,  // 175: banka.trading.v1.TradingService.ListRealizedPnL:output_type -> banka.trading.v1.ListRealizedPnLResponse
+	67,  // 176: banka.trading.v1.TradingService.ListPublicHoldings:output_type -> banka.trading.v1.ListPublicHoldingsResponse
+	68,  // 177: banka.trading.v1.TradingService.CreateOTCOffer:output_type -> banka.trading.v1.OTCOffer
+	68,  // 178: banka.trading.v1.TradingService.CounterOfferOTC:output_type -> banka.trading.v1.OTCOffer
+	68,  // 179: banka.trading.v1.TradingService.WithdrawOTCOffer:output_type -> banka.trading.v1.OTCOffer
+	73,  // 180: banka.trading.v1.TradingService.ListOTCThreads:output_type -> banka.trading.v1.ListOTCThreadsResponse
+	75,  // 181: banka.trading.v1.TradingService.GetOTCThread:output_type -> banka.trading.v1.GetOTCThreadResponse
+	77,  // 182: banka.trading.v1.TradingService.AcceptOTCOffer:output_type -> banka.trading.v1.AcceptOTCOfferResponse
+	80,  // 183: banka.trading.v1.TradingService.ListOTCContracts:output_type -> banka.trading.v1.ListOTCContractsResponse
+	78,  // 184: banka.trading.v1.TradingService.GetOTCContract:output_type -> banka.trading.v1.OTCContract
+	83,  // 185: banka.trading.v1.TradingService.ExerciseOTCContract:output_type -> banka.trading.v1.ExerciseOTCContractResponse
+	146, // [146:186] is the sub-list for method output_type
+	106, // [106:146] is the sub-list for method input_type
+	106, // [106:106] is the sub-list for extension type_name
+	106, // [106:106] is the sub-list for extension extendee
+	0,   // [0:106] is the sub-list for field type_name
 }
 
 func init() { file_trading_v1_trading_proto_init() }
@@ -5478,8 +7221,8 @@ func file_trading_v1_trading_proto_init() {
 		File: protoimpl.DescBuilder{
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
 			RawDescriptor: unsafe.Slice(unsafe.StringData(file_trading_v1_trading_proto_rawDesc), len(file_trading_v1_trading_proto_rawDesc)),
-			NumEnums:      8,
-			NumMessages:   55,
+			NumEnums:      10,
+			NumMessages:   74,
 			NumExtensions: 0,
 			NumServices:   1,
 		},

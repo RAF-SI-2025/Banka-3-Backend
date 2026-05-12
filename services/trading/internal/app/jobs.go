@@ -213,6 +213,40 @@ func runExecutionWorker(ctx context.Context, log *slog.Logger, svc *service.Serv
 	}
 }
 
+// runOTCExpirySweep walks active OTC contracts whose settlement_date
+// has passed and flips them to `expired` (spec p.69). 5-minute cadence
+// per c4-plan; first tick fires immediately so a fresh container
+// catches any backlog left from a crashed run. No-op when no contracts
+// match.
+func runOTCExpirySweep(ctx context.Context, log *slog.Logger, svc *service.Service, interval time.Duration) error {
+	if interval <= 0 {
+		interval = 5 * time.Minute
+	}
+	once := func() {
+		res, err := svc.SweepExpiredOTCContracts(ctx)
+		if err != nil {
+			log.Warn("otc expiry sweep failed", "err", err.Error())
+			return
+		}
+		if res.ContractsExpired > 0 {
+			log.Info("otc expiry sweep ran",
+				"contracts", res.ContractsExpired,
+				"shares_released", res.SharesReleased)
+		}
+	}
+	once()
+	t := time.NewTicker(interval)
+	defer t.Stop()
+	for {
+		select {
+		case <-ctx.Done():
+			return nil
+		case <-t.C:
+			once()
+		}
+	}
+}
+
 // runSagaRecoveryWorker resumes c4 sagas parked by a transient error
 // (or a crashed worker). Every tick it asks the orchestrator's store
 // for sagas in `running`/`compensating` whose `next_attempt_at` has

@@ -33,6 +33,7 @@ import (
 	"github.com/RAF-SI-2025/Banka-3-Backend/pkg/money"
 	"github.com/RAF-SI-2025/Banka-3-Backend/pkg/permissions"
 	"github.com/RAF-SI-2025/Banka-3-Backend/services/trading/internal/domain"
+	"github.com/RAF-SI-2025/Banka-3-Backend/services/trading/internal/saga"
 	"github.com/RAF-SI-2025/Banka-3-Backend/services/trading/internal/store"
 )
 
@@ -220,9 +221,173 @@ func (s *stubMargin) addLoan(clientID string, cur domain.Currency, amt string) {
 }
 
 var (
-	currentSettler = &intStubSettler{}
-	currentMargin  = newStubMargin()
+	currentSettler      = &intStubSettler{}
+	currentMargin       = newStubMargin()
+	currentReservations = newStubReservations()
 )
+
+// stubReservations satisfies BankReservations for integration tests
+// without a live bank container. Reserves are tracked by op_id in
+// memory; commits move money between in-memory account balances so
+// tests can assert post-condition deltas. Errors are pluggable per
+// call type for failure-path tests.
+type stubReservations struct {
+	sync.Mutex
+	balances  map[string]string // accountID → amount (decimal string)
+	reserved  map[string]reservedRow
+	reserveCalls  []ReserveInput
+	releaseCalls  []string
+	commitCalls   []CommitInput
+	transferCalls []TransferInput
+	// Pluggable errors for failure-path tests.
+	reserveErr  error
+	commitErr   error
+	releaseErr  error
+	transferErr error
+}
+
+type reservedRow struct {
+	AccountID string
+	Amount    string
+	Currency  domain.Currency
+	OpKind    string
+	State     string // "held" / "committed" / "released"
+}
+
+func newStubReservations() *stubReservations {
+	return &stubReservations{
+		balances: map[string]string{},
+		reserved: map[string]reservedRow{},
+	}
+}
+
+func (s *stubReservations) reset() {
+	s.Lock()
+	defer s.Unlock()
+	s.balances = map[string]string{}
+	s.reserved = map[string]reservedRow{}
+	s.reserveCalls = nil
+	s.releaseCalls = nil
+	s.commitCalls = nil
+	s.transferCalls = nil
+	s.reserveErr = nil
+	s.commitErr = nil
+	s.releaseErr = nil
+	s.transferErr = nil
+}
+
+func (s *stubReservations) setBalance(accountID string, amount string) {
+	s.Lock()
+	defer s.Unlock()
+	s.balances[accountID] = amount
+}
+
+func (s *stubReservations) balance(accountID string) string {
+	s.Lock()
+	defer s.Unlock()
+	if v, ok := s.balances[accountID]; ok {
+		return v
+	}
+	return "0"
+}
+
+func (s *stubReservations) Reserve(_ context.Context, in ReserveInput) (string, error) {
+	s.Lock()
+	defer s.Unlock()
+	if s.reserveErr != nil {
+		return "", s.reserveErr
+	}
+	if _, ok := s.reserved[in.OpID]; ok {
+		// Idempotent — same op_id returns existing.
+		return "stub-" + in.OpID, nil
+	}
+	s.reserved[in.OpID] = reservedRow{
+		AccountID: in.AccountID,
+		Amount:    in.Amount,
+		Currency:  in.Currency,
+		OpKind:    in.OpKind,
+		State:     "held",
+	}
+	s.reserveCalls = append(s.reserveCalls, in)
+	return "stub-" + in.OpID, nil
+}
+
+func (s *stubReservations) Release(_ context.Context, opID string) (bool, error) {
+	s.Lock()
+	defer s.Unlock()
+	if s.releaseErr != nil {
+		return false, s.releaseErr
+	}
+	r, ok := s.reserved[opID]
+	if !ok {
+		// Idempotent — no-op release returns false.
+		return false, nil
+	}
+	if r.State != "held" {
+		return false, nil
+	}
+	r.State = "released"
+	s.reserved[opID] = r
+	s.releaseCalls = append(s.releaseCalls, opID)
+	return true, nil
+}
+
+func (s *stubReservations) Commit(_ context.Context, in CommitInput) (string, error) {
+	s.Lock()
+	defer s.Unlock()
+	if s.commitErr != nil {
+		return "", s.commitErr
+	}
+	r, ok := s.reserved[in.OpID]
+	if !ok {
+		return "", fmt.Errorf("commit without reserve for op_id=%s", in.OpID)
+	}
+	if r.State == "committed" {
+		// Idempotent return.
+		return in.OpID, nil
+	}
+	if r.State != "held" {
+		return "", fmt.Errorf("commit reservation not held (state=%s)", r.State)
+	}
+	// Move money: debit reserved amount from source, credit dest.
+	src, _ := money.Parse(s.balances[r.AccountID])
+	if src == nil {
+		src = money.MustParse("0")
+	}
+	amt, _ := money.Parse(r.Amount)
+	s.balances[r.AccountID] = money.FormatAmount(money.Sub(src, amt))
+	dst, _ := money.Parse(s.balances[in.DestAccountID])
+	if dst == nil {
+		dst = money.MustParse("0")
+	}
+	destAmt, _ := money.Parse(in.DestAmount)
+	s.balances[in.DestAccountID] = money.FormatAmount(money.Add(dst, destAmt))
+	r.State = "committed"
+	s.reserved[in.OpID] = r
+	s.commitCalls = append(s.commitCalls, in)
+	return in.OpID, nil
+}
+
+func (s *stubReservations) Transfer(_ context.Context, in TransferInput) (string, error) {
+	s.Lock()
+	defer s.Unlock()
+	if s.transferErr != nil {
+		return "", s.transferErr
+	}
+	src, _ := money.Parse(s.balances[in.FromAccountID])
+	if src == nil {
+		src = money.MustParse("0")
+	}
+	amt, _ := money.Parse(in.Amount)
+	s.balances[in.FromAccountID] = money.FormatAmount(money.Sub(src, amt))
+	dst, _ := money.Parse(s.balances[in.ToAccountID])
+	if dst == nil {
+		dst = money.MustParse("0")
+	}
+	s.balances[in.ToAccountID] = money.FormatAmount(money.Add(dst, amt))
+	s.transferCalls = append(s.transferCalls, in)
+	return in.OpID, nil
+}
 
 // setup connects (lazily) to Postgres. Returns a skip reason if the
 // stack isn't reachable so tests are skipped rather than failed when
@@ -275,6 +440,15 @@ func setup(t *testing.T) *Service {
 	currentSettler.reset()
 	currentMargin = newStubMargin()
 	svc.MarginChecker = currentMargin
+
+	// c4 SAGA + reservations wiring. Without these the OTC accept /
+	// exercise paths refuse to run.
+	currentReservations.reset()
+	svc.Reservations = currentReservations
+	svc.SagaStore = st.Sagas()
+	reg := saga.NewRegistry()
+	svc.SagaOrch = saga.New(svc.SagaStore, reg, logger)
+	RegisterSagas(reg, svc)
 	return svc
 }
 
@@ -282,6 +456,8 @@ func resetSchema(t *testing.T) {
 	t.Helper()
 	_, err := fixPool.Exec(context.Background(), `
         truncate
+            "trading".otc_contracts,
+            "trading".otc_offers,
             "trading".option_exercises,
             "trading".realized_gains,
             "trading".portfolio_holdings,

@@ -2490,6 +2490,388 @@
         ]
       }
     },
+    "/api/v1/otc/contracts": {
+      "get": {
+        "summary": "ListOTCContracts drives the \"Sklopljeni ugovori\" page (spec p.69)\nfor the caller. Supervisors/admin may filter by user_id.",
+        "operationId": "TradingService_ListOTCContracts",
+        "responses": {
+          "200": {
+            "description": "A successful response.",
+            "schema": {
+              "$ref": "#/definitions/v1ListOTCContractsResponse"
+            }
+          },
+          "default": {
+            "description": "An unexpected error response.",
+            "schema": {
+              "$ref": "#/definitions/rpcStatus"
+            }
+          }
+        },
+        "parameters": [
+          {
+            "name": "partyUserId",
+            "description": "Supervisor/admin: empty user_id returns all; non-empty narrows.",
+            "in": "query",
+            "required": false,
+            "type": "string"
+          },
+          {
+            "name": "partyUserKind",
+            "in": "query",
+            "required": false,
+            "type": "string",
+            "enum": [
+              "USER_KIND_UNSPECIFIED",
+              "USER_KIND_CLIENT",
+              "USER_KIND_EMPLOYEE"
+            ],
+            "default": "USER_KIND_UNSPECIFIED"
+          },
+          {
+            "name": "status",
+            "description": "\"active\"/\"any\"/\"\" (default \"active\").",
+            "in": "query",
+            "required": false,
+            "type": "string"
+          }
+        ],
+        "tags": [
+          "TradingService"
+        ]
+      }
+    },
+    "/api/v1/otc/contracts/{id}": {
+      "get": {
+        "summary": "GetOTCContract returns one contract (caller must be a party or\nsupervisor/admin).",
+        "operationId": "TradingService_GetOTCContract",
+        "responses": {
+          "200": {
+            "description": "A successful response.",
+            "schema": {
+              "$ref": "#/definitions/v1OTCContract"
+            }
+          },
+          "default": {
+            "description": "An unexpected error response.",
+            "schema": {
+              "$ref": "#/definitions/rpcStatus"
+            }
+          }
+        },
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "type": "string"
+          }
+        ],
+        "tags": [
+          "TradingService"
+        ]
+      }
+    },
+    "/api/v1/otc/contracts/{id}/exercise": {
+      "post": {
+        "summary": "ExerciseOTCContract runs the otc_exercise SAGA on an active\ncontract (spec p.80 intra-bank): buyer pays qty * strike to seller,\nshares transfer, contract flips to `exercised`. Buyer's cost basis\non the received shares is `strike_price`; seller writes a\nrealized_gains row.",
+        "operationId": "TradingService_ExerciseOTCContract",
+        "responses": {
+          "200": {
+            "description": "A successful response.",
+            "schema": {
+              "$ref": "#/definitions/v1ExerciseOTCContractResponse"
+            }
+          },
+          "default": {
+            "description": "An unexpected error response.",
+            "schema": {
+              "$ref": "#/definitions/rpcStatus"
+            }
+          }
+        },
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "type": "string"
+          },
+          {
+            "name": "body",
+            "in": "body",
+            "required": true,
+            "schema": {
+              "$ref": "#/definitions/TradingServiceExerciseOTCContractBody"
+            }
+          }
+        ],
+        "tags": [
+          "TradingService"
+        ]
+      }
+    },
+    "/api/v1/otc/discovery": {
+      "get": {
+        "summary": "ListPublicHoldings drives the OTC discovery board (spec p.67):\nholdings owned by other users that have public_count \u003e reserved_count\nare visible. Filterable by ticker.",
+        "operationId": "TradingService_ListPublicHoldings",
+        "responses": {
+          "200": {
+            "description": "A successful response.",
+            "schema": {
+              "$ref": "#/definitions/v1ListPublicHoldingsResponse"
+            }
+          },
+          "default": {
+            "description": "An unexpected error response.",
+            "schema": {
+              "$ref": "#/definitions/rpcStatus"
+            }
+          }
+        },
+        "parameters": [
+          {
+            "name": "ticker",
+            "in": "query",
+            "required": false,
+            "type": "string"
+          }
+        ],
+        "tags": [
+          "TradingService"
+        ]
+      }
+    },
+    "/api/v1/otc/offers": {
+      "get": {
+        "summary": "ListOTCThreads drives the \"Aktivne ponude\" page (spec p.69) — every\nthread the caller participates in (as buyer or seller), most-recent\niteration per thread.",
+        "operationId": "TradingService_ListOTCThreads",
+        "responses": {
+          "200": {
+            "description": "A successful response.",
+            "schema": {
+              "$ref": "#/definitions/v1ListOTCThreadsResponse"
+            }
+          },
+          "default": {
+            "description": "An unexpected error response.",
+            "schema": {
+              "$ref": "#/definitions/rpcStatus"
+            }
+          }
+        },
+        "parameters": [
+          {
+            "name": "partyUserId",
+            "description": "For supervisor/admin views — narrow to a single party. Empty for\nself.",
+            "in": "query",
+            "required": false,
+            "type": "string"
+          },
+          {
+            "name": "partyUserKind",
+            "in": "query",
+            "required": false,
+            "type": "string",
+            "enum": [
+              "USER_KIND_UNSPECIFIED",
+              "USER_KIND_CLIENT",
+              "USER_KIND_EMPLOYEE"
+            ],
+            "default": "USER_KIND_UNSPECIFIED"
+          },
+          {
+            "name": "status",
+            "description": "\"open\" / \"any\" / \"\" (default \"open\").",
+            "in": "query",
+            "required": false,
+            "type": "string"
+          }
+        ],
+        "tags": [
+          "TradingService"
+        ]
+      },
+      "post": {
+        "summary": "CreateOTCOffer opens a new negotiation thread. The buyer initiates;\nthe seller_holding_id resolves the seller (its owner). Increments\nreserved_count on the seller's holding by quantity.",
+        "operationId": "TradingService_CreateOTCOffer",
+        "responses": {
+          "200": {
+            "description": "A successful response.",
+            "schema": {
+              "$ref": "#/definitions/v1OTCOffer"
+            }
+          },
+          "default": {
+            "description": "An unexpected error response.",
+            "schema": {
+              "$ref": "#/definitions/rpcStatus"
+            }
+          }
+        },
+        "parameters": [
+          {
+            "name": "body",
+            "in": "body",
+            "required": true,
+            "schema": {
+              "$ref": "#/definitions/v1CreateOTCOfferRequest"
+            }
+          }
+        ],
+        "tags": [
+          "TradingService"
+        ]
+      }
+    },
+    "/api/v1/otc/offers/{threadId}": {
+      "get": {
+        "summary": "GetOTCThread returns every iteration in a thread (oldest first).\nDrives the thread-detail modal on spec p.69.",
+        "operationId": "TradingService_GetOTCThread",
+        "responses": {
+          "200": {
+            "description": "A successful response.",
+            "schema": {
+              "$ref": "#/definitions/v1GetOTCThreadResponse"
+            }
+          },
+          "default": {
+            "description": "An unexpected error response.",
+            "schema": {
+              "$ref": "#/definitions/rpcStatus"
+            }
+          }
+        },
+        "parameters": [
+          {
+            "name": "threadId",
+            "in": "path",
+            "required": true,
+            "type": "string"
+          }
+        ],
+        "tags": [
+          "TradingService"
+        ]
+      }
+    },
+    "/api/v1/otc/offers/{threadId}/accept": {
+      "post": {
+        "summary": "AcceptOTCOffer accepts the open iteration in a thread and mints\nan active contract via the otc_premium SAGA (premium transfers\nfrom buyer to seller; contract row is created; seller's holding\nreservation rolls over from offer to contract).",
+        "operationId": "TradingService_AcceptOTCOffer",
+        "responses": {
+          "200": {
+            "description": "A successful response.",
+            "schema": {
+              "$ref": "#/definitions/v1AcceptOTCOfferResponse"
+            }
+          },
+          "default": {
+            "description": "An unexpected error response.",
+            "schema": {
+              "$ref": "#/definitions/rpcStatus"
+            }
+          }
+        },
+        "parameters": [
+          {
+            "name": "threadId",
+            "in": "path",
+            "required": true,
+            "type": "string"
+          },
+          {
+            "name": "body",
+            "in": "body",
+            "required": true,
+            "schema": {
+              "$ref": "#/definitions/TradingServiceAcceptOTCOfferBody"
+            }
+          }
+        ],
+        "tags": [
+          "TradingService"
+        ]
+      }
+    },
+    "/api/v1/otc/offers/{threadId}/counter": {
+      "post": {
+        "summary": "CounterOfferOTC appends a new iteration to an existing thread. The\nprior open row flips to `superseded`; reservation is adjusted if\nquantity changed. modified_by tracks which party last touched the\nthread (drives the FE unread badge).",
+        "operationId": "TradingService_CounterOfferOTC",
+        "responses": {
+          "200": {
+            "description": "A successful response.",
+            "schema": {
+              "$ref": "#/definitions/v1OTCOffer"
+            }
+          },
+          "default": {
+            "description": "An unexpected error response.",
+            "schema": {
+              "$ref": "#/definitions/rpcStatus"
+            }
+          }
+        },
+        "parameters": [
+          {
+            "name": "threadId",
+            "in": "path",
+            "required": true,
+            "type": "string"
+          },
+          {
+            "name": "body",
+            "in": "body",
+            "required": true,
+            "schema": {
+              "$ref": "#/definitions/TradingServiceCounterOfferOTCBody"
+            }
+          }
+        ],
+        "tags": [
+          "TradingService"
+        ]
+      }
+    },
+    "/api/v1/otc/offers/{threadId}/withdraw": {
+      "post": {
+        "summary": "WithdrawOTCOffer pulls a thread out of negotiation. Either party\nmay call; the open row flips to `withdrawn` and the seller's\nreservation is released.",
+        "operationId": "TradingService_WithdrawOTCOffer",
+        "responses": {
+          "200": {
+            "description": "A successful response.",
+            "schema": {
+              "$ref": "#/definitions/v1OTCOffer"
+            }
+          },
+          "default": {
+            "description": "An unexpected error response.",
+            "schema": {
+              "$ref": "#/definitions/rpcStatus"
+            }
+          }
+        },
+        "parameters": [
+          {
+            "name": "threadId",
+            "in": "path",
+            "required": true,
+            "type": "string"
+          },
+          {
+            "name": "body",
+            "in": "body",
+            "required": true,
+            "schema": {
+              "$ref": "#/definitions/TradingServiceWithdrawOTCOfferBody"
+            }
+          }
+        ],
+        "tags": [
+          "TradingService"
+        ]
+      }
+    },
     "/api/v1/payment-recipients": {
       "get": {
         "operationId": "BankService_ListPaymentRecipients",
@@ -3331,11 +3713,33 @@
         }
       }
     },
+    "TradingServiceAcceptOTCOfferBody": {
+      "type": "object"
+    },
     "TradingServiceApproveOrderBody": {
       "type": "object"
     },
     "TradingServiceCancelOrderBody": {
       "type": "object"
+    },
+    "TradingServiceCounterOfferOTCBody": {
+      "type": "object",
+      "properties": {
+        "quantity": {
+          "type": "integer",
+          "format": "int32"
+        },
+        "pricePerUnit": {
+          "type": "string"
+        },
+        "premium": {
+          "type": "string"
+        },
+        "settlementDate": {
+          "type": "string",
+          "format": "date-time"
+        }
+      }
     },
     "TradingServiceDeclineOrderBody": {
       "type": "object",
@@ -3344,6 +3748,9 @@
           "type": "string"
         }
       }
+    },
+    "TradingServiceExerciseOTCContractBody": {
+      "type": "object"
     },
     "TradingServiceExerciseOptionBody": {
       "type": "object",
@@ -3431,6 +3838,9 @@
           "type": "string"
         }
       }
+    },
+    "TradingServiceWithdrawOTCOfferBody": {
+      "type": "object"
     },
     "UserServiceSetEmployeeActiveBody": {
       "type": "object",
@@ -3621,6 +4031,18 @@
             "type": "object",
             "$ref": "#/definitions/protobufAny"
           }
+        }
+      }
+    },
+    "v1AcceptOTCOfferResponse": {
+      "type": "object",
+      "properties": {
+        "contract": {
+          "$ref": "#/definitions/v1OTCContract"
+        },
+        "premiumOpId": {
+          "type": "string",
+          "description": "Bank op_id of the premium leg, for ops correlation."
         }
       }
     },
@@ -4174,6 +4596,34 @@
         }
       }
     },
+    "v1CreateOTCOfferRequest": {
+      "type": "object",
+      "properties": {
+        "sellerHoldingId": {
+          "type": "string"
+        },
+        "buyerAccountId": {
+          "type": "string"
+        },
+        "sellerAccountId": {
+          "type": "string"
+        },
+        "quantity": {
+          "type": "integer",
+          "format": "int32"
+        },
+        "pricePerUnit": {
+          "type": "string"
+        },
+        "premium": {
+          "type": "string"
+        },
+        "settlementDate": {
+          "type": "string",
+          "format": "date-time"
+        }
+      }
+    },
     "v1CreateOrderRequest": {
       "type": "object",
       "properties": {
@@ -4408,6 +4858,25 @@
         }
       }
     },
+    "v1ExerciseOTCContractResponse": {
+      "type": "object",
+      "properties": {
+        "contract": {
+          "$ref": "#/definitions/v1OTCContract"
+        },
+        "strikeOpId": {
+          "type": "string",
+          "description": "Bank op_id of the strike-leg cash transfer."
+        },
+        "sellerRealizedGainNative": {
+          "type": "string",
+          "description": "Realized-gain row written for the seller (RSD, native)."
+        },
+        "sellerRealizedGainRsd": {
+          "type": "string"
+        }
+      }
+    },
     "v1ExerciseOptionResponse": {
       "type": "object",
       "properties": {
@@ -4444,6 +4913,23 @@
             "type": "object",
             "$ref": "#/definitions/v1ListingDailyPrice"
           }
+        }
+      }
+    },
+    "v1GetOTCThreadResponse": {
+      "type": "object",
+      "properties": {
+        "iterations": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "$ref": "#/definitions/v1OTCOffer"
+          },
+          "description": "Every iteration in the thread, oldest first."
+        },
+        "contract": {
+          "$ref": "#/definitions/v1OTCContract",
+          "description": "The signed contract if accept already ran."
         }
       }
     },
@@ -4776,6 +5262,31 @@
         }
       }
     },
+    "v1ListOTCContractsResponse": {
+      "type": "object",
+      "properties": {
+        "contracts": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "$ref": "#/definitions/v1OTCContract"
+          }
+        }
+      }
+    },
+    "v1ListOTCThreadsResponse": {
+      "type": "object",
+      "properties": {
+        "threads": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "$ref": "#/definitions/v1OTCOffer"
+          },
+          "description": "Latest iteration per thread. Sorted newest-first by updated_at."
+        }
+      }
+    },
     "v1ListOrdersResponse": {
       "type": "object",
       "properties": {
@@ -4808,6 +5319,18 @@
           "items": {
             "type": "object",
             "$ref": "#/definitions/v1PaymentRecipient"
+          }
+        }
+      }
+    },
+    "v1ListPublicHoldingsResponse": {
+      "type": "object",
+      "properties": {
+        "items": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "$ref": "#/definitions/v1PublicHoldingItem"
           }
         }
       }
@@ -5252,6 +5775,177 @@
         }
       }
     },
+    "v1OTCContract": {
+      "type": "object",
+      "properties": {
+        "id": {
+          "type": "string"
+        },
+        "threadId": {
+          "type": "string"
+        },
+        "securityId": {
+          "type": "string"
+        },
+        "securityTicker": {
+          "type": "string"
+        },
+        "sellerHoldingId": {
+          "type": "string"
+        },
+        "buyerId": {
+          "type": "string"
+        },
+        "buyerKind": {
+          "$ref": "#/definitions/bankaTradingV1UserKind"
+        },
+        "buyerAccountId": {
+          "type": "string"
+        },
+        "sellerId": {
+          "type": "string"
+        },
+        "sellerKind": {
+          "$ref": "#/definitions/bankaTradingV1UserKind"
+        },
+        "sellerAccountId": {
+          "type": "string"
+        },
+        "quantity": {
+          "type": "integer",
+          "format": "int32"
+        },
+        "strikePrice": {
+          "type": "string"
+        },
+        "premiumPaid": {
+          "type": "string"
+        },
+        "currency": {
+          "$ref": "#/definitions/bankaTradingV1Currency"
+        },
+        "settlementDate": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "premiumOpId": {
+          "type": "string"
+        },
+        "status": {
+          "$ref": "#/definitions/v1OTCContractStatus"
+        },
+        "exercisedOpId": {
+          "type": "string"
+        },
+        "exerciseSagaId": {
+          "type": "string"
+        },
+        "exercisedAt": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "createdAt": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "updatedAt": {
+          "type": "string",
+          "format": "date-time"
+        }
+      }
+    },
+    "v1OTCContractStatus": {
+      "type": "string",
+      "enum": [
+        "OTC_CONTRACT_STATUS_UNSPECIFIED",
+        "OTC_CONTRACT_STATUS_ACTIVE",
+        "OTC_CONTRACT_STATUS_EXERCISED",
+        "OTC_CONTRACT_STATUS_EXPIRED",
+        "OTC_CONTRACT_STATUS_SETTLING"
+      ],
+      "default": "OTC_CONTRACT_STATUS_UNSPECIFIED"
+    },
+    "v1OTCOffer": {
+      "type": "object",
+      "properties": {
+        "id": {
+          "type": "string"
+        },
+        "threadId": {
+          "type": "string"
+        },
+        "securityId": {
+          "type": "string"
+        },
+        "securityTicker": {
+          "type": "string"
+        },
+        "sellerHoldingId": {
+          "type": "string"
+        },
+        "buyerId": {
+          "type": "string"
+        },
+        "buyerKind": {
+          "$ref": "#/definitions/bankaTradingV1UserKind"
+        },
+        "buyerAccountId": {
+          "type": "string"
+        },
+        "sellerId": {
+          "type": "string"
+        },
+        "sellerKind": {
+          "$ref": "#/definitions/bankaTradingV1UserKind"
+        },
+        "sellerAccountId": {
+          "type": "string"
+        },
+        "quantity": {
+          "type": "integer",
+          "format": "int32"
+        },
+        "pricePerUnit": {
+          "type": "string"
+        },
+        "premium": {
+          "type": "string"
+        },
+        "currency": {
+          "$ref": "#/definitions/bankaTradingV1Currency"
+        },
+        "settlementDate": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "modifiedBy": {
+          "type": "string"
+        },
+        "status": {
+          "$ref": "#/definitions/v1OTCStatus"
+        },
+        "createdAt": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "updatedAt": {
+          "type": "string",
+          "format": "date-time"
+        }
+      }
+    },
+    "v1OTCStatus": {
+      "type": "string",
+      "enum": [
+        "OTC_STATUS_UNSPECIFIED",
+        "OTC_STATUS_OPEN",
+        "OTC_STATUS_SUPERSEDED",
+        "OTC_STATUS_ACCEPTED",
+        "OTC_STATUS_WITHDRAWN",
+        "OTC_STATUS_EXPIRED"
+      ],
+      "default": "OTC_STATUS_UNSPECIFIED"
+    },
     "v1OptionChainGroup": {
       "type": "object",
       "properties": {
@@ -5439,6 +6133,48 @@
           "$ref": "#/definitions/v1TransactionStatus"
         }
       }
+    },
+    "v1PublicHoldingItem": {
+      "type": "object",
+      "properties": {
+        "holdingId": {
+          "type": "string"
+        },
+        "sellerId": {
+          "type": "string"
+        },
+        "sellerKind": {
+          "$ref": "#/definitions/bankaTradingV1UserKind"
+        },
+        "sellerAccountId": {
+          "type": "string"
+        },
+        "sellerDisplayName": {
+          "type": "string"
+        },
+        "security": {
+          "$ref": "#/definitions/v1Security"
+        },
+        "availableCount": {
+          "type": "integer",
+          "format": "int32"
+        },
+        "publicCount": {
+          "type": "integer",
+          "format": "int32"
+        },
+        "reservedCount": {
+          "type": "integer",
+          "format": "int32"
+        },
+        "currentPrice": {
+          "type": "string"
+        },
+        "currency": {
+          "$ref": "#/definitions/bankaTradingV1Currency"
+        }
+      },
+      "description": "PublicHoldingItem is one row on the OTC discovery board. The\n\"available_count\" field is the share count visible to negotiations —\npublic_count minus reserved_count, clamped to zero."
     },
     "v1QuoteExchangeRequest": {
       "type": "object",

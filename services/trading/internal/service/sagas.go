@@ -15,12 +15,13 @@ import (
 // about with `reg`. Called once at app boot before the orchestrator
 // starts driving rows.
 //
-// PR1 leaves this empty — the registry is wired, the recovery worker
-// is running, and the bank reservation primitives are in place; PR2's
-// OTC backend lands the first real Definition (otc_accept_saga).
-// Migrating ExerciseOption to a saga (FOUND-2) ships immediately
-// before PR2 so its first integration use validates the framework.
+// c4-PR2 adds:
+//   - otc_accept   — accept saga (premium leg + contract mint).
+//   - otc_exercise — buyer exercises a contract (strike leg + shares
+//     transfer + seller realized_gain).
+//
+// PR3/PR4 will add fund_invest, fund_withdraw, profit-cascade.
 func RegisterSagas(reg *saga.Registry, svc *Service) {
-	_ = reg
-	_ = svc
+	registerOTCAcceptSaga(reg, svc)
+	registerOTCExerciseSaga(reg, svc)
 }

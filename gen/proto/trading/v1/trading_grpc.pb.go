@@ -50,6 +50,16 @@ const (
 	TradingService_ListTaxPositions_FullMethodName       = "/banka.trading.v1.TradingService/ListTaxPositions"
 	TradingService_RunTax_FullMethodName                 = "/banka.trading.v1.TradingService/RunTax"
 	TradingService_ListRealizedPnL_FullMethodName        = "/banka.trading.v1.TradingService/ListRealizedPnL"
+	TradingService_ListPublicHoldings_FullMethodName     = "/banka.trading.v1.TradingService/ListPublicHoldings"
+	TradingService_CreateOTCOffer_FullMethodName         = "/banka.trading.v1.TradingService/CreateOTCOffer"
+	TradingService_CounterOfferOTC_FullMethodName        = "/banka.trading.v1.TradingService/CounterOfferOTC"
+	TradingService_WithdrawOTCOffer_FullMethodName       = "/banka.trading.v1.TradingService/WithdrawOTCOffer"
+	TradingService_ListOTCThreads_FullMethodName         = "/banka.trading.v1.TradingService/ListOTCThreads"
+	TradingService_GetOTCThread_FullMethodName           = "/banka.trading.v1.TradingService/GetOTCThread"
+	TradingService_AcceptOTCOffer_FullMethodName         = "/banka.trading.v1.TradingService/AcceptOTCOffer"
+	TradingService_ListOTCContracts_FullMethodName       = "/banka.trading.v1.TradingService/ListOTCContracts"
+	TradingService_GetOTCContract_FullMethodName         = "/banka.trading.v1.TradingService/GetOTCContract"
+	TradingService_ExerciseOTCContract_FullMethodName    = "/banka.trading.v1.TradingService/ExerciseOTCContract"
 )
 
 // TradingServiceClient is the client API for TradingService service.
@@ -104,6 +114,47 @@ type TradingServiceClient interface {
 	ListTaxPositions(ctx context.Context, in *ListTaxPositionsRequest, opts ...grpc.CallOption) (*ListTaxPositionsResponse, error)
 	RunTax(ctx context.Context, in *RunTaxRequest, opts ...grpc.CallOption) (*RunTaxResponse, error)
 	ListRealizedPnL(ctx context.Context, in *ListRealizedPnLRequest, opts ...grpc.CallOption) (*ListRealizedPnLResponse, error)
+	// ListPublicHoldings drives the OTC discovery board (spec p.67):
+	// holdings owned by other users that have public_count > reserved_count
+	// are visible. Filterable by ticker.
+	ListPublicHoldings(ctx context.Context, in *ListPublicHoldingsRequest, opts ...grpc.CallOption) (*ListPublicHoldingsResponse, error)
+	// CreateOTCOffer opens a new negotiation thread. The buyer initiates;
+	// the seller_holding_id resolves the seller (its owner). Increments
+	// reserved_count on the seller's holding by quantity.
+	CreateOTCOffer(ctx context.Context, in *CreateOTCOfferRequest, opts ...grpc.CallOption) (*OTCOffer, error)
+	// CounterOfferOTC appends a new iteration to an existing thread. The
+	// prior open row flips to `superseded`; reservation is adjusted if
+	// quantity changed. modified_by tracks which party last touched the
+	// thread (drives the FE unread badge).
+	CounterOfferOTC(ctx context.Context, in *CounterOfferOTCRequest, opts ...grpc.CallOption) (*OTCOffer, error)
+	// WithdrawOTCOffer pulls a thread out of negotiation. Either party
+	// may call; the open row flips to `withdrawn` and the seller's
+	// reservation is released.
+	WithdrawOTCOffer(ctx context.Context, in *WithdrawOTCOfferRequest, opts ...grpc.CallOption) (*OTCOffer, error)
+	// ListOTCThreads drives the "Aktivne ponude" page (spec p.69) — every
+	// thread the caller participates in (as buyer or seller), most-recent
+	// iteration per thread.
+	ListOTCThreads(ctx context.Context, in *ListOTCThreadsRequest, opts ...grpc.CallOption) (*ListOTCThreadsResponse, error)
+	// GetOTCThread returns every iteration in a thread (oldest first).
+	// Drives the thread-detail modal on spec p.69.
+	GetOTCThread(ctx context.Context, in *GetOTCThreadRequest, opts ...grpc.CallOption) (*GetOTCThreadResponse, error)
+	// AcceptOTCOffer accepts the open iteration in a thread and mints
+	// an active contract via the otc_premium SAGA (premium transfers
+	// from buyer to seller; contract row is created; seller's holding
+	// reservation rolls over from offer to contract).
+	AcceptOTCOffer(ctx context.Context, in *AcceptOTCOfferRequest, opts ...grpc.CallOption) (*AcceptOTCOfferResponse, error)
+	// ListOTCContracts drives the "Sklopljeni ugovori" page (spec p.69)
+	// for the caller. Supervisors/admin may filter by user_id.
+	ListOTCContracts(ctx context.Context, in *ListOTCContractsRequest, opts ...grpc.CallOption) (*ListOTCContractsResponse, error)
+	// GetOTCContract returns one contract (caller must be a party or
+	// supervisor/admin).
+	GetOTCContract(ctx context.Context, in *GetOTCContractRequest, opts ...grpc.CallOption) (*OTCContract, error)
+	// ExerciseOTCContract runs the otc_exercise SAGA on an active
+	// contract (spec p.80 intra-bank): buyer pays qty * strike to seller,
+	// shares transfer, contract flips to `exercised`. Buyer's cost basis
+	// on the received shares is `strike_price`; seller writes a
+	// realized_gains row.
+	ExerciseOTCContract(ctx context.Context, in *ExerciseOTCContractRequest, opts ...grpc.CallOption) (*ExerciseOTCContractResponse, error)
 }
 
 type tradingServiceClient struct {
@@ -414,6 +465,106 @@ func (c *tradingServiceClient) ListRealizedPnL(ctx context.Context, in *ListReal
 	return out, nil
 }
 
+func (c *tradingServiceClient) ListPublicHoldings(ctx context.Context, in *ListPublicHoldingsRequest, opts ...grpc.CallOption) (*ListPublicHoldingsResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(ListPublicHoldingsResponse)
+	err := c.cc.Invoke(ctx, TradingService_ListPublicHoldings_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *tradingServiceClient) CreateOTCOffer(ctx context.Context, in *CreateOTCOfferRequest, opts ...grpc.CallOption) (*OTCOffer, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(OTCOffer)
+	err := c.cc.Invoke(ctx, TradingService_CreateOTCOffer_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *tradingServiceClient) CounterOfferOTC(ctx context.Context, in *CounterOfferOTCRequest, opts ...grpc.CallOption) (*OTCOffer, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(OTCOffer)
+	err := c.cc.Invoke(ctx, TradingService_CounterOfferOTC_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *tradingServiceClient) WithdrawOTCOffer(ctx context.Context, in *WithdrawOTCOfferRequest, opts ...grpc.CallOption) (*OTCOffer, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(OTCOffer)
+	err := c.cc.Invoke(ctx, TradingService_WithdrawOTCOffer_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *tradingServiceClient) ListOTCThreads(ctx context.Context, in *ListOTCThreadsRequest, opts ...grpc.CallOption) (*ListOTCThreadsResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(ListOTCThreadsResponse)
+	err := c.cc.Invoke(ctx, TradingService_ListOTCThreads_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *tradingServiceClient) GetOTCThread(ctx context.Context, in *GetOTCThreadRequest, opts ...grpc.CallOption) (*GetOTCThreadResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(GetOTCThreadResponse)
+	err := c.cc.Invoke(ctx, TradingService_GetOTCThread_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *tradingServiceClient) AcceptOTCOffer(ctx context.Context, in *AcceptOTCOfferRequest, opts ...grpc.CallOption) (*AcceptOTCOfferResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(AcceptOTCOfferResponse)
+	err := c.cc.Invoke(ctx, TradingService_AcceptOTCOffer_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *tradingServiceClient) ListOTCContracts(ctx context.Context, in *ListOTCContractsRequest, opts ...grpc.CallOption) (*ListOTCContractsResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(ListOTCContractsResponse)
+	err := c.cc.Invoke(ctx, TradingService_ListOTCContracts_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *tradingServiceClient) GetOTCContract(ctx context.Context, in *GetOTCContractRequest, opts ...grpc.CallOption) (*OTCContract, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(OTCContract)
+	err := c.cc.Invoke(ctx, TradingService_GetOTCContract_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *tradingServiceClient) ExerciseOTCContract(ctx context.Context, in *ExerciseOTCContractRequest, opts ...grpc.CallOption) (*ExerciseOTCContractResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(ExerciseOTCContractResponse)
+	err := c.cc.Invoke(ctx, TradingService_ExerciseOTCContract_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
 // TradingServiceServer is the server API for TradingService service.
 // All implementations should embed UnimplementedTradingServiceServer
 // for forward compatibility.
@@ -466,6 +617,47 @@ type TradingServiceServer interface {
 	ListTaxPositions(context.Context, *ListTaxPositionsRequest) (*ListTaxPositionsResponse, error)
 	RunTax(context.Context, *RunTaxRequest) (*RunTaxResponse, error)
 	ListRealizedPnL(context.Context, *ListRealizedPnLRequest) (*ListRealizedPnLResponse, error)
+	// ListPublicHoldings drives the OTC discovery board (spec p.67):
+	// holdings owned by other users that have public_count > reserved_count
+	// are visible. Filterable by ticker.
+	ListPublicHoldings(context.Context, *ListPublicHoldingsRequest) (*ListPublicHoldingsResponse, error)
+	// CreateOTCOffer opens a new negotiation thread. The buyer initiates;
+	// the seller_holding_id resolves the seller (its owner). Increments
+	// reserved_count on the seller's holding by quantity.
+	CreateOTCOffer(context.Context, *CreateOTCOfferRequest) (*OTCOffer, error)
+	// CounterOfferOTC appends a new iteration to an existing thread. The
+	// prior open row flips to `superseded`; reservation is adjusted if
+	// quantity changed. modified_by tracks which party last touched the
+	// thread (drives the FE unread badge).
+	CounterOfferOTC(context.Context, *CounterOfferOTCRequest) (*OTCOffer, error)
+	// WithdrawOTCOffer pulls a thread out of negotiation. Either party
+	// may call; the open row flips to `withdrawn` and the seller's
+	// reservation is released.
+	WithdrawOTCOffer(context.Context, *WithdrawOTCOfferRequest) (*OTCOffer, error)
+	// ListOTCThreads drives the "Aktivne ponude" page (spec p.69) — every
+	// thread the caller participates in (as buyer or seller), most-recent
+	// iteration per thread.
+	ListOTCThreads(context.Context, *ListOTCThreadsRequest) (*ListOTCThreadsResponse, error)
+	// GetOTCThread returns every iteration in a thread (oldest first).
+	// Drives the thread-detail modal on spec p.69.
+	GetOTCThread(context.Context, *GetOTCThreadRequest) (*GetOTCThreadResponse, error)
+	// AcceptOTCOffer accepts the open iteration in a thread and mints
+	// an active contract via the otc_premium SAGA (premium transfers
+	// from buyer to seller; contract row is created; seller's holding
+	// reservation rolls over from offer to contract).
+	AcceptOTCOffer(context.Context, *AcceptOTCOfferRequest) (*AcceptOTCOfferResponse, error)
+	// ListOTCContracts drives the "Sklopljeni ugovori" page (spec p.69)
+	// for the caller. Supervisors/admin may filter by user_id.
+	ListOTCContracts(context.Context, *ListOTCContractsRequest) (*ListOTCContractsResponse, error)
+	// GetOTCContract returns one contract (caller must be a party or
+	// supervisor/admin).
+	GetOTCContract(context.Context, *GetOTCContractRequest) (*OTCContract, error)
+	// ExerciseOTCContract runs the otc_exercise SAGA on an active
+	// contract (spec p.80 intra-bank): buyer pays qty * strike to seller,
+	// shares transfer, contract flips to `exercised`. Buyer's cost basis
+	// on the received shares is `strike_price`; seller writes a
+	// realized_gains row.
+	ExerciseOTCContract(context.Context, *ExerciseOTCContractRequest) (*ExerciseOTCContractResponse, error)
 }
 
 // UnimplementedTradingServiceServer should be embedded to have
@@ -564,6 +756,36 @@ func (UnimplementedTradingServiceServer) RunTax(context.Context, *RunTaxRequest)
 }
 func (UnimplementedTradingServiceServer) ListRealizedPnL(context.Context, *ListRealizedPnLRequest) (*ListRealizedPnLResponse, error) {
 	return nil, status.Error(codes.Unimplemented, "method ListRealizedPnL not implemented")
+}
+func (UnimplementedTradingServiceServer) ListPublicHoldings(context.Context, *ListPublicHoldingsRequest) (*ListPublicHoldingsResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method ListPublicHoldings not implemented")
+}
+func (UnimplementedTradingServiceServer) CreateOTCOffer(context.Context, *CreateOTCOfferRequest) (*OTCOffer, error) {
+	return nil, status.Error(codes.Unimplemented, "method CreateOTCOffer not implemented")
+}
+func (UnimplementedTradingServiceServer) CounterOfferOTC(context.Context, *CounterOfferOTCRequest) (*OTCOffer, error) {
+	return nil, status.Error(codes.Unimplemented, "method CounterOfferOTC not implemented")
+}
+func (UnimplementedTradingServiceServer) WithdrawOTCOffer(context.Context, *WithdrawOTCOfferRequest) (*OTCOffer, error) {
+	return nil, status.Error(codes.Unimplemented, "method WithdrawOTCOffer not implemented")
+}
+func (UnimplementedTradingServiceServer) ListOTCThreads(context.Context, *ListOTCThreadsRequest) (*ListOTCThreadsResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method ListOTCThreads not implemented")
+}
+func (UnimplementedTradingServiceServer) GetOTCThread(context.Context, *GetOTCThreadRequest) (*GetOTCThreadResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method GetOTCThread not implemented")
+}
+func (UnimplementedTradingServiceServer) AcceptOTCOffer(context.Context, *AcceptOTCOfferRequest) (*AcceptOTCOfferResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method AcceptOTCOffer not implemented")
+}
+func (UnimplementedTradingServiceServer) ListOTCContracts(context.Context, *ListOTCContractsRequest) (*ListOTCContractsResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method ListOTCContracts not implemented")
+}
+func (UnimplementedTradingServiceServer) GetOTCContract(context.Context, *GetOTCContractRequest) (*OTCContract, error) {
+	return nil, status.Error(codes.Unimplemented, "method GetOTCContract not implemented")
+}
+func (UnimplementedTradingServiceServer) ExerciseOTCContract(context.Context, *ExerciseOTCContractRequest) (*ExerciseOTCContractResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method ExerciseOTCContract not implemented")
 }
 func (UnimplementedTradingServiceServer) testEmbeddedByValue() {}
 
@@ -1125,6 +1347,186 @@ func _TradingService_ListRealizedPnL_Handler(srv interface{}, ctx context.Contex
 	return interceptor(ctx, in, info, handler)
 }
 
+func _TradingService_ListPublicHoldings_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(ListPublicHoldingsRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(TradingServiceServer).ListPublicHoldings(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: TradingService_ListPublicHoldings_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(TradingServiceServer).ListPublicHoldings(ctx, req.(*ListPublicHoldingsRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _TradingService_CreateOTCOffer_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(CreateOTCOfferRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(TradingServiceServer).CreateOTCOffer(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: TradingService_CreateOTCOffer_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(TradingServiceServer).CreateOTCOffer(ctx, req.(*CreateOTCOfferRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _TradingService_CounterOfferOTC_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(CounterOfferOTCRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(TradingServiceServer).CounterOfferOTC(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: TradingService_CounterOfferOTC_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(TradingServiceServer).CounterOfferOTC(ctx, req.(*CounterOfferOTCRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _TradingService_WithdrawOTCOffer_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(WithdrawOTCOfferRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(TradingServiceServer).WithdrawOTCOffer(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: TradingService_WithdrawOTCOffer_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(TradingServiceServer).WithdrawOTCOffer(ctx, req.(*WithdrawOTCOfferRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _TradingService_ListOTCThreads_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(ListOTCThreadsRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(TradingServiceServer).ListOTCThreads(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: TradingService_ListOTCThreads_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(TradingServiceServer).ListOTCThreads(ctx, req.(*ListOTCThreadsRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _TradingService_GetOTCThread_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(GetOTCThreadRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(TradingServiceServer).GetOTCThread(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: TradingService_GetOTCThread_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(TradingServiceServer).GetOTCThread(ctx, req.(*GetOTCThreadRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _TradingService_AcceptOTCOffer_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(AcceptOTCOfferRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(TradingServiceServer).AcceptOTCOffer(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: TradingService_AcceptOTCOffer_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(TradingServiceServer).AcceptOTCOffer(ctx, req.(*AcceptOTCOfferRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _TradingService_ListOTCContracts_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(ListOTCContractsRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(TradingServiceServer).ListOTCContracts(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: TradingService_ListOTCContracts_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(TradingServiceServer).ListOTCContracts(ctx, req.(*ListOTCContractsRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _TradingService_GetOTCContract_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(GetOTCContractRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(TradingServiceServer).GetOTCContract(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: TradingService_GetOTCContract_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(TradingServiceServer).GetOTCContract(ctx, req.(*GetOTCContractRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _TradingService_ExerciseOTCContract_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(ExerciseOTCContractRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(TradingServiceServer).ExerciseOTCContract(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: TradingService_ExerciseOTCContract_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(TradingServiceServer).ExerciseOTCContract(ctx, req.(*ExerciseOTCContractRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
 // TradingService_ServiceDesc is the grpc.ServiceDesc for TradingService service.
 // It's only intended for direct use with grpc.RegisterService,
 // and not to be introspected or modified (even as a copy)
@@ -1251,6 +1653,46 @@ var TradingService_ServiceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "ListRealizedPnL",
 			Handler:    _TradingService_ListRealizedPnL_Handler,
+		},
+		{
+			MethodName: "ListPublicHoldings",
+			Handler:    _TradingService_ListPublicHoldings_Handler,
+		},
+		{
+			MethodName: "CreateOTCOffer",
+			Handler:    _TradingService_CreateOTCOffer_Handler,
+		},
+		{
+			MethodName: "CounterOfferOTC",
+			Handler:    _TradingService_CounterOfferOTC_Handler,
+		},
+		{
+			MethodName: "WithdrawOTCOffer",
+			Handler:    _TradingService_WithdrawOTCOffer_Handler,
+		},
+		{
+			MethodName: "ListOTCThreads",
+			Handler:    _TradingService_ListOTCThreads_Handler,
+		},
+		{
+			MethodName: "GetOTCThread",
+			Handler:    _TradingService_GetOTCThread_Handler,
+		},
+		{
+			MethodName: "AcceptOTCOffer",
+			Handler:    _TradingService_AcceptOTCOffer_Handler,
+		},
+		{
+			MethodName: "ListOTCContracts",
+			Handler:    _TradingService_ListOTCContracts_Handler,
+		},
+		{
+			MethodName: "GetOTCContract",
+			Handler:    _TradingService_GetOTCContract_Handler,
+		},
+		{
+			MethodName: "ExerciseOTCContract",
+			Handler:    _TradingService_ExerciseOTCContract_Handler,
 		},
 	},
 	Streams:  []grpc.StreamDesc{},

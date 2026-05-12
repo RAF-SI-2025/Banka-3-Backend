@@ -127,9 +127,26 @@ type Service struct {
 	// this instead of the lower-level Settler. May be nil on a dev
 	// stack that doesn't run the c4 RPCs.
 	Reservations BankReservations
+	// OTCNotifier sends counterparty-facing emails on OTC events
+	// (counter-offer, withdraw, accept, contract expired). c4-PR2 wires
+	// this directly to pkg/email per the c2 pattern; PR4 centralises
+	// the notification path through notification-svc and swaps the
+	// adapter without changing service callers. Nil-safe (no email on
+	// dev stacks without SMTP wired).
+	OTCNotifier OTCNotifier
 	// Now is the wall-clock used by every time-dependent path. Tests
 	// pin it; production leaves it nil and falls through to time.Now.
 	Now func() time.Time
+}
+
+// OTCNotifier is the trading-service view of the notification surface
+// for OTC events. Adapter implementations live in app/. Nil-safe at
+// every call site.
+type OTCNotifier interface {
+	OnOTCCounterOffer(ctx context.Context, offer *domain.OTCOffer, recipientID string, recipientKind domain.UserKind)
+	OnOTCAccepted(ctx context.Context, contract *domain.OTCContract, recipientID string, recipientKind domain.UserKind)
+	OnOTCWithdrawn(ctx context.Context, offer *domain.OTCOffer, recipientID string, recipientKind domain.UserKind)
+	OnOTCContractExpired(ctx context.Context, contract *domain.OTCContract, recipientID string, recipientKind domain.UserKind)
 }
 
 // BankReservations is the trading-service view of bank's c4 reservation

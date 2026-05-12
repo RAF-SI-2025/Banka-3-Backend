@@ -306,6 +306,111 @@ type OptionExercise struct {
 	UpdatedAt            time.Time
 }
 
+// =====================================================================
+// OTC (c4 — spec p.64-69, 79)
+// =====================================================================
+
+// OTCStatus is the lifecycle state of a single offer iteration.
+//
+//   - open       → the live row in a thread; counterparty's turn to act.
+//   - superseded → a prior iteration in the same thread; kept for audit.
+//   - accepted   → the iteration the counterparty accepted; promoted to
+//     an otc_contracts row.
+//   - withdrawn  → either party pulled out before accept.
+//   - expired    → never used today (offers don't TTL); reserved for
+//     future "auto-withdraw stale threads" policy.
+type OTCStatus string
+
+const (
+	OTCStatusOpen       OTCStatus = "open"
+	OTCStatusSuperseded OTCStatus = "superseded"
+	OTCStatusAccepted   OTCStatus = "accepted"
+	OTCStatusWithdrawn  OTCStatus = "withdrawn"
+	OTCStatusExpired    OTCStatus = "expired"
+)
+
+// OTCContractStatus is the lifecycle of a signed option contract.
+//
+//   - active     → premium settled, exercisable until settlement_date.
+//   - exercised  → buyer exercised; underlying + cash legs settled.
+//   - expired    → past settlement_date without exercise; premium sunk.
+//   - settling   → exercise saga in flight (reserved for future use; the
+//     exercise saga today flips the row straight to `exercised` on the
+//     finalize step, but the state exists so an extended exercise flow
+//     can mark the row mid-saga).
+type OTCContractStatus string
+
+const (
+	OTCContractActive    OTCContractStatus = "active"
+	OTCContractExercised OTCContractStatus = "exercised"
+	OTCContractExpired   OTCContractStatus = "expired"
+	OTCContractSettling  OTCContractStatus = "settling"
+)
+
+// OTCOffer is one iteration in a negotiation thread. Spec p.67-69.
+//
+// thread_id groups iterations; the first iteration's id is reused as
+// the thread_id by convention (the store enforces this).
+type OTCOffer struct {
+	ID              string
+	ThreadID        string
+	SecurityID      string
+	SellerHoldingID string
+
+	BuyerID        string
+	BuyerKind      UserKind
+	BuyerAccountID string
+
+	SellerID        string
+	SellerKind      UserKind
+	SellerAccountID string
+
+	Quantity       int32
+	PricePerUnit   string
+	Premium        string
+	Currency       Currency
+	SettlementDate time.Time
+
+	ModifiedBy string
+	Status     OTCStatus
+
+	CreatedAt time.Time
+	UpdatedAt time.Time
+}
+
+// OTCContract is the signed option contract minted on accept.
+// Spec p.67.b: strike = price_per_unit, premium paid up-front,
+// exercise window until settlement_date.
+type OTCContract struct {
+	ID              string
+	ThreadID        string
+	SecurityID      string
+	SellerHoldingID string
+
+	BuyerID        string
+	BuyerKind      UserKind
+	BuyerAccountID string
+
+	SellerID        string
+	SellerKind      UserKind
+	SellerAccountID string
+
+	Quantity       int32
+	StrikePrice    string
+	PremiumPaid    string
+	Currency       Currency
+	SettlementDate time.Time
+
+	PremiumOpID    string
+	Status         OTCContractStatus
+	ExercisedOpID  string
+	ExerciseSagaID string
+	ExercisedAt    *time.Time
+
+	CreatedAt time.Time
+	UpdatedAt time.Time
+}
+
 // RealizedGain records one closing sell-execution for capital-gains
 // tax. Spec p.62.
 type RealizedGain struct {

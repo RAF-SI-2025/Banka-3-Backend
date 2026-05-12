@@ -240,6 +240,111 @@ service TradingService {
       get: "/api/v1/tax/realized"
     };
   }
+
+  // -----------------------------------------------------------------
+  // OTC trading (c4 — spec p.64-69, 79).
+  //
+  // Two parties (clients ↔ clients OR supervisors ↔ supervisors —
+  // spec p.79 forbids the mixed case) negotiate iterations on a single
+  // seller-holding row; accepting the open iteration mints an option
+  // contract that is exercisable until settlement_date.
+  // -----------------------------------------------------------------
+
+  // ListPublicHoldings drives the OTC discovery board (spec p.67):
+  // holdings owned by other users that have public_count > reserved_count
+  // are visible. Filterable by ticker.
+  rpc ListPublicHoldings(ListPublicHoldingsRequest) returns (ListPublicHoldingsResponse) {
+    option (google.api.http) = {
+      get: "/api/v1/otc/discovery"
+    };
+  }
+
+  // CreateOTCOffer opens a new negotiation thread. The buyer initiates;
+  // the seller_holding_id resolves the seller (its owner). Increments
+  // reserved_count on the seller's holding by quantity.
+  rpc CreateOTCOffer(CreateOTCOfferRequest) returns (OTCOffer) {
+    option (google.api.http) = {
+      post: "/api/v1/otc/offers"
+      body: "*"
+    };
+  }
+
+  // CounterOfferOTC appends a new iteration to an existing thread. The
+  // prior open row flips to `superseded`; reservation is adjusted if
+  // quantity changed. modified_by tracks which party last touched the
+  // thread (drives the FE unread badge).
+  rpc CounterOfferOTC(CounterOfferOTCRequest) returns (OTCOffer) {
+    option (google.api.http) = {
+      post: "/api/v1/otc/offers/{thread_id}/counter"
+      body: "*"
+    };
+  }
+
+  // WithdrawOTCOffer pulls a thread out of negotiation. Either party
+  // may call; the open row flips to `withdrawn` and the seller's
+  // reservation is released.
+  rpc WithdrawOTCOffer(WithdrawOTCOfferRequest) returns (OTCOffer) {
+    option (google.api.http) = {
+      post: "/api/v1/otc/offers/{thread_id}/withdraw"
+      body: "*"
+    };
+  }
+
+  // ListOTCThreads drives the "Aktivne ponude" page (spec p.69) — every
+  // thread the caller participates in (as buyer or seller), most-recent
+  // iteration per thread.
+  rpc ListOTCThreads(ListOTCThreadsRequest) returns (ListOTCThreadsResponse) {
+    option (google.api.http) = {
+      get: "/api/v1/otc/offers"
+    };
+  }
+
+  // GetOTCThread returns every iteration in a thread (oldest first).
+  // Drives the thread-detail modal on spec p.69.
+  rpc GetOTCThread(GetOTCThreadRequest) returns (GetOTCThreadResponse) {
+    option (google.api.http) = {
+      get: "/api/v1/otc/offers/{thread_id}"
+    };
+  }
+
+  // AcceptOTCOffer accepts the open iteration in a thread and mints
+  // an active contract via the otc_premium SAGA (premium transfers
+  // from buyer to seller; contract row is created; seller's holding
+  // reservation rolls over from offer to contract).
+  rpc AcceptOTCOffer(AcceptOTCOfferRequest) returns (AcceptOTCOfferResponse) {
+    option (google.api.http) = {
+      post: "/api/v1/otc/offers/{thread_id}/accept"
+      body: "*"
+    };
+  }
+
+  // ListOTCContracts drives the "Sklopljeni ugovori" page (spec p.69)
+  // for the caller. Supervisors/admin may filter by user_id.
+  rpc ListOTCContracts(ListOTCContractsRequest) returns (ListOTCContractsResponse) {
+    option (google.api.http) = {
+      get: "/api/v1/otc/contracts"
+    };
+  }
+
+  // GetOTCContract returns one contract (caller must be a party or
+  // supervisor/admin).
+  rpc GetOTCContract(GetOTCContractRequest) returns (OTCContract) {
+    option (google.api.http) = {
+      get: "/api/v1/otc/contracts/{id}"
+    };
+  }
+
+  // ExerciseOTCContract runs the otc_exercise SAGA on an active
+  // contract (spec p.80 intra-bank): buyer pays qty * strike to seller,
+  // shares transfer, contract flips to `exercised`. Buyer's cost basis
+  // on the received shares is `strike_price`; seller writes a
+  // realized_gains row.
+  rpc ExerciseOTCContract(ExerciseOTCContractRequest) returns (ExerciseOTCContractResponse) {
+    option (google.api.http) = {
+      post: "/api/v1/otc/contracts/{id}/exercise"
+      body: "*"
+    };
+  }
 }
 
 // =====================================================================
@@ -841,4 +946,195 @@ message ListRealizedPnLRequest {
 
 message ListRealizedPnLResponse {
   repeated RealizedPnLRow rows = 1;
+}
+
+// =====================================================================
+// OTC (c4 — spec p.64-69, 79)
+// =====================================================================
+
+enum OTCStatus {
+  OTC_STATUS_UNSPECIFIED = 0;
+  OTC_STATUS_OPEN        = 1;
+  OTC_STATUS_SUPERSEDED  = 2;
+  OTC_STATUS_ACCEPTED    = 3;
+  OTC_STATUS_WITHDRAWN   = 4;
+  OTC_STATUS_EXPIRED     = 5;
+}
+
+enum OTCContractStatus {
+  OTC_CONTRACT_STATUS_UNSPECIFIED = 0;
+  OTC_CONTRACT_STATUS_ACTIVE      = 1;
+  OTC_CONTRACT_STATUS_EXERCISED   = 2;
+  OTC_CONTRACT_STATUS_EXPIRED     = 3;
+  OTC_CONTRACT_STATUS_SETTLING    = 4;
+}
+
+// PublicHoldingItem is one row on the OTC discovery board. The
+// "available_count" field is the share count visible to negotiations —
+// public_count minus reserved_count, clamped to zero.
+message PublicHoldingItem {
+  string                    holding_id      = 1;
+  string                    seller_id       = 2;
+  UserKind                  seller_kind     = 3;
+  string                    seller_account_id = 4;
+  string                    seller_display_name = 5;
+  Security                  security        = 6;
+  int32                     available_count = 7;
+  int32                     public_count    = 8;
+  int32                     reserved_count  = 9;
+  string                    current_price   = 10;
+  Currency                  currency        = 11;
+}
+
+message ListPublicHoldingsRequest {
+  string ticker = 1;
+}
+
+message ListPublicHoldingsResponse {
+  repeated PublicHoldingItem items = 1;
+}
+
+message OTCOffer {
+  string                    id                = 1;
+  string                    thread_id         = 2;
+  string                    security_id       = 3;
+  string                    security_ticker   = 4;
+  string                    seller_holding_id = 5;
+
+  string                    buyer_id          = 10;
+  UserKind                  buyer_kind        = 11;
+  string                    buyer_account_id  = 12;
+
+  string                    seller_id         = 20;
+  UserKind                  seller_kind       = 21;
+  string                    seller_account_id = 22;
+
+  int32                     quantity          = 30;
+  string                    price_per_unit    = 31;
+  string                    premium           = 32;
+  Currency                  currency          = 33;
+  google.protobuf.Timestamp settlement_date   = 34;
+
+  string                    modified_by       = 40;
+  OTCStatus                 status            = 41;
+
+  google.protobuf.Timestamp created_at        = 90;
+  google.protobuf.Timestamp updated_at        = 91;
+}
+
+message CreateOTCOfferRequest {
+  string                    seller_holding_id = 1 [(buf.validate.field).string.uuid = true];
+  string                    buyer_account_id  = 2 [(buf.validate.field).string.uuid = true];
+  string                    seller_account_id = 3 [(buf.validate.field).string.uuid = true];
+  int32                     quantity          = 4 [(buf.validate.field).int32.gt = 0];
+  string                    price_per_unit    = 5 [(buf.validate.field).string.min_len = 1];
+  string                    premium           = 6 [(buf.validate.field).string.min_len = 1];
+  google.protobuf.Timestamp settlement_date   = 7;
+}
+
+message CounterOfferOTCRequest {
+  string                    thread_id         = 1 [(buf.validate.field).string.uuid = true];
+  int32                     quantity          = 2 [(buf.validate.field).int32.gt = 0];
+  string                    price_per_unit    = 3 [(buf.validate.field).string.min_len = 1];
+  string                    premium           = 4 [(buf.validate.field).string.min_len = 1];
+  google.protobuf.Timestamp settlement_date   = 5;
+}
+
+message WithdrawOTCOfferRequest {
+  string thread_id = 1 [(buf.validate.field).string.uuid = true];
+}
+
+message ListOTCThreadsRequest {
+  // For supervisor/admin views — narrow to a single party. Empty for
+  // self.
+  string party_user_id = 1;
+  UserKind party_user_kind = 2;
+  // "open" / "any" / "" (default "open").
+  string status = 3;
+}
+
+message ListOTCThreadsResponse {
+  // Latest iteration per thread. Sorted newest-first by updated_at.
+  repeated OTCOffer threads = 1;
+}
+
+message GetOTCThreadRequest {
+  string thread_id = 1 [(buf.validate.field).string.uuid = true];
+}
+
+message GetOTCThreadResponse {
+  // Every iteration in the thread, oldest first.
+  repeated OTCOffer iterations = 1;
+  // The signed contract if accept already ran.
+  OTCContract contract = 2;
+}
+
+message AcceptOTCOfferRequest {
+  string thread_id = 1 [(buf.validate.field).string.uuid = true];
+}
+
+message AcceptOTCOfferResponse {
+  OTCContract contract = 1;
+  // Bank op_id of the premium leg, for ops correlation.
+  string premium_op_id = 2;
+}
+
+message OTCContract {
+  string                    id                = 1;
+  string                    thread_id         = 2;
+  string                    security_id       = 3;
+  string                    security_ticker   = 4;
+  string                    seller_holding_id = 5;
+
+  string                    buyer_id          = 10;
+  UserKind                  buyer_kind        = 11;
+  string                    buyer_account_id  = 12;
+
+  string                    seller_id         = 20;
+  UserKind                  seller_kind       = 21;
+  string                    seller_account_id = 22;
+
+  int32                     quantity          = 30;
+  string                    strike_price      = 31;
+  string                    premium_paid      = 32;
+  Currency                  currency          = 33;
+  google.protobuf.Timestamp settlement_date   = 34;
+
+  string                    premium_op_id     = 40;
+  OTCContractStatus         status            = 41;
+  string                    exercised_op_id   = 42;
+  string                    exercise_saga_id  = 43;
+  google.protobuf.Timestamp exercised_at      = 44;
+
+  google.protobuf.Timestamp created_at        = 90;
+  google.protobuf.Timestamp updated_at        = 91;
+}
+
+message ListOTCContractsRequest {
+  // Supervisor/admin: empty user_id returns all; non-empty narrows.
+  string party_user_id = 1;
+  UserKind party_user_kind = 2;
+  // "active"/"any"/"" (default "active").
+  string status = 3;
+}
+
+message ListOTCContractsResponse {
+  repeated OTCContract contracts = 1;
+}
+
+message GetOTCContractRequest {
+  string id = 1 [(buf.validate.field).string.uuid = true];
+}
+
+message ExerciseOTCContractRequest {
+  string id = 1 [(buf.validate.field).string.uuid = true];
+}
+
+message ExerciseOTCContractResponse {
+  OTCContract contract = 1;
+  // Bank op_id of the strike-leg cash transfer.
+  string strike_op_id = 2;
+  // Realized-gain row written for the seller (RSD, native).
+  string seller_realized_gain_native = 3;
+  string seller_realized_gain_rsd    = 4;
 }

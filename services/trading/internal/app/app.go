@@ -12,6 +12,7 @@ import (
 	tradingpb "github.com/RAF-SI-2025/Banka-3-Backend/gen/proto/trading/v1"
 	userpb "github.com/RAF-SI-2025/Banka-3-Backend/gen/proto/user/v1"
 	"github.com/RAF-SI-2025/Banka-3-Backend/pkg/config"
+	"github.com/RAF-SI-2025/Banka-3-Backend/pkg/email"
 	"github.com/RAF-SI-2025/Banka-3-Backend/pkg/grpcserver"
 	"github.com/RAF-SI-2025/Banka-3-Backend/pkg/logger"
 	"github.com/RAF-SI-2025/Banka-3-Backend/pkg/postgres"
@@ -76,19 +77,34 @@ func Run() error {
 	}
 
 	// User-service resolver for the supervisor tax dashboard
-	// (display_name + name filter, spec p.63). The service tolerates a
-	// nil Users field on a minimal dev stack — display_name then comes
-	// back empty.
+	// (display_name + name filter, spec p.63) and the OTC email
+	// notifier's recipient lookup. The service tolerates a nil Users
+	// field on a minimal dev stack — display_name then comes back
+	// empty and the OTC notifier drops its lookups.
+	var userClient userpb.UserServiceClient
 	if userAddr := config.String("USER_GRPC_ADDR", ""); userAddr != "" {
 		conn, err := grpc.NewClient(userAddr, grpc.WithTransportCredentials(insecure.NewCredentials()))
 		if err != nil {
 			return fmt.Errorf("dial user: %w", err)
 		}
 		defer conn.Close()
-		svc.Users = &userResolverAdapter{c: userpb.NewUserServiceClient(conn)}
+		userClient = userpb.NewUserServiceClient(conn)
+		svc.Users = &userResolverAdapter{c: userClient}
 	} else {
 		log.Warn("USER_GRPC_ADDR not set; tax dashboard display_name will be empty")
 	}
+
+	// c4 OTC email notifier (PR2-stub; PR4 swaps for notification-svc).
+	// Same SMTP-or-log fallback as user/bank — SMTP_HOST empty → log only.
+	emailSender := email.New(email.Config{
+		Host:     config.String("SMTP_HOST", ""),
+		Port:     config.Int("SMTP_PORT", 587),
+		Username: config.String("SMTP_USERNAME", ""),
+		Password: config.String("SMTP_PASSWORD", ""),
+		From:     config.String("SMTP_FROM", "banka@example.local"),
+		UseTLS:   config.Bool("SMTP_USE_TLS", true),
+	}, log)
+	svc.OTCNotifier = newOTCEmailNotifier(emailSender, userClient, log)
 
 	// Bank settler — the execution worker dials this on every fill to
 	// move money between user account and bank house account. Without
@@ -208,6 +224,15 @@ func Run() error {
 	sagaTick := config.Duration("SAGA_RECOVERY_TICK", 30*time.Second)
 	g.Go(func() error {
 		return runSagaRecoveryWorker(gctx, log, svc, sagaTick)
+	})
+
+	// c4 OTC contract expiry sweep (spec p.69). 5min default cadence;
+	// the cron is idempotent and the work per tick is bounded by the
+	// number of contracts past settlement_date, so re-running shorter
+	// is fine but unnecessary.
+	otcExpiryTick := config.Duration("OTC_EXPIRY_TICK", 5*time.Minute)
+	g.Go(func() error {
+		return runOTCExpirySweep(gctx, log, svc, otcExpiryTick)
 	})
 
 	probeSrv.MarkReady()
