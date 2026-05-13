@@ -135,14 +135,18 @@ func run() error {
 	}
 
 	// Second client — useful for testing flows that need two distinct
-	// client logins (e.g. inter-client payments). No bank fixtures
-	// hung off them; the admin can mint accounts via the portal if
-	// needed. Idempotent on email like the first.
-	if _, err := seedClient(ctx, pool,
+	// client logins (e.g. inter-client payments, OTC negotiation).
+	// Idempotent on email like the first.
+	client2ID, err := seedClient(ctx, pool,
 		envOr("SEED_CLIENT2_EMAIL", "klijent2@banka.local"),
 		envOr("SEED_CLIENT2_PASSWORD", "Klijent123!"),
-		"Drugi", "Klijent", "+381111000222"); err != nil {
+		"Drugi", "Klijent", "+381111000222")
+	if err != nil {
 		return fmt.Errorf("seed second client: %w", err)
+	}
+
+	if err := seedOTC(ctx, pool, clientID, client2ID, adminID); err != nil {
+		return fmt.Errorf("seed otc: %w", err)
 	}
 
 	// Third client — non-trading. Drives the banking-trading-gate
@@ -1119,6 +1123,327 @@ func seedTrading(ctx context.Context, pool *pgxpool.Pool, clientID, adminID stri
 		"  forex:        EUR/USD\n"+
 		"  option:       AAPL-C-190 (call, ATM, +60d expiry)\n",
 		usdNumber, usdAccountID, aktuarID, supervisorID)
+	return nil
+}
+
+// seedOTC plants a handful of c4 OTC negotiations + one accepted
+// contract on top of the seeded portfolios so the /banking/otc page
+// and "Sklopljeni ugovori" tab have varied data without having to
+// click through a negotiation by hand.
+//
+// Depends on seedTrading already having created klijent's USD trading
+// account + AAPL/CL holdings. Mints klijent2's USD trading account
+// here so they can be a counterparty.
+//
+// Threads planted (in addition to the seedTrading set):
+//
+//	1. Open, 1 iter        — klijent2 buying 3 of klijent's AAPL   (klijent's turn)
+//	2. Open, 3 iters       — klijent buying 10 of klijent2's MSFT  (klijent2's turn)
+//	3. Withdrawn           — klijent abandoned a 5 GOOGL bid
+//	4. Accepted + contract — klijent2 bought 2 of klijent's CL @ $78
+//
+// Reservation accounting (spec p.68) is baked into the new klijent2
+// holding rows at insert time and applied as a guarded bump on
+// klijent's existing AAPL/CL rows. All inserts use deterministic
+// UUIDs + ON CONFLICT DO NOTHING so re-running the seed is a no-op;
+// the marker check up front short-circuits before touching anything.
+func seedOTC(ctx context.Context, pool *pgxpool.Pool, clientID, client2ID, adminID string) error {
+	if clientID == "" || client2ID == "" || adminID == "" {
+		return fmt.Errorf("seedOTC: clientID, client2ID and adminID are required")
+	}
+
+	// Skip if already seeded — thread 1's deterministic id is the marker.
+	var marker string
+	switch err := pool.QueryRow(ctx,
+		`select id from "trading".otc_offers
+		 where id = 'a1111111-0000-4000-8000-000000000001'`,
+	).Scan(&marker); err {
+	case nil:
+		fmt.Println("seed: otc fixtures already present; skipping")
+		return nil
+	default:
+		if err.Error() != "no rows in result set" {
+			return fmt.Errorf("check existing otc seed: %w", err)
+		}
+	}
+
+	bankCode := envOr("BANK_CODE", "333")
+	branch := envOr("BANK_BRANCH", "0001")
+
+	tx, err := pool.BeginTx(ctx, pgx.TxOptions{})
+	if err != nil {
+		return fmt.Errorf("begin tx: %w", err)
+	}
+	defer func() { _ = tx.Rollback(ctx) }()
+
+	// klijent's USD trading account + AAPL/CL holding rows.
+	var clientUSDAcct, clientAAPLHolding, clientCLHolding string
+	if err := tx.QueryRow(ctx, `
+        select id from "bank".accounts
+         where owner_client_id=$1 and currency='USD' and kind='personal_fx'
+         limit 1`, clientID).Scan(&clientUSDAcct); err != nil {
+		return fmt.Errorf("lookup klijent USD account: %w", err)
+	}
+	if err := tx.QueryRow(ctx, `
+        select h.id from "trading".portfolio_holdings h
+        join "trading".securities s on s.id = h.security_id
+         where h.user_id=$1 and s.ticker='AAPL' and s.type='stock'
+         limit 1`, clientID).Scan(&clientAAPLHolding); err != nil {
+		return fmt.Errorf("lookup klijent AAPL holding: %w", err)
+	}
+	if err := tx.QueryRow(ctx, `
+        select h.id from "trading".portfolio_holdings h
+        join "trading".securities s on s.id = h.security_id
+         where h.user_id=$1 and s.ticker='CL' and s.type='future'
+         limit 1`, clientID).Scan(&clientCLHolding); err != nil {
+		return fmt.Errorf("lookup klijent CL holding: %w", err)
+	}
+
+	// klijent2's USD trading account — create with $50k opening balance
+	// if missing. Buyer-flavoured fixture; the premium-tier funds are
+	// enough for the seeded threads.
+	var client2USDAcct string
+	switch err := tx.QueryRow(ctx, `
+        select id from "bank".accounts
+         where owner_client_id=$1 and currency='USD' and kind='personal_fx'
+         limit 1`, client2ID).Scan(&client2USDAcct); err {
+	case nil:
+		// already there
+	default:
+		if err.Error() != "no rows in result set" {
+			return fmt.Errorf("check klijent2 USD account: %w", err)
+		}
+		num, err := account.Generate(bankCode, branch, account.TypePersonalFX)
+		if err != nil {
+			return fmt.Errorf("klijent2 USD account number: %w", err)
+		}
+		if err := tx.QueryRow(ctx, `
+            insert into "bank".accounts
+                (number, name, owner_client_id, created_by_employee_id,
+                 kind, subtype, currency, status,
+                 balance, available_balance, maintenance_fee,
+                 daily_limit, monthly_limit)
+            values ($1, $2, $3, $4,
+                    'personal_fx', 'unspecified', 'USD', 'active',
+                    $5, $5, '0', '0', '0')
+            returning id`,
+			num, "Trgovinski USD", client2ID, adminID, "50000",
+		).Scan(&client2USDAcct); err != nil {
+			return fmt.Errorf("insert klijent2 USD account: %w", err)
+		}
+	}
+
+	// Security ids needed by the threads.
+	var aaplID, msftID, googlID, clID string
+	for _, row := range []struct {
+		ticker, kind string
+		out          *string
+	}{
+		{"AAPL", "stock", &aaplID},
+		{"MSFT", "stock", &msftID},
+		{"GOOGL", "stock", &googlID},
+		{"CL", "future", &clID},
+	} {
+		if err := tx.QueryRow(ctx,
+			`select id from "trading".securities where ticker=$1 and type=$2 limit 1`,
+			row.ticker, row.kind,
+		).Scan(row.out); err != nil {
+			return fmt.Errorf("lookup %s %s: %w", row.ticker, row.kind, err)
+		}
+	}
+
+	// klijent2 holdings: MSFT (30, 10 reserved by thread 2's open
+	// offer) and GOOGL (15, no reservation — thread 3 ends withdrawn).
+	if _, err := tx.Exec(ctx, `
+        insert into "trading".portfolio_holdings
+            (id, user_id, user_kind, security_id, account_id,
+             quantity, weighted_avg_price, reserved_count)
+        values
+            ('11111111-1111-4111-8111-000000000001', $1, 'client', $2, $3, 30, 400.00, 10),
+            ('11111111-1111-4111-8111-000000000002', $1, 'client', $4, $3, 15, 170.00,  0)
+        on conflict (user_id, security_id, account_id) do nothing`,
+		client2ID, msftID, client2USDAcct, googlID,
+	); err != nil {
+		return fmt.Errorf("insert klijent2 holdings: %w", err)
+	}
+
+	// Bump klijent's reservations to cover thread 1 (+3 AAPL) and the
+	// thread-4 accepted contract (+2 CL). Guarded on free quantity so
+	// the bump can't take reserved_count past quantity even if a future
+	// caller wedges this in alongside other reservation churn.
+	if _, err := tx.Exec(ctx,
+		`update "trading".portfolio_holdings
+            set reserved_count = reserved_count + 3
+          where id = $1 and quantity - reserved_count >= 3`,
+		clientAAPLHolding,
+	); err != nil {
+		return fmt.Errorf("bump klijent AAPL reserved: %w", err)
+	}
+	if _, err := tx.Exec(ctx,
+		`update "trading".portfolio_holdings
+            set reserved_count = reserved_count + 2
+          where id = $1 and quantity - reserved_count >= 2`,
+		clientCLHolding,
+	); err != nil {
+		return fmt.Errorf("bump klijent CL reserved: %w", err)
+	}
+
+	// Thread 1 — open, 1 iter, modified_by=klijent2 → klijent's turn.
+	if _, err := tx.Exec(ctx, `
+        insert into "trading".otc_offers
+            (id, thread_id, security_id, seller_holding_id,
+             buyer_id, buyer_kind, buyer_account_id,
+             seller_id, seller_kind, seller_account_id,
+             quantity, price_per_unit, premium, currency, settlement_date,
+             modified_by, status, created_at, updated_at)
+        values
+            ('a1111111-0000-4000-8000-000000000001',
+             'a1111111-0000-4000-8000-000000000001',
+             $1, $2,
+             $3, 'client', $4,
+             $5, 'client', $6,
+             3, 195.00, 4.00, 'USD', date '2027-03-31',
+             $3, 'open',
+             now() - interval '2 days', now() - interval '2 days')
+        on conflict (id) do nothing`,
+		aaplID, clientAAPLHolding,
+		client2ID, client2USDAcct,
+		clientID, clientUSDAcct,
+	); err != nil {
+		return fmt.Errorf("insert otc thread 1: %w", err)
+	}
+
+	// Thread 2 — three iters, current open, klijent2's turn.
+	// A: klijent opens at $400/$3 (superseded)
+	// B: klijent2 counters at $415/$5 (superseded)
+	// C: klijent counters at $410/$8 (open) — klijent2's turn.
+	if _, err := tx.Exec(ctx, `
+        insert into "trading".otc_offers
+            (id, thread_id, security_id, seller_holding_id,
+             buyer_id, buyer_kind, buyer_account_id,
+             seller_id, seller_kind, seller_account_id,
+             quantity, price_per_unit, premium, currency, settlement_date,
+             modified_by, status, created_at, updated_at)
+        values
+            ('a2222222-0000-4000-8000-00000000000a',
+             'a2222222-0000-4000-8000-00000000000a',
+             $1, $2,
+             $3, 'client', $4,
+             $5, 'client', $6,
+             10, 400.00, 3.00, 'USD', date '2027-02-28',
+             $3, 'superseded',
+             now() - interval '5 days', now() - interval '5 days'),
+            ('a2222222-0000-4000-8000-00000000000b',
+             'a2222222-0000-4000-8000-00000000000a',
+             $1, $2,
+             $3, 'client', $4,
+             $5, 'client', $6,
+             10, 415.00, 5.00, 'USD', date '2027-02-28',
+             $5, 'superseded',
+             now() - interval '4 days', now() - interval '4 days'),
+            ('a2222222-0000-4000-8000-00000000000c',
+             'a2222222-0000-4000-8000-00000000000a',
+             $1, $2,
+             $3, 'client', $4,
+             $5, 'client', $6,
+             10, 410.00, 8.00, 'USD', date '2027-02-28',
+             $3, 'open',
+             now() - interval '1 day', now() - interval '1 day')
+        on conflict (id) do nothing`,
+		msftID, "11111111-1111-4111-8111-000000000001",
+		clientID, clientUSDAcct,
+		client2ID, client2USDAcct,
+	); err != nil {
+		return fmt.Errorf("insert otc thread 2: %w", err)
+	}
+
+	// Thread 3 — withdrawn. klijent's abandoned 5-GOOGL bid.
+	if _, err := tx.Exec(ctx, `
+        insert into "trading".otc_offers
+            (id, thread_id, security_id, seller_holding_id,
+             buyer_id, buyer_kind, buyer_account_id,
+             seller_id, seller_kind, seller_account_id,
+             quantity, price_per_unit, premium, currency, settlement_date,
+             modified_by, status, created_at, updated_at)
+        values
+            ('a3333333-0000-4000-8000-000000000001',
+             'a3333333-0000-4000-8000-000000000001',
+             $1, $2,
+             $3, 'client', $4,
+             $5, 'client', $6,
+             5, 168.00, 2.00, 'USD', date '2027-01-31',
+             $3, 'withdrawn',
+             now() - interval '7 days', now() - interval '6 days')
+        on conflict (id) do nothing`,
+		googlID, "11111111-1111-4111-8111-000000000002",
+		clientID, clientUSDAcct,
+		client2ID, client2USDAcct,
+	); err != nil {
+		return fmt.Errorf("insert otc thread 3: %w", err)
+	}
+
+	// Thread 4 — accepted + active contract.
+	// A: klijent2 opens at $75/$2 (superseded)
+	// B: klijent counters at $78/$3 (accepted) — klijent2 accepted it.
+	if _, err := tx.Exec(ctx, `
+        insert into "trading".otc_offers
+            (id, thread_id, security_id, seller_holding_id,
+             buyer_id, buyer_kind, buyer_account_id,
+             seller_id, seller_kind, seller_account_id,
+             quantity, price_per_unit, premium, currency, settlement_date,
+             modified_by, status, created_at, updated_at)
+        values
+            ('a4444444-0000-4000-8000-00000000000a',
+             'a4444444-0000-4000-8000-00000000000a',
+             $1, $2,
+             $3, 'client', $4,
+             $5, 'client', $6,
+             2, 75.00, 2.00, 'USD', date '2026-12-31',
+             $3, 'superseded',
+             now() - interval '10 days', now() - interval '10 days'),
+            ('a4444444-0000-4000-8000-00000000000b',
+             'a4444444-0000-4000-8000-00000000000a',
+             $1, $2,
+             $3, 'client', $4,
+             $5, 'client', $6,
+             2, 78.00, 3.00, 'USD', date '2026-12-31',
+             $5, 'accepted',
+             now() - interval '9 days', now() - interval '8 days')
+        on conflict (id) do nothing`,
+		clID, clientCLHolding,
+		client2ID, client2USDAcct,
+		clientID, clientUSDAcct,
+	); err != nil {
+		return fmt.Errorf("insert otc thread 4: %w", err)
+	}
+	if _, err := tx.Exec(ctx, `
+        insert into "trading".otc_contracts
+            (id, thread_id, security_id, seller_holding_id,
+             buyer_id, buyer_kind, buyer_account_id,
+             seller_id, seller_kind, seller_account_id,
+             quantity, strike_price, premium_paid, currency, settlement_date,
+             premium_op_id, status, created_at, updated_at)
+        values
+            ('c4444444-0000-4000-8000-000000000001',
+             'a4444444-0000-4000-8000-00000000000a',
+             $1, $2,
+             $3, 'client', $4,
+             $5, 'client', $6,
+             2, 78.00, 3.00, 'USD', date '2026-12-31',
+             'c4444444-0000-4000-8000-0000000000ff', 'active',
+             now() - interval '8 days', now() - interval '8 days')
+        on conflict (id) do nothing`,
+		clID, clientCLHolding,
+		client2ID, client2USDAcct,
+		clientID, clientUSDAcct,
+	); err != nil {
+		return fmt.Errorf("insert otc contract: %w", err)
+	}
+
+	if err := tx.Commit(ctx); err != nil {
+		return fmt.Errorf("commit otc seed: %w", err)
+	}
+	fmt.Println("seed: otc fixtures created — 4 threads (2 open, 1 withdrawn, 1 accepted) + 1 active contract")
 	return nil
 }
 
