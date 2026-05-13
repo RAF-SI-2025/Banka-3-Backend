@@ -245,6 +245,7 @@ func (s *Service) WithdrawFromFund(ctx context.Context, in WithdrawFromFundInput
 		IsActuary:           isInNameOfBank,
 	}
 
+	ctx = saga.FaultsFromMetadata(ctx, s.Cfg.SagaDebugFaultInjection)
 	row, err := saga.Start(ctx, s.SagaOrch, saga.StartInput[fundWithdrawPayload]{
 		TransactionID: txID,
 		SagaType:      fundWithdrawSagaType,

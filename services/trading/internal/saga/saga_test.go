@@ -340,6 +340,157 @@ func TestBackoffCap(t *testing.T) {
 	}
 }
 
+// TestForceFailForwardPermanent verifies the cypress fault-injection
+// hook fails the named step's Forward with a permanent error,
+// triggering reverse-order compensation. Pin matches the cypress c4
+// SAGA scenarios that rely on the directive.
+func TestForceFailForwardPermanent(t *testing.T) {
+	reg := NewRegistry()
+	Register[echoPayload](reg, Definition[echoPayload]{
+		Type: "test_force_fwd",
+		Steps: []Step[echoPayload]{
+			{
+				Name: "a",
+				Forward: func(_ context.Context, sc *Context[echoPayload]) error {
+					sc.State.Notes = append(sc.State.Notes, "a:fwd")
+					return nil
+				},
+				Compensate: func(_ context.Context, sc *Context[echoPayload]) error {
+					sc.State.Notes = append(sc.State.Notes, "a:comp")
+					return nil
+				},
+			},
+			{
+				Name: "b",
+				Forward: func(_ context.Context, sc *Context[echoPayload]) error {
+					sc.State.Notes = append(sc.State.Notes, "b:fwd-should-not-run")
+					return nil
+				},
+				Compensate: func(_ context.Context, sc *Context[echoPayload]) error {
+					sc.State.Notes = append(sc.State.Notes, "b:comp-should-not-run")
+					return nil
+				},
+			},
+		},
+	})
+	o := New(newMemStore(), reg, quietLogger())
+	ctx := WithForceFail(context.Background(), ForceFail{Step: "b"})
+	row, err := Start(ctx, o, StartInput[echoPayload]{
+		TransactionID: "00000000-0000-0000-0000-000000000010",
+		SagaType:      "test_force_fwd",
+		InitialState:  echoPayload{},
+	})
+	if err == nil {
+		t.Fatalf("Start: expected fault-injection error")
+	}
+	if row.Status != StatusFailed {
+		t.Errorf("status = %s, want failed", row.Status)
+	}
+	var got echoPayload
+	_ = json.Unmarshal(row.State, &got)
+	want := []string{"a:fwd", "a:comp"}
+	if fmt.Sprint(got.Notes) != fmt.Sprint(want) {
+		t.Errorf("notes=%v, want %v", got.Notes, want)
+	}
+}
+
+// TestForceFailForwardTransient verifies the transient directive bumps
+// attempts and parks the saga. Recovery worker (separate context, no
+// directive) succeeds on Resume.
+func TestForceFailForwardTransient(t *testing.T) {
+	reg := NewRegistry()
+	Register[echoPayload](reg, Definition[echoPayload]{
+		Type: "test_force_transient",
+		Steps: []Step[echoPayload]{
+			{
+				Name: "flaky",
+				Forward: func(_ context.Context, sc *Context[echoPayload]) error {
+					sc.State.Notes = append(sc.State.Notes, "flaky:fwd")
+					return nil
+				},
+			},
+		},
+	})
+	store := newMemStore()
+	o := New(store, reg, quietLogger())
+	o.MaxBackoff = 0
+	ctx := WithForceFail(context.Background(), ForceFail{Step: "flaky", Kind: "transient"})
+	row, err := Start(ctx, o, StartInput[echoPayload]{
+		TransactionID: "00000000-0000-0000-0000-000000000011",
+		SagaType:      "test_force_transient",
+		InitialState:  echoPayload{},
+	})
+	if err == nil {
+		t.Fatalf("Start: expected transient error first time")
+	}
+	if row.Status != StatusRunning {
+		t.Errorf("status = %s, want running", row.Status)
+	}
+	if row.Attempts != 1 {
+		t.Errorf("attempts = %d, want 1", row.Attempts)
+	}
+	// Recovery worker context — no directive — should succeed.
+	stored, _ := store.Get(context.Background(), row.TransactionID)
+	stored.NextAttemptAt = time.Now().Add(-time.Second)
+	_ = store.Update(context.Background(), stored)
+	if err := o.Resume(context.Background(), row.TransactionID); err != nil {
+		t.Fatalf("Resume: %v", err)
+	}
+	final, _ := store.Get(context.Background(), row.TransactionID)
+	if final.Status != StatusCompleted {
+		t.Errorf("status after recovery = %s, want completed", final.Status)
+	}
+}
+
+// TestForceCompensateFail verifies the Compensate-side directive parks
+// the saga in `failed` after compensation retry exhaustion.
+func TestForceCompensateFail(t *testing.T) {
+	reg := NewRegistry()
+	Register[echoPayload](reg, Definition[echoPayload]{
+		Type: "test_force_comp",
+		Steps: []Step[echoPayload]{
+			{
+				Name: "a",
+				Forward: func(_ context.Context, sc *Context[echoPayload]) error {
+					sc.State.Notes = append(sc.State.Notes, "a:fwd")
+					return nil
+				},
+				Compensate: func(_ context.Context, sc *Context[echoPayload]) error {
+					sc.State.Notes = append(sc.State.Notes, "a:comp-real")
+					return nil
+				},
+			},
+			{
+				Name: "b",
+				Forward: func(_ context.Context, sc *Context[echoPayload]) error {
+					return status.Error(codes.InvalidArgument, "real fail at b")
+				},
+			},
+		},
+	})
+	o := New(newMemStore(), reg, quietLogger())
+	ctx := WithForceCompensateFail(context.Background(), ForceCompensateFail{Step: "a"})
+	row, err := Start(ctx, o, StartInput[echoPayload]{
+		TransactionID: "00000000-0000-0000-0000-000000000012",
+		SagaType:      "test_force_comp",
+		InitialState:  echoPayload{},
+	})
+	if err == nil {
+		t.Fatalf("Start: expected compensation fail")
+	}
+	if row.Status != StatusFailed {
+		t.Errorf("status = %s, want failed", row.Status)
+	}
+	var got echoPayload
+	_ = json.Unmarshal(row.State, &got)
+	// Real a:comp must NOT have run — the injected fault returns first.
+	for _, n := range got.Notes {
+		if n == "a:comp-real" {
+			t.Errorf("real Compensate ran despite directive: notes=%v", got.Notes)
+		}
+	}
+}
+
 // TestIsPermanent pins the gRPC code classifier so the SAGA and the
 // existing pending-execution recovery sweep stay in sync.
 func TestIsPermanent(t *testing.T) {

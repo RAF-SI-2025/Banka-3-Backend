@@ -139,6 +139,7 @@ func (s *Service) AcceptOTCOffer(ctx context.Context, in AcceptOTCOfferInput) (*
 		IsActuary:       isActuary,
 	}
 
+	ctx = saga.FaultsFromMetadata(ctx, s.Cfg.SagaDebugFaultInjection)
 	row, err := saga.Start(ctx, s.SagaOrch, saga.StartInput[otcAcceptSagaPayload]{
 		TransactionID: txID,
 		SagaType:      otcAcceptSagaType,

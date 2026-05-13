@@ -152,6 +152,7 @@ func (s *Service) ExerciseOTCContract(ctx context.Context, in ExerciseOTCContrac
 	}
 
 	txID := otcExerciseTxID(c.ID)
+	ctx = saga.FaultsFromMetadata(ctx, s.Cfg.SagaDebugFaultInjection)
 	row, err := saga.Start(ctx, s.SagaOrch, saga.StartInput[otcExerciseSagaPayload]{
 		TransactionID: txID,
 		SagaType:      otcExerciseSagaType,

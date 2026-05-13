@@ -198,6 +198,7 @@ func (s *Service) InvestInFund(ctx context.Context, in InvestInFundInput) (*Inve
 		IsActuary:           isInNameOfBank,
 	}
 
+	ctx = saga.FaultsFromMetadata(ctx, s.Cfg.SagaDebugFaultInjection)
 	row, err := saga.Start(ctx, s.SagaOrch, saga.StartInput[fundInvestPayload]{
 		TransactionID: txID,
 		SagaType:      fundInvestSagaType,

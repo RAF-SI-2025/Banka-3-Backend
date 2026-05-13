@@ -59,8 +59,9 @@ func Run() error {
 
 	st := store.New(pool)
 	svc := service.New(st, service.Config{
-		Belgrade:     belgrade,
-		FXCommission: config.String("FX_COMMISSION", "0.005"),
+		Belgrade:                belgrade,
+		FXCommission:            config.String("FX_COMMISSION", "0.005"),
+		SagaDebugFaultInjection: config.Bool("SAGA_DEBUG_FAULT_INJECTION", false),
 	}, log)
 
 	// Exchange-rate client for foreign-currency → RSD conversions used

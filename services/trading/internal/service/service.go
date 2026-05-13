@@ -35,6 +35,13 @@ type Config struct {
 	// ExecutionTickInterval is how often the worker wakes up to walk
 	// every active order. Defaults to 10s.
 	ExecutionTickInterval time.Duration
+
+	// SagaDebugFaultInjection lets requests force-fail named SAGA steps
+	// via the X-Saga-Force-Fail / -Kind / -Compensate-Fail headers (see
+	// pkg saga FaultsFromMetadata). Off in production; the c4-tests
+	// cypress spec turns this on locally to drive scenarios 4/6/7/9 that
+	// have no FE-natural failure mode.
+	SagaDebugFaultInjection bool
 }
 
 // RateProvider returns raw FX bid/ask between two currencies. Used by
