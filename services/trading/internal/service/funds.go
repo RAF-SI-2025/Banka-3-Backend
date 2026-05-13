@@ -82,7 +82,7 @@ func (s *Service) ListFunds(ctx context.Context, in ListFundsInput) ([]*Decorate
 		return nil, err
 	}
 	if !permissions.HasAny(p.Permissions, permissions.Admin,
-		permissions.FundsReadClient, permissions.FundsReadSupervisor) {
+		permissions.TradingClient, permissions.FundsReadSupervisor) {
 		return nil, apperr.PermissionDenied("nedovoljne permisije za fondove")
 	}
 	rows, err := s.Store.ListFunds(ctx, store.FundFilter{
@@ -132,7 +132,7 @@ func (s *Service) GetFund(ctx context.Context, id string) (*GetFundResult, error
 		return nil, err
 	}
 	if !permissions.HasAny(p.Permissions, permissions.Admin,
-		permissions.FundsReadClient, permissions.FundsReadSupervisor) {
+		permissions.TradingClient, permissions.FundsReadSupervisor) {
 		return nil, apperr.PermissionDenied("nedovoljne permisije za fondove")
 	}
 	f, err := s.Store.GetFund(ctx, id)
@@ -465,7 +465,7 @@ func (s *Service) ListFundPositions(ctx context.Context, in ListFundPositionsInp
 		return nil, err
 	}
 	if !permissions.HasAny(p.Permissions, permissions.Admin,
-		permissions.FundsReadClient, permissions.FundsReadSupervisor) {
+		permissions.TradingClient, permissions.FundsReadSupervisor) {
 		return nil, apperr.PermissionDenied("nedovoljne permisije za fondove")
 	}
 	target := in.ClientID
@@ -512,7 +512,7 @@ func (s *Service) GetFundPerformance(ctx context.Context, fundID string, days in
 		return nil, err
 	}
 	if !permissions.HasAny(p.Permissions, permissions.Admin,
-		permissions.FundsReadClient, permissions.FundsReadSupervisor) {
+		permissions.TradingClient, permissions.FundsReadSupervisor) {
 		return nil, apperr.PermissionDenied("nedovoljne permisije za fondove")
 	}
 	if _, err := s.Store.GetFund(ctx, fundID); err != nil {
@@ -576,7 +576,7 @@ func (s *Service) ListFundTransactions(ctx context.Context, in ListFundTransacti
 		return nil, 0, err
 	}
 	if !permissions.HasAny(p.Permissions, permissions.Admin,
-		permissions.FundsReadClient, permissions.FundsReadSupervisor) {
+		permissions.TradingClient, permissions.FundsReadSupervisor) {
 		return nil, 0, apperr.PermissionDenied("nedovoljne permisije")
 	}
 	supervisor := permissions.HasAny(p.Permissions, permissions.Admin, permissions.FundsReadSupervisor)

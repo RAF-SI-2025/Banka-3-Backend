@@ -39,10 +39,10 @@ func TestRequireOTCTrader(t *testing.T) {
 		perms   []string
 		wantErr bool
 	}{
-		{"client trade", []string{permissions.OTCTradeClient}, false},
+		{"client trading", []string{permissions.TradingClient}, false},
 		{"supervisor trade", []string{permissions.OTCTradeSupervisor}, false},
 		{"admin", []string{permissions.Admin}, false},
-		{"read-only", []string{permissions.OTCRead}, true},
+		{"unrelated perm", []string{permissions.ClientRead}, true},
 		{"none", []string{}, true},
 	}
 	for _, c := range cases {

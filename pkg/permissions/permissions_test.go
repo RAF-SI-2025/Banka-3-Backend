@@ -63,16 +63,14 @@ func TestRoleBundlesContent(t *testing.T) {
 
 		{"client-trading", RoleClientTrading, []string{
 			ClientRead, AccountRead, CardRead, CardWrite, PaymentWrite, LoanRead, LoanWrite,
+			// Spec p.4: stocks + OTC + funds are one capability, gated
+			// by the single TradingClient flag.
 			TradingClient,
-			// c4 additions — every trading-eligible client also gets
-			// the OTC + fund client perms.
-			OTCRead, OTCTradeClient,
-			FundsReadClient, FundsInvestClient,
 		}},
 		{"actuary-supervisor", RoleEmployeeActuarySupervisor, []string{
 			Actuary, ActuarySupervisor, TradingMargin, EmployeeRead,
 			// c4 additions — supervisors run OTC, manage funds, see Profit Banke.
-			OTCRead, OTCTradeSupervisor,
+			OTCTradeSupervisor,
 			FundsReadSupervisor, FundsManageSupervisor,
 			BankProfitRead,
 		}},

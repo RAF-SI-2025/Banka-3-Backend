@@ -151,9 +151,11 @@ func run() error {
 
 	// Third client — non-trading. Drives the banking-trading-gate
 	// cypress spec which asserts a client without `trading.client`
-	// sees no Portfolio / Trgovina nav or tile. seedClient always
-	// promotes its return to trading.client for c3 dev ergonomics,
-	// so we strip the perm right after via direct SQL.
+	// sees no Portfolio / Trgovina / OTC / Fondovi nav or tile.
+	// seedClient always promotes its return to RoleClientTrading
+	// for c3+c4 dev ergonomics, so we strip the perm right after via
+	// direct SQL. Per spec p.4 client OTC + funds access is bundled
+	// into trading.client, so stripping that single perm is enough.
 	nonTradingID, err := seedClient(ctx, pool,
 		envOr("SEED_CLIENT3_EMAIL", "klijent3@banka.local"),
 		envOr("SEED_CLIENT3_PASSWORD", "Klijent123!"),
@@ -227,20 +229,22 @@ func seedClient(ctx context.Context, pool *pgxpool.Pool, email, password, firstN
 	switch err := pool.QueryRow(ctx,
 		`select id from "user".clients where lower(email) = lower($1)`, email).Scan(&existing); err {
 	case nil:
-		// Existing rows from before c3/c4 may be missing trading + OTC +
-		// fund client permissions. Append the full RoleClientTrading
-		// bundle idempotently so the seed promotes already-planted
-		// clients into the current trading-capable set on every run.
+		// Existing rows from before c3/c4 may be missing trading.client.
+		// Append the full RoleClientTrading bundle idempotently and
+		// strip the four deprecated client-side perms (collapsed into
+		// trading.client per spec p.4 — see pkg/permissions/permissions.go)
+		// so dev DBs self-heal across the refactor.
 		if _, err := pool.Exec(ctx, `
             update "user".clients
             set permissions = (
                 select array_agg(distinct p)
                 from unnest(permissions || $2::text[]) as p
+                where p not in ('otc.read','otc.trade.client','funds.read.client','funds.invest.client')
             )
             where id = $1`, existing, []string(permissions.RoleClientTrading)); err != nil {
 			return "", fmt.Errorf("augment client perms: %w", err)
 		}
-		fmt.Printf("seed: client already exists (id=%s, email=%s); ensured trading+otc+funds perms\n", existing, email)
+		fmt.Printf("seed: client already exists (id=%s, email=%s); ensured trading perms\n", existing, email)
 		return existing, nil
 	default:
 		if err.Error() != "no rows in result set" {

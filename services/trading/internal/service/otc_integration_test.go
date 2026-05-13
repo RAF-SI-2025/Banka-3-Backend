@@ -21,7 +21,7 @@ func clientOTCCtx(id string) context.Context {
 	return auth.WithPrincipal(context.Background(), auth.Principal{
 		UserID:      id,
 		UserKind:    auth.KindClient,
-		Permissions: []string{permissions.TradingClient, permissions.OTCRead, permissions.OTCTradeClient},
+		Permissions: []string{permissions.TradingClient},
 	})
 }
 
@@ -29,7 +29,7 @@ func supervisorOTCCtx(id string) context.Context {
 	return auth.WithPrincipal(context.Background(), auth.Principal{
 		UserID:      id,
 		UserKind:    auth.KindEmployee,
-		Permissions: []string{permissions.Actuary, permissions.ActuarySupervisor, permissions.OTCRead, permissions.OTCTradeSupervisor},
+		Permissions: []string{permissions.Actuary, permissions.ActuarySupervisor, permissions.OTCTradeSupervisor},
 	})
 }
 

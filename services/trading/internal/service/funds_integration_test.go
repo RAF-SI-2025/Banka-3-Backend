@@ -34,16 +34,13 @@ func supervisorFundsCtx(id string) context.Context {
 	})
 }
 
-// clientFundsCtx returns a client principal with the trading + funds
-// invest bundle.
+// clientFundsCtx returns a client principal with the unified trading
+// capability (spec p.4 — TradingClient covers stocks + OTC + funds).
 func clientFundsCtx(id string) context.Context {
 	return auth.WithPrincipal(context.Background(), auth.Principal{
-		UserID:   id,
-		UserKind: auth.KindClient,
-		Permissions: []string{
-			permissions.TradingClient,
-			permissions.FundsReadClient, permissions.FundsInvestClient,
-		},
+		UserID:      id,
+		UserKind:    auth.KindClient,
+		Permissions: []string{permissions.TradingClient},
 	})
 }
 

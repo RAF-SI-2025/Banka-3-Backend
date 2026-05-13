@@ -377,7 +377,7 @@ var fundInvestNS = uuid.MustParse("c4f0010d-be0b-4b4d-9b1d-d5a9c0e1b2f3")
 // service doesn't depend on the bundle layout.
 func (s *Service) requireFundsInvestClient(p auth.Principal) error {
 	if permissions.HasAny(p.Permissions, permissions.Admin,
-		permissions.FundsInvestClient, permissions.FundsManageSupervisor) {
+		permissions.TradingClient, permissions.FundsManageSupervisor) {
 		return nil
 	}
 	return apperr.PermissionDenied("nedovoljne permisije za ulaganje u fond")

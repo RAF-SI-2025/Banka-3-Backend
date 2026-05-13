@@ -87,26 +87,33 @@ const (
 // Celina 4 — OTC trading + investment funds + Profit Banke (spec
 // p.64-76).
 //
-//   - OTC: clients and supervisors can browse other parties' public
-//     holdings and negotiate offers. The client and supervisor variants
-//     differ in counterparty (client↔client vs supervisor↔supervisor —
-//     spec p.79 forbids the mixed case).
-//   - Funds: clients invest/withdraw on their own behalf; supervisors
-//     create funds, place orders as the fund actor, and act "in name
-//     of the bank" (spec p.75 Napomena 2). Read perms are split per-
-//     audience so a supervisor without funds.manage.supervisor still
-//     sees the discovery surface.
+// Spec p.4 defines client OTC + funds access as part of the single
+// "ClientTrading" capability: a client either has the whole trading
+// bundle (stocks + OTC + funds) or none of it. The earlier split into
+// otc.read / otc.trade.client / funds.read.client / funds.invest.client
+// modelled a fineness the spec doesn't sanction and allowed a stripped
+// client to retain OTC/funds access. The client-side gate is now
+// TradingClient (c3 const) for all four c4 portals.
+//
+// The supervisor namespace stays granular because spec p.4 lists the
+// employee-side capabilities separately ("upravljanje OTC trgovinom,
+// fondovima i agentima") and there are admin-only flows that grant
+// a subset.
+//
+//   - OTC: supervisors negotiate with other supervisors (spec p.79
+//     forbids mixed-kind counterparties). Clients on the same flow
+//     use TradingClient.
+//   - Funds: supervisors create funds, place orders as the fund actor,
+//     and act "in name of the bank" (spec p.75 Napomena 2). Read on
+//     the supervisor side is split from manage so a non-manager
+//     supervisor still sees the discovery surface.
 //   - Profit Banke (spec p.76): the supervisor dashboard reading
 //     actuary performance + bank's positions in funds.
 const (
-	OTCRead             = "otc.read"
-	OTCTradeClient      = "otc.trade.client"
-	OTCTradeSupervisor  = "otc.trade.supervisor"
-	FundsReadClient     = "funds.read.client"
-	FundsInvestClient   = "funds.invest.client"
-	FundsReadSupervisor = "funds.read.supervisor"
+	OTCTradeSupervisor    = "otc.trade.supervisor"
+	FundsReadSupervisor   = "funds.read.supervisor"
 	FundsManageSupervisor = "funds.manage.supervisor"
-	BankProfitRead      = "bank.profit.read"
+	BankProfitRead        = "bank.profit.read"
 )
 
 // Role bundles. The spec frames users in terms of roles; the system
@@ -118,13 +125,11 @@ var (
 	// — opening a new account is an employee action per spec p.11
 	// ("Račun kreira Zaposleni").
 	RoleClientBasic = []string{ClientRead, AccountRead, CardRead, CardWrite, PaymentWrite, LoanRead, LoanWrite}
-	RoleClientTrading = append(append([]string{}, RoleClientBasic...),
-		TradingClient,
-		// c4: every trading-eligible client may negotiate OTC + invest
-		// in funds. The funds.manage perm is supervisor-only.
-		OTCRead, OTCTradeClient,
-		FundsReadClient, FundsInvestClient,
-	)
+	// RoleClientTrading is one capability per spec p.4: stocks + OTC +
+	// funds gated by a single TradingClient flag. The c4 portals
+	// (OTC, OTC Ponude i Ugovori, Investicioni fondovi, Moji fondovi)
+	// all check TradingClient on the client side.
+	RoleClientTrading = append(append([]string{}, RoleClientBasic...), TradingClient)
 
 	// Employees:
 	//   basic — read-only on people and accounts; legacy from c1.
@@ -173,7 +178,7 @@ var (
 		Actuary, ActuarySupervisor, TradingMargin, EmployeeRead,
 		// c4: supervisors negotiate OTC with other supervisors, manage
 		// investment funds, and see the Profit Banke dashboard.
-		OTCRead, OTCTradeSupervisor,
+		OTCTradeSupervisor,
 		FundsReadSupervisor, FundsManageSupervisor,
 		BankProfitRead,
 	}

@@ -71,8 +71,8 @@ func (s *Service) ListPublicHoldings(ctx context.Context, tickerFilter string) (
 	if err != nil {
 		return nil, err
 	}
-	if !permissions.HasAny(p.Permissions, permissions.OTCRead, permissions.Admin) {
-		return nil, apperr.PermissionDenied("nedovoljne permisije za OTC")
+	if err := requireOTCTrader(p); err != nil {
+		return nil, err
 	}
 
 	peerKind, err := otcPeerKind(p)
@@ -396,8 +396,8 @@ func (s *Service) ListOTCThreads(ctx context.Context, in ListOTCThreadsInput) ([
 	if err != nil {
 		return nil, err
 	}
-	if !permissions.HasAny(p.Permissions, permissions.OTCRead, permissions.Admin) {
-		return nil, apperr.PermissionDenied("nedovoljne permisije za OTC")
+	if err := requireOTCTrader(p); err != nil {
+		return nil, err
 	}
 	f := store.OTCThreadFilter{Status: in.Status}
 	if !permissions.HasAny(p.Permissions, permissions.Admin, permissions.ActuarySupervisor) {
@@ -456,8 +456,8 @@ func (s *Service) ListOTCContracts(ctx context.Context, in ListOTCContractsInput
 	if err != nil {
 		return nil, err
 	}
-	if !permissions.HasAny(p.Permissions, permissions.OTCRead, permissions.Admin) {
-		return nil, apperr.PermissionDenied("nedovoljne permisije za OTC")
+	if err := requireOTCTrader(p); err != nil {
+		return nil, err
 	}
 	f := store.OTCContractFilter{Status: in.Status}
 	if !permissions.HasAny(p.Permissions, permissions.Admin, permissions.ActuarySupervisor) {
@@ -492,13 +492,15 @@ func (s *Service) GetOTCContract(ctx context.Context, id string) (*domain.OTCCon
 // Helpers
 // =====================================================================
 
-// requireOTCTrader rejects principals without one of the OTC trading
-// permissions (clients need otc.trade.client; supervisors need
-// otc.trade.supervisor; admin counts as supervisor).
+// requireOTCTrader rejects principals without an OTC capability.
+// Per spec p.4, the client-side OTC capability is bundled into
+// TradingClient; supervisors use the dedicated OTCTradeSupervisor.
+// Admin shadows both.
 func requireOTCTrader(p auth.Principal) error {
-	if permissions.Has(p.Permissions, permissions.Admin) ||
-		permissions.Has(p.Permissions, permissions.OTCTradeSupervisor) ||
-		permissions.Has(p.Permissions, permissions.OTCTradeClient) {
+	if permissions.HasAny(p.Permissions,
+		permissions.Admin,
+		permissions.OTCTradeSupervisor,
+		permissions.TradingClient) {
 		return nil
 	}
 	return apperr.PermissionDenied("nedovoljne permisije za OTC trgovinu")
@@ -513,12 +515,12 @@ func otcPeerKind(p auth.Principal) (domain.UserKind, error) {
 	}
 	switch p.UserKind {
 	case auth.KindClient:
-		if !permissions.HasAny(p.Permissions, permissions.OTCTradeClient, permissions.OTCRead) {
+		if !permissions.Has(p.Permissions, permissions.TradingClient) {
 			return "", apperr.PermissionDenied("nedovoljne permisije za OTC")
 		}
 		return domain.KindClient, nil
 	case auth.KindEmployee:
-		if !permissions.HasAny(p.Permissions, permissions.OTCTradeSupervisor, permissions.OTCRead) {
+		if !permissions.Has(p.Permissions, permissions.OTCTradeSupervisor) {
 			return "", apperr.PermissionDenied("nedovoljne permisije za OTC")
 		}
 		return domain.KindEmployee, nil
