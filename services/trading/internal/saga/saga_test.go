@@ -257,8 +257,12 @@ func TestTransientErrorParksWithBackoff(t *testing.T) {
 		SagaType:      "test_transient",
 		InitialState:  echoPayload{},
 	})
-	if err == nil {
-		t.Fatalf("Start: expected transient error first time")
+	// Transient error that left the row parked is not surfaced — the
+	// row's status + LastError already encode "I'm pending, retry me",
+	// and bubbling the err makes every Start caller re-derive that
+	// classification.
+	if err != nil {
+		t.Fatalf("Start: transient parked saga should not surface err, got %v", err)
 	}
 	if row.Status != StatusRunning {
 		t.Errorf("status = %s, want running", row.Status)
@@ -268,6 +272,9 @@ func TestTransientErrorParksWithBackoff(t *testing.T) {
 	}
 	if !row.NextAttemptAt.After(time.Now()) {
 		t.Errorf("next_attempt_at should be in the future")
+	}
+	if row.LastError == "" {
+		t.Errorf("last_error should be set on a parked row for observability")
 	}
 
 	// Backdate so the recovery worker would pick it up, then Resume.
@@ -420,8 +427,10 @@ func TestForceFailForwardTransient(t *testing.T) {
 		SagaType:      "test_force_transient",
 		InitialState:  echoPayload{},
 	})
-	if err == nil {
-		t.Fatalf("Start: expected transient error first time")
+	// Same contract as TestTransientErrorParksWithBackoff: the parked
+	// row carries the transient signal, so Start returns (row, nil).
+	if err != nil {
+		t.Fatalf("Start: transient parked saga should not surface err, got %v", err)
 	}
 	if row.Status != StatusRunning {
 		t.Errorf("status = %s, want running", row.Status)

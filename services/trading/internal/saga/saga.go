@@ -358,6 +358,15 @@ func Start[T any](ctx context.Context, o *Orchestrator, in StartInput[T]) (*Row,
 	if updated != nil {
 		row = updated
 	}
+	// A transient step error that left the row at status=running is
+	// the orchestrator's normal "I parked, retry later" signal — the
+	// recovery worker will drive it forward. From the caller's POV
+	// the saga is healthy and pending, not failed; suppress the err.
+	// (The recovery worker still gets the original LastError via the
+	// persisted row for logging/observability.)
+	if resumeErr != nil && row.Status == StatusRunning {
+		resumeErr = nil
+	}
 	// Also surface a "terminal-failed" condition as an error so a
 	// caller blind to status sees something went wrong. Permanent
 	// forward errors that ran compensation to completion still leave

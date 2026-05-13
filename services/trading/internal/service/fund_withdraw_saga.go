@@ -252,14 +252,6 @@ func (s *Service) WithdrawFromFund(ctx context.Context, in WithdrawFromFundInput
 		InitialState:  payload,
 		AttemptsMax:   8,
 	})
-	// A transient error from a still-running saga is the illiquid path's
-	// normal signal — `liquidate_holdings` returns codes.Unavailable to
-	// park itself while the auto-liquidation orders settle, and the
-	// recovery worker drives it forward. From the caller's perspective
-	// this is "pending", not failure.
-	if err != nil && row != nil && row.Status == saga.StatusRunning {
-		err = nil
-	}
 	if err != nil {
 		_ = s.markFundTxFailed(ctx, auditID, err.Error())
 		return nil, fmt.Errorf("fund withdraw saga: %w", err)
