@@ -121,6 +121,22 @@ func Run() error {
 		// dialer text ("name resolver error: produced zero addresses")
 		// to the client.
 		runtime.WithErrorHandler(unavailableFriendly()),
+		// Forward the trading-debug fault-injection headers (X-Saga-*)
+		// down to gRPC services as `grpcgateway-x-saga-*` metadata.
+		// runtime.DefaultHeaderMatcher only forwards a small permanent
+		// allow-list (Authorization, Content-Type, etc.) plus the
+		// explicit `Grpc-Metadata-` prefix; without this matcher,
+		// FaultsFromMetadata in services/trading/.../saga/saga.go
+		// never sees the headers and SAGA_DEBUG_FAULT_INJECTION is a
+		// silent no-op. Gated by SAGA_DEBUG_FAULT_INJECTION on the
+		// trading side so production traffic is unaffected even with
+		// the headers forwarded.
+		runtime.WithIncomingHeaderMatcher(func(key string) (string, bool) {
+			if strings.HasPrefix(strings.ToLower(key), "x-saga-") {
+				return runtime.MetadataPrefix + strings.ToLower(key), true
+			}
+			return runtime.DefaultHeaderMatcher(key)
+		}),
 	)
 	registerGW := func(ctx context.Context, mux *runtime.ServeMux) error {
 		if err := userpb.RegisterUserServiceHandler(ctx, mux, cs.UserConn); err != nil {
