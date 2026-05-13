@@ -63,6 +63,11 @@ services:
       <<: *service-env
       JWT_SIGNING_KEY: "${JWT_SIGNING_KEY}"
       NOTIFICATION_GRPC_ADDR: "${NOTIFICATION_GRPC_ADDR:-notification:50051}"
+      # c4-PR4 supervisor-demotion fund cascade: when a supervisor loses
+      # funds.manage.supervisor, user-svc calls trading-svc to reassign
+      # their active funds to the acting admin. Without this env the
+      # cascade is silently disabled and S46 fails.
+      TRADING_GRPC_ADDR: "${TRADING_GRPC_ADDR:-trading:50051}"
     ports:
       - "${USER_GRPC_PORT:-50051}:50051"
       - "${USER_PROBE_PORT:-8081}:8081"
