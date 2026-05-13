@@ -38,8 +38,8 @@ package service
 import (
 	"context"
 	"encoding/json"
-	"fmt"
 	"math/big"
+	"strings"
 	"time"
 
 	"github.com/RAF-SI-2025/Banka-3-Backend/pkg/apperr"
@@ -160,10 +160,16 @@ func (s *Service) ExerciseOTCContract(ctx context.Context, in ExerciseOTCContrac
 		AttemptsMax:   8,
 	})
 	if err != nil {
-		return nil, fmt.Errorf("otc exercise saga: %w", err)
+		// Surface the saga's own LastError to the caller so the
+		// FE/test sees the originating step's reason
+		// (e.g. "nedovoljno sredstava na računu"), not a generic
+		// "internal error". The saga rolled forward+compensated
+		// already; this is a business-rule failure, not a system
+		// fault, so map it to FailedPrecondition.
+		return nil, apperr.FailedPrecondition(sagaFailureMessage(row, err))
 	}
 	if row.Status != saga.StatusCompleted {
-		return nil, apperr.Internal("otc exercise saga did not complete", nil)
+		return nil, apperr.FailedPrecondition(sagaFailureMessage(row, nil))
 	}
 
 	// Reload + return final state.
@@ -241,8 +247,21 @@ func registerOTCExerciseSaga(reg *saga.Registry, svc *Service) {
 					return err
 				},
 				Compensate: func(ctx context.Context, sc *saga.Context[otcExerciseSagaPayload]) error {
-					reserveOp := saga.DeriveOpID(sc.TransactionID, "reserve_buyer_strike")
-					_, err := svc.Reservations.Release(ctx, reserveOp)
+					// Forward Commit already moved real money seller-ward
+					// (the reservation row is in 'committed' state).
+					// bank.ReleaseFunds only handles the 'held' case, so
+					// the compensation has to issue a reverse transfer
+					// to return the strike amount to the buyer.
+					reverseOp := saga.DeriveOpID(sc.TransactionID, "transfer_strike_reverse")
+					_, err := svc.Reservations.Transfer(ctx, TransferInput{
+						FromAccountID: sc.State.SellerAccountID,
+						ToAccountID:   sc.State.BuyerAccountID,
+						Amount:        sc.State.TotalAmount,
+						OpID:          reverseOp,
+						OpKind:        "otc_exercise",
+						IsActuary:     sc.State.IsActuary,
+						Purpose:       "Rollback OTC izvršenja — ugovor " + sc.State.ContractID,
+					})
 					return err
 				},
 			},
@@ -393,3 +412,28 @@ func otcExerciseTxID(contractID string) string {
 }
 
 var otcExerciseNS = uuid.MustParse("c4ec6f15-cafe-4f6f-9d22-b0d4b9d8f7c2")
+
+// sagaFailureMessage picks the most useful Serbian-or-other-source
+// failure copy out of a finished saga: the row's LastError when set
+// (already stripped of any "rpc error: code = X desc =" envelope), or
+// the raw err string. Falls back to a fixed Serbian sentinel if both
+// are empty so the caller always has something to render.
+func sagaFailureMessage(row *saga.Row, err error) string {
+	if row != nil && row.LastError != "" {
+		return stripRPCEnvelope(row.LastError)
+	}
+	if err != nil {
+		return stripRPCEnvelope(err.Error())
+	}
+	return "OTC izvršenje nije uspelo"
+}
+
+// stripRPCEnvelope reduces "rpc error: code = X desc = Y" to "Y" so the
+// FE/test sees the underlying Serbian copy rather than the gRPC framing.
+func stripRPCEnvelope(s string) string {
+	const marker = "desc = "
+	if i := strings.LastIndex(s, marker); i >= 0 {
+		return s[i+len(marker):]
+	}
+	return s
+}
