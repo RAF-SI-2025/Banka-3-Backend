@@ -86,18 +86,31 @@ func (s *Service) ResendActivation(ctx context.Context, employeeID string) error
 // real user. Returns nil even when the email is unknown so callers
 // can't probe for accounts. (We bend the spec slightly: spec scenario 4
 // just says the reset email is sent for a valid email.)
+//
+// Email-send failures (SMTP rate limits, transient notification-svc
+// errors) are logged and swallowed so the FE still sees the
+// "Link važi 15 minuta" success state — the reset token row is already
+// persisted, the operator can rebroadcast it later. Surfacing the SMTP
+// error to the FE would also leak account existence (the unknown-email
+// branch always returns nil).
 func (s *Service) RequestPasswordReset(ctx context.Context, email string) error {
 	if email == "" {
 		return apperr.Validation("email is required")
 	}
 
 	if emp, err := s.Store.GetEmployeeByEmail(ctx, email); err == nil {
-		return s.sendResetEmail(ctx, domain.KindEmployee, emp.ID, emp.Email, emp.FirstName)
+		if serr := s.sendResetEmail(ctx, domain.KindEmployee, emp.ID, emp.Email, emp.FirstName); serr != nil {
+			s.Log.Warn("password reset email failed", "user_kind", "employee", "user_id", emp.ID, "error", serr)
+		}
+		return nil
 	} else if !isNotFound(err) {
 		return err
 	}
 	if cl, err := s.Store.GetClientByEmail(ctx, email); err == nil {
-		return s.sendResetEmail(ctx, domain.KindClient, cl.ID, cl.Email, cl.FirstName)
+		if serr := s.sendResetEmail(ctx, domain.KindClient, cl.ID, cl.Email, cl.FirstName); serr != nil {
+			s.Log.Warn("password reset email failed", "user_kind", "client", "user_id", cl.ID, "error", serr)
+		}
+		return nil
 	} else if !isNotFound(err) {
 		return err
 	}
