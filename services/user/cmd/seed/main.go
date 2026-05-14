@@ -746,12 +746,18 @@ func seedTrading(ctx context.Context, pool *pgxpool.Pool, clientID, adminID stri
 		{"XLON", "London Stock Exchange", "LSE", "United Kingdom", "GBP", "Europe/London", "08:00", "16:30"},
 		{"XBEL", "Beogradska berza", "BELEX", "Srbija", "RSD", "Europe/Belgrade", "09:30", "14:00"},
 	}
+	// Seed exchanges with override_state='open' so the dev stack accepts
+	// trades at any wall-clock — this is a simulation, not a real market.
+	// Admins can still flip the override per exchange via the /portal/berze
+	// admin UI (or `PATCH /api/v1/exchanges/{mic}/override`) to exercise
+	// the spec p.39 closed-market path; re-running `task seed` forces them
+	// back to open via on-conflict update.
 	for _, e := range exchanges {
 		if _, err := tx.Exec(ctx, `
             insert into "trading".exchanges
-                (mic, name, acronym, polity, currency, timezone, open_local, close_local)
-            values ($1, $2, $3, $4, $5, $6, $7::time, $8::time)
-            on conflict (mic) do nothing`,
+                (mic, name, acronym, polity, currency, timezone, open_local, close_local, override_state)
+            values ($1, $2, $3, $4, $5, $6, $7::time, $8::time, 'open')
+            on conflict (mic) do update set override_state='open'`,
 			e.mic, e.name, e.acronym, e.polity, e.currency, e.timezone, e.open, e.close,
 		); err != nil {
 			return fmt.Errorf("insert exchange %s: %w", e.mic, err)
