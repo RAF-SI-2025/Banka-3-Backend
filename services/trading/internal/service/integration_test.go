@@ -2733,6 +2733,64 @@ func TestIntegration_UpdateActuaryLimit_BelowUsed(t *testing.T) {
 	}
 }
 
+// TestIntegration_Execution_SkippedOnClosedMarket pins the spec p.39
+// gate — when the exchange is forced closed via override (or naturally
+// closed outside trading hours and outside the after-hours window),
+// ProcessOrderTick must not move money or shares. Without the guard the
+// cadence sweep happily debited the buyer's account regardless of state.
+func TestIntegration_Execution_SkippedOnClosedMarket(t *testing.T) {
+	svc := setup(t)
+	ex := seedExchange(t, svc, "XNYS", domain.CurrencyUSD)
+	sec, _ := seedStock(t, svc, "CLSD", ex, "100", "100", "99", 100000)
+
+	clientID := uuid.NewString()
+	o, err := svc.CreateOrder(clientCtx(clientID), CreateOrderInput{
+		SecurityID: sec.ID,
+		OrderType:  domain.OrderMarket,
+		Direction:  domain.DirectionBuy,
+		Quantity:   1,
+		AllOrNone:  true, // skip random cadence so a tick that should fill, fills
+		AccountID:  uuid.NewString(),
+	})
+	if err != nil {
+		t.Fatalf("create order: %v", err)
+	}
+
+	// Force the market closed and tick — no fill, no execution row.
+	closed := domain.ExchangeOverrideClosed
+	if _, err := svc.Store.SetExchangeOverride(context.Background(), ex.MIC, &closed); err != nil {
+		t.Fatalf("override closed: %v", err)
+	}
+	res, err := svc.ProcessOrderTick(context.Background(), o.Order)
+	if err != nil {
+		t.Fatalf("tick (closed): %v", err)
+	}
+	if res.Fired {
+		t.Fatalf("market closed: tick fired a fill, expected skip")
+	}
+	execs, err := svc.Store.ListExecutions(context.Background(), o.ID)
+	if err != nil {
+		t.Fatalf("ListExecutions: %v", err)
+	}
+	if len(execs) != 0 {
+		t.Fatalf("market closed: %d execution rows, want 0", len(execs))
+	}
+
+	// Flip the override back to open; the next tick should fire.
+	open := domain.ExchangeOverrideOpen
+	if _, err := svc.Store.SetExchangeOverride(context.Background(), ex.MIC, &open); err != nil {
+		t.Fatalf("override open: %v", err)
+	}
+	o2, _ := svc.Store.GetOrder(context.Background(), o.ID)
+	res, err = svc.ProcessOrderTick(context.Background(), o2)
+	if err != nil {
+		t.Fatalf("tick (open): %v", err)
+	}
+	if !res.Fired || res.Execution == nil {
+		t.Fatalf("market open: fired=%v exec=%v, want fill", res.Fired, res.Execution)
+	}
+}
+
 // TestIntegration_Execution_ForexSell (BE-T14) is the sell twin of
 // TestIntegration_Execution_ForexNoHolding. A forex sell pairs a
 // debit on the base currency with a credit on the quote currency, and

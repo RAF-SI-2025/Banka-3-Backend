@@ -224,6 +224,25 @@ func (s *Service) ProcessOrderTick(ctx context.Context, o *domain.Order) (proces
 		}
 	}
 
+	// Spec p.39 — no fills while the exchange is fully closed (either
+	// scheduled outside hours and outside the spec p.56 after-hours
+	// window, or admin-forced closed via the override toggle). Without
+	// this the cadence sweep settles money + moves shares regardless of
+	// market state, which the org-file audit caught: "hartija se
+	// deductuje nezavisno od stanja berze". Runs AFTER the resume-pending
+	// path so bank-side reconciliation of an already-settled fill still
+	// converges even with the market closed.
+	if listing.ExchangeMIC != "" {
+		ex, exErr := s.Store.GetExchange(ctx, listing.ExchangeMIC)
+		if exErr == nil {
+			st := s.resolveMarketState(ex, s.now())
+			if !st.IsOpen && !st.IsAfterHours {
+				res.NextEarliest = s.now().Add(s.tickRetryInterval())
+				return res, nil
+			}
+		}
+	}
+
 	// Trigger detection for STOP / STOP_LIMIT.
 	if (o.OrderType == domain.OrderStop || o.OrderType == domain.OrderStopLimit) && !o.Triggered {
 		if !s.stopTriggered(o, listing) {
