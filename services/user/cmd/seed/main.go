@@ -1162,6 +1162,37 @@ func seedOTC(ctx context.Context, pool *pgxpool.Pool, clientID, client2ID, admin
 		return fmt.Errorf("seedOTC: clientID, client2ID and adminID are required")
 	}
 
+	// Idempotent: ensure the seeded OTC-discovery holdings carry a
+	// non-zero public_count so the /banking/otc + /portal/otc boards
+	// surface something. Without this, every holding sits at the
+	// schema default (0) and `where public_count > reserved_count`
+	// returns no rows. Runs before the marker short-circuit so dev
+	// DBs that were seeded before this fix heal on the next `task
+	// seed`; the `public_count < target` guard keeps a hand-edited
+	// higher value from being lowered.
+	for _, row := range []struct {
+		userID, ticker, kind string
+		target               int32
+	}{
+		{clientID, "AAPL", "stock", 8},   // qty 10, reserved 3 ⇒ 5 available
+		{client2ID, "MSFT", "stock", 25}, // qty 30, reserved 10 ⇒ 15 available
+		{client2ID, "GOOGL", "stock", 10}, // qty 15, reserved 0  ⇒ 10 available
+	} {
+		if _, err := pool.Exec(ctx, `
+            update "trading".portfolio_holdings h
+               set public_count = $1
+              from "trading".securities s
+             where s.id = h.security_id
+               and h.user_id = $2
+               and s.ticker = $3
+               and s.type   = $4
+               and h.public_count < $1`,
+			row.target, row.userID, row.ticker, row.kind,
+		); err != nil {
+			return fmt.Errorf("heal public_count %s: %w", row.ticker, err)
+		}
+	}
+
 	// Skip if already seeded — thread 1's deterministic id is the marker.
 	var marker string
 	switch err := pool.QueryRow(ctx,
@@ -1263,14 +1294,15 @@ func seedOTC(ctx context.Context, pool *pgxpool.Pool, clientID, client2ID, admin
 	}
 
 	// klijent2 holdings: MSFT (30, 10 reserved by thread 2's open
-	// offer) and GOOGL (15, no reservation — thread 3 ends withdrawn).
+	// offer, 25 published ⇒ 15 free on the OTC board) and GOOGL (15,
+	// no reservation — thread 3 ends withdrawn — 10 published).
 	if _, err := tx.Exec(ctx, `
         insert into "trading".portfolio_holdings
             (id, user_id, user_kind, security_id, account_id,
-             quantity, weighted_avg_price, reserved_count)
+             quantity, weighted_avg_price, public_count, reserved_count)
         values
-            ('11111111-1111-4111-8111-000000000001', $1, 'client', $2, $3, 30, 400.00, 10),
-            ('11111111-1111-4111-8111-000000000002', $1, 'client', $4, $3, 15, 170.00,  0)
+            ('11111111-1111-4111-8111-000000000001', $1, 'client', $2, $3, 30, 400.00, 25, 10),
+            ('11111111-1111-4111-8111-000000000002', $1, 'client', $4, $3, 15, 170.00, 10,  0)
         on conflict (user_id, security_id, account_id) do nothing`,
 		client2ID, msftID, client2USDAcct, googlID,
 	); err != nil {
