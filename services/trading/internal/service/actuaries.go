@@ -98,6 +98,17 @@ func (s *Service) UpdateActuaryLimit(ctx context.Context, employeeID, dailyLimit
 	if cur.Type == domain.ActuarySupervisor {
 		return nil, apperr.FailedPrecondition("supervizor nema limit")
 	}
+	// Reject limits below the agent's current used_limit. Otherwise the
+	// supervisor can silently put an agent over their cap, which
+	// blocks every subsequent order until the cron resets at 23:59.
+	newLimit, _ := money.Parse(dailyLimit)
+	usedLimit, err := money.Parse(cur.UsedLimit)
+	if err != nil {
+		return nil, apperr.Validation("used_limit on actuary record is malformed")
+	}
+	if money.Cmp(newLimit, usedLimit) < 0 {
+		return nil, apperr.FailedPrecondition("novi limit ne sme biti manji od trenutno iskorišćenog limita")
+	}
 	return s.Store.UpdateActuaryLimit(ctx, employeeID, dailyLimit)
 }
 

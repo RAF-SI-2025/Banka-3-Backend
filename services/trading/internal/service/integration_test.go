@@ -2699,6 +2699,40 @@ func TestIntegration_DailyLimitResetCron(t *testing.T) {
 	}
 }
 
+// TestIntegration_UpdateActuaryLimit_BelowUsed pins the guard that
+// rejects setting daily_limit below the current used_limit. Without
+// it a supervisor can silently put an agent over their cap, blocking
+// every order until 23:59 reset.
+func TestIntegration_UpdateActuaryLimit_BelowUsed(t *testing.T) {
+	svc := setup(t)
+	supervisorID := uuid.NewString()
+	agentID := uuid.NewString()
+	seedActuary(t, svc, agentID, domain.ActuaryAgent, "10000", false)
+
+	if _, err := fixPool.Exec(context.Background(),
+		`update "trading".actuary_info set used_limit='5000' where employee_id=$1`, agentID); err != nil {
+		t.Fatalf("seed used_limit: %v", err)
+	}
+
+	// Lower limit but still ≥ used_limit — allowed.
+	if _, err := svc.UpdateActuaryLimit(supervisorCtx(supervisorID), agentID, "5000"); err != nil {
+		t.Fatalf("set limit == used_limit: %v", err)
+	}
+
+	// Drop below used_limit — must be rejected.
+	_, err := svc.UpdateActuaryLimit(supervisorCtx(supervisorID), agentID, "4999")
+	if err == nil {
+		t.Fatalf("set limit < used_limit: want error, got nil")
+	}
+	got, err := svc.Store.GetActuaryInfo(context.Background(), agentID)
+	if err != nil {
+		t.Fatalf("GetActuaryInfo: %v", err)
+	}
+	if !numericEq(got.DailyLimit, "5000") {
+		t.Fatalf("daily_limit = %q, want 5000 (unchanged after rejection)", got.DailyLimit)
+	}
+}
+
 // TestIntegration_Execution_ForexSell (BE-T14) is the sell twin of
 // TestIntegration_Execution_ForexNoHolding. A forex sell pairs a
 // debit on the base currency with a credit on the quote currency, and
