@@ -224,7 +224,7 @@ func (s *Service) materializeLoan(ctx context.Context, tx pgx.Tx, req *domain.Lo
 	op := uuid.NewString()
 	if _, err := s.Store.InsertTransaction(ctx, tx, &domain.Transaction{
 		OpID:              op,
-		Kind:              domain.TransactionKind("loan_disbursement"),
+		Kind:              domain.TxKindLoanDisbursement,
 		LegIndex:          1,
 		FromAccountID:     bankHouse.ID,
 		ToAccountID:       req.AccountID,
@@ -431,7 +431,7 @@ func (s *Service) collectOneInstallment(ctx context.Context, inst *domain.LoanIn
 		}
 		if _, err := s.Store.InsertTransaction(ctx, tx, &domain.Transaction{
 			OpID:              uuid.NewString(),
-			Kind:              domain.TransactionKind("loan_installment"),
+			Kind:              domain.TxKindLoanInstallment,
 			LegIndex:          1,
 			FromAccountID:     loan.AccountID,
 			ToAccountID:       bankHouse.ID,

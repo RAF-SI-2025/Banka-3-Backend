@@ -713,6 +713,8 @@ enum TransactionKind {
   TRANSACTION_KIND_OTC_EXERCISE  = 9;
   TRANSACTION_KIND_FUND_INVEST   = 10;
   TRANSACTION_KIND_FUND_WITHDRAW = 11;
+  TRANSACTION_KIND_LOAN_DISBURSEMENT = 12;
+  TRANSACTION_KIND_LOAN_INSTALLMENT  = 13;
 }
 
 // Transaction is one ledger leg. UX-level operations (a payment, a

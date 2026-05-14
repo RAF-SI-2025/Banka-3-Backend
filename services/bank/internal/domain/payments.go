@@ -24,6 +24,9 @@ const (
 	TxKindOTCExercise  TransactionKind = "otc_exercise"
 	TxKindFundInvest   TransactionKind = "fund_invest"
 	TxKindFundWithdraw TransactionKind = "fund_withdraw"
+
+	TxKindLoanDisbursement TransactionKind = "loan_disbursement"
+	TxKindLoanInstallment  TransactionKind = "loan_installment"
 )
 
 // ReservationState pins the bank.reservations row lifecycle (c4).

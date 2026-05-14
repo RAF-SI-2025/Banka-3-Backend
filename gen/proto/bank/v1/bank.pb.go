@@ -348,10 +348,12 @@ const (
 	TransactionKind_TRANSACTION_KIND_TAX         TransactionKind = 6 // capital-gains tax debit (spec p.62)
 	TransactionKind_TRANSACTION_KIND_FOREX_FILL  TransactionKind = 7 // forex pair fill (spec p.42)
 	// c4 — OTC + funds money-moving categories.
-	TransactionKind_TRANSACTION_KIND_OTC_PREMIUM   TransactionKind = 8
-	TransactionKind_TRANSACTION_KIND_OTC_EXERCISE  TransactionKind = 9
-	TransactionKind_TRANSACTION_KIND_FUND_INVEST   TransactionKind = 10
-	TransactionKind_TRANSACTION_KIND_FUND_WITHDRAW TransactionKind = 11
+	TransactionKind_TRANSACTION_KIND_OTC_PREMIUM       TransactionKind = 8
+	TransactionKind_TRANSACTION_KIND_OTC_EXERCISE      TransactionKind = 9
+	TransactionKind_TRANSACTION_KIND_FUND_INVEST       TransactionKind = 10
+	TransactionKind_TRANSACTION_KIND_FUND_WITHDRAW     TransactionKind = 11
+	TransactionKind_TRANSACTION_KIND_LOAN_DISBURSEMENT TransactionKind = 12
+	TransactionKind_TRANSACTION_KIND_LOAN_INSTALLMENT  TransactionKind = 13
 )
 
 // Enum value maps for TransactionKind.
@@ -369,20 +371,24 @@ var (
 		9:  "TRANSACTION_KIND_OTC_EXERCISE",
 		10: "TRANSACTION_KIND_FUND_INVEST",
 		11: "TRANSACTION_KIND_FUND_WITHDRAW",
+		12: "TRANSACTION_KIND_LOAN_DISBURSEMENT",
+		13: "TRANSACTION_KIND_LOAN_INSTALLMENT",
 	}
 	TransactionKind_value = map[string]int32{
-		"TRANSACTION_KIND_UNSPECIFIED":   0,
-		"TRANSACTION_KIND_PAYMENT":       1,
-		"TRANSACTION_KIND_TRANSFER":      2,
-		"TRANSACTION_KIND_EXCHANGE":      3,
-		"TRANSACTION_KIND_FEE":           4,
-		"TRANSACTION_KIND_TRADE":         5,
-		"TRANSACTION_KIND_TAX":           6,
-		"TRANSACTION_KIND_FOREX_FILL":    7,
-		"TRANSACTION_KIND_OTC_PREMIUM":   8,
-		"TRANSACTION_KIND_OTC_EXERCISE":  9,
-		"TRANSACTION_KIND_FUND_INVEST":   10,
-		"TRANSACTION_KIND_FUND_WITHDRAW": 11,
+		"TRANSACTION_KIND_UNSPECIFIED":       0,
+		"TRANSACTION_KIND_PAYMENT":           1,
+		"TRANSACTION_KIND_TRANSFER":          2,
+		"TRANSACTION_KIND_EXCHANGE":          3,
+		"TRANSACTION_KIND_FEE":               4,
+		"TRANSACTION_KIND_TRADE":             5,
+		"TRANSACTION_KIND_TAX":               6,
+		"TRANSACTION_KIND_FOREX_FILL":        7,
+		"TRANSACTION_KIND_OTC_PREMIUM":       8,
+		"TRANSACTION_KIND_OTC_EXERCISE":      9,
+		"TRANSACTION_KIND_FUND_INVEST":       10,
+		"TRANSACTION_KIND_FUND_WITHDRAW":     11,
+		"TRANSACTION_KIND_LOAN_DISBURSEMENT": 12,
+		"TRANSACTION_KIND_LOAN_INSTALLMENT":  13,
 	}
 )
 
@@ -6543,7 +6549,7 @@ const file_bank_v1_bank_proto_rawDesc = "" +
 	"\x1eTRANSACTION_STATUS_UNSPECIFIED\x10\x00\x12\x1f\n" +
 	"\x1bTRANSACTION_STATUS_REALIZED\x10\x01\x12\x1f\n" +
 	"\x1bTRANSACTION_STATUS_REJECTED\x10\x02\x12!\n" +
-	"\x1dTRANSACTION_STATUS_PROCESSING\x10\x03*\x8b\x03\n" +
+	"\x1dTRANSACTION_STATUS_PROCESSING\x10\x03*\xda\x03\n" +
 	"\x0fTransactionKind\x12 \n" +
 	"\x1cTRANSACTION_KIND_UNSPECIFIED\x10\x00\x12\x1c\n" +
 	"\x18TRANSACTION_KIND_PAYMENT\x10\x01\x12\x1d\n" +
@@ -6557,7 +6563,9 @@ const file_bank_v1_bank_proto_rawDesc = "" +
 	"\x1dTRANSACTION_KIND_OTC_EXERCISE\x10\t\x12 \n" +
 	"\x1cTRANSACTION_KIND_FUND_INVEST\x10\n" +
 	"\x12\"\n" +
-	"\x1eTRANSACTION_KIND_FUND_WITHDRAW\x10\v*\x85\x01\n" +
+	"\x1eTRANSACTION_KIND_FUND_WITHDRAW\x10\v\x12&\n" +
+	"\"TRANSACTION_KIND_LOAN_DISBURSEMENT\x10\f\x12%\n" +
+	"!TRANSACTION_KIND_LOAN_INSTALLMENT\x10\r*\x85\x01\n" +
 	"\tCardBrand\x12\x1a\n" +
 	"\x16CARD_BRAND_UNSPECIFIED\x10\x00\x12\x13\n" +
 	"\x0fCARD_BRAND_VISA\x10\x01\x12\x19\n" +

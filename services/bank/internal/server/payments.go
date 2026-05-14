@@ -278,6 +278,10 @@ func txKindToProto(k domain.TransactionKind) bankpb.TransactionKind {
 		return bankpb.TransactionKind_TRANSACTION_KIND_FUND_INVEST
 	case domain.TxKindFundWithdraw:
 		return bankpb.TransactionKind_TRANSACTION_KIND_FUND_WITHDRAW
+	case domain.TxKindLoanDisbursement:
+		return bankpb.TransactionKind_TRANSACTION_KIND_LOAN_DISBURSEMENT
+	case domain.TxKindLoanInstallment:
+		return bankpb.TransactionKind_TRANSACTION_KIND_LOAN_INSTALLMENT
 	}
 	return bankpb.TransactionKind_TRANSACTION_KIND_UNSPECIFIED
 }

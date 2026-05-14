@@ -7530,7 +7530,9 @@
         "TRANSACTION_KIND_OTC_PREMIUM",
         "TRANSACTION_KIND_OTC_EXERCISE",
         "TRANSACTION_KIND_FUND_INVEST",
-        "TRANSACTION_KIND_FUND_WITHDRAW"
+        "TRANSACTION_KIND_FUND_WITHDRAW",
+        "TRANSACTION_KIND_LOAN_DISBURSEMENT",
+        "TRANSACTION_KIND_LOAN_INSTALLMENT"
       ],
       "default": "TRANSACTION_KIND_UNSPECIFIED",
       "description": " - TRANSACTION_KIND_EXCHANGE: intermediate leg in a menjačnica path\n - TRANSACTION_KIND_TRADE: trading-service fill settlement\n - TRANSACTION_KIND_TAX: capital-gains tax debit (spec p.62)\n - TRANSACTION_KIND_FOREX_FILL: forex pair fill (spec p.42)\n - TRANSACTION_KIND_OTC_PREMIUM: c4 — OTC + funds money-moving categories."
