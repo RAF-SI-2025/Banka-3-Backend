@@ -270,21 +270,26 @@ func registerOTCExerciseSaga(reg *saga.Registry, svc *Service) {
 				Forward: func(ctx context.Context, sc *saga.Context[otcExerciseSagaPayload]) error {
 					return svc.Store.ExecuteAtomic(ctx, func(tx pgx.Tx) error {
 						// 1. Sell side: capture pre-fill cost basis,
-						//    then decrement quantity AND reserved_count.
+						//    then decrement reserved_count BEFORE quantity.
+						//    The CHECK constraint reserved_count <= quantity
+						//    fires after each statement; if the whole holding
+						//    was reserved by this contract (quantity ==
+						//    reserved_count), decrementing quantity first
+						//    leaves reserved_count > quantity and violates.
 						sellerHolding, err := svc.Store.GetHoldingByID(ctx, sc.State.SellerHoldingID)
 						if err != nil {
 							return err
 						}
 						sc.State.SellerCostBasis = sellerHolding.WeightedAvgPrice
+						if _, err := svc.Store.DecrementReservedHolding(ctx, tx, sc.State.SellerHoldingID, sc.State.Quantity); err != nil {
+							return err
+						}
 						avg, _, err := svc.Store.ApplySellFill(ctx, tx,
 							sellerHolding.UserID, string(sellerHolding.UserKind),
 							sellerHolding.SecurityID, sellerHolding.AccountID,
 							sc.State.Quantity,
 						)
 						if err != nil {
-							return err
-						}
-						if _, err := svc.Store.DecrementReservedHolding(ctx, tx, sc.State.SellerHoldingID, sc.State.Quantity); err != nil {
 							return err
 						}
 

@@ -393,6 +393,65 @@ func TestIntegration_OTC_Exercise_TransfersSharesAndCash(t *testing.T) {
 	}
 }
 
+// TestIntegration_OTC_Exercise_FullyReservedHolding pins the
+// transfer_shares fix: when a seller's ENTIRE holding is reserved by
+// the contract being exercised (quantity == reserved_count == qty),
+// the saga must decrement reserved_count before quantity. Decrementing
+// quantity first leaves reserved_count > quantity and trips the
+// `portfolio_holdings.reserved_le_qty` CHECK, which abandons the saga
+// and leaves the FE exercise modal stuck open (S25-S26 cypress repro).
+func TestIntegration_OTC_Exercise_FullyReservedHolding(t *testing.T) {
+	svc := setup(t)
+	ex := seedExchange(t, svc, "XNYS", domain.CurrencyUSD)
+	sec, _ := seedStock(t, svc, "AAPL", ex, "150", "150", "149", 1000)
+
+	sellerID := uuid.NewString()
+	sellerAcc := uuid.NewString()
+	publishHolding(t, svc, sellerID, domain.KindClient, sec.ID, sellerAcc, 5, "100")
+	buyerID := uuid.NewString()
+	buyerAcc := uuid.NewString()
+	currentReservations.setBalance(buyerAcc, "100000")
+
+	h := findHolding(t, svc, sellerID)
+	// Contract for the WHOLE holding (5/5). After accept, reserved_count=5,
+	// quantity=5 — every share locked behind this single contract.
+	offer, err := svc.CreateOTCOffer(clientOTCCtx(buyerID), CreateOTCOfferInput{
+		SellerHoldingID: h.ID,
+		BuyerAccountID:  buyerAcc,
+		SellerAccountID: sellerAcc,
+		Quantity:        5,
+		PricePerUnit:    "155",
+		Premium:         "10",
+		SettlementDate:  time.Now().AddDate(0, 1, 0),
+	})
+	if err != nil {
+		t.Fatalf("create: %v", err)
+	}
+	accept, err := svc.AcceptOTCOffer(clientOTCCtx(sellerID), AcceptOTCOfferInput{ThreadID: offer.ThreadID})
+	if err != nil {
+		t.Fatalf("accept: %v", err)
+	}
+	pre, err := svc.Store.GetHoldingByID(context.Background(), h.ID)
+	if err != nil {
+		t.Fatalf("GetHoldingByID pre: %v", err)
+	}
+	if pre.Quantity != 5 || pre.ReservedCount != 5 {
+		t.Fatalf("pre-exercise quantity=%d reserved=%d, want 5/5", pre.Quantity, pre.ReservedCount)
+	}
+
+	if _, err := svc.ExerciseOTCContract(clientOTCCtx(buyerID), ExerciseOTCContractInput{ContractID: accept.Contract.ID}); err != nil {
+		t.Fatalf("exercise: %v", err)
+	}
+
+	post, err := svc.Store.GetHoldingByID(context.Background(), h.ID)
+	if err != nil {
+		t.Fatalf("GetHoldingByID post: %v", err)
+	}
+	if post.Quantity != 0 || post.ReservedCount != 0 {
+		t.Fatalf("post-exercise quantity=%d reserved=%d, want 0/0", post.Quantity, post.ReservedCount)
+	}
+}
+
 // EDGE-9: expired contract releases shares but does NOT refund premium.
 func TestIntegration_OTC_Expiry_ReleasesSharesNotPremium(t *testing.T) {
 	svc := setup(t)
