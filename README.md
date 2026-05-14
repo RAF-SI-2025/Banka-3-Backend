@@ -8,13 +8,18 @@ See `CLAUDE.md` for architecture, conventions, and roadmap. Quick start:
 
 ```bash
 cp .env.example .env
-make proto
-make up
-make migrate
-make seed
+make up      # builds the tools image, runs migrations, brings up every service
+make seed    # plants the bootstrap admin + demo dataset
 ```
 
-`make help` shows everything available.
+The only host requirement is Docker (with the Compose plugin) and GNU
+Make. `buf`, `golang-migrate`, `gofumpt`, `golangci-lint`, and `go`
+itself all live inside the `banka-tools` image — see
+`docker/Dockerfile.tools`. `make help` shows every target.
+
+For local-toolchain iteration (faster than spinning a container per
+command), install the host bins (the `flake.nix` covers Nix users) and
+prefix any target with `HOST=1`, e.g. `make HOST=1 test`.
 
 ## Seeded credentials
 

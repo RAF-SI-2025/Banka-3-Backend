@@ -16,9 +16,10 @@ memory.
 ├── go.work                    # workspace declaration
 ├── docker-compose.yml         # local dev: postgres + redis + all services
 ├── Makefile                   # canonical commands (`make help` for the list)
-├── flake.nix                  # nix dev shell (go, protoc, buf, gnumake, …)
-├── .env.example
 ├── docker/Dockerfile          # one image, $SERVICE arg picks the binary
+├── docker/Dockerfile.tools    # toolchain image (buf, migrate, gofumpt, …)
+├── flake.nix                  # nix dev shell (only needed for `make HOST=1`)
+├── .env.example
 ├── buf.yaml / buf.gen.yaml    # proto codegen via buf
 ├── proto/<svc>/v1/*.proto     # service contracts (grpc-gateway annotated)
 ├── gen/proto/                 # generated stubs (gitignored, run `make proto`)
@@ -193,17 +194,33 @@ Use `pkg/probes`, `pkg/shutdown`, `pkg/grpcserver` — don't reinvent.
 make proto                  # buf generate → gen/proto/
 make tidy                   # go mod tidy each module (populates go.sum)
 make build                  # compile all services to bin/
-make up                     # postgres + redis + every service
+make up                     # postgres + redis + migrate + every service
 make down                   # tear down
-make migrate                # apply migrations across all services
+make migrate                # re-apply migrations (auto-runs as part of up)
 make migrate-create SVC=user NAME=add_index
 make seed                   # load dev fixtures
-make nuke                   # down -v + up + migrate + seed
+make nuke                   # down -v + up + seed
 make test                   # unit tests with race detector
 make test-integration
 make lint                   # golangci-lint
 make fmt                    # gofumpt
 ```
+
+By default every toolchain target (`proto`, `migrate*`, `seed`,
+`build`, `tidy`, `lint`, `fmt`, `test*`) runs inside the
+`banka-tools` image (`docker/Dockerfile.tools`), exposed as the
+`tools` profile-gated service in `docker-compose.yml`. The image runs
+as the host UID/GID (passed via `HOST_UID`/`HOST_GID` env from the
+Makefile) so anything it writes into the bind-mounted repo (gen/,
+go.sum, bin/) ends up owned by the developer. The `migrate` compose
+service shares the same image and is wired as a one-shot dependency
+of every app service via `service_completed_successfully`, so app
+services never race the migration pass.
+
+`make HOST=1 <target>` bypasses the container and shells out to the
+host toolchain directly — for devs who already have go/buf/migrate/
+gofumpt/golangci-lint installed and want the lower per-command
+latency.
 
 ## C4 status
 

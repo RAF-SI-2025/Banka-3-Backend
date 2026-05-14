@@ -1,5 +1,12 @@
 name: banka
 
+x-tools-build: &tools-build
+  context: .
+  dockerfile: docker/Dockerfile.tools
+  args:
+    UID: ${HOST_UID:-1000}
+    GID: ${HOST_GID:-1000}
+
 x-service-defaults: &service-defaults
   build:
     context: .
@@ -21,6 +28,15 @@ x-service-defaults: &service-defaults
     SMTP_PASSWORD: "${SMTP_PASSWORD:-}"
     SMTP_FROM: "${SMTP_FROM:-no-reply@banka.local}"
     SMTP_TLS: "${SMTP_TLS:-false}"
+
+# App services share this depends-on block so they all wait for the
+# migrate one-shot to finish before booting. Without it they'd race
+# the migrations and crash on missing tables until the migrate run
+# completed.
+x-app-deps: &app-deps
+  postgres: { condition: service_healthy }
+  redis:    { condition: service_healthy }
+  migrate:  { condition: service_completed_successfully }
 
 services:
   postgres:
@@ -52,6 +68,46 @@ services:
       retries: 10
     networks: [banka]
 
+  # Apply golang-migrate `up` across every service before app services
+  # boot. Idempotent (golang-migrate is a no-op on already-applied
+  # migrations) so re-running `docker compose up -d` costs ~1-2s and
+  # is safe.
+  migrate:
+    image: banka-tools
+    build: *tools-build
+    working_dir: /src
+    volumes:
+      - .:/src
+    environment:
+      DATABASE_URL: "postgres://${POSTGRES_USER}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB}?sslmode=disable"
+    depends_on:
+      postgres: { condition: service_healthy }
+    networks: [banka]
+    restart: "no"
+    command: ["bash", "scripts/db/migrate.sh", "up"]
+
+  # Long-lived nothing — provides the toolchain image for
+  # `docker compose run --rm tools <cmd>`. Profile-gated so it
+  # doesn't spin up on `docker compose up`.
+  tools:
+    image: banka-tools
+    build: *tools-build
+    working_dir: /src
+    volumes:
+      - .:/src
+      - tools-go-mod:/home/app/go/pkg/mod
+      - tools-go-build:/home/app/.cache/go-build
+    environment:
+      DATABASE_URL: "postgres://${POSTGRES_USER}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB}?sslmode=disable"
+      INTEGRATION_DATABASE_URL: "postgres://${POSTGRES_USER}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB}?sslmode=disable"
+      INTEGRATION_REDIS_ADDR: "redis:6379"
+      INTEGRATION_REDIS_PASSWORD: "${REDIS_PASSWORD}"
+      POSTGRES_USER: ${POSTGRES_USER}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+      POSTGRES_DB: ${POSTGRES_DB}
+    networks: [banka]
+    profiles: ["tools"]
+
   user:
     <<: *service-defaults
     build:
@@ -71,9 +127,7 @@ services:
     ports:
       - "${USER_GRPC_PORT:-50051}:50051"
       - "${USER_PROBE_PORT:-8081}:8081"
-    depends_on:
-      postgres: { condition: service_healthy }
-      redis:    { condition: service_healthy }
+    depends_on: *app-deps
     networks: [banka]
 
   gateway:
@@ -112,9 +166,7 @@ services:
     ports:
       - "${BANK_GRPC_PORT:-50052}:50051"
       - "${BANK_PROBE_PORT:-8082}:8081"
-    depends_on:
-      postgres: { condition: service_healthy }
-      redis:    { condition: service_healthy }
+    depends_on: *app-deps
     networks: [banka]
 
   exchange:
@@ -127,9 +179,7 @@ services:
     ports:
       - "${EXCHANGE_GRPC_PORT:-50054}:50051"
       - "${EXCHANGE_PROBE_PORT:-8084}:8081"
-    depends_on:
-      postgres: { condition: service_healthy }
-      redis:    { condition: service_healthy }
+    depends_on: *app-deps
     networks: [banka]
 
   notification:
@@ -142,9 +192,7 @@ services:
     ports:
       - "${NOTIFICATION_GRPC_PORT:-50055}:50051"
       - "${NOTIFICATION_PROBE_PORT:-8085}:8081"
-    depends_on:
-      postgres: { condition: service_healthy }
-      redis:    { condition: service_healthy }
+    depends_on: *app-deps
     networks: [banka]
 
   trading:
@@ -171,14 +219,14 @@ services:
     ports:
       - "${TRADING_GRPC_PORT:-50053}:50051"
       - "${TRADING_PROBE_PORT:-8083}:8081"
-    depends_on:
-      postgres: { condition: service_healthy }
-      redis:    { condition: service_healthy }
+    depends_on: *app-deps
     networks: [banka]
 
 volumes:
   pgdata:
   redisdata:
+  tools-go-mod:
+  tools-go-build:
 
 networks:
   banka:

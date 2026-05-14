@@ -1,0 +1,51 @@
+# syntax=docker/dockerfile:1.7
+#
+# Toolchain image for everything the Makefile delegates to the host:
+# `buf` (proto codegen), `migrate` (golang-migrate), `gofumpt`,
+# `golangci-lint`, plus `go` itself for build/test/tidy/seed.
+#
+# Built lazily by `make` (and by docker-compose for the `migrate`
+# one-shot + the `tools` profile service). The image runs as a user
+# whose UID/GID match the host caller so files this container writes
+# into the bind-mounted repo (gen/, go.sum, bin/) end up owned by the
+# developer, not root.
+
+FROM golang:1.25-alpine
+
+RUN apk add --no-cache bash git make postgresql-client wget ca-certificates
+
+ARG UID=1000
+ARG GID=1000
+
+# Create the app user. On macOS hosts the typical staff group GID (20)
+# already exists on Alpine, so re-use whatever group already owns that
+# GID rather than failing on a duplicate.
+RUN set -ex; \
+    if ! getent group ${GID} >/dev/null; then addgroup -g ${GID} appgrp; fi; \
+    GROUP=$(getent group ${GID} | cut -d: -f1); \
+    adduser -u ${UID} -G "$GROUP" -D -h /home/app app; \
+    mkdir -p /home/app/go/bin /home/app/go/pkg/mod /home/app/.cache/go-build; \
+    chown -R ${UID}:${GID} /home/app
+
+USER app
+ENV HOME=/home/app \
+    GOPATH=/home/app/go \
+    GOCACHE=/home/app/.cache/go-build \
+    PATH=/home/app/go/bin:/usr/local/go/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin \
+    GOWORK=off
+
+ARG BUF_VERSION=v1.45.0
+ARG MIGRATE_VERSION=v4.18.1
+ARG GOFUMPT_VERSION=v0.7.0
+ARG GOLANGCI_LINT_VERSION=v1.61.0
+
+RUN go install github.com/bufbuild/buf/cmd/buf@${BUF_VERSION} \
+ && go install -tags 'postgres' \
+        github.com/golang-migrate/migrate/v4/cmd/migrate@${MIGRATE_VERSION} \
+ && go install mvdan.cc/gofumpt@${GOFUMPT_VERSION} \
+ && wget -qO- https://raw.githubusercontent.com/golangci/golangci-lint/master/install.sh \
+        | sh -s -- -b /home/app/go/bin ${GOLANGCI_LINT_VERSION}
+
+WORKDIR /src
+ENTRYPOINT []
+CMD ["sh"]
