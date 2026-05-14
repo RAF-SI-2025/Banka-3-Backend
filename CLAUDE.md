@@ -15,8 +15,8 @@ memory.
 .
 ├── go.work                    # workspace declaration
 ├── docker-compose.yml         # local dev: postgres + redis + all services
-├── Taskfile.yml               # canonical commands (go-task)
-├── flake.nix                  # nix dev shell (go, protoc, buf, go-task, …)
+├── Makefile                   # canonical commands (`make help` for the list)
+├── flake.nix                  # nix dev shell (go, protoc, buf, gnumake, …)
 ├── .env.example
 ├── docker/Dockerfile          # one image, $SERVICE arg picks the binary
 ├── buf.yaml / buf.gen.yaml    # proto codegen via buf
@@ -45,7 +45,7 @@ memory.
 ```
 
 Generated proto stubs go into `gen/proto/<svc>v1/`. Don't commit them —
-`task proto` regenerates them and CI verifies they're up-to-date.
+`make proto` regenerates them and CI verifies they're up-to-date.
 
 ## Services
 
@@ -94,7 +94,7 @@ One Postgres instance, one schema per service:
 | `notification` | notification | `notification.outbox` |
 
 Migrations are owned per-service in `services/<svc>/migrations/` using
-golang-migrate's `NNNN_name.up.sql` / `.down.sql` convention. `task migrate`
+golang-migrate's `NNNN_name.up.sql` / `.down.sql` convention. `make migrate`
 runs all pending migrations across all services in dependency order.
 
 Cross-schema joins are forbidden by convention — services own their data.
@@ -185,24 +185,24 @@ Use `pkg/probes`, `pkg/shutdown`, `pkg/grpcserver` — don't reinvent.
 - **No god packages**. `internal/util/` is a smell — name the package
   by what it does (`internal/luhn`, `internal/iban`).
 
-## Task targets
+## Make targets
 
-`task --list` shows everything; common ones:
+`make help` shows everything; common ones:
 
 ```
-task proto                  # buf generate → gen/proto/
-task tidy                   # go mod tidy each module (populates go.sum)
-task build                  # compile all services to bin/
-task up                     # postgres + redis + every service
-task down                   # tear down
-task migrate                # apply migrations across all services
-task migrate:create SVC=user NAME=add_index
-task seed                   # load dev fixtures
-task nuke                   # down -v + up + migrate + seed
-task test                   # unit tests with race detector
-task test:integration
-task lint                   # golangci-lint
-task fmt                    # gofumpt
+make proto                  # buf generate → gen/proto/
+make tidy                   # go mod tidy each module (populates go.sum)
+make build                  # compile all services to bin/
+make up                     # postgres + redis + every service
+make down                   # tear down
+make migrate                # apply migrations across all services
+make migrate-create SVC=user NAME=add_index
+make seed                   # load dev fixtures
+make nuke                   # down -v + up + migrate + seed
+make test                   # unit tests with race detector
+make test-integration
+make lint                   # golangci-lint
+make fmt                    # gofumpt
 ```
 
 ## C4 status
@@ -216,7 +216,7 @@ PR8 landed two backend deliverables on top of PR1–PR7:
   every active fund managed by the demoted supervisor in one shot
   + is idempotent. `TestIntegration_Cascade_SkipsClosedFunds` proves
   closed funds stay with the prior manager (`status='active'`-only).
-  Run via `task test:integration` after `task up` + `task migrate`.
+  Run via `make test-integration` after `make up` + `make migrate`.
 
 - *Two real bugs surfaced + fixed* by the c4-PR8 frontend cypress
   specs:
@@ -256,7 +256,7 @@ USD-reference commission caps; per-order commission cap prorated
 across fills; settlement-date re-check on approve; forex paired
 settlement via `bank.SettleForexFill` against per-currency
 `KindForexBook` accounts; clients with approved loan auto-qualify
-for margin. Live stack rebuilt + `task test:integration` green.
+for margin. Live stack rebuilt + `make test-integration` green.
 
 Below: the original landing log from before the audit. Some of these
 notes describe behavior that has since been corrected (e.g. the
@@ -468,7 +468,7 @@ the audit log when in doubt.
 **c3 bootstrap landed (2026-05-09):**
 
 - `services/user/cmd/seed/main.go` extended with `seedTrading`. Plants
-  on every `task seed` (idempotent throughout):
+  on every `make seed` (idempotent throughout):
   - USD personal_fx trading account ("Trgovinski USD") on the seeded
     klijent, opening balance 300000 USD. Match-by-currency-and-kind so
     a hand-rolled USD account survives.
@@ -501,16 +501,16 @@ the audit log when in doubt.
   array_agg(distinct …) pattern.
 - `.env.example` documents `EXECUTION_TICK_INTERVAL` (default 10s) +
   `FX_COMMISSION` (default 0.005).
-- `Taskfile.yml`'s `test:integration` now also runs services/bank's
+- `Makefile`'s `test-integration` now also runs services/bank's
   integration suite (was user-only).
 
-Smoke-test of seed end-to-end on the live dev DB: `task seed` ran twice
+Smoke-test of seed end-to-end on the live dev DB: `make seed` ran twice
 back-to-back, both runs reached "trading fixtures created" without
 error or duplicate. Re-login as `klijent@banka.local` returned a JWT
 with `trading.client` in the perms. `GET /api/v1/listings` as the
 client returned the seeded stocks + future (forex/option correctly
 filtered out per spec p.58); same endpoint as the agent additionally
-returned the forex row. `task test` and `task test:integration` both
+returned the forex row. `make test` and `make test-integration` both
 green.
 
 **c1**: user service — auth (login/refresh/logout), employee CRUD,

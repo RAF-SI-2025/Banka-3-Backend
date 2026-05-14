@@ -4,9 +4,9 @@
 // against a real Postgres. Same gating + reset pattern as the bank
 // service:
 //
-//	task up CELINA=c2          # bring up postgres
-//	task migrate               # apply trading schema
-//	task test:integration      # runs this suite
+//	make up                    # bring up postgres
+//	make migrate               # apply trading schema
+//	make test-integration      # runs this suite
 //
 // Bank settlement, FX rates, and bank-account reads are stubbed
 // in-process so we don't need a live `bank` or `exchange` container.
@@ -464,7 +464,7 @@ func setup(t *testing.T) *Service {
 		// applied, skip with a useful message rather than fail.
 		var n int
 		if err := pool.QueryRow(ctx, `select count(*) from information_schema.tables where table_schema='trading' and table_name='orders'`).Scan(&n); err != nil || n == 0 {
-			fixSkip = "trading.orders missing — run migrations first (task migrate)"
+			fixSkip = "trading.orders missing — run migrations first (make migrate)"
 			return
 		}
 		fixPool = pool

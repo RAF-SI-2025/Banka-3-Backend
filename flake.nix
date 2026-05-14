@@ -22,7 +22,7 @@
             postgresql
             redis
             sqlc
-            go-task
+            gnumake
             docker-compose
           ];
           shellHook = ''

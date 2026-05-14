@@ -4,9 +4,9 @@
 // a real Postgres. Same gating + reset pattern as the user service:
 // build-tag protected, lazy fixture, schema reset between tests.
 //
-//	task up CELINA=c2
-//	task migrate
-//	task test:integration
+//	make up
+//	make migrate
+//	make test-integration
 //
 // The exchange service is stubbed (RateProvider) so these tests don't
 // need a live `exchange` container; rates are pinned in-process.
@@ -98,7 +98,7 @@ func setup(t *testing.T) *Service {
 		// applied, skip with a useful message rather than fail.
 		var n int
 		if err := pool.QueryRow(ctx, `select count(*) from information_schema.tables where table_schema='bank' and table_name='accounts'`).Scan(&n); err != nil || n == 0 {
-			fixSkip = "bank.accounts missing — run migrations first (task migrate)"
+			fixSkip = "bank.accounts missing — run migrations first (make migrate)"
 			return
 		}
 		fixPool = pool

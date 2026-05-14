@@ -6,8 +6,8 @@
 //
 // Run with the local compose stack up:
 //
-//	task up CELINA=c1
-//	task test:integration
+//	make up
+//	make test-integration
 //
 // Override INTEGRATION_DATABASE_URL / INTEGRATION_REDIS_ADDR /
 // INTEGRATION_REDIS_PASSWORD if your dev stack uses non-default ports.
@@ -82,7 +82,7 @@ func setup(t *testing.T) (*Service, *spyNotifier) {
 		// applied, skip with a useful message rather than fail.
 		var n int
 		if err := pool.QueryRow(ctx, `select count(*) from information_schema.tables where table_schema='user' and table_name='employees'`).Scan(&n); err != nil || n == 0 {
-			fixSkip = "user.employees missing — run migrations first (task migrate)"
+			fixSkip = "user.employees missing — run migrations first (make migrate)"
 			return
 		}
 

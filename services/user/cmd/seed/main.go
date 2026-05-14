@@ -284,7 +284,7 @@ func seedClient(ctx context.Context, pool *pgxpool.Pool, email, password, firstN
 // We write directly to the bank schema (same convention as seedClient
 // vs the user schema) instead of going through the bank service —
 // cuts the seed dependency surface to plain pgx, and the bank service
-// can be down when seed runs (we do this after `task migrate` but
+// can be down when seed runs (we do this after `make migrate` but
 // before the service is necessarily up).
 func seedBank(ctx context.Context, pool *pgxpool.Pool, clientID, adminID string) error {
 	if clientID == "" || adminID == "" {
@@ -750,7 +750,7 @@ func seedTrading(ctx context.Context, pool *pgxpool.Pool, clientID, adminID stri
 	// trades at any wall-clock — this is a simulation, not a real market.
 	// Admins can still flip the override per exchange via the /portal/berze
 	// admin UI (or `PATCH /api/v1/exchanges/{mic}/override`) to exercise
-	// the spec p.39 closed-market path; re-running `task seed` forces them
+	// the spec p.39 closed-market path; re-running `make seed` forces them
 	// back to open via on-conflict update.
 	for _, e := range exchanges {
 		if _, err := tx.Exec(ctx, `

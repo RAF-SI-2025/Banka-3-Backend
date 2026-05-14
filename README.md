@@ -8,17 +8,17 @@ See `CLAUDE.md` for architecture, conventions, and roadmap. Quick start:
 
 ```bash
 cp .env.example .env
-task proto
-task up
-task migrate
-task seed
+make proto
+make up
+make migrate
+make seed
 ```
 
-`task --list` shows everything available.
+`make help` shows everything available.
 
 ## Seeded credentials
 
-`task seed` is idempotent and unconditionally plants the bootstrap
+`make seed` is idempotent and unconditionally plants the bootstrap
 admin, the demo client, and (when the bank schema is migrated) a
 small c2 dataset hung off the client: one company, three accounts
 (RSD personal / EUR personal / RSD business), an active card, and an
