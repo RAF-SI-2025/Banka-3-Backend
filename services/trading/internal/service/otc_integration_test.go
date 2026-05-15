@@ -393,6 +393,74 @@ func TestIntegration_OTC_Exercise_TransfersSharesAndCash(t *testing.T) {
 	}
 }
 
+// TestIntegration_OTC_Exercise_ClampsPublicCount pins the migration
+// 0014 fix: without the clamp in ApplySellFill, the seller's
+// public_count survived the exercise unchanged while quantity dropped,
+// and the discovery board (public_count − reserved_count) over-reported
+// the seller's actual remaining inventory. A follow-up CreateOTCOffer
+// could then pass the service-layer pre-check (against the inflated
+// available number) and only fail at the reserved_count CHECK.
+func TestIntegration_OTC_Exercise_ClampsPublicCount(t *testing.T) {
+	svc := setup(t)
+	ex := seedExchange(t, svc, "XNYS", domain.CurrencyUSD)
+	sec, _ := seedStock(t, svc, "AAPL", ex, "150", "150", "149", 1000)
+
+	sellerID := uuid.NewString()
+	sellerAcc := uuid.NewString()
+	publishHolding(t, svc, sellerID, domain.KindClient, sec.ID, sellerAcc, 10, "100")
+	buyerID := uuid.NewString()
+	buyerAcc := uuid.NewString()
+	currentReservations.setBalance(buyerAcc, "100000")
+
+	h := findHolding(t, svc, sellerID)
+	offer, err := svc.CreateOTCOffer(clientOTCCtx(buyerID), CreateOTCOfferInput{
+		SellerHoldingID: h.ID,
+		BuyerAccountID:  buyerAcc,
+		SellerAccountID: sellerAcc,
+		Quantity:        4,
+		PricePerUnit:    "155",
+		Premium:         "10",
+		SettlementDate:  time.Now().AddDate(0, 1, 0),
+	})
+	if err != nil {
+		t.Fatalf("create: %v", err)
+	}
+	accept, err := svc.AcceptOTCOffer(clientOTCCtx(sellerID), AcceptOTCOfferInput{ThreadID: offer.ThreadID})
+	if err != nil {
+		t.Fatalf("accept: %v", err)
+	}
+	if _, err := svc.ExerciseOTCContract(clientOTCCtx(buyerID), ExerciseOTCContractInput{ContractID: accept.Contract.ID}); err != nil {
+		t.Fatalf("exercise: %v", err)
+	}
+
+	post, err := svc.Store.GetHoldingByID(context.Background(), h.ID)
+	if err != nil {
+		t.Fatalf("GetHoldingByID post: %v", err)
+	}
+	if post.Quantity != 6 {
+		t.Fatalf("seller qty after exercise=%d want 6", post.Quantity)
+	}
+	if post.PublicCount != 6 {
+		t.Fatalf("seller public_count after exercise=%d want 6 (clamped to quantity)", post.PublicCount)
+	}
+
+	// Discovery now correctly reports 6 (= public_count − reserved_count),
+	// and a follow-up offer for 7 fails cleanly at the service layer
+	// rather than blowing up against the reserved_count CHECK.
+	_, err = svc.CreateOTCOffer(clientOTCCtx(uuid.NewString()), CreateOTCOfferInput{
+		SellerHoldingID: h.ID,
+		BuyerAccountID:  uuid.NewString(),
+		SellerAccountID: sellerAcc,
+		Quantity:        7,
+		PricePerUnit:    "155",
+		Premium:         "10",
+		SettlementDate:  time.Now().AddDate(0, 1, 0),
+	})
+	if err == nil {
+		t.Fatalf("CreateOTCOffer for 7 shares: want FailedPrecondition, got nil")
+	}
+}
+
 // TestIntegration_OTC_Exercise_FullyReservedHolding pins the
 // transfer_shares fix: when a seller's ENTIRE holding is reserved by
 // the contract being exercised (quantity == reserved_count == qty),

@@ -64,6 +64,12 @@ func (s *Store) ApplyBuyFill(
 // the updated row plus a snapshot of the row's pre-decrement
 // weighted_avg_price so callers can compute realized gains.
 //
+// `public_count` is clamped down to the new quantity atomically:
+// without this, a seller who exercised OTC delivery (or sold on the
+// market) would keep an inflated public_count, and the discovery
+// board would over-report `public_count - reserved_count`. The schema
+// CHECK `public_count <= quantity` (migration 0014) is the backstop.
+//
 // Errors with FailedPrecondition when the user doesn't own enough.
 func (s *Store) ApplySellFill(
 	ctx context.Context, tx pgx.Tx,
@@ -72,8 +78,9 @@ func (s *Store) ApplySellFill(
 ) (avgPrice string, updated *domain.Holding, err error) {
 	const q = `
         update "trading".portfolio_holdings
-        set quantity   = quantity - $5,
-            updated_at = now()
+        set quantity     = quantity - $5,
+            public_count = least(public_count, quantity - $5),
+            updated_at   = now()
         where user_id = $1 and user_kind = $2 and security_id = $3 and account_id = $4
           and quantity >= $5
         returning weighted_avg_price::text, ` + holdingCols
