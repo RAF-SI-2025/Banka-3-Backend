@@ -7349,9 +7349,14 @@ func (x *CreateFundRequest) GetManagerUserId() string {
 }
 
 type InvestInFundRequest struct {
-	state  protoimpl.MessageState `protogen:"open.v1"`
-	Id     string                 `protobuf:"bytes,1,opt,name=id,proto3" json:"id,omitempty"`
-	Amount string                 `protobuf:"bytes,2,opt,name=amount,proto3" json:"amount,omitempty"`
+	state protoimpl.MessageState `protogen:"open.v1"`
+	Id    string                 `protobuf:"bytes,1,opt,name=id,proto3" json:"id,omitempty"`
+	// Investment amount in RSD — the fund's accounting unit (spec p.71
+	// ClientFundTransaction.Iznos = "iznos investicije ... u RSD", and
+	// minimumContribution is RSD). The server converts RSD → the source
+	// account's currency for the debit (commission added on top for
+	// clients, none for the bank/actuary). Mirrors WithdrawFromFundRequest.
+	AmountRsd string `protobuf:"bytes,2,opt,name=amount_rsd,json=amountRsd,proto3" json:"amount_rsd,omitempty"`
 	// Source account. Client's own RSD/FX account, or — when supervisor
 	// is investing on behalf of the bank — a bank-side RSD/FX account.
 	SourceAccountId string `protobuf:"bytes,3,opt,name=source_account_id,json=sourceAccountId,proto3" json:"source_account_id,omitempty"`
@@ -7401,9 +7406,9 @@ func (x *InvestInFundRequest) GetId() string {
 	return ""
 }
 
-func (x *InvestInFundRequest) GetAmount() string {
+func (x *InvestInFundRequest) GetAmountRsd() string {
 	if x != nil {
-		return x.Amount
+		return x.AmountRsd
 	}
 	return ""
 }
@@ -8988,10 +8993,11 @@ const file_trading_v1_trading_proto_rawDesc = "" +
 	"\x04name\x18\x01 \x01(\tB\t\xbaH\x06r\x04\x10\x01\x18xR\x04name\x12*\n" +
 	"\vdescription\x18\x02 \x01(\tB\b\xbaH\x05r\x03\x18\xe8\aR\vdescription\x12Q\n" +
 	"\x14minimum_contribution\x18\x03 \x01(\tB\x1e\xbaH\x1br\x192\x17^[0-9]+(\\.[0-9]{1,4})?$R\x13minimumContribution\x12&\n" +
-	"\x0fmanager_user_id\x18\x04 \x01(\tR\rmanagerUserId\"\xcc\x01\n" +
+	"\x0fmanager_user_id\x18\x04 \x01(\tR\rmanagerUserId\"\xd3\x01\n" +
 	"\x13InvestInFundRequest\x12\x18\n" +
-	"\x02id\x18\x01 \x01(\tB\b\xbaH\x05r\x03\xb0\x01\x01R\x02id\x126\n" +
-	"\x06amount\x18\x02 \x01(\tB\x1e\xbaH\x1br\x192\x17^[0-9]+(\\.[0-9]{1,4})?$R\x06amount\x124\n" +
+	"\x02id\x18\x01 \x01(\tB\b\xbaH\x05r\x03\xb0\x01\x01R\x02id\x12=\n" +
+	"\n" +
+	"amount_rsd\x18\x02 \x01(\tB\x1e\xbaH\x1br\x192\x17^[0-9]+(\\.[0-9]{1,4})?$R\tamountRsd\x124\n" +
 	"\x11source_account_id\x18\x03 \x01(\tB\b\xbaH\x05r\x03\xb0\x01\x01R\x0fsourceAccountId\x12-\n" +
 	"\x13on_behalf_client_id\x18\x04 \x01(\tR\x10onBehalfClientId\"\xf6\x01\n" +
 	"\x17WithdrawFromFundRequest\x12\x18\n" +

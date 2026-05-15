@@ -2,14 +2,21 @@
 //
 // Three forward steps:
 //
+// The investor commits a figure in RSD — the fund's accounting unit
+// (spec p.71 ClientFundTransaction.Iznos "u RSD", minimumContribution
+// in RSD). The source-currency debit is derived from it, never the
+// other way round; this keeps the minimumContribution gate exact and
+// mirrors WithdrawFromFund.
+//
 //   1. reserve_source       — bank.ReserveFunds debits available_balance
-//      on the investor's source account by amount_native (the source
-//      account's currency). FX hop happens at commit time.
+//      on the investor's source account by source_amount (the committed
+//      RSD converted into the source account's currency, commission
+//      grossed in for clients). FX hop happens at commit time.
 //   2. transfer_to_fund     — bank.CommitReservedFunds finalises the
-//      reservation, debiting balance on the source and crediting
-//      balance + available_balance on the fund's RSD account. FX
-//      commission rules:
-//        - client investor  → commission ON  (client pays the FX fee)
+//      reservation, debiting balance on the source and crediting the
+//      full committed RSD (amount_rsd) to the fund's RSD account. The
+//      commission is the src→RSD gap baked into source_amount:
+//        - client investor  → commission ON  (debit grossed by 1/(1-c))
 //        - supervisor (bank)→ commission OFF (actuary path, spec p.55)
 //   3. record_position      — upsert client_fund_positions; bump fund
 //      total_units; mark the audit row completed.
@@ -58,8 +65,8 @@ type fundInvestPayload struct {
 	InitiatorEmployeeID string `json:"initiator_employee_id"`
 	SourceAccountID     string `json:"source_account_id"`
 	SourceCurrency      string `json:"source_currency"`
-	SourceAmount        string `json:"source_amount"` // in source currency
-	AmountRSD           string `json:"amount_rsd"`    // converted, post-commission
+	SourceAmount        string `json:"source_amount"` // in source currency, commission incl.
+	AmountRSD           string `json:"amount_rsd"`    // the committed RSD (fund credit)
 	UnitsDelta          string `json:"units_delta"`
 	IsActuary           bool   `json:"is_actuary"`
 }
@@ -67,7 +74,7 @@ type fundInvestPayload struct {
 // InvestInFundInput is the validated payload.
 type InvestInFundInput struct {
 	FundID           string
-	Amount           string // in source-account currency
+	AmountRSD        string // RSD — the fund's accounting unit (spec p.71)
 	SourceAccountID  string
 	OnBehalfClientID string // sentinel for "in name of bank"; empty for self
 }
@@ -107,8 +114,8 @@ func (s *Service) InvestInFund(ctx context.Context, in InvestInFundInput) (*Inve
 		}
 	}
 
-	amt, err := money.Parse(in.Amount)
-	if err != nil || !money.IsPositive(amt) {
+	amountRSD, err := money.Parse(in.AmountRSD)
+	if err != nil || !money.IsPositive(amountRSD) {
 		return nil, apperr.Validation("amount nije validan iznos")
 	}
 
@@ -120,24 +127,27 @@ func (s *Service) InvestInFund(ctx context.Context, in InvestInFundInput) (*Inve
 		return nil, apperr.FailedPrecondition("fond nije aktivan")
 	}
 
-	// Source account currency lookup for FX math.
+	// minimum_contribution gate on the committed RSD amount. Exact —
+	// the user states the figure in the fund's own currency, so no
+	// FX conversion can blur the threshold (spec p.74 "proveriti
+	// constraint za minimumContribution").
+	min, err := money.Parse(f.MinimumContribution)
+	if err == nil && min.Sign() > 0 && amountRSD.Cmp(min) < 0 {
+		return nil, apperr.FailedPrecondition("iznos je ispod minimalnog uloga fonda")
+	}
+
+	// Source account currency lookup, then convert the committed RSD
+	// → the source account's currency for the debit. Commission is
+	// added on top for clients (the fund still receives the full
+	// committed RSD); none for the bank/actuary path (spec p.55).
+	// RSD source passes through unchanged.
 	srcCurrency, _, err := s.Reservations.AccountAvailable(ctx, in.SourceAccountID)
 	if err != nil {
 		return nil, fmt.Errorf("bank.GetAccount(source): %w", err)
 	}
-
-	// Convert source amount → amount in RSD (post-commission for clients,
-	// pre-commission for supervisors). When src is already RSD the amount
-	// passes through unchanged.
-	amountRSD, err := s.convertToRSDForFundFlow(ctx, srcCurrency, amt, !isInNameOfBank)
+	sourceAmount, err := s.convertFromRSDForFundInvest(ctx, srcCurrency, amountRSD, !isInNameOfBank)
 	if err != nil {
 		return nil, err
-	}
-
-	// minimum_contribution gate on amountRSD.
-	min, err := money.Parse(f.MinimumContribution)
-	if err == nil && min.Sign() > 0 && amountRSD.Cmp(min) < 0 {
-		return nil, apperr.FailedPrecondition("iznos je ispod minimalnog uloga fonda")
 	}
 
 	// Unit pricing snapshot. Run inside a fresh decoration to capture
@@ -192,7 +202,7 @@ func (s *Service) InvestInFund(ctx context.Context, in InvestInFundInput) (*Inve
 		InitiatorEmployeeID: initiator,
 		SourceAccountID:     in.SourceAccountID,
 		SourceCurrency:      string(srcCurrency),
-		SourceAmount:        money.FormatAmount(amt),
+		SourceAmount:        money.FormatAmount(sourceAmount),
 		AmountRSD:           money.FormatAmount(amountRSD),
 		UnitsDelta:          money.FormatAmount(unitsDelta),
 		IsActuary:           isInNameOfBank,
@@ -220,38 +230,61 @@ func (s *Service) InvestInFund(ctx context.Context, in InvestInFundInput) (*Inve
 	return &InvestInFundResult{Transaction: final, SagaID: txID, Pending: false}, nil
 }
 
-// convertToRSDForFundFlow converts amount in `srcCurrency` to RSD via
-// the rate provider's ASK column. Subtracts the FX commission when
-// `applyCommission` is true (client investor path). Passes through
-// unchanged when srcCurrency is already RSD.
-func (s *Service) convertToRSDForFundFlow(
-	ctx context.Context, srcCurrency domain.Currency, srcAmount *big.Rat,
+// convertFromRSDForFundInvest converts a committed RSD amount into the
+// amount that must be debited from the investor's `srcCurrency` source
+// account. The fund is always credited the full committed RSD (the
+// caller passes amountRSD straight through as the commit DestAmount);
+// when `applyCommission` is true (client path) the investor is charged
+// the menjačnica fee on top so the fund still nets the whole figure —
+// the exact inverse of the withdraw haircut in
+// convertFromRSDForFundFlow (spec p.26 ASK on every leg; spec p.55
+// actuaries pay no commission). Passes through unchanged when
+// srcCurrency is already RSD: no FX leg, no commission, and
+// bank.CommitReservedFunds then books a single same-currency leg
+// with src == dst amount.
+func (s *Service) convertFromRSDForFundInvest(
+	ctx context.Context, srcCurrency domain.Currency, amountRSD *big.Rat,
 	applyCommission bool,
 ) (*big.Rat, error) {
 	if srcCurrency == domain.CurrencyRSD || srcCurrency == "" {
-		return srcAmount, nil
+		return amountRSD, nil
 	}
 	if s.Rates == nil {
 		return nil, apperr.FailedPrecondition("FX rate provider nije dostupan")
 	}
+	// RSD → src: divide by the src→RSD ASK (spec p.26 ASK on every leg;
+	// the bank's profit is the commission, not the spread).
 	_, ask, err := s.Rates.Quote(ctx, srcCurrency, domain.CurrencyRSD)
 	if err != nil {
 		return nil, apperr.Internal("fx quote failed", err)
 	}
 	r, err := money.Parse(ask)
-	if err != nil {
-		return nil, apperr.Internal("fx ask unparseable", err)
+	if err != nil || !money.IsPositive(r) {
+		return nil, apperr.Internal("fx ask invalid", err)
 	}
-	out := money.Mul(srcAmount, r)
+	out, err := money.Div(amountRSD, r)
+	if err != nil {
+		return nil, apperr.Internal("fx div failed", err)
+	}
 	if applyCommission {
 		commission, err := money.Parse(s.Cfg.FXCommission)
 		if err == nil && commission.Sign() > 0 {
-			fee := money.Mul(out, commission)
-			out = money.Sub(out, fee)
+			// Gross the debit up by 1/(1-c) so that after the bank's
+			// (1-c) menjačnica haircut the fund still receives the
+			// full committed RSD. Exact inverse of
+			// convertFromRSDForFundFlow's out*(1-c).
+			oneMinusC := money.Sub(money.MustParse("1"), commission)
+			if !money.IsPositive(oneMinusC) {
+				return nil, apperr.FailedPrecondition("FX provizija nije validna")
+			}
+			out, err = money.Div(out, oneMinusC)
+			if err != nil {
+				return nil, apperr.Internal("fx commission div failed", err)
+			}
 		}
 	}
 	if !money.IsPositive(out) {
-		return nil, apperr.Validation("iznos premali posle provizije")
+		return nil, apperr.Validation("iznos nije validan posle konverzije")
 	}
 	return out, nil
 }
@@ -389,4 +422,3 @@ func (s *Service) requireFundsManage(p auth.Principal) error {
 	}
 	return apperr.PermissionDenied("nedovoljne permisije za upravljanje fondom")
 }
-

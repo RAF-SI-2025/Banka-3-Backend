@@ -15,6 +15,7 @@ import (
 
 	"github.com/RAF-SI-2025/Banka-3-Backend/pkg/account"
 	"github.com/RAF-SI-2025/Banka-3-Backend/pkg/auth"
+	"github.com/RAF-SI-2025/Banka-3-Backend/pkg/money"
 	"github.com/RAF-SI-2025/Banka-3-Backend/pkg/permissions"
 	"github.com/RAF-SI-2025/Banka-3-Backend/services/trading/internal/domain"
 )
@@ -81,7 +82,7 @@ func TestIntegration_Fund_CreateAndInvest_Liquid(t *testing.T) {
 
 	res, err := svc.InvestInFund(clientFundsCtx(clientID), InvestInFundInput{
 		FundID:          fund.ID,
-		Amount:          "10000",
+		AmountRSD:       "10000",
 		SourceAccountID: clientAccountID,
 	})
 	if err != nil {
@@ -122,6 +123,87 @@ func TestIntegration_Fund_CreateAndInvest_Liquid(t *testing.T) {
 	}
 }
 
+// TestIntegration_Fund_Invest_FXSource_RSDDenominated asserts the spec
+// p.71 invariant: the investor commits a figure in RSD (the fund's
+// accounting unit) and the fund is credited exactly that RSD even when
+// the source account is foreign. The src→RSD ASK conversion plus the
+// client FX commission are charged on top of the source-account debit
+// so the fund still nets the whole committed amount; the
+// minimum_contribution gate is checked against the committed RSD, not
+// a post-conversion figure. Mirrors the withdraw FX haircut.
+func TestIntegration_Fund_Invest_FXSource_RSDDenominated(t *testing.T) {
+	svc := setup(t)
+	supervisorID := uuid.NewString()
+	clientID := uuid.NewString()
+	usdAccountID := uuid.NewString()
+	currentReservations.setBalance(usdAccountID, "5000")
+	currentReservations.setCurrency(usdAccountID, domain.CurrencyUSD)
+
+	fund := seedFund(t, svc, supervisorID, "Beta Fond")
+
+	// Commit 110_500 RSD from a USD account. pinnedRates USD→RSD
+	// ask = 110.50, FXCommission = 0.005.
+	res, err := svc.InvestInFund(clientFundsCtx(clientID), InvestInFundInput{
+		FundID:          fund.ID,
+		AmountRSD:       "110500",
+		SourceAccountID: usdAccountID,
+	})
+	if err != nil {
+		t.Fatalf("InvestInFund(FX): %v", err)
+	}
+	if res.Transaction.Status != domain.FundTxCompleted {
+		t.Fatalf("status: got %s want completed", res.Transaction.Status)
+	}
+
+	// Expected source debit: base = 110500/110.50 = 1000 USD; grossed
+	// up by 1/(1-0.005) so the fund still receives the full RSD.
+	ask := money.MustParse("110.50")
+	base, err := money.Div(money.MustParse("110500"), ask)
+	if err != nil {
+		t.Fatalf("div: %v", err)
+	}
+	oneMinusC := money.Sub(money.MustParse("1"), money.MustParse("0.005"))
+	srcExpected, err := money.Div(base, oneMinusC)
+	if err != nil {
+		t.Fatalf("div: %v", err)
+	}
+	srcExpectedStr := money.FormatAmount(srcExpected)
+
+	// The fund is credited the FULL committed RSD — the core spec
+	// invariant. UnitsDelta == committed RSD (fresh fund, unit price 1).
+	if got := currentReservations.balance(fund.BankAccountID); !numericEq(got, "110500") {
+		t.Fatalf("fund balance: got %s want 110500 (full committed RSD)", got)
+	}
+	if !numericEq(res.Transaction.UnitsDelta, "110500") {
+		t.Fatalf("units_delta: got %s want 110500", res.Transaction.UnitsDelta)
+	}
+
+	// The USD source paid the conversion + commission on top.
+	if n := len(currentReservations.reserveCalls); n == 0 {
+		t.Fatalf("no reserve call recorded")
+	}
+	gotSrc := currentReservations.reserveCalls[len(currentReservations.reserveCalls)-1].Amount
+	if !numericEq(gotSrc, srcExpectedStr) {
+		t.Fatalf("source reserve: got %s want %s (base/(1-c))", gotSrc, srcExpectedStr)
+	}
+	if money.MustParse(gotSrc).Cmp(base) <= 0 {
+		t.Fatalf("source reserve %s must exceed commission-free base %s", gotSrc, money.FormatAmount(base))
+	}
+	wantBal := money.FormatAmount(money.Sub(money.MustParse("5000"), money.MustParse(srcExpectedStr)))
+	if got := currentReservations.balance(usdAccountID); !numericEq(got, wantBal) {
+		t.Fatalf("usd balance: got %s want %s", got, wantBal)
+	}
+
+	// Position is recorded in the committed RSD, not the FX figure.
+	pos, err := svc.Store.GetFundPosition(context.Background(), fund.ID, clientID)
+	if err != nil {
+		t.Fatalf("GetFundPosition: %v", err)
+	}
+	if !numericEq(pos.TotalInvestedRSD, "110500") {
+		t.Fatalf("position.total_invested_rsd: got %s want 110500", pos.TotalInvestedRSD)
+	}
+}
+
 // TestIntegration_Fund_Invest_BelowMinimum rejects amounts below the
 // fund's minimum_contribution with a FailedPrecondition.
 func TestIntegration_Fund_Invest_BelowMinimum(t *testing.T) {
@@ -136,7 +218,7 @@ func TestIntegration_Fund_Invest_BelowMinimum(t *testing.T) {
 
 	_, err := svc.InvestInFund(clientFundsCtx(clientID), InvestInFundInput{
 		FundID:          fund.ID,
-		Amount:          "100", // below 1000 minimum
+		AmountRSD:       "100", // below 1000 minimum
 		SourceAccountID: clientAccountID,
 	})
 	if err == nil {
@@ -160,7 +242,7 @@ func TestIntegration_Fund_Withdraw_Liquid_Happy(t *testing.T) {
 	fund := seedFund(t, svc, supervisorID, "Gamma Fond")
 	if _, err := svc.InvestInFund(clientFundsCtx(clientID), InvestInFundInput{
 		FundID:          fund.ID,
-		Amount:          "10000",
+		AmountRSD:       "10000",
 		SourceAccountID: clientAccountID,
 	}); err != nil {
 		t.Fatalf("InvestInFund: %v", err)
@@ -232,7 +314,7 @@ func TestIntegration_Fund_Withdraw_All(t *testing.T) {
 	fund := seedFund(t, svc, supervisorID, "Delta Fond")
 	if _, err := svc.InvestInFund(clientFundsCtx(clientID), InvestInFundInput{
 		FundID:          fund.ID,
-		Amount:          "10000",
+		AmountRSD:       "10000",
 		SourceAccountID: clientAccountID,
 	}); err != nil {
 		t.Fatalf("InvestInFund: %v", err)
@@ -267,7 +349,7 @@ func TestIntegration_Fund_BankAsClient_InvestAndWithdraw(t *testing.T) {
 
 	res, err := svc.InvestInFund(supervisorFundsCtx(supervisorID), InvestInFundInput{
 		FundID:           fund.ID,
-		Amount:           "20000",
+		AmountRSD:        "20000",
 		SourceAccountID:  bankSourceAccount,
 		OnBehalfClientID: account.BankAsClientOwnerID,
 	})
@@ -302,7 +384,7 @@ func TestIntegration_Fund_FundActorOrder_HoldingSeed(t *testing.T) {
 	// Invest enough RSD to buy stock.
 	if _, err := svc.InvestInFund(clientFundsCtx(clientID), InvestInFundInput{
 		FundID:          fund.ID,
-		Amount:          "500000",
+		AmountRSD:       "500000",
 		SourceAccountID: clientAccountID,
 	}); err != nil {
 		t.Fatalf("InvestInFund: %v", err)
@@ -355,7 +437,7 @@ func TestIntegration_Fund_DiscoveryDecoration(t *testing.T) {
 	fund := seedFund(t, svc, supervisorID, "Eta Fond")
 	if _, err := svc.InvestInFund(clientFundsCtx(clientID), InvestInFundInput{
 		FundID:          fund.ID,
-		Amount:          "10000",
+		AmountRSD:       "10000",
 		SourceAccountID: clientAccountID,
 	}); err != nil {
 		t.Fatalf("InvestInFund: %v", err)

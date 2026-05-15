@@ -1418,7 +1418,12 @@ message CreateFundRequest {
 
 message InvestInFundRequest {
   string id                = 1 [(buf.validate.field).string.uuid = true];
-  string amount            = 2 [(buf.validate.field).string.pattern = "^[0-9]+(\\.[0-9]{1,4})?$"];
+  // Investment amount in RSD — the fund's accounting unit (spec p.71
+  // ClientFundTransaction.Iznos = "iznos investicije ... u RSD", and
+  // minimumContribution is RSD). The server converts RSD → the source
+  // account's currency for the debit (commission added on top for
+  // clients, none for the bank/actuary). Mirrors WithdrawFromFundRequest.
+  string amount_rsd        = 2 [(buf.validate.field).string.pattern = "^[0-9]+(\\.[0-9]{1,4})?$"];
   // Source account. Client's own RSD/FX account, or — when supervisor
   // is investing on behalf of the bank — a bank-side RSD/FX account.
   string source_account_id = 3 [(buf.validate.field).string.uuid = true];

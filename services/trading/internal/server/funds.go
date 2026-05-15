@@ -61,12 +61,12 @@ func (s *Server) CreateFund(ctx context.Context, in *tradingpb.CreateFundRequest
 		return nil, err
 	}
 	dec := &service.DecoratedFund{
-		Fund:           f,
-		LiquidRSD:      "0",
+		Fund:             f,
+		LiquidRSD:        "0",
 		HoldingsValueRSD: "0",
-		TotalValueRSD:  "0",
-		ProfitRSD:      "0",
-		UnitPriceRSD:   "1",
+		TotalValueRSD:    "0",
+		ProfitRSD:        "0",
+		UnitPriceRSD:     "1",
 	}
 	return decoratedFundToProto(dec), nil
 }
@@ -74,7 +74,7 @@ func (s *Server) CreateFund(ctx context.Context, in *tradingpb.CreateFundRequest
 func (s *Server) InvestInFund(ctx context.Context, in *tradingpb.InvestInFundRequest) (*tradingpb.FundTransactionResponse, error) {
 	res, err := s.Svc.InvestInFund(ctx, service.InvestInFundInput{
 		FundID:           in.GetId(),
-		Amount:           in.GetAmount(),
+		AmountRSD:        in.GetAmountRsd(),
 		SourceAccountID:  in.GetSourceAccountId(),
 		OnBehalfClientID: in.GetOnBehalfClientId(),
 	})
@@ -203,17 +203,17 @@ func fundPositionToProto(p *domain.FundPosition, fundName, share, value, profit 
 		return nil
 	}
 	return &tradingpb.FundPosition{
-		Id:                p.ID,
-		FundId:            p.FundID,
-		FundName:          fundName,
-		ClientId:          p.ClientID,
-		Units:             p.Units,
-		TotalInvestedRsd:  p.TotalInvestedRSD,
-		CurrentValueRsd:   value,
-		ProfitRsd:         profit,
-		SharePct:          share,
-		CreatedAt:         timestamppb.New(p.CreatedAt),
-		UpdatedAt:         timestamppb.New(p.UpdatedAt),
+		Id:               p.ID,
+		FundId:           p.FundID,
+		FundName:         fundName,
+		ClientId:         p.ClientID,
+		Units:            p.Units,
+		TotalInvestedRsd: p.TotalInvestedRSD,
+		CurrentValueRsd:  value,
+		ProfitRsd:        profit,
+		SharePct:         share,
+		CreatedAt:        timestamppb.New(p.CreatedAt),
+		UpdatedAt:        timestamppb.New(p.UpdatedAt),
 	}
 }
 
@@ -243,19 +243,19 @@ func fundTxToProto(t *domain.FundTransaction) *tradingpb.FundTransaction {
 		return nil
 	}
 	return &tradingpb.FundTransaction{
-		Id:                       t.ID,
-		FundId:                   t.FundID,
-		ClientId:                 t.ClientID,
-		InitiatorEmployeeId:      t.InitiatorEmployeeID,
-		AmountRsd:                t.AmountRSD,
-		UnitsDelta:               t.UnitsDelta,
-		SourceOrDestAccountId:    t.SourceOrDestAccountID,
-		IsInflow:                 t.IsInflow,
-		Status:                   fundTxStatusToProto(t.Status),
-		SagaId:                   t.SagaID,
-		FailureReason:            t.FailureReason,
-		CreatedAt:                timestamppb.New(t.CreatedAt),
-		UpdatedAt:                timestamppb.New(t.UpdatedAt),
+		Id:                    t.ID,
+		FundId:                t.FundID,
+		ClientId:              t.ClientID,
+		InitiatorEmployeeId:   t.InitiatorEmployeeID,
+		AmountRsd:             t.AmountRSD,
+		UnitsDelta:            t.UnitsDelta,
+		SourceOrDestAccountId: t.SourceOrDestAccountID,
+		IsInflow:              t.IsInflow,
+		Status:                fundTxStatusToProto(t.Status),
+		SagaId:                t.SagaID,
+		FailureReason:         t.FailureReason,
+		CreatedAt:             timestamppb.New(t.CreatedAt),
+		UpdatedAt:             timestamppb.New(t.UpdatedAt),
 	}
 }
 

@@ -78,7 +78,7 @@ type fundWithdrawPayload struct {
 	DestAccountID       string `json:"dest_account_id"`
 	DestCurrency        string `json:"dest_currency"`
 	DestAmount          string `json:"dest_amount"`
-	AmountRSD           string `json:"amount_rsd"`     // gross RSD pulled from the fund
+	AmountRSD           string `json:"amount_rsd"` // gross RSD pulled from the fund
 	UnitsRemoved        string `json:"units_removed"`
 	CostBasisRemoved    string `json:"cost_basis_removed"`
 	IsActuary           bool   `json:"is_actuary"`
@@ -264,8 +264,11 @@ func (s *Service) WithdrawFromFund(ctx context.Context, in WithdrawFromFundInput
 	}, nil
 }
 
-// convertFromRSDForFundFlow inverts convertToRSDForFundFlow: amountRSD
-// → amount in destCurrency, applying commission for client paths.
+// convertFromRSDForFundFlow converts a committed RSD amount to the
+// payout in destCurrency, taking the menjačnica haircut for client
+// paths (the client receives base*(1-c); the fund is debited the full
+// RSD). Mirror of convertFromRSDForFundInvest, which grosses up by
+// 1/(1-c) on the way in.
 func (s *Service) convertFromRSDForFundFlow(
 	ctx context.Context, destCurrency domain.Currency, amountRSD *big.Rat,
 	applyCommission bool,

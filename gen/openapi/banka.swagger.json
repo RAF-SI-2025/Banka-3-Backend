@@ -4179,8 +4179,9 @@
     "TradingServiceInvestInFundBody": {
       "type": "object",
       "properties": {
-        "amount": {
-          "type": "string"
+        "amountRsd": {
+          "type": "string",
+          "description": "Investment amount in RSD — the fund's accounting unit (spec p.71\nClientFundTransaction.Iznos = \"iznos investicije ... u RSD\", and\nminimumContribution is RSD). The server converts RSD → the source\naccount's currency for the debit (commission added on top for\nclients, none for the bank/actuary). Mirrors WithdrawFromFundRequest."
         },
         "sourceAccountId": {
           "type": "string",
