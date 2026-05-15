@@ -220,7 +220,7 @@ func (s *Store) ListActuaryPerformances(ctx context.Context, typeFilter string) 
           and ($1 = '' or ai.type = $1)
         group by rg.user_id, ai.type
         having coalesce(sum(case when rg.gain_rsd > 0 then rg.gain_rsd else 0 end), 0) > 0
-        order by profit_rsd desc`
+        order by coalesce(sum(case when rg.gain_rsd > 0 then rg.gain_rsd else 0 end), 0) desc`
 	rows, err := s.Pool.Query(ctx, q, typeFilter)
 	if err != nil {
 		return nil, apperr.Internal("list actuary performances", err)

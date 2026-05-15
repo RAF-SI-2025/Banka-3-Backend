@@ -1149,6 +1149,51 @@ func seedTrading(ctx context.Context, pool *pgxpool.Pool, clientID, adminID stri
 		}
 	}
 
+	// Profit Banke — actuary leaderboard fixture (spec p.76). The
+	// dashboard's "Učinak aktuara" tab sums positive gain_rsd from
+	// realized_gains where user_kind='employee' joined to actuary_info;
+	// with no employee rows it renders empty even though the "Pozicije
+	// banke u fondovima" tab has the seeded Beta position. Plant a few
+	// prior-year, already-taxed gains for the two seeded actuaries so
+	// the leaderboard shows the agent ahead of the supervisor.
+	//
+	// taxed=true + a >366-day-old taxed_at keeps these out of the
+	// /portal/porez board and the monthly tax cron regardless of when
+	// the seed runs: ListUnpaidGainsForUser filters `not taxed`, and
+	// ListTaxAggregates' YTD term needs taxed_at >= date_trunc('year',
+	// now()) — an offset of 400 days always lands in a strictly prior
+	// calendar year (max day-of-year is 366). Idempotent: skipped once
+	// any employee realized_gain exists for the agent.
+	var empRG int
+	if err := tx.QueryRow(ctx,
+		`select count(*) from "trading".realized_gains
+		   where user_id = $1 and user_kind = 'employee'`, aktuarID,
+	).Scan(&empRG); err != nil {
+		return fmt.Errorf("count employee realized_gains: %w", err)
+	}
+	if empRG == 0 {
+		if _, err := tx.Exec(ctx, `
+            insert into "trading".realized_gains
+                (user_id, user_kind, security_id, account_id,
+                 quantity, cost_basis_amt, proceeds_amt, currency,
+                 gain_native, gain_rsd, realized_at, taxed, taxed_at)
+            values
+                -- agent: two wins + one loss (3 trades, +61100 RSD)
+                ($1, 'employee', $3, $4, 20, 170.00, 190.50, 'USD',
+                 410.00,  41200.00, now() - interval '430 days', true, now() - interval '400 days'),
+                ($1, 'employee', $3, $4, 10, 450.10, 469.90, 'USD',
+                 198.00,  19900.00, now() - interval '430 days', true, now() - interval '400 days'),
+                ($1, 'employee', $3, $4,  5, 190.50, 185.00, 'USD',
+                 -27.50, -2762.50, now() - interval '430 days', true, now() - interval '400 days'),
+                -- supervisor: one win (1 trade, +7960 RSD)
+                ($2, 'employee', $3, $4,  8, 450.10, 460.00, 'USD',
+                 79.20,    7960.00, now() - interval '430 days', true, now() - interval '400 days')
+            `, aktuarID, supervisorID, aaplID, bankUSDAcctID,
+		); err != nil {
+			return fmt.Errorf("insert employee realized_gains: %w", err)
+		}
+	}
+
 	if err := tx.Commit(ctx); err != nil {
 		return fmt.Errorf("commit trading seed: %w", err)
 	}
@@ -1160,7 +1205,8 @@ func seedTrading(ctx context.Context, pool *pgxpool.Pool, clientID, adminID stri
 		"  stocks:       AAPL, MSFT, GOOGL, VOD, NIS\n"+
 		"  future:       CL (Crude Oil WTI, +90d settlement)\n"+
 		"  forex:        EUR/USD\n"+
-		"  option:       AAPL-C-190 (call, ATM, +60d expiry)\n",
+		"  option:       AAPL-C-190 (call, ATM, +60d expiry)\n"+
+		"  profit banke: aktuar +61100 RSD / 3, supervizor +7960 RSD / 1\n",
 		usdNumber, usdAccountID, aktuarID, supervisorID)
 	return nil
 }
