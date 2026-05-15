@@ -16,12 +16,12 @@ import (
 
 // Router holds dependencies shared across HTTP handlers.
 type Router struct {
-	Users           userpb.UserServiceClient
-	AuthMW          func(http.Handler) http.Handler
-	IdempotencyMW   func(http.Handler) http.Handler
-	VerificationMW  func(http.Handler) http.Handler
-	Verifier        verification.Verifier
-	SecureCookies   bool
+	Users          userpb.UserServiceClient
+	AuthMW         func(http.Handler) http.Handler
+	IdempotencyMW  func(http.Handler) http.Handler
+	VerificationMW func(http.Handler) http.Handler
+	Verifier       verification.Verifier
+	SecureCookies  bool
 }
 
 // Mount returns the gateway's top-level handler. Public auth endpoints
@@ -52,6 +52,9 @@ func (r *Router) Mount(ctx context.Context, gwMux *runtime.ServeMux, registerGW 
 	// who's asking) but does not itself need a verification code.
 	if r.Verifier != nil {
 		mux.Handle("POST /api/v1/verification/request", r.AuthMW(http.HandlerFunc(r.VerificationHandler())))
+		// Additive: mobile polls this for the active codes to display
+		// (spec p.84). Auth-gated so we know whose codes to list.
+		mux.Handle("GET /api/v1/verification/pending", r.AuthMW(http.HandlerFunc(r.VerificationPendingHandler())))
 	}
 
 	// Everything else (activation, password reset, employees, clients,

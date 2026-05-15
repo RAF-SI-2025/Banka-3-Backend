@@ -36,8 +36,13 @@ type Config struct {
 	JWTSigningKey []byte
 	AccessTTL     time.Duration // default 15m
 	RefreshTTL    time.Duration // default 168h (7 days)
-	ActivationTTL time.Duration // default 24h
-	ResetTTL      time.Duration // default 15m (per spec)
+	// MobileRefreshTTL is the refresh-token lifetime for mobile logins
+	// (LoginOption LongLived). Spec p.84 — the mobile app has no
+	// session interval; default ~1y so it effectively never expires in
+	// the dev sim while still being a real, revocable server-side TTL.
+	MobileRefreshTTL time.Duration // default 8760h (365 days)
+	ActivationTTL    time.Duration // default 24h
+	ResetTTL         time.Duration // default 15m (per spec)
 
 	// WebBaseURL is the public URL of the SPA used in email links.
 	WebBaseURL string
@@ -64,6 +69,9 @@ func New(s *store.Store, n Notifier, r *redis.Client, cfg Config, log *slog.Logg
 	}
 	if cfg.RefreshTTL == 0 {
 		cfg.RefreshTTL = 7 * 24 * time.Hour
+	}
+	if cfg.MobileRefreshTTL == 0 {
+		cfg.MobileRefreshTTL = 365 * 24 * time.Hour
 	}
 	if cfg.ActivationTTL == 0 {
 		cfg.ActivationTTL = 24 * time.Hour

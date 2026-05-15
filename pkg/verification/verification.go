@@ -1,8 +1,9 @@
 // Package verification implements the spec p.11 "Verifikacioni kod"
-// flow as a Redis-backed primitive. The mobile app is deferred until
-// celina 5; until then, requesting a code returns the code in the
-// HTTP response body so the SPA can render it inline (the FE wraps
-// it in a fake-QR dialog so the round-trip is exercised end-to-end).
+// flow as a Redis-backed primitive. The web app still gets the code in
+// the HTTP response body so the SPA can render it inline (the fake-QR
+// dialog exercises the round-trip end-to-end). The mobile app (spec
+// p.84) instead polls ListPending and shows the code on the phone;
+// that path is purely additive — the web in-body code is unchanged.
 //
 // Lifecycle:
 //
@@ -11,11 +12,11 @@
 //  2. Consume(id, code, expectedActionKind) →
 //     - success: deletes the record and returns nil (one-shot).
 //     - wrong code: increments attempts; returns ErrWrongCode. After
-//       MaxAttempts the record is deleted and ErrTooMany returns until
-//       a fresh code is issued.
+//     MaxAttempts the record is deleted and ErrTooMany returns until
+//     a fresh code is issued.
 //     - expired/missing: ErrNotFound.
 //     - actionKind mismatch: ErrMismatch (caller asked to consume a
-//       payment code on a card-issue endpoint, etc).
+//     payment code on a card-issue endpoint, etc).
 //
 // Action kind is part of the record so a code minted for one operation
 // can't be replayed against another. The caller is responsible for
@@ -30,6 +31,7 @@ import (
 	"errors"
 	"fmt"
 	"math/big"
+	"strconv"
 	"time"
 
 	"github.com/redis/go-redis/v9"
@@ -64,10 +66,10 @@ const (
 	// Kept as distinct kinds (rather than one umbrella) so a code
 	// minted for "OTC accept" can't be replayed to confirm a fund
 	// withdrawal, and the FE renders the right Serbian copy per flow.
-	ActionOTCAccept     ActionKind = "otc_accept"
-	ActionOTCExercise   ActionKind = "otc_exercise"
-	ActionFundInvest    ActionKind = "fund_invest"
-	ActionFundWithdraw  ActionKind = "fund_withdraw"
+	ActionOTCAccept    ActionKind = "otc_accept"
+	ActionOTCExercise  ActionKind = "otc_exercise"
+	ActionFundInvest   ActionKind = "fund_invest"
+	ActionFundWithdraw ActionKind = "fund_withdraw"
 )
 
 var (
@@ -94,12 +96,32 @@ type Verifier interface {
 	Consume(ctx context.Context, id, code string, expectedKind ActionKind) error
 }
 
-// Cache is the Redis-backed Verifier.
+// Pending is one active (not yet consumed/expired) verification record,
+// as seen by the owning user. Used by the mobile app's "Verifikacija"
+// screen (spec p.84) — it displays Code and the user types it back on
+// the web app (spec Option 1).
+type Pending struct {
+	ID        string
+	Kind      ActionKind
+	Code      string
+	Attempts  int
+	ExpiresAt time.Time
+}
+
+// PendingLister is an optional capability: list a user's active codes.
+// Kept separate from Verifier so the existing in-memory test stubs
+// don't have to implement it — the gateway type-asserts for it.
+type PendingLister interface {
+	ListPending(ctx context.Context, userID string) ([]Pending, error)
+}
+
+// Cache is the Redis-backed Verifier (and PendingLister).
 type Cache struct {
 	R *redis.Client
 }
 
-func key(id string) string { return "verif:" + id }
+func key(id string) string      { return "verif:" + id }
+func userKey(uid string) string { return "verif:user:" + uid }
 
 type record struct {
 	UserID   string     `json:"u"`
@@ -128,7 +150,61 @@ func (c *Cache) Issue(ctx context.Context, userID string, kind ActionKind) (stri
 	if err := c.R.Set(ctx, key(id), raw, CodeTTL).Err(); err != nil {
 		return "", "", time.Time{}, err
 	}
+	// Secondary per-user index for the mobile pending viewer (spec
+	// p.84). Best-effort: a failed index write must never fail code
+	// issuance — the web verification flow doesn't depend on it, and
+	// ListPending prunes stale members lazily anyway.
+	idx := userKey(userID)
+	_ = c.R.ZAdd(ctx, idx, redis.Z{Score: float64(expiresAt.Unix()), Member: id}).Err()
+	_ = c.R.Expire(ctx, idx, CodeTTL).Err()
 	return id, code, expiresAt, nil
+}
+
+// ListPending returns the caller's active verification records. It
+// prunes index entries that have expired or whose record was already
+// consumed (the record key is gone but the index member lingered).
+func (c *Cache) ListPending(ctx context.Context, userID string) ([]Pending, error) {
+	idx := userKey(userID)
+	now := time.Now().Unix()
+	// Drop index members whose expiry score is in the past.
+	_ = c.R.ZRemRangeByScore(ctx, idx, "0", strconv.FormatInt(now-1, 10)).Err()
+
+	zs, err := c.R.ZRangeByScoreWithScores(ctx, idx, &redis.ZRangeBy{
+		Min: strconv.FormatInt(now, 10),
+		Max: "+inf",
+	}).Result()
+	if err != nil {
+		return nil, err
+	}
+
+	out := make([]Pending, 0, len(zs))
+	for _, z := range zs {
+		id, ok := z.Member.(string)
+		if !ok || id == "" {
+			continue
+		}
+		raw, gerr := c.R.Get(ctx, key(id)).Bytes()
+		if errors.Is(gerr, redis.Nil) {
+			// Consumed or expired between the index write and now.
+			_ = c.R.ZRem(ctx, idx, id).Err()
+			continue
+		}
+		if gerr != nil {
+			return nil, gerr
+		}
+		var rec record
+		if json.Unmarshal(raw, &rec) != nil {
+			continue
+		}
+		out = append(out, Pending{
+			ID:        id,
+			Kind:      rec.Kind,
+			Code:      rec.Code,
+			Attempts:  rec.Attempts,
+			ExpiresAt: time.Unix(int64(z.Score), 0),
+		})
+	}
+	return out, nil
 }
 
 // Consume validates id+code against the stored record. On a clean

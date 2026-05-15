@@ -13,6 +13,25 @@ import (
 	"github.com/RAF-SI-2025/Banka-3-Backend/services/user/internal/domain"
 )
 
+// LoginOption tweaks token issuance. Variadic so the existing
+// (ctx,email,password) / (ctx,token) call sites — including the c1
+// test suite — stay source-compatible; only the mobile path passes one.
+type LoginOption func(*sessionOpts)
+
+type sessionOpts struct{ longLived bool }
+
+// LongLived makes the issued refresh token long-lived (mobile, spec
+// p.84 "no session interval"). Web logins omit it → normal RefreshTTL.
+func LongLived() LoginOption { return func(o *sessionOpts) { o.longLived = true } }
+
+func resolveOpts(opts []LoginOption) sessionOpts {
+	var s sessionOpts
+	for _, o := range opts {
+		o(&s)
+	}
+	return s
+}
+
 // LoginResult is what Login returns. Server layer maps to proto.
 type LoginResult struct {
 	AccessToken      string
@@ -34,15 +53,16 @@ type LoginResult struct {
 // valid email addresses by observing different error responses. The
 // spec calls out the wrong-password copy explicitly (E2E p.4) and we
 // apply it uniformly to the unknown-email path too.
-func (s *Service) Login(ctx context.Context, email, password string) (*LoginResult, error) {
+func (s *Service) Login(ctx context.Context, email, password string, opts ...LoginOption) (*LoginResult, error) {
 	email = strings.TrimSpace(email)
 	if email == "" || password == "" {
 		return nil, apperr.Validation("email and password are required")
 	}
+	longLived := resolveOpts(opts).longLived
 
 	emp, err := s.Store.GetEmployeeByEmail(ctx, email)
 	if err == nil {
-		return s.completeLogin(ctx, emp.ID, emp.Email, domain.KindEmployee, emp.PasswordHash, emp.Active, emp.Activated(), emp.Permissions, emp.SessionVersion, emp.FirstName, emp.LastName, password)
+		return s.completeLogin(ctx, emp.ID, emp.Email, domain.KindEmployee, emp.PasswordHash, emp.Active, emp.Activated(), emp.Permissions, emp.SessionVersion, emp.FirstName, emp.LastName, password, longLived)
 	}
 	if !isNotFound(err) {
 		return nil, err
@@ -50,7 +70,7 @@ func (s *Service) Login(ctx context.Context, email, password string) (*LoginResu
 
 	cl, err := s.Store.GetClientByEmail(ctx, email)
 	if err == nil {
-		return s.completeLogin(ctx, cl.ID, cl.Email, domain.KindClient, cl.PasswordHash, cl.Active, cl.PasswordHash != "", cl.Permissions, cl.SessionVersion, cl.FirstName, cl.LastName, password)
+		return s.completeLogin(ctx, cl.ID, cl.Email, domain.KindClient, cl.PasswordHash, cl.Active, cl.PasswordHash != "", cl.Permissions, cl.SessionVersion, cl.FirstName, cl.LastName, password, longLived)
 	}
 	if !isNotFound(err) {
 		return nil, err
@@ -72,6 +92,7 @@ func (s *Service) completeLogin(
 	sessionVersion int64,
 	firstName, lastName string,
 	password string,
+	longLived bool,
 ) (*LoginResult, error) {
 	if !active {
 		return nil, apperr.PermissionDenied("nalog je deaktiviran")
@@ -83,7 +104,7 @@ func (s *Service) completeLogin(
 	if err != nil || !ok {
 		return nil, apperr.Unauthenticated("Neispravni kredencijali")
 	}
-	r, err := s.issueTokens(ctx, kind, userID, perms, sessionVersion)
+	r, err := s.issueTokens(ctx, kind, userID, perms, sessionVersion, longLived)
 	if err != nil {
 		return nil, err
 	}
@@ -93,7 +114,7 @@ func (s *Service) completeLogin(
 }
 
 // issueTokens signs a fresh access JWT and creates a refresh token row.
-func (s *Service) issueTokens(ctx context.Context, kind domain.UserKind, userID string, perms []string, sv int64) (*LoginResult, error) {
+func (s *Service) issueTokens(ctx context.Context, kind domain.UserKind, userID string, perms []string, sv int64, longLived bool) (*LoginResult, error) {
 	access, err := auth.Sign(auth.Claims{
 		UserID:         userID,
 		UserKind:       auth.UserKind(kind),
@@ -108,7 +129,14 @@ func (s *Service) issueTokens(ctx context.Context, kind domain.UserKind, userID 
 	if err != nil {
 		return nil, apperr.Internal("generate refresh", err)
 	}
-	if err := s.Store.CreateRefreshToken(ctx, kind, userID, refreshHash, s.Clock.Now().Add(s.Cfg.RefreshTTL)); err != nil {
+	// Mobile (spec p.84 "no session interval") gets the long-lived
+	// lifetime; web keeps the standard RefreshTTL. The access token
+	// stays short-lived in both cases — only the refresh window grows.
+	refreshTTL := s.Cfg.RefreshTTL
+	if longLived {
+		refreshTTL = s.Cfg.MobileRefreshTTL
+	}
+	if err := s.Store.CreateRefreshToken(ctx, kind, userID, refreshHash, s.Clock.Now().Add(refreshTTL)); err != nil {
 		return nil, err
 	}
 
@@ -116,7 +144,7 @@ func (s *Service) issueTokens(ctx context.Context, kind domain.UserKind, userID 
 		AccessToken:      access,
 		RefreshToken:     refreshPlain,
 		AccessExpiresIn:  s.Cfg.AccessTTL,
-		RefreshExpiresIn: s.Cfg.RefreshTTL,
+		RefreshExpiresIn: refreshTTL,
 		UserKind:         kind,
 		UserID:           userID,
 		Permissions:      perms,
@@ -125,7 +153,7 @@ func (s *Service) issueTokens(ctx context.Context, kind domain.UserKind, userID 
 
 // Refresh rotates the refresh token. The presented one is revoked
 // immediately on use; if it's already revoked or expired we reject.
-func (s *Service) Refresh(ctx context.Context, refreshPlain string) (*LoginResult, error) {
+func (s *Service) Refresh(ctx context.Context, refreshPlain string, opts ...LoginOption) (*LoginResult, error) {
 	if refreshPlain == "" {
 		return nil, apperr.Unauthenticated("missing refresh token")
 	}
@@ -147,7 +175,7 @@ func (s *Service) Refresh(ctx context.Context, refreshPlain string) (*LoginResul
 	if err := s.Store.RevokeRefreshToken(ctx, hash); err != nil {
 		return nil, err
 	}
-	return s.issueTokens(ctx, kind, userID, perms, sv)
+	return s.issueTokens(ctx, kind, userID, perms, sv, resolveOpts(opts).longLived)
 }
 
 // Logout revokes one refresh token. Idempotent.

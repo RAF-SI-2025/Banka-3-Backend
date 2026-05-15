@@ -17,6 +17,10 @@ const refreshCookieName = "refresh_token"
 type loginRequestBody struct {
 	Email    string `json:"email"`
 	Password string `json:"password"`
+	// LongLivedSession is set by the mobile app (no cookie jar, spec
+	// p.84 no session interval). Absent/false for web → unchanged
+	// cookie flow.
+	LongLivedSession bool `json:"longLivedSession"`
 }
 
 type loginResponseBody struct {
@@ -27,6 +31,9 @@ type loginResponseBody struct {
 	Permissions     []string `json:"permissions"`
 	FirstName       string   `json:"firstName,omitempty"`
 	LastName        string   `json:"lastName,omitempty"`
+	// RefreshToken is returned ONLY on the mobile (long-lived) path.
+	// omitempty keeps the web response byte-identical to before.
+	RefreshToken string `json:"refreshToken,omitempty"`
 }
 
 // LoginHandler takes JSON {email, password}, calls user.Login, sets the
@@ -42,15 +49,15 @@ func (r *Router) LoginHandler() http.HandlerFunc {
 			return
 		}
 		resp, err := r.Users.Login(req.Context(), &userpb.LoginRequest{
-			Email:    body.Email,
-			Password: body.Password,
+			Email:            body.Email,
+			Password:         body.Password,
+			LongLivedSession: body.LongLivedSession,
 		})
 		if err != nil {
 			writeGRPCError(w, err)
 			return
 		}
-		setRefreshCookie(w, resp.GetRefreshToken(), r.SecureCookies)
-		writeJSON(w, http.StatusOK, loginResponseBody{
+		out := loginResponseBody{
 			AccessToken:     resp.GetAccessToken(),
 			AccessExpiresIn: resp.GetAccessExpiresIn(),
 			UserID:          resp.GetUserId(),
@@ -58,36 +65,74 @@ func (r *Router) LoginHandler() http.HandlerFunc {
 			Permissions:     resp.GetPermissions(),
 			FirstName:       resp.GetFirstName(),
 			LastName:        resp.GetLastName(),
-		})
+		}
+		// Web: refresh token in the httpOnly cookie (unchanged).
+		// Mobile: in the body (no cookie jar), and we skip the cookie
+		// entirely so the web path stays byte-identical.
+		if body.LongLivedSession {
+			out.RefreshToken = resp.GetRefreshToken()
+		} else {
+			setRefreshCookie(w, resp.GetRefreshToken(), r.SecureCookies)
+		}
+		writeJSON(w, http.StatusOK, out)
 	}
+}
+
+type refreshRequestBody struct {
+	RefreshToken     string `json:"refreshToken"`
+	LongLivedSession bool   `json:"longLivedSession"`
 }
 
 type refreshResponseBody struct {
 	AccessToken     string `json:"accessToken"`
 	AccessExpiresIn int64  `json:"accessExpiresIn"`
+	// Rotated refresh token, mobile path only (omitempty → web JSON
+	// unchanged; web gets the rotated token in the cookie instead).
+	RefreshToken string `json:"refreshToken,omitempty"`
 }
 
-// RefreshHandler reads the refresh cookie, asks user.Refresh for a new
-// token pair, sets a new cookie, and returns the new access token.
+// RefreshHandler rotates the refresh token. Web sends it in the
+// httpOnly cookie (unchanged path: new cookie, no body token). Mobile
+// has no cookie jar, so when the cookie is absent we accept the token
+// in the JSON body and return the rotated one in the body, keeping
+// long_lived_session so the new token stays long-lived.
 func (r *Router) RefreshHandler() http.HandlerFunc {
 	return func(w http.ResponseWriter, req *http.Request) {
-		c, err := req.Cookie(refreshCookieName)
-		if err != nil || c.Value == "" {
+		if c, err := req.Cookie(refreshCookieName); err == nil && c.Value != "" {
+			resp, rerr := r.Users.Refresh(req.Context(), &userpb.RefreshRequest{
+				RefreshToken: c.Value,
+			})
+			if rerr != nil {
+				clearRefreshCookie(w, r.SecureCookies)
+				writeGRPCError(w, rerr)
+				return
+			}
+			setRefreshCookie(w, resp.GetRefreshToken(), r.SecureCookies)
+			writeJSON(w, http.StatusOK, refreshResponseBody{
+				AccessToken:     resp.GetAccessToken(),
+				AccessExpiresIn: resp.GetAccessExpiresIn(),
+			})
+			return
+		}
+
+		// No cookie → mobile body path.
+		var body refreshRequestBody
+		if err := json.NewDecoder(req.Body).Decode(&body); err != nil || body.RefreshToken == "" {
 			writeError(w, http.StatusUnauthorized, "no refresh token")
 			return
 		}
 		resp, err := r.Users.Refresh(req.Context(), &userpb.RefreshRequest{
-			RefreshToken: c.Value,
+			RefreshToken:     body.RefreshToken,
+			LongLivedSession: body.LongLivedSession,
 		})
 		if err != nil {
-			clearRefreshCookie(w, r.SecureCookies)
 			writeGRPCError(w, err)
 			return
 		}
-		setRefreshCookie(w, resp.GetRefreshToken(), r.SecureCookies)
 		writeJSON(w, http.StatusOK, refreshResponseBody{
 			AccessToken:     resp.GetAccessToken(),
 			AccessExpiresIn: resp.GetAccessExpiresIn(),
+			RefreshToken:    resp.GetRefreshToken(),
 		})
 	}
 }
@@ -97,6 +142,13 @@ func (r *Router) LogoutHandler() http.HandlerFunc {
 	return func(w http.ResponseWriter, req *http.Request) {
 		if c, err := req.Cookie(refreshCookieName); err == nil && c.Value != "" {
 			_, _ = r.Users.Logout(req.Context(), &userpb.LogoutRequest{RefreshToken: c.Value})
+		} else {
+			// Mobile path: refresh token in the body so the
+			// server-side row is actually revoked on sign-out.
+			var body refreshRequestBody
+			if json.NewDecoder(req.Body).Decode(&body) == nil && body.RefreshToken != "" {
+				_, _ = r.Users.Logout(req.Context(), &userpb.LogoutRequest{RefreshToken: body.RefreshToken})
+			}
 		}
 		clearRefreshCookie(w, r.SecureCookies)
 		w.WriteHeader(http.StatusNoContent)

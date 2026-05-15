@@ -118,6 +118,78 @@ func TestConsumeMissing(t *testing.T) {
 	}
 }
 
+func TestListPending(t *testing.T) {
+	c := setup(t)
+	ctx := context.Background()
+
+	// Unknown user → empty, no error.
+	if got, err := c.ListPending(ctx, "nobody"); err != nil || len(got) != 0 {
+		t.Fatalf("empty user: got %v, err %v", got, err)
+	}
+
+	id1, code1, _, _ := c.Issue(ctx, "u1", ActionPayment)
+	_, _, _, _ = c.Issue(ctx, "u1", ActionTransfer)
+	_, _, _, _ = c.Issue(ctx, "u2", ActionCardIssue)
+
+	got, err := c.ListPending(ctx, "u1")
+	if err != nil {
+		t.Fatalf("list u1: %v", err)
+	}
+	if len(got) != 2 {
+		t.Fatalf("u1 should have 2 pending, got %d", len(got))
+	}
+	for _, p := range got {
+		if p.Code == "" || p.ID == "" {
+			t.Errorf("pending missing code/id: %+v", p)
+		}
+		if p.Attempts != 0 {
+			t.Errorf("fresh code attempts should be 0, got %d", p.Attempts)
+		}
+		if d := time.Until(p.ExpiresAt); d <= 0 || d > CodeTTL+time.Second {
+			t.Errorf("expiry out of range: %v", d)
+		}
+		if p.ID == id1 && p.Code != code1 {
+			t.Errorf("code mismatch for id1: want %s got %s", code1, p.Code)
+		}
+	}
+
+	// u2's code must not leak into u1's list.
+	if u2, _ := c.ListPending(ctx, "u2"); len(u2) != 1 {
+		t.Fatalf("u2 should have 1 pending, got %d", len(u2))
+	}
+
+	// Consuming retires the record; the stale index entry is pruned.
+	if err := c.Consume(ctx, id1, code1, ActionPayment); err != nil {
+		t.Fatalf("consume: %v", err)
+	}
+	after, err := c.ListPending(ctx, "u1")
+	if err != nil {
+		t.Fatalf("list u1 after consume: %v", err)
+	}
+	if len(after) != 1 {
+		t.Fatalf("u1 should have 1 pending after consume, got %d", len(after))
+	}
+	if after[0].ID == id1 {
+		t.Errorf("consumed id should not appear in pending list")
+	}
+}
+
+func TestListPendingReflectsAttempts(t *testing.T) {
+	c := setup(t)
+	ctx := context.Background()
+	id, _, _, _ := c.Issue(ctx, "u", ActionPayment)
+	if err := c.Consume(ctx, id, "000000", ActionPayment); !errors.Is(err, ErrWrongCode) {
+		t.Fatalf("want ErrWrongCode, got %v", err)
+	}
+	got, err := c.ListPending(ctx, "u")
+	if err != nil || len(got) != 1 {
+		t.Fatalf("list: got %v err %v", got, err)
+	}
+	if got[0].Attempts != 1 {
+		t.Errorf("attempts after one wrong try: want 1, got %d", got[0].Attempts)
+	}
+}
+
 func TestConsumeExpired(t *testing.T) {
 	c := setup(t)
 	ctx := context.Background()

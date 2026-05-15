@@ -55,12 +55,13 @@ func Run() error {
 	defer closeNotif()
 
 	svc := service.New(st, notifier, rdb, service.Config{
-		JWTSigningKey: []byte(config.MustString("JWT_SIGNING_KEY")),
-		AccessTTL:     config.Duration("JWT_ACCESS_TTL", 0),
-		RefreshTTL:    config.Duration("JWT_REFRESH_TTL", 0),
-		ActivationTTL: config.Duration("ACTIVATION_TTL", 0),
-		ResetTTL:      config.Duration("RESET_TTL", 0),
-		WebBaseURL:    config.String("WEB_BASE_URL", "http://localhost:5173"),
+		JWTSigningKey:    []byte(config.MustString("JWT_SIGNING_KEY")),
+		AccessTTL:        config.Duration("JWT_ACCESS_TTL", 0),
+		RefreshTTL:       config.Duration("JWT_REFRESH_TTL", 0),
+		MobileRefreshTTL: config.Duration("JWT_MOBILE_REFRESH_TTL", 0),
+		ActivationTTL:    config.Duration("ACTIVATION_TTL", 0),
+		ResetTTL:         config.Duration("RESET_TTL", 0),
+		WebBaseURL:       config.String("WEB_BASE_URL", "http://localhost:5173"),
 	}, log)
 
 	// Optional trading-svc client for the c4 PR4 CASCADE-1 fund-manager

@@ -138,8 +138,13 @@ debit / credit operations all need an idempotency key column.
 - Access token: JWT, 15min TTL, signed HS256 (key in env). Carries
   `sub` (user_id), `permissions` (string array), `iat`, `exp`.
 - Refresh token: opaque random 32 bytes, 7d TTL, stored hashed in
-  `user.refresh_tokens`. Delivered to FE in an `httpOnly; Secure;
-  SameSite=Strict` cookie scoped to `/api/v1/auth/refresh`.
+  `user.refresh_tokens`. Web: delivered in an `httpOnly; Secure;
+  SameSite=Strict` cookie scoped to `/api/v1/auth`. Mobile (login
+  with `longLivedSession:true`, spec p.84): no cookie jar, so the
+  gateway returns the token in the body and `RefreshHandler` accepts
+  it in the body; lifetime is `JWT_MOBILE_REFRESH_TTL` (~1y). Both
+  paths share one user-service flow (variadic `LoginOption`); the
+  web path is byte-identical to before (response field `omitempty`).
 - The gateway validates access tokens and forwards
   `x-user-id` + `x-permissions` metadata to gRPC services.
 - Activation + password-reset tokens are stored in Redis with TTL
@@ -549,8 +554,14 @@ internal admin metadata to fetch the recipient address).
 **Verification primitive** (`pkg/verification`, gateway middleware):
 spec p.11 verifikacioni-kod gates payments / transfers / limit
 changes / card issuance. Redis-keyed, 6-digit, 5-min TTL, 3 wrong
-attempts retire the record. Mobile app is c5; until then the gateway
-returns the code in the request response so the FE can render it.
+attempts retire the record. The web flow returns the code in the
+`/verification/request` response so the FE renders it inline (dev
+mode — unchanged). The mobile app (spec p.84) instead polls
+`GET /api/v1/verification/pending` (additive; `pkg/verification`
+keeps a per-user index, gateway type-asserts the optional
+`PendingLister`) and shows the code on the phone for the user to type
+back on the web. Do NOT remove the web in-body code — Cypress depends
+on it.
 
 **Tests**: bank service ~50 (`integration` build tag for ~33 of them),
 user service ~30 integration, gateway middleware suites (auth +

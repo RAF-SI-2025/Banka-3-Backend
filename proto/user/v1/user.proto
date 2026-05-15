@@ -227,6 +227,12 @@ message Client {
 message LoginRequest {
   string email    = 1 [(buf.validate.field).string.email = true];
   string password = 2 [(buf.validate.field).string = {min_len: 1, max_len: 64}];
+  // long_lived_session is set by the mobile app (spec p.84 — no
+  // session interval). When true the user service mints a long-lived
+  // refresh token and the gateway returns it in the response body
+  // instead of relying on the (RN-incompatible) httpOnly cookie. Web
+  // clients leave it false and the cookie flow is unchanged.
+  bool long_lived_session = 3;
 }
 
 message LoginResponse {
@@ -243,6 +249,10 @@ message LoginResponse {
 
 message RefreshRequest {
   string refresh_token = 1;
+  // Mobile passes its refresh token in the body (no cookie jar) and
+  // keeps long_lived_session=true so the rotated token stays long-
+  // lived. Web omits both — the gateway reads the cookie instead.
+  bool long_lived_session = 2;
 }
 
 message RefreshResponse {

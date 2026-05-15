@@ -6574,6 +6574,10 @@
         },
         "password": {
           "type": "string"
+        },
+        "longLivedSession": {
+          "type": "boolean",
+          "description": "long_lived_session is set by the mobile app (spec p.84 — no\nsession interval). When true the user service mints a long-lived\nrefresh token and the gateway returns it in the response body\ninstead of relying on the (RN-incompatible) httpOnly cookie. Web\nclients leave it false and the cookie flow is unchanged."
         }
       }
     },
@@ -7170,6 +7174,10 @@
       "properties": {
         "refreshToken": {
           "type": "string"
+        },
+        "longLivedSession": {
+          "type": "boolean",
+          "description": "Mobile passes its refresh token in the body (no cookie jar) and\nkeeps long_lived_session=true so the rotated token stays long-\nlived. Web omits both — the gateway reads the cookie instead."
         }
       }
     },

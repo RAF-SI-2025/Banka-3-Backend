@@ -6,8 +6,8 @@ import (
 	"context"
 	"time"
 
-	"github.com/RAF-SI-2025/Banka-3-Backend/pkg/apperr"
 	userpb "github.com/RAF-SI-2025/Banka-3-Backend/gen/proto/user/v1"
+	"github.com/RAF-SI-2025/Banka-3-Backend/pkg/apperr"
 	"github.com/RAF-SI-2025/Banka-3-Backend/services/user/internal/domain"
 	"github.com/RAF-SI-2025/Banka-3-Backend/services/user/internal/service"
 
@@ -29,7 +29,11 @@ func New(svc *service.Service) *Server { return &Server{Svc: svc} }
 // =====================================================================
 
 func (s *Server) Login(ctx context.Context, in *userpb.LoginRequest) (*userpb.LoginResponse, error) {
-	r, err := s.Svc.Login(ctx, in.GetEmail(), in.GetPassword())
+	var opts []service.LoginOption
+	if in.GetLongLivedSession() {
+		opts = append(opts, service.LongLived())
+	}
+	r, err := s.Svc.Login(ctx, in.GetEmail(), in.GetPassword(), opts...)
 	if err != nil {
 		return nil, err
 	}
@@ -47,7 +51,11 @@ func (s *Server) Login(ctx context.Context, in *userpb.LoginRequest) (*userpb.Lo
 }
 
 func (s *Server) Refresh(ctx context.Context, in *userpb.RefreshRequest) (*userpb.RefreshResponse, error) {
-	r, err := s.Svc.Refresh(ctx, in.GetRefreshToken())
+	var opts []service.LoginOption
+	if in.GetLongLivedSession() {
+		opts = append(opts, service.LongLived())
+	}
+	r, err := s.Svc.Refresh(ctx, in.GetRefreshToken(), opts...)
 	if err != nil {
 		return nil, err
 	}

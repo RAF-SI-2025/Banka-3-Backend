@@ -44,6 +44,82 @@ var allowedKinds = map[string]verification.ActionKind{
 	string(verification.ActionFundWithdraw): verification.ActionFundWithdraw,
 }
 
+// actionLabels maps an action kind to Serbian copy the mobile app
+// shows next to each pending code (spec p.84 "Verifikacija").
+var actionLabels = map[verification.ActionKind]string{
+	verification.ActionPayment:      "Plaćanje",
+	verification.ActionTransfer:     "Prenos sredstava",
+	verification.ActionLimitChange:  "Promena limita",
+	verification.ActionCardIssue:    "Izdavanje kartice",
+	verification.ActionOTCAccept:    "Prihvatanje OTC ponude",
+	verification.ActionOTCExercise:  "Izvršenje opcije",
+	verification.ActionFundInvest:   "Ulaganje u fond",
+	verification.ActionFundWithdraw: "Povlačenje iz fonda",
+}
+
+func actionLabel(k verification.ActionKind) string {
+	if s, ok := actionLabels[k]; ok {
+		return s
+	}
+	return "Verifikacija"
+}
+
+// pendingItem is one active code as the mobile app consumes it. Field
+// names match the hand-written mobile verification client.
+type pendingItem struct {
+	ID                string    `json:"id"`
+	Action            string    `json:"action"`
+	Code              string    `json:"code"`
+	ExpiresAt         time.Time `json:"expiresAt"`
+	AttemptsRemaining int       `json:"attemptsRemaining"`
+}
+
+type pendingResponse struct {
+	Pending []pendingItem `json:"pending"`
+}
+
+// VerificationPendingHandler returns GET /api/v1/verification/pending —
+// the additive endpoint the mobile app polls (spec p.84, Option 1: the
+// phone shows the 6-digit code, the user types it on the web app). It
+// is purely additive: the web /verification/request flow and its
+// dev-mode in-body code are untouched.
+func (r *Router) VerificationPendingHandler() http.HandlerFunc {
+	return func(w http.ResponseWriter, req *http.Request) {
+		lister, ok := r.Verifier.(verification.PendingLister)
+		if !ok {
+			// Verifier without the optional capability (e.g. a stub):
+			// no pending codes rather than an error.
+			writeJSON(w, http.StatusOK, pendingResponse{Pending: []pendingItem{}})
+			return
+		}
+		p, ok := pkgauth.PrincipalFrom(req.Context())
+		if !ok {
+			writeError(w, http.StatusUnauthorized, "missing access token")
+			return
+		}
+		recs, err := lister.ListPending(req.Context(), p.UserID)
+		if err != nil {
+			writeError(w, http.StatusServiceUnavailable, "Verifikacija privremeno nedostupna.")
+			return
+		}
+		items := make([]pendingItem, 0, len(recs))
+		for _, rec := range recs {
+			remaining := verification.MaxAttempts - rec.Attempts
+			if remaining < 0 {
+				remaining = 0
+			}
+			items = append(items, pendingItem{
+				ID:                rec.ID,
+				Action:            actionLabel(rec.Kind),
+				Code:              rec.Code,
+				ExpiresAt:         rec.ExpiresAt,
+				AttemptsRemaining: remaining,
+			})
+		}
+		writeJSON(w, http.StatusOK, pendingResponse{Pending: items})
+	}
+}
+
 // VerificationHandler returns the POST /api/v1/verification/request
 // handler. It is mounted under the auth middleware so the principal
 // is already on the context.

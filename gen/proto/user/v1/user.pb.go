@@ -423,11 +423,17 @@ func (x *Client) GetUpdatedAt() *timestamppb.Timestamp {
 }
 
 type LoginRequest struct {
-	state         protoimpl.MessageState `protogen:"open.v1"`
-	Email         string                 `protobuf:"bytes,1,opt,name=email,proto3" json:"email,omitempty"`
-	Password      string                 `protobuf:"bytes,2,opt,name=password,proto3" json:"password,omitempty"`
-	unknownFields protoimpl.UnknownFields
-	sizeCache     protoimpl.SizeCache
+	state    protoimpl.MessageState `protogen:"open.v1"`
+	Email    string                 `protobuf:"bytes,1,opt,name=email,proto3" json:"email,omitempty"`
+	Password string                 `protobuf:"bytes,2,opt,name=password,proto3" json:"password,omitempty"`
+	// long_lived_session is set by the mobile app (spec p.84 — no
+	// session interval). When true the user service mints a long-lived
+	// refresh token and the gateway returns it in the response body
+	// instead of relying on the (RN-incompatible) httpOnly cookie. Web
+	// clients leave it false and the cookie flow is unchanged.
+	LongLivedSession bool `protobuf:"varint,3,opt,name=long_lived_session,json=longLivedSession,proto3" json:"long_lived_session,omitempty"`
+	unknownFields    protoimpl.UnknownFields
+	sizeCache        protoimpl.SizeCache
 }
 
 func (x *LoginRequest) Reset() {
@@ -472,6 +478,13 @@ func (x *LoginRequest) GetPassword() string {
 		return x.Password
 	}
 	return ""
+}
+
+func (x *LoginRequest) GetLongLivedSession() bool {
+	if x != nil {
+		return x.LongLivedSession
+	}
+	return false
 }
 
 type LoginResponse struct {
@@ -583,10 +596,14 @@ func (x *LoginResponse) GetLastName() string {
 }
 
 type RefreshRequest struct {
-	state         protoimpl.MessageState `protogen:"open.v1"`
-	RefreshToken  string                 `protobuf:"bytes,1,opt,name=refresh_token,json=refreshToken,proto3" json:"refresh_token,omitempty"`
-	unknownFields protoimpl.UnknownFields
-	sizeCache     protoimpl.SizeCache
+	state        protoimpl.MessageState `protogen:"open.v1"`
+	RefreshToken string                 `protobuf:"bytes,1,opt,name=refresh_token,json=refreshToken,proto3" json:"refresh_token,omitempty"`
+	// Mobile passes its refresh token in the body (no cookie jar) and
+	// keeps long_lived_session=true so the rotated token stays long-
+	// lived. Web omits both — the gateway reads the cookie instead.
+	LongLivedSession bool `protobuf:"varint,2,opt,name=long_lived_session,json=longLivedSession,proto3" json:"long_lived_session,omitempty"`
+	unknownFields    protoimpl.UnknownFields
+	sizeCache        protoimpl.SizeCache
 }
 
 func (x *RefreshRequest) Reset() {
@@ -624,6 +641,13 @@ func (x *RefreshRequest) GetRefreshToken() string {
 		return x.RefreshToken
 	}
 	return ""
+}
+
+func (x *RefreshRequest) GetLongLivedSession() bool {
+	if x != nil {
+		return x.LongLivedSession
+	}
+	return false
 }
 
 type RefreshResponse struct {
@@ -2088,10 +2112,11 @@ const file_user_v1_user_proto_rawDesc = "" +
 	"\n" +
 	"created_at\x18\v \x01(\v2\x1a.google.protobuf.TimestampR\tcreatedAt\x129\n" +
 	"\n" +
-	"updated_at\x18\f \x01(\v2\x1a.google.protobuf.TimestampR\tupdatedAt\"T\n" +
+	"updated_at\x18\f \x01(\v2\x1a.google.protobuf.TimestampR\tupdatedAt\"\x82\x01\n" +
 	"\fLoginRequest\x12\x1d\n" +
 	"\x05email\x18\x01 \x01(\tB\a\xbaH\x04r\x02`\x01R\x05email\x12%\n" +
-	"\bpassword\x18\x02 \x01(\tB\t\xbaH\x06r\x04\x10\x01\x18@R\bpassword\"\xde\x02\n" +
+	"\bpassword\x18\x02 \x01(\tB\t\xbaH\x06r\x04\x10\x01\x18@R\bpassword\x12,\n" +
+	"\x12long_lived_session\x18\x03 \x01(\bR\x10longLivedSession\"\xde\x02\n" +
 	"\rLoginResponse\x12!\n" +
 	"\faccess_token\x18\x01 \x01(\tR\vaccessToken\x12#\n" +
 	"\rrefresh_token\x18\x02 \x01(\tR\frefreshToken\x12*\n" +
@@ -2102,9 +2127,10 @@ const file_user_v1_user_proto_rawDesc = "" +
 	"\vpermissions\x18\a \x03(\tR\vpermissions\x12\x1d\n" +
 	"\n" +
 	"first_name\x18\b \x01(\tR\tfirstName\x12\x1b\n" +
-	"\tlast_name\x18\t \x01(\tR\blastName\"5\n" +
+	"\tlast_name\x18\t \x01(\tR\blastName\"c\n" +
 	"\x0eRefreshRequest\x12#\n" +
-	"\rrefresh_token\x18\x01 \x01(\tR\frefreshToken\"\xb3\x01\n" +
+	"\rrefresh_token\x18\x01 \x01(\tR\frefreshToken\x12,\n" +
+	"\x12long_lived_session\x18\x02 \x01(\bR\x10longLivedSession\"\xb3\x01\n" +
 	"\x0fRefreshResponse\x12!\n" +
 	"\faccess_token\x18\x01 \x01(\tR\vaccessToken\x12#\n" +
 	"\rrefresh_token\x18\x02 \x01(\tR\frefreshToken\x12*\n" +
