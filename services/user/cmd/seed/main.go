@@ -8,6 +8,9 @@
 //	   accounts (RSD personal / EUR personal / RSD business), two
 //	   cards (active Visa + blocked Mastercard), two loans (active +
 //	   paid_off), and two loan requests (pending + rejected)
+//	4. trading fixtures (USD trading account, actuary + supervisor
+//	   employees, exchanges, securities, OTC threads) and three
+//	   investment funds managed by the supervisor
 //
 // Configuration:
 //
@@ -147,6 +150,10 @@ func run() error {
 
 	if err := seedOTC(ctx, pool, clientID, client2ID, adminID); err != nil {
 		return fmt.Errorf("seed otc: %w", err)
+	}
+
+	if err := seedFunds(ctx, pool, adminID); err != nil {
+		return fmt.Errorf("seed funds: %w", err)
 	}
 
 	// Third client — non-trading. Drives the banking-trading-gate
@@ -1486,6 +1493,119 @@ func seedOTC(ctx context.Context, pool *pgxpool.Pool, clientID, client2ID, admin
 		return fmt.Errorf("commit otc seed: %w", err)
 	}
 	fmt.Println("seed: otc fixtures created — 4 threads (2 open, 1 withdrawn, 1 accepted) + 1 active contract")
+	return nil
+}
+
+// seedFunds plants three investment funds with the seeded supervisor
+// as manager. Each fund gets a paired bank-side RSD liquidity account
+// (kind='fund', owner=FundsOwnerID) matching what
+// `trading.CreateFund` would mint at runtime. No pre-investments —
+// /banking/fondovi shows the discovery list with vrednost=0 / profit=0
+// out of the box; the Moji fondovi tab fills in once anyone clicks
+// "Uloži".
+//
+// Idempotent on (fund name): a second run skips funds that already
+// exist. A bank-side account orphaned by a partial prior run is
+// recreated on the next pass because the trading.investment_funds row
+// is what we key off (the account has no fund_id back-reference).
+func seedFunds(ctx context.Context, pool *pgxpool.Pool, adminID string) error {
+	if adminID == "" {
+		return fmt.Errorf("seedFunds: adminID is required")
+	}
+	supervisorEmail := envOr("SEED_SUPERVISOR_EMAIL", "supervizor@banka.local")
+	var supervisorID string
+	if err := pool.QueryRow(ctx,
+		`select id from "user".employees where lower(email)=lower($1)`,
+		supervisorEmail,
+	).Scan(&supervisorID); err != nil {
+		return fmt.Errorf("lookup supervisor %s: %w", supervisorEmail, err)
+	}
+
+	bankCode := envOr("BANK_CODE", "333")
+	branch := envOr("BANK_BRANCH", "0001")
+
+	funds := []struct {
+		name, description, minRSD string
+	}{
+		{
+			"Alfa diverzifikovani fond",
+			"Diverzifikovani RSD fond — kombinacija domaćih i regionalnih hartija.",
+			"1000",
+		},
+		{
+			"Beta tehnološki fond",
+			"Fond fokusiran na vodeće američke tehnološke kompanije (AAPL, MSFT, GOOGL).",
+			"5000",
+		},
+		{
+			"Gama konzervativni fond",
+			"Konzervativna alokacija za očuvanje kapitala — pretežno fjučersi i RSD likvidnost.",
+			"10000",
+		},
+	}
+
+	created := 0
+	for _, f := range funds {
+		var existing string
+		switch err := pool.QueryRow(ctx,
+			`select id from "trading".investment_funds where name = $1`, f.name,
+		).Scan(&existing); err {
+		case nil:
+			continue
+		default:
+			if err.Error() != "no rows in result set" {
+				return fmt.Errorf("check existing fund %q: %w", f.name, err)
+			}
+		}
+
+		tx, err := pool.BeginTx(ctx, pgx.TxOptions{})
+		if err != nil {
+			return fmt.Errorf("begin tx for %q: %w", f.name, err)
+		}
+		number, err := account.Generate(bankCode, branch, account.TypeFund)
+		if err != nil {
+			_ = tx.Rollback(ctx)
+			return fmt.Errorf("generate fund account number: %w", err)
+		}
+		var bankAccountID string
+		if err := tx.QueryRow(ctx, `
+            insert into "bank".accounts
+                (number, name, owner_client_id, created_by_employee_id,
+                 kind, subtype, currency, status,
+                 balance, available_balance, maintenance_fee,
+                 daily_limit, monthly_limit)
+            values ($1, $2, $3, $4,
+                    'fund', 'unspecified', 'RSD', 'active',
+                    '0', '0', '0',
+                    '0', '0')
+            returning id`,
+			number, f.name, account.FundsOwnerID, adminID,
+		).Scan(&bankAccountID); err != nil {
+			_ = tx.Rollback(ctx)
+			return fmt.Errorf("insert fund bank account for %q: %w", f.name, err)
+		}
+		var fundID string
+		if err := tx.QueryRow(ctx, `
+            insert into "trading".investment_funds
+                (name, description, manager_user_id, bank_account_id,
+                 minimum_contribution, total_units, status)
+            values ($1, $2, $3, $4, $5::numeric, 0, 'active')
+            returning id`,
+			f.name, f.description, supervisorID, bankAccountID, f.minRSD,
+		).Scan(&fundID); err != nil {
+			_ = tx.Rollback(ctx)
+			return fmt.Errorf("insert fund %q: %w", f.name, err)
+		}
+		if err := tx.Commit(ctx); err != nil {
+			return fmt.Errorf("commit fund %q: %w", f.name, err)
+		}
+		created++
+		fmt.Printf("seed: fund %q created (id=%s, account=%s, min=%s RSD)\n",
+			f.name, fundID, number, f.minRSD)
+	}
+	if created == 0 {
+		fmt.Println("seed: funds already present; skipping")
+	}
 	return nil
 }
 
