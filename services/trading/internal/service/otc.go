@@ -178,42 +178,37 @@ func (s *Service) CreateOTCOffer(ctx context.Context, in CreateOTCOfferInput) (*
 	if err := assertSameKindCounterparties(p, holding); err != nil {
 		return nil, err
 	}
-	available := holding.PublicCount - holding.ReservedCount
-	if available <= 0 {
-		return nil, apperr.FailedPrecondition("hartija više nije dostupna na OTC")
-	}
-	if in.Quantity > available {
-		return nil, apperr.FailedPrecondition("nedovoljno raspoloživih akcija")
-	}
 
 	buyerKind := principalUserKind(p)
 
 	var out *domain.OTCOffer
 	err = s.Store.ExecuteAtomic(ctx, func(tx pgx.Tx) error {
-		// Spec p.68 — verify reservation overlap headroom before bumping.
-		sum, err := s.Store.SumOpenOTCOfferQty(ctx, tx, holding.ID)
+		// Spec p.68 — lock the holding row inside the tx so concurrent
+		// CreateOTCOffer / CounterOfferOTC calls serialize. The pre-tx
+		// `holding` read is a stale snapshot; re-check available against
+		// the locked one.
+		locked, err := s.Store.GetHoldingForUpdate(ctx, tx, holding.ID)
 		if err != nil {
 			return err
 		}
-		// Active-contract reservations are baked into holding.reserved_count
-		// already (the contract sign + exercise path manages it). The
-		// open-offer sum is what's NOT yet baked in — wait, actually:
-		// offers DO bump reserved_count at create time (this method),
-		// so reserved_count already covers offers + contracts. The sum
-		// query is a paranoid double-check for invariant tests.
-		_ = sum
-
-		if _, err := s.Store.IncrementReservedHolding(ctx, tx, holding.ID, in.Quantity); err != nil {
+		available := locked.PublicCount - locked.ReservedCount
+		if available <= 0 {
+			return apperr.FailedPrecondition("hartija više nije dostupna na OTC")
+		}
+		if in.Quantity > available {
+			return apperr.FailedPrecondition("nedovoljno raspoloživih akcija")
+		}
+		if _, err := s.Store.IncrementReservedHolding(ctx, tx, locked.ID, in.Quantity); err != nil {
 			return err
 		}
 		o := &domain.OTCOffer{
-			SecurityID:      holding.SecurityID,
-			SellerHoldingID: holding.ID,
+			SecurityID:      locked.SecurityID,
+			SellerHoldingID: locked.ID,
 			BuyerID:         p.UserID,
 			BuyerKind:       buyerKind,
 			BuyerAccountID:  in.BuyerAccountID,
-			SellerID:        holding.UserID,
-			SellerKind:      holding.UserKind,
+			SellerID:        locked.UserID,
+			SellerKind:      locked.UserKind,
 			SellerAccountID: in.SellerAccountID,
 			Quantity:        in.Quantity,
 			PricePerUnit:    money.FormatAmount(money.MustParse(in.PricePerUnit)),
@@ -278,7 +273,7 @@ func (s *Service) CounterOfferOTC(ctx context.Context, in CounterOfferOTCInput) 
 			return err
 		}
 		if open.BuyerID != p.UserID && open.SellerID != p.UserID {
-			return apperr.PermissionDenied("niste strana u ovoj nogovaračkoj niti")
+			return apperr.PermissionDenied("niste strana u ovoj pregovaračkoj niti")
 		}
 		if open.ModifiedBy == p.UserID {
 			return apperr.FailedPrecondition("čeka se odgovor druge strane")
@@ -353,7 +348,7 @@ func (s *Service) WithdrawOTCOffer(ctx context.Context, threadID string) (*domai
 			return err
 		}
 		if open.BuyerID != p.UserID && open.SellerID != p.UserID {
-			return apperr.PermissionDenied("niste strana u ovoj nogovaračkoj niti")
+			return apperr.PermissionDenied("niste strana u ovoj pregovaračkoj niti")
 		}
 		// Release the reservation for this iteration's qty.
 		if open.Quantity > 0 {

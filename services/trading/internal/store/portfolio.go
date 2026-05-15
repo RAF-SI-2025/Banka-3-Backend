@@ -172,6 +172,26 @@ func (s *Store) GetHoldingByID(ctx context.Context, id string) (*domain.Holding,
 	return out, nil
 }
 
+// GetHoldingForUpdate reads a holding row with `for update` inside the
+// caller's tx. OTC create needs this: the pre-flight availability check
+// (`public_count - reserved_count >= qty`) is otherwise a stale read,
+// and two concurrent CreateOTCOffer calls on the same holding can both
+// pass and race the reservation increment. The DB CHECK catches the
+// second one as FailedPrecondition, but the lock lets us serialize
+// cleanly so the second caller sees the post-increment state.
+func (s *Store) GetHoldingForUpdate(ctx context.Context, tx pgx.Tx, id string) (*domain.Holding, error) {
+	const q = `select ` + holdingCols + ` from "trading".portfolio_holdings
+	           where id = $1 for update`
+	out, err := scanHolding(tx.QueryRow(ctx, q, id))
+	if err != nil {
+		if noRows(err) {
+			return nil, apperr.NotFound("holding ne postoji")
+		}
+		return nil, apperr.Internal("lock holding", err)
+	}
+	return out, nil
+}
+
 func scanHolding(row pgx.Row) (*domain.Holding, error) {
 	var h domain.Holding
 	var t string

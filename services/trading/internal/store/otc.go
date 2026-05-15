@@ -105,16 +105,21 @@ func (s *Store) GetOTCOffer(ctx context.Context, id string) (*domain.OTCOffer, e
 
 // GetOpenOTCOfferByThread returns the live (status='open') iteration in
 // a thread or NotFound. Used by the accept/withdraw/counter handlers.
-// Accepts an optional tx so callers can take the row inside an
-// atomic update.
+// When called inside a tx the open row is locked `for update` so that
+// concurrent withdraw+counter on the same thread serialize (otherwise
+// both txs read the same row, both decrement reserved_count, and the
+// second status flip is a silent no-op against an already-terminal row).
 func (s *Store) GetOpenOTCOfferByThread(ctx context.Context, tx pgx.Tx, threadID string) (*domain.OTCOffer, error) {
-	const q = `select ` + otcOfferCols + ` from "trading".otc_offers
-	           where thread_id = $1 and status = 'open' limit 1`
+	const qLock = `select ` + otcOfferCols + ` from "trading".otc_offers
+	               where thread_id = $1 and status = 'open' limit 1
+	               for update`
+	const qRead = `select ` + otcOfferCols + ` from "trading".otc_offers
+	               where thread_id = $1 and status = 'open' limit 1`
 	var row pgx.Row
 	if tx != nil {
-		row = tx.QueryRow(ctx, q, threadID)
+		row = tx.QueryRow(ctx, qLock, threadID)
 	} else {
-		row = s.Pool.QueryRow(ctx, q, threadID)
+		row = s.Pool.QueryRow(ctx, qRead, threadID)
 	}
 	out, err := scanOTCOffer(row)
 	if err != nil {
@@ -204,25 +209,6 @@ func (s *Store) ListLatestOTCOffers(ctx context.Context, f OTCThreadFilter) ([]*
 		out = append(out, o)
 	}
 	return out, rows.Err()
-}
-
-// SumOpenOTCOfferQty returns the sum of open offer quantities against a
-// holding (spec p.68 reservation check). Reads in tx so the caller can
-// hold the holding's row across the check.
-func (s *Store) SumOpenOTCOfferQty(ctx context.Context, tx pgx.Tx, sellerHoldingID string) (int32, error) {
-	const q = `select coalesce(sum(quantity), 0)::int from "trading".otc_offers
-	           where seller_holding_id = $1 and status = 'open'`
-	var n int32
-	var row pgx.Row
-	if tx != nil {
-		row = tx.QueryRow(ctx, q, sellerHoldingID)
-	} else {
-		row = s.Pool.QueryRow(ctx, q, sellerHoldingID)
-	}
-	if err := row.Scan(&n); err != nil {
-		return 0, apperr.Internal("sum open otc offer qty", err)
-	}
-	return n, nil
 }
 
 // MarkOTCOfferStatus flips the status of a single iteration. Inside the
