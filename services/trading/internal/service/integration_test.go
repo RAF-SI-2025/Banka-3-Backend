@@ -16,6 +16,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"hash/fnv"
 	"log/slog"
 	"os"
 	"sync"
@@ -162,8 +163,8 @@ func (s *intStubSettler) settles() []SettleInput {
 type stubMargin struct {
 	sync.Mutex
 	accounts map[string]struct {
-		cur  domain.Currency
-		amt  string
+		cur domain.Currency
+		amt string
 	}
 	loans map[string]struct {
 		cur domain.Currency
@@ -233,9 +234,9 @@ var (
 // call type for failure-path tests.
 type stubReservations struct {
 	sync.Mutex
-	balances     map[string]string // accountID → amount (decimal string)
-	currencies   map[string]domain.Currency
-	reserved     map[string]reservedRow
+	balances        map[string]string // accountID → amount (decimal string)
+	currencies      map[string]domain.Currency
+	reserved        map[string]reservedRow
 	reserveCalls    []ReserveInput
 	releaseCalls    []string
 	commitCalls     []CommitInput
@@ -397,6 +398,17 @@ func (s *stubReservations) AccountAvailable(_ context.Context, accountID string)
 		bal = "0"
 	}
 	return c, bal, nil
+}
+
+// AccountNumber returns a synthetic 18-digit number derived from the
+// account id (stub tests don't track real bank-side numbers). Good
+// enough for callers that only need a non-empty value.
+func (s *stubReservations) AccountNumber(_ context.Context, accountID string) (string, error) {
+	h := fnv.New64a()
+	_, _ = h.Write([]byte(accountID))
+	n := h.Sum64()
+	// 18 digits, mod-11 not enforced (cosmetic in stub).
+	return fmt.Sprintf("%018d", n%1_000_000_000_000_000_000), nil
 }
 
 // CreateFundAccount returns the next queued fund account id, or a

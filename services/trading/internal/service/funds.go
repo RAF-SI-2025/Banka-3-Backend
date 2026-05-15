@@ -116,11 +116,11 @@ type GetFundResult struct {
 
 // HoldingView is one decorated portfolio_holding row on a fund.
 type HoldingView struct {
-	Holding       *tdomain.Holding
-	Security      *tdomain.Security
-	CurrentPrice  string
-	MarketValue   string
-	ProfitNative  string
+	Holding      *tdomain.Holding
+	Security     *tdomain.Security
+	CurrentPrice string
+	MarketValue  string
+	ProfitNative string
 }
 
 // GetFund returns the fund detail. Clients see public columns; the
@@ -267,9 +267,12 @@ func (s *Service) decorateFund(ctx context.Context, f *tdomain.Fund) *DecoratedF
 			d.ManagerDisplayName = name
 		}
 	}
-	// Account number is not on the AccountAvailable surface; the FE
-	// only needs it cosmetically. GetFund decorates it via
-	// Reservations.GetAccount in PR4 if needed.
+	// Bank account number — cosmetic for the FE "Račun fonda" row.
+	if s.Reservations != nil {
+		if num, err := s.Reservations.AccountNumber(ctx, f.BankAccountID); err == nil {
+			d.BankAccountNumber = num
+		}
+	}
 	return d
 }
 
@@ -449,12 +452,12 @@ type ListFundPositionsInput struct {
 // DecoratedFundPosition bundles a position with the fund row + the
 // computed share/current/profit columns.
 type DecoratedFundPosition struct {
-	Position      *tdomain.FundPosition
-	Fund          *tdomain.Fund
-	FundName      string
-	SharePct      string
+	Position        *tdomain.FundPosition
+	Fund            *tdomain.Fund
+	FundName        string
+	SharePct        string
 	CurrentValueRSD string
-	ProfitRSD     string
+	ProfitRSD       string
 }
 
 // ListFundPositions returns the caller's positions (default) or a

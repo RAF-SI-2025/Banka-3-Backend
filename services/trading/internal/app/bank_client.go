@@ -109,6 +109,23 @@ func (a *bankSettlerAdapter) AccountAvailable(ctx context.Context, accountID str
 	return currencyFromBankProto(resp.GetCurrency()), resp.GetAvailableBalance(), nil
 }
 
+// AccountNumber reads the 18-digit account number via bank.GetAccount.
+// Same admin-sentinel principal as AccountAvailable so the bank's
+// canSeeAccount check admits the read regardless of who owns the
+// account.
+func (a *bankSettlerAdapter) AccountNumber(ctx context.Context, accountID string) (string, error) {
+	ctx = auth.AttachToOutgoing(ctx, auth.Principal{
+		UserID:      "00000000-0000-0000-0000-00000000fffe",
+		UserKind:    auth.KindEmployee,
+		Permissions: []string{permissions.Admin},
+	})
+	resp, err := a.c.GetAccount(ctx, &bankpb.GetAccountRequest{Id: accountID})
+	if err != nil {
+		return "", fmt.Errorf("bank.GetAccount: %w", err)
+	}
+	return resp.GetNumber(), nil
+}
+
 // Reserve bridges service.BankReservations.Reserve to
 // bank.ReserveFunds with the admin-sentinel principal.
 func (a *bankSettlerAdapter) Reserve(ctx context.Context, in service.ReserveInput) (string, error) {

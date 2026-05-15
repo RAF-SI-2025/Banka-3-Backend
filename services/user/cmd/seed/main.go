@@ -1,16 +1,18 @@
 // Command seed plants development fixtures across the whole stack.
-// Three layers, all idempotent and unconditional:
+// All layers are idempotent; every layer is unconditional except the
+// investment-fund fixtures (layer 4's funds), which are gated by the
+// SEED_FUNDS env switch (default on):
 //
-//	1. bootstrap admin (so the system has someone who can create
-//	   employees — the spec gates that on admin)
-//	2. test client klijent@banka.local
-//	3. bank fixtures hung off the test client: two companies, three
-//	   accounts (RSD personal / EUR personal / RSD business), two
-//	   cards (active Visa + blocked Mastercard), two loans (active +
-//	   paid_off), and two loan requests (pending + rejected)
-//	4. trading fixtures (USD trading account, actuary + supervisor
-//	   employees, exchanges, securities, OTC threads) and three
-//	   investment funds managed by the supervisor
+//  1. bootstrap admin (so the system has someone who can create
+//     employees — the spec gates that on admin)
+//  2. test client klijent@banka.local
+//  3. bank fixtures hung off the test client: two companies, three
+//     accounts (RSD personal / EUR personal / RSD business), two
+//     cards (active Visa + blocked Mastercard), two loans (active +
+//     paid_off), and two loan requests (pending + rejected)
+//  4. trading fixtures (USD trading account, actuary + supervisor
+//     employees, exchanges, securities, OTC threads) and three
+//     investment funds managed by the supervisor
 //
 // Configuration:
 //
@@ -28,6 +30,11 @@
 //	BANK_CODE            (default 333)  — used to mint account numbers
 //	BANK_BRANCH          (default 0001) — see pkg/account
 //	BANK_CVV_PEPPER      (default "dev-pepper") — see pkg/cvv
+//	SEED_FUNDS           (default 1; "0"/"false"/"off" opts out of the
+//	                     investment-fund fixtures + demo mock data —
+//	                     cypress.config.ts's resetBackend reseed sets
+//	                     this so fund acceptance specs keep a pristine
+//	                     klijent baseline)
 //
 // The default password meets the spec's complexity rules (8–32 chars,
 // ≥2 digits, ≥1 upper, ≥1 lower) but should be changed in any shared
@@ -42,6 +49,7 @@ import (
 	"math/rand/v2"
 	"os"
 	"strconv"
+	"strings"
 	"time"
 
 	"github.com/jackc/pgx/v5"
@@ -152,8 +160,19 @@ func run() error {
 		return fmt.Errorf("seed otc: %w", err)
 	}
 
-	if err := seedFunds(ctx, pool, adminID); err != nil {
-		return fmt.Errorf("seed funds: %w", err)
+	// Investment funds + their demo mock data (invests, holdings,
+	// performance history) mutate the klijent baseline — they debit
+	// klijent's RSD account and pre-create klijent fund positions. The
+	// c4 cypress acceptance specs assume a pristine klijent and
+	// self-fixture their own funds, so cypress.config.ts's resetBackend
+	// reseed sets SEED_FUNDS=0 to opt out. Default is on for `make seed`
+	// (manual demo / cold boot).
+	if isEnvTruthy(envOr("SEED_FUNDS", "1")) {
+		if err := seedFunds(ctx, pool, clientID, adminID); err != nil {
+			return fmt.Errorf("seed funds: %w", err)
+		}
+	} else {
+		fmt.Println("seed: SEED_FUNDS disabled; skipping investment funds")
 	}
 
 	// Third client — non-trading. Drives the banking-trading-gate
@@ -575,24 +594,24 @@ func seedBank(ctx context.Context, pool *pgxpool.Pool, clientID, adminID string)
 // seedTrading plants the c3 fixture surface so the trading portal has
 // data on first boot:
 //
-//   1. A USD personal_fx trading account for the seeded client (300k
-//      USD opening balance), so they can place orders on USD-listed
-//      stocks without first running an FX deposit.
-//   2. The seeded employee (zaposleni@banka.local) gets promoted to
-//      actuary agent: permissions augmented with `actuary` +
-//      `actuary.agent`, an `actuary_info` row planted with daily_limit
-//      = 200000 RSD and need_approval=false. The bootstrap admin gets
-//      no actuary_info row; admin is implicitly a supervisor per
-//      `requireSupervisor`.
-//   3. Three exchanges: NYSE (XNYS / USD), London (XLON / GBP), and
-//      Borsa Beograd (XBEL / RSD). Hours and IANA timezones are
-//      realistic so the after-hours math behaves under both Belgrade
-//      and US wall-clocks.
-//   4. Five stocks (AAPL/MSFT/GOOGL on NYSE, VOD on XLON, NIS on XBEL),
-//      one future (CL crude oil), one forex pair (EUR/USD), one option
-//      (AAPL call expiring +60 days). Listings for everything except
-//      the option — options read their premium directly off the
-//      security row.
+//  1. A USD personal_fx trading account for the seeded client (300k
+//     USD opening balance), so they can place orders on USD-listed
+//     stocks without first running an FX deposit.
+//  2. The seeded employee (zaposleni@banka.local) gets promoted to
+//     actuary agent: permissions augmented with `actuary` +
+//     `actuary.agent`, an `actuary_info` row planted with daily_limit
+//     = 200000 RSD and need_approval=false. The bootstrap admin gets
+//     no actuary_info row; admin is implicitly a supervisor per
+//     `requireSupervisor`.
+//  3. Three exchanges: NYSE (XNYS / USD), London (XLON / GBP), and
+//     Borsa Beograd (XBEL / RSD). Hours and IANA timezones are
+//     realistic so the after-hours math behaves under both Belgrade
+//     and US wall-clocks.
+//  4. Five stocks (AAPL/MSFT/GOOGL on NYSE, VOD on XLON, NIS on XBEL),
+//     one future (CL crude oil), one forex pair (EUR/USD), one option
+//     (AAPL call expiring +60 days). Listings for everything except
+//     the option — options read their premium directly off the
+//     security row.
 //
 // Idempotent: if any exchange row already exists, we no-op.
 //
@@ -774,7 +793,10 @@ func seedTrading(ctx context.Context, pool *pgxpool.Pool, clientID, adminID stri
 	// 4) Securities + listings. Helper closures keep the boilerplate
 	// short: insertStock returns the new uuid so the option chain can
 	// reference AAPL.
-	insertStock := func(ticker, name, mic, currency string, outstanding int64, dividend string, listing struct{ price, ask, bid string; volume int64 }) (string, error) {
+	insertStock := func(ticker, name, mic, currency string, outstanding int64, dividend string, listing struct {
+		price, ask, bid string
+		volume          int64
+	}) (string, error) {
 		// ON CONFLICT DO UPDATE SET <noop> so RETURNING fires whether we
 		// inserted or matched an existing (ticker, type) row. Cheap and
 		// keeps the seed re-runnable on partial state.
@@ -1154,10 +1176,10 @@ func seedTrading(ctx context.Context, pool *pgxpool.Pool, clientID, adminID stri
 //
 // Threads planted (in addition to the seedTrading set):
 //
-//	1. Open, 1 iter        — klijent2 buying 3 of klijent's AAPL   (klijent's turn)
-//	2. Open, 3 iters       — klijent buying 10 of klijent2's MSFT  (klijent2's turn)
-//	3. Withdrawn           — klijent abandoned a 5 GOOGL bid
-//	4. Accepted + contract — klijent2 bought 2 of klijent's CL @ $78
+//  1. Open, 1 iter        — klijent2 buying 3 of klijent's AAPL   (klijent's turn)
+//  2. Open, 3 iters       — klijent buying 10 of klijent2's MSFT  (klijent2's turn)
+//  3. Withdrawn           — klijent abandoned a 5 GOOGL bid
+//  4. Accepted + contract — klijent2 bought 2 of klijent's CL @ $78
 //
 // Reservation accounting (spec p.68) is baked into the new klijent2
 // holding rows at insert time and applied as a guarded bump on
@@ -1181,8 +1203,8 @@ func seedOTC(ctx context.Context, pool *pgxpool.Pool, clientID, client2ID, admin
 		userID, ticker, kind string
 		target               int32
 	}{
-		{clientID, "AAPL", "stock", 8},   // qty 10, reserved 3 ⇒ 5 available
-		{client2ID, "MSFT", "stock", 25}, // qty 30, reserved 10 ⇒ 15 available
+		{clientID, "AAPL", "stock", 8},    // qty 10, reserved 3 ⇒ 5 available
+		{client2ID, "MSFT", "stock", 25},  // qty 30, reserved 10 ⇒ 15 available
 		{client2ID, "GOOGL", "stock", 10}, // qty 15, reserved 0  ⇒ 10 available
 	} {
 		if _, err := pool.Exec(ctx, `
@@ -1497,20 +1519,24 @@ func seedOTC(ctx context.Context, pool *pgxpool.Pool, clientID, client2ID, admin
 }
 
 // seedFunds plants three investment funds with the seeded supervisor
-// as manager. Each fund gets a paired bank-side RSD liquidity account
-// (kind='fund', owner=FundsOwnerID) matching what
-// `trading.CreateFund` would mint at runtime. No pre-investments —
-// /banking/fondovi shows the discovery list with vrednost=0 / profit=0
-// out of the box; the Moji fondovi tab fills in once anyone clicks
-// "Uloži".
+// as manager, then layers mock data on top: client + bank-as-client
+// pre-investments, fund-actor stock holdings, and 60 days of
+// performance snapshots so /banking/fondovi has populated discovery
+// + non-empty Moji fondovi + non-flat charts out of the box.
 //
-// Idempotent on (fund name): a second run skips funds that already
-// exist. A bank-side account orphaned by a partial prior run is
-// recreated on the next pass because the trading.investment_funds row
-// is what we key off (the account has no fund_id back-reference).
-func seedFunds(ctx context.Context, pool *pgxpool.Pool, adminID string) error {
-	if adminID == "" {
-		return fmt.Errorf("seedFunds: adminID is required")
+// Each fund gets a paired bank-side RSD liquidity account
+// (kind='fund', owner=FundsOwnerID) matching what
+// `trading.CreateFund` would mint at runtime.
+//
+// Idempotency:
+//   - fund creation skips funds whose name already exists in
+//     trading.investment_funds (per-fund tx).
+//   - mock data plants only on a clean slate (no rows in
+//     client_fund_transactions) so a partial prior run plus a re-run
+//     doesn't double-debit klijent's RSD account.
+func seedFunds(ctx context.Context, pool *pgxpool.Pool, clientID, adminID string) error {
+	if clientID == "" || adminID == "" {
+		return fmt.Errorf("seedFunds: clientID and adminID are required")
 	}
 	supervisorEmail := envOr("SEED_SUPERVISOR_EMAIL", "supervizor@banka.local")
 	var supervisorID string
@@ -1544,13 +1570,17 @@ func seedFunds(ctx context.Context, pool *pgxpool.Pool, adminID string) error {
 		},
 	}
 
+	refs := map[string]fundRef{}
+
 	created := 0
 	for _, f := range funds {
-		var existing string
+		var existing fundRef
 		switch err := pool.QueryRow(ctx,
-			`select id from "trading".investment_funds where name = $1`, f.name,
-		).Scan(&existing); err {
+			`select id, bank_account_id from "trading".investment_funds where name = $1`,
+			f.name,
+		).Scan(&existing.id, &existing.bankAccountID); err {
 		case nil:
+			refs[f.name] = existing
 			continue
 		default:
 			if err.Error() != "no rows in result set" {
@@ -1599,13 +1629,302 @@ func seedFunds(ctx context.Context, pool *pgxpool.Pool, adminID string) error {
 		if err := tx.Commit(ctx); err != nil {
 			return fmt.Errorf("commit fund %q: %w", f.name, err)
 		}
+		refs[f.name] = fundRef{id: fundID, bankAccountID: bankAccountID}
 		created++
 		fmt.Printf("seed: fund %q created (id=%s, account=%s, min=%s RSD)\n",
 			f.name, fundID, number, f.minRSD)
 	}
 	if created == 0 {
-		fmt.Println("seed: funds already present; skipping")
+		fmt.Println("seed: funds already present; skipping creation")
 	}
+
+	return seedFundMockData(ctx, pool, clientID, supervisorID, refs)
+}
+
+// fundRef pairs a fund's id with its bank-side liquidity account id.
+// Carried across seedFunds and seedFundMockData so mock-data planting
+// doesn't need to round-trip the DB for ids it already has.
+type fundRef struct{ id, bankAccountID string }
+
+// seedFundMockData plants the cross-fund mock state once: per-fund
+// pre-investments (klijent + bank-as-client), fund-actor stock
+// holdings, and 60 days of performance snapshots. Marker: skips if
+// any row already exists in trading.client_fund_transactions.
+func seedFundMockData(
+	ctx context.Context,
+	pool *pgxpool.Pool,
+	clientID, supervisorID string,
+	refs map[string]fundRef,
+) error {
+	var prior int
+	if err := pool.QueryRow(ctx,
+		`select count(*) from "trading".client_fund_transactions`,
+	).Scan(&prior); err != nil {
+		return fmt.Errorf("count existing fund transactions: %w", err)
+	}
+	if prior > 0 {
+		fmt.Println("seed: fund mock data already present; skipping")
+		return nil
+	}
+
+	// Look up the source accounts + securities we'll touch.
+	var clientRSDAcct string
+	if err := pool.QueryRow(ctx, `
+        select id from "bank".accounts
+         where owner_client_id = $1
+           and kind = 'personal_checking_rsd'
+           and currency = 'RSD'
+         limit 1`, clientID).Scan(&clientRSDAcct); err != nil {
+		return fmt.Errorf("lookup klijent RSD account: %w", err)
+	}
+	var bankSystemRSDAcct string
+	if err := pool.QueryRow(ctx, `
+        select id from "bank".accounts
+         where owner_client_id = '00000000-0000-0000-0000-000000000000'
+           and kind = 'system'
+           and currency = 'RSD'
+         limit 1`).Scan(&bankSystemRSDAcct); err != nil {
+		return fmt.Errorf("lookup bank system RSD account: %w", err)
+	}
+	// lookupSecurity returns the stock's security id + the FX ask to
+	// convert its native currency into RSD (1.0 for RSD-listed). The
+	// caller computes RSD costs from a chosen buy price so seeded
+	// holdings can carry a cost basis below current market (visible
+	// unrealised profit in the demo).
+	lookupSecurity := func(ticker string) (securityID string, fxAskToRSD float64, err error) {
+		var native string
+		if err = pool.QueryRow(ctx, `
+            select s.id, s.currency
+              from "trading".securities s
+              join "trading".listings l on l.security_id = s.id
+             where s.ticker = $1 and s.type = 'stock'
+             limit 1`, ticker).Scan(&securityID, &native); err != nil {
+			return "", 0, fmt.Errorf("lookup listing %s: %w", ticker, err)
+		}
+		if native == "RSD" {
+			return securityID, 1.0, nil
+		}
+		var ask string
+		if err = pool.QueryRow(ctx,
+			`select ask::text from "exchange".fx_rates where "from"=$1 and "to"='RSD'`,
+			native,
+		).Scan(&ask); err != nil {
+			return "", 0, fmt.Errorf("lookup FX %s/RSD: %w", native, err)
+		}
+		r, rerr := strconv.ParseFloat(ask, 64)
+		if rerr != nil {
+			return "", 0, fmt.Errorf("parse FX ask %q: %w", ask, rerr)
+		}
+		return securityID, r, nil
+	}
+
+	tx, err := pool.BeginTx(ctx, pgx.TxOptions{})
+	if err != nil {
+		return fmt.Errorf("begin tx for fund mock data: %w", err)
+	}
+	defer func() { _ = tx.Rollback(ctx) }()
+
+	// Tiny RSD-string adder; balances + units are NUMERIC in DB and we
+	// don't need exact precision for seed math (DB does the arithmetic).
+	type investStep struct {
+		fundName            string
+		clientID            string
+		isBankAsClient      bool
+		sourceAccountID     string
+		initiatorEmployeeID string
+		amountRSD           string
+	}
+	investSteps := []investStep{
+		{"Alfa diverzifikovani fond", clientID, false, clientRSDAcct, "", "100000"},
+		{"Beta tehnološki fond", clientID, false, clientRSDAcct, "", "50000"},
+		{"Gama konzervativni fond", clientID, false, clientRSDAcct, "", "10000"},
+		// Bank-as-client invest into Beta — supervisor-initiated, RSD
+		// drawn from the bank's house RSD account (spec p.75 Napomena 2).
+		{"Beta tehnološki fond", account.BankAsClientOwnerID, true, bankSystemRSDAcct, supervisorID, "200000"},
+	}
+
+	for _, s := range investSteps {
+		ref, ok := refs[s.fundName]
+		if !ok {
+			return fmt.Errorf("fund %q not present after creation", s.fundName)
+		}
+		// 1) Debit source account.
+		if _, err := tx.Exec(ctx, `
+            update "bank".accounts
+               set balance = balance - $1::numeric,
+                   available_balance = available_balance - $1::numeric
+             where id = $2`, s.amountRSD, s.sourceAccountID); err != nil {
+			return fmt.Errorf("debit source %s: %w", s.sourceAccountID, err)
+		}
+		// 2) Credit fund's RSD bank account.
+		if _, err := tx.Exec(ctx, `
+            update "bank".accounts
+               set balance = balance + $1::numeric,
+                   available_balance = available_balance + $1::numeric
+             where id = $2`, s.amountRSD, ref.bankAccountID); err != nil {
+			return fmt.Errorf("credit fund account %s: %w", ref.bankAccountID, err)
+		}
+		// 3) Mint units at the current unit price. We invest into the
+		//    funds before planting any holdings, so total_value ==
+		//    total_units throughout and unit_price stays 1 — units
+		//    minted == amount_rsd.
+		if _, err := tx.Exec(ctx, `
+            insert into "trading".client_fund_positions
+                (fund_id, client_id, units, total_invested_rsd)
+            values ($1, $2, $3::numeric, $3::numeric)
+            on conflict (fund_id, client_id) do update set
+                units = "trading".client_fund_positions.units + excluded.units,
+                total_invested_rsd =
+                    "trading".client_fund_positions.total_invested_rsd
+                    + excluded.total_invested_rsd,
+                updated_at = now()`,
+			ref.id, s.clientID, s.amountRSD,
+		); err != nil {
+			return fmt.Errorf("upsert client_fund_positions: %w", err)
+		}
+		if _, err := tx.Exec(ctx, `
+            update "trading".investment_funds
+               set total_units = total_units + $1::numeric, updated_at = now()
+             where id = $2`, s.amountRSD, ref.id); err != nil {
+			return fmt.Errorf("bump fund total_units: %w", err)
+		}
+		// 4) Audit row, completed.
+		var initiator any
+		if s.initiatorEmployeeID != "" {
+			initiator = s.initiatorEmployeeID
+		}
+		if _, err := tx.Exec(ctx, `
+            insert into "trading".client_fund_transactions
+                (fund_id, client_id, initiator_employee_id,
+                 amount_rsd, units_delta, source_or_dest_account_id,
+                 is_inflow, status)
+            values ($1, $2, $3, $4::numeric, $4::numeric, $5, true, 'completed')`,
+			ref.id, s.clientID, initiator, s.amountRSD, s.sourceAccountID,
+		); err != nil {
+			return fmt.Errorf("insert client_fund_transactions: %w", err)
+		}
+	}
+
+	// Fund-actor holdings. buyPriceNative is set deliberately below the
+	// seeded listing price (NIS 850, MSFT 450.10) so the fund carries an
+	// unrealised gain — Moji fondovi / Profit show green out of the box
+	// instead of a flat break-even. The fund's RSD account is debited by
+	// the actual cost (buyPrice × qty × FX); weighted_avg_price stores
+	// the native-currency cost basis.
+	type holdingStep struct {
+		fundName       string
+		ticker         string
+		quantity       int
+		buyPriceNative float64
+	}
+	holdings := []holdingStep{
+		{"Alfa diverzifikovani fond", "NIS", 100, 760.00},
+	}
+	// Beta gets MSFT only if the live FX rate is wired (it is, from the
+	// bank's seed).
+	if _, _, ferr := lookupSecurity("MSFT"); ferr == nil {
+		holdings = append(holdings, holdingStep{
+			"Beta tehnološki fond", "MSFT", 4, 408.00,
+		})
+	}
+
+	for _, h := range holdings {
+		ref, ok := refs[h.fundName]
+		if !ok {
+			return fmt.Errorf("fund %q not present for holding step", h.fundName)
+		}
+		secID, fxAsk, err := lookupSecurity(h.ticker)
+		if err != nil {
+			return fmt.Errorf("lookup %s: %w", h.ticker, err)
+		}
+		totalRSD := strconv.FormatFloat(
+			float64(h.quantity)*h.buyPriceNative*fxAsk, 'f', 4, 64)
+		// Debit fund's RSD account by the RSD cost.
+		if _, err := tx.Exec(ctx, `
+            update "bank".accounts
+               set balance = balance - $1::numeric,
+                   available_balance = available_balance - $1::numeric
+             where id = $2`, totalRSD, ref.bankAccountID); err != nil {
+			return fmt.Errorf("debit fund account for %s: %w", h.ticker, err)
+		}
+		if _, err := tx.Exec(ctx, `
+            insert into "trading".portfolio_holdings
+                (user_id, user_kind, security_id, account_id,
+                 quantity, weighted_avg_price)
+            values ($1, 'fund', $2, $3, $4, $5::numeric)`,
+			ref.id, secID, ref.bankAccountID, h.quantity,
+			strconv.FormatFloat(h.buyPriceNative, 'f', 4, 64),
+		); err != nil {
+			return fmt.Errorf("insert fund holding %s: %w", h.ticker, err)
+		}
+	}
+
+	// Performance snapshots: 60 daily rows per fund, ending at "now".
+	// Walks holdings_value with a deterministic ±2%/day step seeded by
+	// fund_id, terminating at the fund's current holdings_value_rsd.
+	// Liquid stays flat at the current value — the chart's interesting
+	// line is total_value, which moves with holdings only.
+	const snapDays = 60
+	for name, ref := range refs {
+		// Today's state straight out of the DB so we don't drift from
+		// the inserts above.
+		var liquidStr, holdingsStr string
+		if err := tx.QueryRow(ctx, `
+            select a.available_balance::text,
+                   coalesce(sum(h.quantity * h.weighted_avg_price *
+                                case when s.currency = 'RSD' then 1
+                                     else (select ask from "exchange".fx_rates
+                                            where "from" = s.currency and "to" = 'RSD')
+                                end)::text, '0') as holdings_rsd
+              from "bank".accounts a
+              left join "trading".portfolio_holdings h
+                     on h.account_id = a.id and h.user_kind = 'fund'
+              left join "trading".securities s on s.id = h.security_id
+             where a.id = $1
+             group by a.available_balance`,
+			ref.bankAccountID,
+		).Scan(&liquidStr, &holdingsStr); err != nil {
+			return fmt.Errorf("read current fund state %q: %w", name, err)
+		}
+		liquid, _ := strconv.ParseFloat(liquidStr, 64)
+		holdingsNow, _ := strconv.ParseFloat(holdingsStr, 64)
+
+		h := fnv.New64a()
+		_, _ = h.Write([]byte(ref.id))
+		rng := rand.New(rand.NewPCG(h.Sum64(), h.Sum64()^0x9e3779b97f4a7c15))
+
+		values := make([]float64, snapDays+1)
+		values[snapDays] = holdingsNow
+		for i := snapDays - 1; i >= 0; i-- {
+			step := 1.0 + (rng.Float64()*0.04 - 0.018) // ±2% with mild uptrend
+			if values[i+1] > 0 {
+				values[i] = values[i+1] / step
+			} else {
+				values[i] = 0
+			}
+		}
+		now := time.Now().UTC()
+		for i := 0; i <= snapDays; i++ {
+			at := now.AddDate(0, 0, -(snapDays - i))
+			if _, err := tx.Exec(ctx, `
+                insert into "trading".fund_performance_snapshots
+                    (fund_id, snapshot_at, liquid_rsd, holdings_value_rsd)
+                values ($1, $2, $3::numeric, $4::numeric)
+                on conflict (fund_id, snapshot_at) do nothing`,
+				ref.id, at,
+				strconv.FormatFloat(liquid, 'f', 4, 64),
+				strconv.FormatFloat(values[i], 'f', 4, 64),
+			); err != nil {
+				return fmt.Errorf("insert snapshot %q: %w", name, err)
+			}
+		}
+	}
+
+	if err := tx.Commit(ctx); err != nil {
+		return fmt.Errorf("commit fund mock data: %w", err)
+	}
+	fmt.Printf("seed: fund mock data created — %d invests, %d holdings, %d×%d snapshots\n",
+		len(investSteps), len(holdings), len(refs), snapDays+1)
 	return nil
 }
 
@@ -1646,4 +1965,16 @@ func envOr(key, fallback string) string {
 		return v
 	}
 	return fallback
+}
+
+// isEnvTruthy treats "0", "false", "off", "no" (case-insensitive) as
+// false and everything else as true. Used for opt-out env switches
+// that default on.
+func isEnvTruthy(v string) bool {
+	switch strings.ToLower(strings.TrimSpace(v)) {
+	case "0", "false", "off", "no":
+		return false
+	default:
+		return true
+	}
 }

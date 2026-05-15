@@ -171,6 +171,10 @@ type BankReservations interface {
 	// CreateFundAccount mints the bank-side liquidity account for a
 	// fund. Called from CreateFund. Returns the new account's id.
 	CreateFundAccount(ctx context.Context, name string, currency domain.Currency) (accountID string, err error)
+	// AccountNumber returns the 18-digit number of a bank account by id.
+	// Used cosmetically by GetFund to decorate the fund's RSD liquidity
+	// account number for the FE detail page.
+	AccountNumber(ctx context.Context, accountID string) (string, error)
 }
 
 // ReserveInput mirrors the bank.ReserveFunds RPC fields the SAGA needs.
