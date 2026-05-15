@@ -55,6 +55,10 @@ func (r *Router) Mount(ctx context.Context, gwMux *runtime.ServeMux, registerGW 
 		// Additive: mobile polls this for the active codes to display
 		// (spec p.84). Auth-gated so we know whose codes to list.
 		mux.Handle("GET /api/v1/verification/pending", r.AuthMW(http.HandlerFunc(r.VerificationPendingHandler())))
+		// Additive: mobile "Verifikacija" screen request history, each
+		// row marked successful/unsuccessful (spec p.84). Durable —
+		// backed by the user service, survives the Redis code TTL.
+		mux.Handle("GET /api/v1/verification/history", r.AuthMW(http.HandlerFunc(r.VerificationHistoryHandler())))
 	}
 
 	// Everything else (activation, password reset, employees, clients,

@@ -2068,6 +2068,297 @@ func (x *GetSessionVersionResponse) GetSessionVersion() int64 {
 	return 0
 }
 
+// RecordVerificationEventRequest carries the verification id (the same
+// id pkg/verification minted), the owning user, and the action kind
+// string (verification.ActionKind values: 'payment', 'transfer', …).
+type RecordVerificationEventRequest struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	Id            string                 `protobuf:"bytes,1,opt,name=id,proto3" json:"id,omitempty"`
+	UserId        string                 `protobuf:"bytes,2,opt,name=user_id,json=userId,proto3" json:"user_id,omitempty"`
+	ActionKind    string                 `protobuf:"bytes,3,opt,name=action_kind,json=actionKind,proto3" json:"action_kind,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *RecordVerificationEventRequest) Reset() {
+	*x = RecordVerificationEventRequest{}
+	mi := &file_user_v1_user_proto_msgTypes[26]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *RecordVerificationEventRequest) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*RecordVerificationEventRequest) ProtoMessage() {}
+
+func (x *RecordVerificationEventRequest) ProtoReflect() protoreflect.Message {
+	mi := &file_user_v1_user_proto_msgTypes[26]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use RecordVerificationEventRequest.ProtoReflect.Descriptor instead.
+func (*RecordVerificationEventRequest) Descriptor() ([]byte, []int) {
+	return file_user_v1_user_proto_rawDescGZIP(), []int{26}
+}
+
+func (x *RecordVerificationEventRequest) GetId() string {
+	if x != nil {
+		return x.Id
+	}
+	return ""
+}
+
+func (x *RecordVerificationEventRequest) GetUserId() string {
+	if x != nil {
+		return x.UserId
+	}
+	return ""
+}
+
+func (x *RecordVerificationEventRequest) GetActionKind() string {
+	if x != nil {
+		return x.ActionKind
+	}
+	return ""
+}
+
+type ResolveVerificationEventRequest struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	Id            string                 `protobuf:"bytes,1,opt,name=id,proto3" json:"id,omitempty"`
+	Success       bool                   `protobuf:"varint,2,opt,name=success,proto3" json:"success,omitempty"` // true → 'success', false → 'failed'
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *ResolveVerificationEventRequest) Reset() {
+	*x = ResolveVerificationEventRequest{}
+	mi := &file_user_v1_user_proto_msgTypes[27]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *ResolveVerificationEventRequest) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*ResolveVerificationEventRequest) ProtoMessage() {}
+
+func (x *ResolveVerificationEventRequest) ProtoReflect() protoreflect.Message {
+	mi := &file_user_v1_user_proto_msgTypes[27]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use ResolveVerificationEventRequest.ProtoReflect.Descriptor instead.
+func (*ResolveVerificationEventRequest) Descriptor() ([]byte, []int) {
+	return file_user_v1_user_proto_rawDescGZIP(), []int{27}
+}
+
+func (x *ResolveVerificationEventRequest) GetId() string {
+	if x != nil {
+		return x.Id
+	}
+	return ""
+}
+
+func (x *ResolveVerificationEventRequest) GetSuccess() bool {
+	if x != nil {
+		return x.Success
+	}
+	return false
+}
+
+type ListVerificationHistoryRequest struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	UserId        string                 `protobuf:"bytes,1,opt,name=user_id,json=userId,proto3" json:"user_id,omitempty"`
+	Limit         int32                  `protobuf:"varint,2,opt,name=limit,proto3" json:"limit,omitempty"` // 0 → service default cap
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *ListVerificationHistoryRequest) Reset() {
+	*x = ListVerificationHistoryRequest{}
+	mi := &file_user_v1_user_proto_msgTypes[28]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *ListVerificationHistoryRequest) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*ListVerificationHistoryRequest) ProtoMessage() {}
+
+func (x *ListVerificationHistoryRequest) ProtoReflect() protoreflect.Message {
+	mi := &file_user_v1_user_proto_msgTypes[28]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use ListVerificationHistoryRequest.ProtoReflect.Descriptor instead.
+func (*ListVerificationHistoryRequest) Descriptor() ([]byte, []int) {
+	return file_user_v1_user_proto_rawDescGZIP(), []int{28}
+}
+
+func (x *ListVerificationHistoryRequest) GetUserId() string {
+	if x != nil {
+		return x.UserId
+	}
+	return ""
+}
+
+func (x *ListVerificationHistoryRequest) GetLimit() int32 {
+	if x != nil {
+		return x.Limit
+	}
+	return 0
+}
+
+// VerificationEvent is one historical request. status is the raw
+// stored value ('pending' | 'success' | 'failed'); the gateway
+// projects an unresolved-but-stale 'pending' to expired for the
+// mobile UI using the code TTL.
+type VerificationEvent struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	Id            string                 `protobuf:"bytes,1,opt,name=id,proto3" json:"id,omitempty"`
+	ActionKind    string                 `protobuf:"bytes,2,opt,name=action_kind,json=actionKind,proto3" json:"action_kind,omitempty"`
+	Status        string                 `protobuf:"bytes,3,opt,name=status,proto3" json:"status,omitempty"`
+	CreatedAt     *timestamppb.Timestamp `protobuf:"bytes,4,opt,name=created_at,json=createdAt,proto3" json:"created_at,omitempty"`
+	ResolvedAt    *timestamppb.Timestamp `protobuf:"bytes,5,opt,name=resolved_at,json=resolvedAt,proto3" json:"resolved_at,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *VerificationEvent) Reset() {
+	*x = VerificationEvent{}
+	mi := &file_user_v1_user_proto_msgTypes[29]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *VerificationEvent) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*VerificationEvent) ProtoMessage() {}
+
+func (x *VerificationEvent) ProtoReflect() protoreflect.Message {
+	mi := &file_user_v1_user_proto_msgTypes[29]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use VerificationEvent.ProtoReflect.Descriptor instead.
+func (*VerificationEvent) Descriptor() ([]byte, []int) {
+	return file_user_v1_user_proto_rawDescGZIP(), []int{29}
+}
+
+func (x *VerificationEvent) GetId() string {
+	if x != nil {
+		return x.Id
+	}
+	return ""
+}
+
+func (x *VerificationEvent) GetActionKind() string {
+	if x != nil {
+		return x.ActionKind
+	}
+	return ""
+}
+
+func (x *VerificationEvent) GetStatus() string {
+	if x != nil {
+		return x.Status
+	}
+	return ""
+}
+
+func (x *VerificationEvent) GetCreatedAt() *timestamppb.Timestamp {
+	if x != nil {
+		return x.CreatedAt
+	}
+	return nil
+}
+
+func (x *VerificationEvent) GetResolvedAt() *timestamppb.Timestamp {
+	if x != nil {
+		return x.ResolvedAt
+	}
+	return nil
+}
+
+type ListVerificationHistoryResponse struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	Events        []*VerificationEvent   `protobuf:"bytes,1,rep,name=events,proto3" json:"events,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *ListVerificationHistoryResponse) Reset() {
+	*x = ListVerificationHistoryResponse{}
+	mi := &file_user_v1_user_proto_msgTypes[30]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *ListVerificationHistoryResponse) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*ListVerificationHistoryResponse) ProtoMessage() {}
+
+func (x *ListVerificationHistoryResponse) ProtoReflect() protoreflect.Message {
+	mi := &file_user_v1_user_proto_msgTypes[30]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use ListVerificationHistoryResponse.ProtoReflect.Descriptor instead.
+func (*ListVerificationHistoryResponse) Descriptor() ([]byte, []int) {
+	return file_user_v1_user_proto_rawDescGZIP(), []int{30}
+}
+
+func (x *ListVerificationHistoryResponse) GetEvents() []*VerificationEvent {
+	if x != nil {
+		return x.Events
+	}
+	return nil
+}
+
 var File_user_v1_user_proto protoreflect.FileDescriptor
 
 const file_user_v1_user_proto_rawDesc = "" +
@@ -2257,7 +2548,29 @@ const file_user_v1_user_proto_rawDesc = "" +
 	"\tuser_kind\x18\x01 \x01(\x0e2\x17.banka.user.v1.UserKindR\buserKind\x12\x17\n" +
 	"\auser_id\x18\x02 \x01(\tR\x06userId\"D\n" +
 	"\x19GetSessionVersionResponse\x12'\n" +
-	"\x0fsession_version\x18\x01 \x01(\x03R\x0esessionVersion*S\n" +
+	"\x0fsession_version\x18\x01 \x01(\x03R\x0esessionVersion\"j\n" +
+	"\x1eRecordVerificationEventRequest\x12\x0e\n" +
+	"\x02id\x18\x01 \x01(\tR\x02id\x12\x17\n" +
+	"\auser_id\x18\x02 \x01(\tR\x06userId\x12\x1f\n" +
+	"\vaction_kind\x18\x03 \x01(\tR\n" +
+	"actionKind\"K\n" +
+	"\x1fResolveVerificationEventRequest\x12\x0e\n" +
+	"\x02id\x18\x01 \x01(\tR\x02id\x12\x18\n" +
+	"\asuccess\x18\x02 \x01(\bR\asuccess\"O\n" +
+	"\x1eListVerificationHistoryRequest\x12\x17\n" +
+	"\auser_id\x18\x01 \x01(\tR\x06userId\x12\x14\n" +
+	"\x05limit\x18\x02 \x01(\x05R\x05limit\"\xd4\x01\n" +
+	"\x11VerificationEvent\x12\x0e\n" +
+	"\x02id\x18\x01 \x01(\tR\x02id\x12\x1f\n" +
+	"\vaction_kind\x18\x02 \x01(\tR\n" +
+	"actionKind\x12\x16\n" +
+	"\x06status\x18\x03 \x01(\tR\x06status\x129\n" +
+	"\n" +
+	"created_at\x18\x04 \x01(\v2\x1a.google.protobuf.TimestampR\tcreatedAt\x12;\n" +
+	"\vresolved_at\x18\x05 \x01(\v2\x1a.google.protobuf.TimestampR\n" +
+	"resolvedAt\"[\n" +
+	"\x1fListVerificationHistoryResponse\x128\n" +
+	"\x06events\x18\x01 \x03(\v2 .banka.user.v1.VerificationEventR\x06events*S\n" +
 	"\bUserKind\x12\x19\n" +
 	"\x15USER_KIND_UNSPECIFIED\x10\x00\x12\x16\n" +
 	"\x12USER_KIND_EMPLOYEE\x10\x01\x12\x14\n" +
@@ -2266,7 +2579,7 @@ const file_user_v1_user_proto_rawDesc = "" +
 	"\x12GENDER_UNSPECIFIED\x10\x00\x12\x0f\n" +
 	"\vGENDER_MALE\x10\x01\x12\x11\n" +
 	"\rGENDER_FEMALE\x10\x02\x12\x10\n" +
-	"\fGENDER_OTHER\x10\x032\xfc\x10\n" +
+	"\fGENDER_OTHER\x10\x032\xbc\x13\n" +
 	"\vUserService\x12a\n" +
 	"\x05Login\x12\x1b.banka.user.v1.LoginRequest\x1a\x1c.banka.user.v1.LoginResponse\"\x1d\x82\xd3\xe4\x93\x02\x17:\x01*\"\x12/api/v1/auth/login\x12i\n" +
 	"\aRefresh\x12\x1d.banka.user.v1.RefreshRequest\x1a\x1e.banka.user.v1.RefreshResponse\"\x1f\x82\xd3\xe4\x93\x02\x19:\x01*\"\x14/api/v1/auth/refresh\x12^\n" +
@@ -2286,7 +2599,10 @@ const file_user_v1_user_proto_rawDesc = "" +
 	"\vListClients\x12!.banka.user.v1.ListClientsRequest\x1a\".banka.user.v1.ListClientsResponse\"\x17\x82\xd3\xe4\x93\x02\x11\x12\x0f/api/v1/clients\x12a\n" +
 	"\tGetClient\x12\x1f.banka.user.v1.GetClientRequest\x1a\x15.banka.user.v1.Client\"\x1c\x82\xd3\xe4\x93\x02\x16\x12\x14/api/v1/clients/{id}\x12j\n" +
 	"\fUpdateClient\x12\".banka.user.v1.UpdateClientRequest\x1a\x15.banka.user.v1.Client\"\x1f\x82\xd3\xe4\x93\x02\x19:\x01*2\x14/api/v1/clients/{id}\x12f\n" +
-	"\x11GetSessionVersion\x12'.banka.user.v1.GetSessionVersionRequest\x1a(.banka.user.v1.GetSessionVersionResponseB\xb5\x01\n" +
+	"\x11GetSessionVersion\x12'.banka.user.v1.GetSessionVersionRequest\x1a(.banka.user.v1.GetSessionVersionResponse\x12`\n" +
+	"\x17RecordVerificationEvent\x12-.banka.user.v1.RecordVerificationEventRequest\x1a\x16.google.protobuf.Empty\x12b\n" +
+	"\x18ResolveVerificationEvent\x12..banka.user.v1.ResolveVerificationEventRequest\x1a\x16.google.protobuf.Empty\x12x\n" +
+	"\x17ListVerificationHistory\x12-.banka.user.v1.ListVerificationHistoryRequest\x1a..banka.user.v1.ListVerificationHistoryResponseB\xb5\x01\n" +
 	"\x11com.banka.user.v1B\tUserProtoP\x01Z?github.com/RAF-SI-2025/Banka-3-Backend/gen/proto/user/v1;userv1\xa2\x02\x03BUX\xaa\x02\rBanka.User.V1\xca\x02\rBanka\\User\\V1\xe2\x02\x19Banka\\User\\V1\\GPBMetadata\xea\x02\x0fBanka::User::V1b\x06proto3"
 
 var (
@@ -2302,46 +2618,51 @@ func file_user_v1_user_proto_rawDescGZIP() []byte {
 }
 
 var file_user_v1_user_proto_enumTypes = make([]protoimpl.EnumInfo, 2)
-var file_user_v1_user_proto_msgTypes = make([]protoimpl.MessageInfo, 26)
+var file_user_v1_user_proto_msgTypes = make([]protoimpl.MessageInfo, 31)
 var file_user_v1_user_proto_goTypes = []any{
-	(UserKind)(0),                         // 0: banka.user.v1.UserKind
-	(Gender)(0),                           // 1: banka.user.v1.Gender
-	(*Employee)(nil),                      // 2: banka.user.v1.Employee
-	(*Client)(nil),                        // 3: banka.user.v1.Client
-	(*LoginRequest)(nil),                  // 4: banka.user.v1.LoginRequest
-	(*LoginResponse)(nil),                 // 5: banka.user.v1.LoginResponse
-	(*RefreshRequest)(nil),                // 6: banka.user.v1.RefreshRequest
-	(*RefreshResponse)(nil),               // 7: banka.user.v1.RefreshResponse
-	(*LogoutRequest)(nil),                 // 8: banka.user.v1.LogoutRequest
-	(*MeResponse)(nil),                    // 9: banka.user.v1.MeResponse
-	(*ActivateAccountRequest)(nil),        // 10: banka.user.v1.ActivateAccountRequest
-	(*ResendActivationRequest)(nil),       // 11: banka.user.v1.ResendActivationRequest
-	(*RequestPasswordResetRequest)(nil),   // 12: banka.user.v1.RequestPasswordResetRequest
-	(*ConfirmPasswordResetRequest)(nil),   // 13: banka.user.v1.ConfirmPasswordResetRequest
-	(*CreateEmployeeRequest)(nil),         // 14: banka.user.v1.CreateEmployeeRequest
-	(*ListEmployeesRequest)(nil),          // 15: banka.user.v1.ListEmployeesRequest
-	(*ListEmployeesResponse)(nil),         // 16: banka.user.v1.ListEmployeesResponse
-	(*GetEmployeeRequest)(nil),            // 17: banka.user.v1.GetEmployeeRequest
-	(*UpdateEmployeeRequest)(nil),         // 18: banka.user.v1.UpdateEmployeeRequest
-	(*SetEmployeeActiveRequest)(nil),      // 19: banka.user.v1.SetEmployeeActiveRequest
-	(*SetEmployeePermissionsRequest)(nil), // 20: banka.user.v1.SetEmployeePermissionsRequest
-	(*CreateClientRequest)(nil),           // 21: banka.user.v1.CreateClientRequest
-	(*ListClientsRequest)(nil),            // 22: banka.user.v1.ListClientsRequest
-	(*ListClientsResponse)(nil),           // 23: banka.user.v1.ListClientsResponse
-	(*GetClientRequest)(nil),              // 24: banka.user.v1.GetClientRequest
-	(*UpdateClientRequest)(nil),           // 25: banka.user.v1.UpdateClientRequest
-	(*GetSessionVersionRequest)(nil),      // 26: banka.user.v1.GetSessionVersionRequest
-	(*GetSessionVersionResponse)(nil),     // 27: banka.user.v1.GetSessionVersionResponse
-	(*timestamppb.Timestamp)(nil),         // 28: google.protobuf.Timestamp
-	(*emptypb.Empty)(nil),                 // 29: google.protobuf.Empty
+	(UserKind)(0),                           // 0: banka.user.v1.UserKind
+	(Gender)(0),                             // 1: banka.user.v1.Gender
+	(*Employee)(nil),                        // 2: banka.user.v1.Employee
+	(*Client)(nil),                          // 3: banka.user.v1.Client
+	(*LoginRequest)(nil),                    // 4: banka.user.v1.LoginRequest
+	(*LoginResponse)(nil),                   // 5: banka.user.v1.LoginResponse
+	(*RefreshRequest)(nil),                  // 6: banka.user.v1.RefreshRequest
+	(*RefreshResponse)(nil),                 // 7: banka.user.v1.RefreshResponse
+	(*LogoutRequest)(nil),                   // 8: banka.user.v1.LogoutRequest
+	(*MeResponse)(nil),                      // 9: banka.user.v1.MeResponse
+	(*ActivateAccountRequest)(nil),          // 10: banka.user.v1.ActivateAccountRequest
+	(*ResendActivationRequest)(nil),         // 11: banka.user.v1.ResendActivationRequest
+	(*RequestPasswordResetRequest)(nil),     // 12: banka.user.v1.RequestPasswordResetRequest
+	(*ConfirmPasswordResetRequest)(nil),     // 13: banka.user.v1.ConfirmPasswordResetRequest
+	(*CreateEmployeeRequest)(nil),           // 14: banka.user.v1.CreateEmployeeRequest
+	(*ListEmployeesRequest)(nil),            // 15: banka.user.v1.ListEmployeesRequest
+	(*ListEmployeesResponse)(nil),           // 16: banka.user.v1.ListEmployeesResponse
+	(*GetEmployeeRequest)(nil),              // 17: banka.user.v1.GetEmployeeRequest
+	(*UpdateEmployeeRequest)(nil),           // 18: banka.user.v1.UpdateEmployeeRequest
+	(*SetEmployeeActiveRequest)(nil),        // 19: banka.user.v1.SetEmployeeActiveRequest
+	(*SetEmployeePermissionsRequest)(nil),   // 20: banka.user.v1.SetEmployeePermissionsRequest
+	(*CreateClientRequest)(nil),             // 21: banka.user.v1.CreateClientRequest
+	(*ListClientsRequest)(nil),              // 22: banka.user.v1.ListClientsRequest
+	(*ListClientsResponse)(nil),             // 23: banka.user.v1.ListClientsResponse
+	(*GetClientRequest)(nil),                // 24: banka.user.v1.GetClientRequest
+	(*UpdateClientRequest)(nil),             // 25: banka.user.v1.UpdateClientRequest
+	(*GetSessionVersionRequest)(nil),        // 26: banka.user.v1.GetSessionVersionRequest
+	(*GetSessionVersionResponse)(nil),       // 27: banka.user.v1.GetSessionVersionResponse
+	(*RecordVerificationEventRequest)(nil),  // 28: banka.user.v1.RecordVerificationEventRequest
+	(*ResolveVerificationEventRequest)(nil), // 29: banka.user.v1.ResolveVerificationEventRequest
+	(*ListVerificationHistoryRequest)(nil),  // 30: banka.user.v1.ListVerificationHistoryRequest
+	(*VerificationEvent)(nil),               // 31: banka.user.v1.VerificationEvent
+	(*ListVerificationHistoryResponse)(nil), // 32: banka.user.v1.ListVerificationHistoryResponse
+	(*timestamppb.Timestamp)(nil),           // 33: google.protobuf.Timestamp
+	(*emptypb.Empty)(nil),                   // 34: google.protobuf.Empty
 }
 var file_user_v1_user_proto_depIdxs = []int32{
 	1,  // 0: banka.user.v1.Employee.gender:type_name -> banka.user.v1.Gender
-	28, // 1: banka.user.v1.Employee.created_at:type_name -> google.protobuf.Timestamp
-	28, // 2: banka.user.v1.Employee.updated_at:type_name -> google.protobuf.Timestamp
+	33, // 1: banka.user.v1.Employee.created_at:type_name -> google.protobuf.Timestamp
+	33, // 2: banka.user.v1.Employee.updated_at:type_name -> google.protobuf.Timestamp
 	1,  // 3: banka.user.v1.Client.gender:type_name -> banka.user.v1.Gender
-	28, // 4: banka.user.v1.Client.created_at:type_name -> google.protobuf.Timestamp
-	28, // 5: banka.user.v1.Client.updated_at:type_name -> google.protobuf.Timestamp
+	33, // 4: banka.user.v1.Client.created_at:type_name -> google.protobuf.Timestamp
+	33, // 5: banka.user.v1.Client.updated_at:type_name -> google.protobuf.Timestamp
 	0,  // 6: banka.user.v1.LoginResponse.user_kind:type_name -> banka.user.v1.UserKind
 	2,  // 7: banka.user.v1.MeResponse.employee:type_name -> banka.user.v1.Employee
 	3,  // 8: banka.user.v1.MeResponse.client:type_name -> banka.user.v1.Client
@@ -2352,49 +2673,58 @@ var file_user_v1_user_proto_depIdxs = []int32{
 	3,  // 13: banka.user.v1.ListClientsResponse.clients:type_name -> banka.user.v1.Client
 	1,  // 14: banka.user.v1.UpdateClientRequest.gender:type_name -> banka.user.v1.Gender
 	0,  // 15: banka.user.v1.GetSessionVersionRequest.user_kind:type_name -> banka.user.v1.UserKind
-	4,  // 16: banka.user.v1.UserService.Login:input_type -> banka.user.v1.LoginRequest
-	6,  // 17: banka.user.v1.UserService.Refresh:input_type -> banka.user.v1.RefreshRequest
-	8,  // 18: banka.user.v1.UserService.Logout:input_type -> banka.user.v1.LogoutRequest
-	29, // 19: banka.user.v1.UserService.Me:input_type -> google.protobuf.Empty
-	10, // 20: banka.user.v1.UserService.ActivateAccount:input_type -> banka.user.v1.ActivateAccountRequest
-	11, // 21: banka.user.v1.UserService.ResendActivation:input_type -> banka.user.v1.ResendActivationRequest
-	12, // 22: banka.user.v1.UserService.RequestPasswordReset:input_type -> banka.user.v1.RequestPasswordResetRequest
-	13, // 23: banka.user.v1.UserService.ConfirmPasswordReset:input_type -> banka.user.v1.ConfirmPasswordResetRequest
-	14, // 24: banka.user.v1.UserService.CreateEmployee:input_type -> banka.user.v1.CreateEmployeeRequest
-	15, // 25: banka.user.v1.UserService.ListEmployees:input_type -> banka.user.v1.ListEmployeesRequest
-	17, // 26: banka.user.v1.UserService.GetEmployee:input_type -> banka.user.v1.GetEmployeeRequest
-	18, // 27: banka.user.v1.UserService.UpdateEmployee:input_type -> banka.user.v1.UpdateEmployeeRequest
-	19, // 28: banka.user.v1.UserService.SetEmployeeActive:input_type -> banka.user.v1.SetEmployeeActiveRequest
-	20, // 29: banka.user.v1.UserService.SetEmployeePermissions:input_type -> banka.user.v1.SetEmployeePermissionsRequest
-	21, // 30: banka.user.v1.UserService.CreateClient:input_type -> banka.user.v1.CreateClientRequest
-	22, // 31: banka.user.v1.UserService.ListClients:input_type -> banka.user.v1.ListClientsRequest
-	24, // 32: banka.user.v1.UserService.GetClient:input_type -> banka.user.v1.GetClientRequest
-	25, // 33: banka.user.v1.UserService.UpdateClient:input_type -> banka.user.v1.UpdateClientRequest
-	26, // 34: banka.user.v1.UserService.GetSessionVersion:input_type -> banka.user.v1.GetSessionVersionRequest
-	5,  // 35: banka.user.v1.UserService.Login:output_type -> banka.user.v1.LoginResponse
-	7,  // 36: banka.user.v1.UserService.Refresh:output_type -> banka.user.v1.RefreshResponse
-	29, // 37: banka.user.v1.UserService.Logout:output_type -> google.protobuf.Empty
-	9,  // 38: banka.user.v1.UserService.Me:output_type -> banka.user.v1.MeResponse
-	29, // 39: banka.user.v1.UserService.ActivateAccount:output_type -> google.protobuf.Empty
-	29, // 40: banka.user.v1.UserService.ResendActivation:output_type -> google.protobuf.Empty
-	29, // 41: banka.user.v1.UserService.RequestPasswordReset:output_type -> google.protobuf.Empty
-	29, // 42: banka.user.v1.UserService.ConfirmPasswordReset:output_type -> google.protobuf.Empty
-	2,  // 43: banka.user.v1.UserService.CreateEmployee:output_type -> banka.user.v1.Employee
-	16, // 44: banka.user.v1.UserService.ListEmployees:output_type -> banka.user.v1.ListEmployeesResponse
-	2,  // 45: banka.user.v1.UserService.GetEmployee:output_type -> banka.user.v1.Employee
-	2,  // 46: banka.user.v1.UserService.UpdateEmployee:output_type -> banka.user.v1.Employee
-	2,  // 47: banka.user.v1.UserService.SetEmployeeActive:output_type -> banka.user.v1.Employee
-	2,  // 48: banka.user.v1.UserService.SetEmployeePermissions:output_type -> banka.user.v1.Employee
-	3,  // 49: banka.user.v1.UserService.CreateClient:output_type -> banka.user.v1.Client
-	23, // 50: banka.user.v1.UserService.ListClients:output_type -> banka.user.v1.ListClientsResponse
-	3,  // 51: banka.user.v1.UserService.GetClient:output_type -> banka.user.v1.Client
-	3,  // 52: banka.user.v1.UserService.UpdateClient:output_type -> banka.user.v1.Client
-	27, // 53: banka.user.v1.UserService.GetSessionVersion:output_type -> banka.user.v1.GetSessionVersionResponse
-	35, // [35:54] is the sub-list for method output_type
-	16, // [16:35] is the sub-list for method input_type
-	16, // [16:16] is the sub-list for extension type_name
-	16, // [16:16] is the sub-list for extension extendee
-	0,  // [0:16] is the sub-list for field type_name
+	33, // 16: banka.user.v1.VerificationEvent.created_at:type_name -> google.protobuf.Timestamp
+	33, // 17: banka.user.v1.VerificationEvent.resolved_at:type_name -> google.protobuf.Timestamp
+	31, // 18: banka.user.v1.ListVerificationHistoryResponse.events:type_name -> banka.user.v1.VerificationEvent
+	4,  // 19: banka.user.v1.UserService.Login:input_type -> banka.user.v1.LoginRequest
+	6,  // 20: banka.user.v1.UserService.Refresh:input_type -> banka.user.v1.RefreshRequest
+	8,  // 21: banka.user.v1.UserService.Logout:input_type -> banka.user.v1.LogoutRequest
+	34, // 22: banka.user.v1.UserService.Me:input_type -> google.protobuf.Empty
+	10, // 23: banka.user.v1.UserService.ActivateAccount:input_type -> banka.user.v1.ActivateAccountRequest
+	11, // 24: banka.user.v1.UserService.ResendActivation:input_type -> banka.user.v1.ResendActivationRequest
+	12, // 25: banka.user.v1.UserService.RequestPasswordReset:input_type -> banka.user.v1.RequestPasswordResetRequest
+	13, // 26: banka.user.v1.UserService.ConfirmPasswordReset:input_type -> banka.user.v1.ConfirmPasswordResetRequest
+	14, // 27: banka.user.v1.UserService.CreateEmployee:input_type -> banka.user.v1.CreateEmployeeRequest
+	15, // 28: banka.user.v1.UserService.ListEmployees:input_type -> banka.user.v1.ListEmployeesRequest
+	17, // 29: banka.user.v1.UserService.GetEmployee:input_type -> banka.user.v1.GetEmployeeRequest
+	18, // 30: banka.user.v1.UserService.UpdateEmployee:input_type -> banka.user.v1.UpdateEmployeeRequest
+	19, // 31: banka.user.v1.UserService.SetEmployeeActive:input_type -> banka.user.v1.SetEmployeeActiveRequest
+	20, // 32: banka.user.v1.UserService.SetEmployeePermissions:input_type -> banka.user.v1.SetEmployeePermissionsRequest
+	21, // 33: banka.user.v1.UserService.CreateClient:input_type -> banka.user.v1.CreateClientRequest
+	22, // 34: banka.user.v1.UserService.ListClients:input_type -> banka.user.v1.ListClientsRequest
+	24, // 35: banka.user.v1.UserService.GetClient:input_type -> banka.user.v1.GetClientRequest
+	25, // 36: banka.user.v1.UserService.UpdateClient:input_type -> banka.user.v1.UpdateClientRequest
+	26, // 37: banka.user.v1.UserService.GetSessionVersion:input_type -> banka.user.v1.GetSessionVersionRequest
+	28, // 38: banka.user.v1.UserService.RecordVerificationEvent:input_type -> banka.user.v1.RecordVerificationEventRequest
+	29, // 39: banka.user.v1.UserService.ResolveVerificationEvent:input_type -> banka.user.v1.ResolveVerificationEventRequest
+	30, // 40: banka.user.v1.UserService.ListVerificationHistory:input_type -> banka.user.v1.ListVerificationHistoryRequest
+	5,  // 41: banka.user.v1.UserService.Login:output_type -> banka.user.v1.LoginResponse
+	7,  // 42: banka.user.v1.UserService.Refresh:output_type -> banka.user.v1.RefreshResponse
+	34, // 43: banka.user.v1.UserService.Logout:output_type -> google.protobuf.Empty
+	9,  // 44: banka.user.v1.UserService.Me:output_type -> banka.user.v1.MeResponse
+	34, // 45: banka.user.v1.UserService.ActivateAccount:output_type -> google.protobuf.Empty
+	34, // 46: banka.user.v1.UserService.ResendActivation:output_type -> google.protobuf.Empty
+	34, // 47: banka.user.v1.UserService.RequestPasswordReset:output_type -> google.protobuf.Empty
+	34, // 48: banka.user.v1.UserService.ConfirmPasswordReset:output_type -> google.protobuf.Empty
+	2,  // 49: banka.user.v1.UserService.CreateEmployee:output_type -> banka.user.v1.Employee
+	16, // 50: banka.user.v1.UserService.ListEmployees:output_type -> banka.user.v1.ListEmployeesResponse
+	2,  // 51: banka.user.v1.UserService.GetEmployee:output_type -> banka.user.v1.Employee
+	2,  // 52: banka.user.v1.UserService.UpdateEmployee:output_type -> banka.user.v1.Employee
+	2,  // 53: banka.user.v1.UserService.SetEmployeeActive:output_type -> banka.user.v1.Employee
+	2,  // 54: banka.user.v1.UserService.SetEmployeePermissions:output_type -> banka.user.v1.Employee
+	3,  // 55: banka.user.v1.UserService.CreateClient:output_type -> banka.user.v1.Client
+	23, // 56: banka.user.v1.UserService.ListClients:output_type -> banka.user.v1.ListClientsResponse
+	3,  // 57: banka.user.v1.UserService.GetClient:output_type -> banka.user.v1.Client
+	3,  // 58: banka.user.v1.UserService.UpdateClient:output_type -> banka.user.v1.Client
+	27, // 59: banka.user.v1.UserService.GetSessionVersion:output_type -> banka.user.v1.GetSessionVersionResponse
+	34, // 60: banka.user.v1.UserService.RecordVerificationEvent:output_type -> google.protobuf.Empty
+	34, // 61: banka.user.v1.UserService.ResolveVerificationEvent:output_type -> google.protobuf.Empty
+	32, // 62: banka.user.v1.UserService.ListVerificationHistory:output_type -> banka.user.v1.ListVerificationHistoryResponse
+	41, // [41:63] is the sub-list for method output_type
+	19, // [19:41] is the sub-list for method input_type
+	19, // [19:19] is the sub-list for extension type_name
+	19, // [19:19] is the sub-list for extension extendee
+	0,  // [0:19] is the sub-list for field type_name
 }
 
 func init() { file_user_v1_user_proto_init() }
@@ -2413,7 +2743,7 @@ func file_user_v1_user_proto_init() {
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
 			RawDescriptor: unsafe.Slice(unsafe.StringData(file_user_v1_user_proto_rawDesc), len(file_user_v1_user_proto_rawDesc)),
 			NumEnums:      2,
-			NumMessages:   26,
+			NumMessages:   31,
 			NumExtensions: 0,
 			NumServices:   1,
 		},

@@ -82,11 +82,19 @@ func Run() error {
 	}
 	idemMW := idempotency.Middleware(idemCache, log)
 
-	// Verification: spec p.11 verifikacioni-kod placeholder. Mobile app
-	// is deferred until c5; until then the issuer returns the code in
-	// the HTTP response so the FE can display it inline. Middleware
-	// gates payments / transfers / limit changes / card issuance.
-	verifier := &pkgverif.Cache{R: rdb}
+	// Verification: spec p.11 verifikacioni-kod. The web flow still
+	// returns the code in the HTTP response so the SPA renders it
+	// inline; the mobile app (spec p.84) polls /verification/pending +
+	// /verification/history instead. The RecordingVerifier wraps the
+	// Redis primitive to durably persist each request + its outcome
+	// via the user service (best-effort — a history hiccup never
+	// breaks the gate). Middleware gates payments / transfers / limit
+	// changes / card issuance + the c4 money-moving OTC/fund routes.
+	verifier := &gwverif.RecordingVerifier{
+		Inner: &pkgverif.Cache{R: rdb},
+		Users: cs.User,
+		Log:   log,
+	}
 	verifMW := gwverif.Middleware(verifier, gwverif.DefaultRules(), log)
 
 	r := &router.Router{

@@ -69,6 +69,29 @@ type Client struct {
 	UpdatedAt      time.Time
 }
 
+// VerificationEvent is one row of a user's verification request
+// history (spec p.84). Status is one of 'pending', 'success',
+// 'failed'; ResolvedAt is nil until the code is consumed or its
+// attempt budget is spent. The user service never stores the code or
+// reasons about expiry — an unresolved 'pending' past the code TTL is
+// projected to expired by the gateway.
+type VerificationEvent struct {
+	ID         string
+	UserID     string
+	ActionKind string
+	Status     string
+	CreatedAt  time.Time
+	ResolvedAt *time.Time
+}
+
+// Verification status constants. Mirrors the DB check constraint in
+// migration 0003.
+const (
+	VerificationPending = "pending"
+	VerificationSuccess = "success"
+	VerificationFailed  = "failed"
+)
+
 // EmployeeFilter narrows ListEmployees results. Empty fields don't filter.
 type EmployeeFilter struct {
 	Email    string

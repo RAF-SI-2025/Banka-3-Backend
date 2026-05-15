@@ -5,6 +5,7 @@ import (
 	"net/http"
 	"time"
 
+	userpb "github.com/RAF-SI-2025/Banka-3-Backend/gen/proto/user/v1"
 	pkgauth "github.com/RAF-SI-2025/Banka-3-Backend/pkg/auth"
 	"github.com/RAF-SI-2025/Banka-3-Backend/pkg/verification"
 )
@@ -117,6 +118,61 @@ func (r *Router) VerificationPendingHandler() http.HandlerFunc {
 			})
 		}
 		writeJSON(w, http.StatusOK, pendingResponse{Pending: items})
+	}
+}
+
+// historyItem is one past request as the mobile "Verifikacija" screen
+// (spec p.84) consumes it. Field names match the hand-written mobile
+// verification client's VerificationHistoryItem.
+type historyItem struct {
+	ID        string    `json:"id"`
+	Action    string    `json:"action"`
+	Status    string    `json:"status"` // pending | success | failed | expired
+	CreatedAt time.Time `json:"createdAt"`
+}
+
+type historyResponse struct {
+	History []historyItem `json:"history"`
+}
+
+// VerificationHistoryHandler returns GET /api/v1/verification/history —
+// the durable request history the mobile app shows, each row marked
+// successful/unsuccessful (spec p.84 "Stranica Verifikacija"). The
+// user service stores only the raw 'pending'|'success'|'failed' state;
+// the gateway owns verification timing, so it projects a still-pending
+// row older than the code TTL to "expired" here.
+func (r *Router) VerificationHistoryHandler() http.HandlerFunc {
+	return func(w http.ResponseWriter, req *http.Request) {
+		p, ok := pkgauth.PrincipalFrom(req.Context())
+		if !ok {
+			writeError(w, http.StatusUnauthorized, "missing access token")
+			return
+		}
+		resp, err := r.Users.ListVerificationHistory(req.Context(), &userpb.ListVerificationHistoryRequest{
+			UserId: p.UserID,
+		})
+		if err != nil {
+			writeError(w, http.StatusServiceUnavailable, "Istorija verifikacija privremeno nedostupna.")
+			return
+		}
+		now := time.Now()
+		items := make([]historyItem, 0, len(resp.GetEvents()))
+		for _, e := range resp.GetEvents() {
+			status := e.GetStatus()
+			if status == "pending" && e.GetCreatedAt() != nil &&
+				now.Sub(e.GetCreatedAt().AsTime()) > verification.CodeTTL {
+				// Issued, never consumed, code window elapsed → an
+				// unsuccessful (expired) attempt for display.
+				status = "expired"
+			}
+			items = append(items, historyItem{
+				ID:        e.GetId(),
+				Action:    actionLabel(verification.ActionKind(e.GetActionKind())),
+				Status:    status,
+				CreatedAt: e.GetCreatedAt().AsTime(),
+			})
+		}
+		writeJSON(w, http.StatusOK, historyResponse{History: items})
 	}
 }
 

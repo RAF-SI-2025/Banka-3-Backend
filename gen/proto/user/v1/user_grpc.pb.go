@@ -20,25 +20,28 @@ import (
 const _ = grpc.SupportPackageIsVersion9
 
 const (
-	UserService_Login_FullMethodName                  = "/banka.user.v1.UserService/Login"
-	UserService_Refresh_FullMethodName                = "/banka.user.v1.UserService/Refresh"
-	UserService_Logout_FullMethodName                 = "/banka.user.v1.UserService/Logout"
-	UserService_Me_FullMethodName                     = "/banka.user.v1.UserService/Me"
-	UserService_ActivateAccount_FullMethodName        = "/banka.user.v1.UserService/ActivateAccount"
-	UserService_ResendActivation_FullMethodName       = "/banka.user.v1.UserService/ResendActivation"
-	UserService_RequestPasswordReset_FullMethodName   = "/banka.user.v1.UserService/RequestPasswordReset"
-	UserService_ConfirmPasswordReset_FullMethodName   = "/banka.user.v1.UserService/ConfirmPasswordReset"
-	UserService_CreateEmployee_FullMethodName         = "/banka.user.v1.UserService/CreateEmployee"
-	UserService_ListEmployees_FullMethodName          = "/banka.user.v1.UserService/ListEmployees"
-	UserService_GetEmployee_FullMethodName            = "/banka.user.v1.UserService/GetEmployee"
-	UserService_UpdateEmployee_FullMethodName         = "/banka.user.v1.UserService/UpdateEmployee"
-	UserService_SetEmployeeActive_FullMethodName      = "/banka.user.v1.UserService/SetEmployeeActive"
-	UserService_SetEmployeePermissions_FullMethodName = "/banka.user.v1.UserService/SetEmployeePermissions"
-	UserService_CreateClient_FullMethodName           = "/banka.user.v1.UserService/CreateClient"
-	UserService_ListClients_FullMethodName            = "/banka.user.v1.UserService/ListClients"
-	UserService_GetClient_FullMethodName              = "/banka.user.v1.UserService/GetClient"
-	UserService_UpdateClient_FullMethodName           = "/banka.user.v1.UserService/UpdateClient"
-	UserService_GetSessionVersion_FullMethodName      = "/banka.user.v1.UserService/GetSessionVersion"
+	UserService_Login_FullMethodName                    = "/banka.user.v1.UserService/Login"
+	UserService_Refresh_FullMethodName                  = "/banka.user.v1.UserService/Refresh"
+	UserService_Logout_FullMethodName                   = "/banka.user.v1.UserService/Logout"
+	UserService_Me_FullMethodName                       = "/banka.user.v1.UserService/Me"
+	UserService_ActivateAccount_FullMethodName          = "/banka.user.v1.UserService/ActivateAccount"
+	UserService_ResendActivation_FullMethodName         = "/banka.user.v1.UserService/ResendActivation"
+	UserService_RequestPasswordReset_FullMethodName     = "/banka.user.v1.UserService/RequestPasswordReset"
+	UserService_ConfirmPasswordReset_FullMethodName     = "/banka.user.v1.UserService/ConfirmPasswordReset"
+	UserService_CreateEmployee_FullMethodName           = "/banka.user.v1.UserService/CreateEmployee"
+	UserService_ListEmployees_FullMethodName            = "/banka.user.v1.UserService/ListEmployees"
+	UserService_GetEmployee_FullMethodName              = "/banka.user.v1.UserService/GetEmployee"
+	UserService_UpdateEmployee_FullMethodName           = "/banka.user.v1.UserService/UpdateEmployee"
+	UserService_SetEmployeeActive_FullMethodName        = "/banka.user.v1.UserService/SetEmployeeActive"
+	UserService_SetEmployeePermissions_FullMethodName   = "/banka.user.v1.UserService/SetEmployeePermissions"
+	UserService_CreateClient_FullMethodName             = "/banka.user.v1.UserService/CreateClient"
+	UserService_ListClients_FullMethodName              = "/banka.user.v1.UserService/ListClients"
+	UserService_GetClient_FullMethodName                = "/banka.user.v1.UserService/GetClient"
+	UserService_UpdateClient_FullMethodName             = "/banka.user.v1.UserService/UpdateClient"
+	UserService_GetSessionVersion_FullMethodName        = "/banka.user.v1.UserService/GetSessionVersion"
+	UserService_RecordVerificationEvent_FullMethodName  = "/banka.user.v1.UserService/RecordVerificationEvent"
+	UserService_ResolveVerificationEvent_FullMethodName = "/banka.user.v1.UserService/ResolveVerificationEvent"
+	UserService_ListVerificationHistory_FullMethodName  = "/banka.user.v1.UserService/ListVerificationHistory"
 )
 
 // UserServiceClient is the client API for UserService service.
@@ -78,6 +81,22 @@ type UserServiceClient interface {
 	// GetSessionVersion is called by the gateway on JWT verification when
 	// the cached session_version for a user is missing.
 	GetSessionVersion(ctx context.Context, in *GetSessionVersionRequest, opts ...grpc.CallOption) (*GetSessionVersionResponse, error)
+	// RecordVerificationEvent durably persists a freshly issued
+	// verification request so the mobile app (spec p.84 "Stranica
+	// Verifikacija") can show request history. Called by the gateway
+	// from the verification issue path; the ephemeral 6-digit code
+	// itself stays in Redis (pkg/verification) and is never stored here.
+	RecordVerificationEvent(ctx context.Context, in *RecordVerificationEventRequest, opts ...grpc.CallOption) (*emptypb.Empty, error)
+	// ResolveVerificationEvent marks a recorded request 'success' or
+	// 'failed' when its code is consumed (or the attempt budget is
+	// spent). Unresolved rows older than the code TTL are reported as
+	// expired by the gateway projection — the user service stays
+	// unaware of verification timing.
+	ResolveVerificationEvent(ctx context.Context, in *ResolveVerificationEventRequest, opts ...grpc.CallOption) (*emptypb.Empty, error)
+	// ListVerificationHistory returns a user's verification request
+	// history, newest first (spec p.84 — each request marked
+	// successful/unsuccessful).
+	ListVerificationHistory(ctx context.Context, in *ListVerificationHistoryRequest, opts ...grpc.CallOption) (*ListVerificationHistoryResponse, error)
 }
 
 type userServiceClient struct {
@@ -278,6 +297,36 @@ func (c *userServiceClient) GetSessionVersion(ctx context.Context, in *GetSessio
 	return out, nil
 }
 
+func (c *userServiceClient) RecordVerificationEvent(ctx context.Context, in *RecordVerificationEventRequest, opts ...grpc.CallOption) (*emptypb.Empty, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(emptypb.Empty)
+	err := c.cc.Invoke(ctx, UserService_RecordVerificationEvent_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *userServiceClient) ResolveVerificationEvent(ctx context.Context, in *ResolveVerificationEventRequest, opts ...grpc.CallOption) (*emptypb.Empty, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(emptypb.Empty)
+	err := c.cc.Invoke(ctx, UserService_ResolveVerificationEvent_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *userServiceClient) ListVerificationHistory(ctx context.Context, in *ListVerificationHistoryRequest, opts ...grpc.CallOption) (*ListVerificationHistoryResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(ListVerificationHistoryResponse)
+	err := c.cc.Invoke(ctx, UserService_ListVerificationHistory_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
 // UserServiceServer is the server API for UserService service.
 // All implementations should embed UnimplementedUserServiceServer
 // for forward compatibility.
@@ -315,6 +364,22 @@ type UserServiceServer interface {
 	// GetSessionVersion is called by the gateway on JWT verification when
 	// the cached session_version for a user is missing.
 	GetSessionVersion(context.Context, *GetSessionVersionRequest) (*GetSessionVersionResponse, error)
+	// RecordVerificationEvent durably persists a freshly issued
+	// verification request so the mobile app (spec p.84 "Stranica
+	// Verifikacija") can show request history. Called by the gateway
+	// from the verification issue path; the ephemeral 6-digit code
+	// itself stays in Redis (pkg/verification) and is never stored here.
+	RecordVerificationEvent(context.Context, *RecordVerificationEventRequest) (*emptypb.Empty, error)
+	// ResolveVerificationEvent marks a recorded request 'success' or
+	// 'failed' when its code is consumed (or the attempt budget is
+	// spent). Unresolved rows older than the code TTL are reported as
+	// expired by the gateway projection — the user service stays
+	// unaware of verification timing.
+	ResolveVerificationEvent(context.Context, *ResolveVerificationEventRequest) (*emptypb.Empty, error)
+	// ListVerificationHistory returns a user's verification request
+	// history, newest first (spec p.84 — each request marked
+	// successful/unsuccessful).
+	ListVerificationHistory(context.Context, *ListVerificationHistoryRequest) (*ListVerificationHistoryResponse, error)
 }
 
 // UnimplementedUserServiceServer should be embedded to have
@@ -380,6 +445,15 @@ func (UnimplementedUserServiceServer) UpdateClient(context.Context, *UpdateClien
 }
 func (UnimplementedUserServiceServer) GetSessionVersion(context.Context, *GetSessionVersionRequest) (*GetSessionVersionResponse, error) {
 	return nil, status.Error(codes.Unimplemented, "method GetSessionVersion not implemented")
+}
+func (UnimplementedUserServiceServer) RecordVerificationEvent(context.Context, *RecordVerificationEventRequest) (*emptypb.Empty, error) {
+	return nil, status.Error(codes.Unimplemented, "method RecordVerificationEvent not implemented")
+}
+func (UnimplementedUserServiceServer) ResolveVerificationEvent(context.Context, *ResolveVerificationEventRequest) (*emptypb.Empty, error) {
+	return nil, status.Error(codes.Unimplemented, "method ResolveVerificationEvent not implemented")
+}
+func (UnimplementedUserServiceServer) ListVerificationHistory(context.Context, *ListVerificationHistoryRequest) (*ListVerificationHistoryResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method ListVerificationHistory not implemented")
 }
 func (UnimplementedUserServiceServer) testEmbeddedByValue() {}
 
@@ -743,6 +817,60 @@ func _UserService_GetSessionVersion_Handler(srv interface{}, ctx context.Context
 	return interceptor(ctx, in, info, handler)
 }
 
+func _UserService_RecordVerificationEvent_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(RecordVerificationEventRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(UserServiceServer).RecordVerificationEvent(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: UserService_RecordVerificationEvent_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(UserServiceServer).RecordVerificationEvent(ctx, req.(*RecordVerificationEventRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _UserService_ResolveVerificationEvent_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(ResolveVerificationEventRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(UserServiceServer).ResolveVerificationEvent(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: UserService_ResolveVerificationEvent_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(UserServiceServer).ResolveVerificationEvent(ctx, req.(*ResolveVerificationEventRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _UserService_ListVerificationHistory_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(ListVerificationHistoryRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(UserServiceServer).ListVerificationHistory(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: UserService_ListVerificationHistory_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(UserServiceServer).ListVerificationHistory(ctx, req.(*ListVerificationHistoryRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
 // UserService_ServiceDesc is the grpc.ServiceDesc for UserService service.
 // It's only intended for direct use with grpc.RegisterService,
 // and not to be introspected or modified (even as a copy)
@@ -825,6 +953,18 @@ var UserService_ServiceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "GetSessionVersion",
 			Handler:    _UserService_GetSessionVersion_Handler,
+		},
+		{
+			MethodName: "RecordVerificationEvent",
+			Handler:    _UserService_RecordVerificationEvent_Handler,
+		},
+		{
+			MethodName: "ResolveVerificationEvent",
+			Handler:    _UserService_ResolveVerificationEvent_Handler,
+		},
+		{
+			MethodName: "ListVerificationHistory",
+			Handler:    _UserService_ListVerificationHistory_Handler,
 		},
 	},
 	Streams:  []grpc.StreamDesc{},

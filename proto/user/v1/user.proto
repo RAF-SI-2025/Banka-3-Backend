@@ -167,6 +167,25 @@ service UserService {
   // GetSessionVersion is called by the gateway on JWT verification when
   // the cached session_version for a user is missing.
   rpc GetSessionVersion(GetSessionVersionRequest) returns (GetSessionVersionResponse);
+
+  // RecordVerificationEvent durably persists a freshly issued
+  // verification request so the mobile app (spec p.84 "Stranica
+  // Verifikacija") can show request history. Called by the gateway
+  // from the verification issue path; the ephemeral 6-digit code
+  // itself stays in Redis (pkg/verification) and is never stored here.
+  rpc RecordVerificationEvent(RecordVerificationEventRequest) returns (google.protobuf.Empty);
+
+  // ResolveVerificationEvent marks a recorded request 'success' or
+  // 'failed' when its code is consumed (or the attempt budget is
+  // spent). Unresolved rows older than the code TTL are reported as
+  // expired by the gateway projection — the user service stays
+  // unaware of verification timing.
+  rpc ResolveVerificationEvent(ResolveVerificationEventRequest) returns (google.protobuf.Empty);
+
+  // ListVerificationHistory returns a user's verification request
+  // history, newest first (spec p.84 — each request marked
+  // successful/unsuccessful).
+  rpc ListVerificationHistory(ListVerificationHistoryRequest) returns (ListVerificationHistoryResponse);
 }
 
 // =====================================================================
@@ -427,4 +446,39 @@ message GetSessionVersionRequest {
 
 message GetSessionVersionResponse {
   int64 session_version = 1;
+}
+
+// RecordVerificationEventRequest carries the verification id (the same
+// id pkg/verification minted), the owning user, and the action kind
+// string (verification.ActionKind values: 'payment', 'transfer', …).
+message RecordVerificationEventRequest {
+  string id          = 1;
+  string user_id     = 2;
+  string action_kind = 3;
+}
+
+message ResolveVerificationEventRequest {
+  string id      = 1;
+  bool   success = 2;  // true → 'success', false → 'failed'
+}
+
+message ListVerificationHistoryRequest {
+  string user_id = 1;
+  int32  limit   = 2;  // 0 → service default cap
+}
+
+// VerificationEvent is one historical request. status is the raw
+// stored value ('pending' | 'success' | 'failed'); the gateway
+// projects an unresolved-but-stale 'pending' to expired for the
+// mobile UI using the code TTL.
+message VerificationEvent {
+  string                    id          = 1;
+  string                    action_kind = 2;
+  string                    status      = 3;
+  google.protobuf.Timestamp created_at  = 4;
+  google.protobuf.Timestamp resolved_at = 5;
+}
+
+message ListVerificationHistoryResponse {
+  repeated VerificationEvent events = 1;
 }
