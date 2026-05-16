@@ -35,6 +35,11 @@
 //	                     cypress.config.ts's resetBackend reseed sets
 //	                     this so fund acceptance specs keep a pristine
 //	                     klijent baseline)
+//	SEED_ORDERS          (default 1; "0"/"false"/"off" opts out of the
+//	                     historical done-order fixture that reconciles
+//	                     "Pregled naloga" with the Profit Banke actuary
+//	                     leaderboard — cypress.config.ts's resetBackend
+//	                     reseed sets this so order specs self-fixture)
 //
 // The default password meets the spec's complexity rules (8–32 chars,
 // ≥2 digits, ≥1 upper, ≥1 lower) but should be changed in any shared
@@ -691,6 +696,25 @@ func seedTrading(ctx context.Context, pool *pgxpool.Pool, clientID, adminID stri
 			`select id from "user".employees where lower(email) = lower($1)`, email,
 		).Scan(&existing); err {
 		case nil:
+			// Self-heal, mirroring seedClient's "ensured trading perms"
+			// path: an actuary row from an earlier seed — or one a
+			// cypress spec demoted (S46 strips funds.manage.supervisor)
+			// — keeps its id but must still carry its full role bundle,
+			// otherwise e.g. the supervisor can't open Profit Banke
+			// (bank.profit.read lives in RoleEmployeeActuarySupervisor).
+			// Idempotent union. Under cypress this branch is never hit
+			// (resetBackend truncates "user".employees first), so it's
+			// purely a dev-DB ergonomic and changes no spec baseline.
+			if _, err := tx.Exec(ctx, `
+                update "user".employees
+                set permissions = (
+                    select array_agg(distinct p)
+                    from unnest(permissions || $2::text[]) as p
+                )
+                where id = $1`, existing, perms); err != nil {
+				return "", fmt.Errorf("ensure %s perms: %w", email, err)
+			}
+			fmt.Printf("seed: %s already exists (id=%s); ensured role perms\n", position, existing)
 			return existing, nil
 		default:
 			if err.Error() != "no rows in result set" {
@@ -1202,6 +1226,72 @@ func seedTrading(ctx context.Context, pool *pgxpool.Pool, clientID, adminID stri
             `, aktuarID, supervisorID, aaplID, bankUSDAcctID,
 		); err != nil {
 			return fmt.Errorf("insert employee realized_gains: %w", err)
+		}
+	}
+
+	// Pregled naloga ↔ Profit Banke reconciliation. The employee
+	// realized_gains above are exactly what the supervisor's Profit
+	// Banke leaderboard shows per actuary: count(realized rows) as
+	// "broj realizovanih prodaja" + Σ positive gain_rsd as "profit".
+	// Plant one matching done SELL order per realized row so that
+	// "Pregled naloga", filtered to an actuary, shows precisely that
+	// actuary's realized-sale count, with quantities and unit prices
+	// (= proceeds_amt) that reconcile to the leaderboard:
+	//   agent      → 3 sells (20 + 10 + 5), Σ wins  = 61100 RSD
+	//   supervisor → 1 sell  (8),           Σ wins  =  7960 RSD
+	// There is no 'done' order status — a finished order is
+	// status='approved' + is_done + 0 remaining. Backdated 430 days
+	// to align with the realized_at above. Gated by SEED_ORDERS
+	// (cypress sets 0: the c3/c4 specs self-fixture their own orders
+	// and several read /api/v1/orders?status=pending, which these
+	// approved/done rows are never part of). Idempotent on any
+	// actuary order already being present.
+	if isEnvTruthy(envOr("SEED_ORDERS", "1")) {
+		var actOrders int
+		if err := tx.QueryRow(ctx,
+			`select count(*) from "trading".orders
+			   where user_id = $1 and is_actuary = true`, aktuarID,
+		).Scan(&actOrders); err != nil {
+			return fmt.Errorf("count actuary orders: %w", err)
+		}
+		if actOrders == 0 {
+			if _, err := tx.Exec(ctx, `
+            insert into "trading".orders
+                (user_id, user_kind, security_id, account_id,
+                 order_type, direction, quantity, contract_size,
+                 price_per_unit, all_or_none, margin, is_actuary,
+                 actor_kind, status, approval_required, approved_by,
+                 approved_at, is_done, cancelled, triggered,
+                 after_hours, remaining_quantity,
+                 last_modification, created_at)
+            values
+                -- agent: 2 wins + 1 loss == the 3 realized sales above
+                ($1, 'employee', $3, $4, 'market', 'sell', 20, 1,
+                 190.50, false, false, true, 'employee', 'approved',
+                 false, $2, now() - interval '430 days', true, false,
+                 false, false, 0,
+                 now() - interval '430 days', now() - interval '430 days'),
+                ($1, 'employee', $3, $4, 'market', 'sell', 10, 1,
+                 469.90, false, false, true, 'employee', 'approved',
+                 false, $2, now() - interval '430 days', true, false,
+                 false, false, 0,
+                 now() - interval '430 days', now() - interval '430 days'),
+                ($1, 'employee', $3, $4, 'market', 'sell', 5, 1,
+                 185.00, false, false, true, 'employee', 'approved',
+                 false, $2, now() - interval '430 days', true, false,
+                 false, false, 0,
+                 now() - interval '430 days', now() - interval '430 days'),
+                -- supervisor: the single +7960 RSD realized sale
+                ($2, 'employee', $3, $4, 'market', 'sell', 8, 1,
+                 460.00, false, false, true, 'employee', 'approved',
+                 false, $2, now() - interval '430 days', true, false,
+                 false, false, 0,
+                 now() - interval '430 days', now() - interval '430 days')
+            `, aktuarID, supervisorID, aaplID, bankUSDAcctID,
+			); err != nil {
+				return fmt.Errorf("insert actuary done orders: %w", err)
+			}
+			fmt.Println("seed: actuary done orders planted (Pregled naloga ↔ Profit Banke)")
 		}
 	}
 
