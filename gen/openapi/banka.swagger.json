@@ -3567,6 +3567,52 @@
         ]
       }
     },
+    "/api/v1/profit/timeseries": {
+      "get": {
+        "summary": "GetBankProfitTimeseries buckets realized bank profit over a time\nwindow. Same per-row loss clamp as ListActuaryPerformances, so\nΣ buckets over the whole history reconciles with\nΣ ListActuaryPerformances.profit_rsd. Gated by `bank.profit.read`.",
+        "operationId": "TradingService_GetBankProfitTimeseries",
+        "responses": {
+          "200": {
+            "description": "A successful response.",
+            "schema": {
+              "$ref": "#/definitions/v1GetBankProfitTimeseriesResponse"
+            }
+          },
+          "default": {
+            "description": "An unexpected error response.",
+            "schema": {
+              "$ref": "#/definitions/rpcStatus"
+            }
+          }
+        },
+        "parameters": [
+          {
+            "name": "bucket",
+            "description": "\"day\" (default) / \"week\" / \"month\".",
+            "in": "query",
+            "required": false,
+            "type": "string"
+          },
+          {
+            "name": "from",
+            "in": "query",
+            "required": false,
+            "type": "string",
+            "format": "date-time"
+          },
+          {
+            "name": "to",
+            "in": "query",
+            "required": false,
+            "type": "string",
+            "format": "date-time"
+          }
+        ],
+        "tags": [
+          "TradingService"
+        ]
+      }
+    },
     "/api/v1/securities": {
       "get": {
         "operationId": "TradingService_ListSecurities",
@@ -4751,6 +4797,32 @@
       },
       "description": "BankFundPosition is one row on the \"bank's positions in funds\"\ndashboard (spec p.76 — \"Pozicije banke u fondovima\"). Wraps the\nunderlying FundPosition with the fund's display columns so the FE\ndoesn't need a second round-trip per row."
     },
+    "v1BankProfitBucket": {
+      "type": "object",
+      "properties": {
+        "periodStart": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "profitRsd": {
+          "type": "string"
+        },
+        "tradingRsd": {
+          "type": "string"
+        },
+        "fundRsd": {
+          "type": "string"
+        },
+        "cumulativeRsd": {
+          "type": "string"
+        },
+        "realizedCount": {
+          "type": "string",
+          "format": "int64"
+        }
+      },
+      "description": "BankProfitBucket is one calendar period. profit_rsd uses the same\nper-row loss clamp as the actuary leaderboard (Σ greatest(gain_rsd,\n0) on realized_gains where user_kind='employee'), so Σ profit_rsd\nacross every bucket of the full history reconciles with\nΣ ListActuaryPerformances.profit_rsd. trading_rsd + fund_rsd\npartition profit_rsd by source (realized_gains.security_id set vs\nfund_id set). cumulative_rsd is the running total from the first\nbucket in the response."
+    },
     "v1Card": {
       "type": "object",
       "properties": {
@@ -5678,6 +5750,22 @@
         "FUND_TX_STATUS_FAILED"
       ],
       "default": "FUND_TX_STATUS_UNSPECIFIED"
+    },
+    "v1GetBankProfitTimeseriesResponse": {
+      "type": "object",
+      "properties": {
+        "buckets": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "$ref": "#/definitions/v1BankProfitBucket"
+          }
+        },
+        "totalRsd": {
+          "type": "string",
+          "description": "Σ profit_rsd across every returned bucket (the last bucket's\ncumulative_rsd, or \"0\" when the window is empty)."
+        }
+      }
     },
     "v1GetFundPerformanceResponse": {
       "type": "object",

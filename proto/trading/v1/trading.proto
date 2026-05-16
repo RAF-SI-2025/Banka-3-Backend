@@ -464,6 +464,16 @@ service TradingService {
     };
   }
 
+  // GetBankProfitTimeseries buckets realized bank profit over a time
+  // window. Same per-row loss clamp as ListActuaryPerformances, so
+  // Σ buckets over the whole history reconciles with
+  // Σ ListActuaryPerformances.profit_rsd. Gated by `bank.profit.read`.
+  rpc GetBankProfitTimeseries(GetBankProfitTimeseriesRequest) returns (GetBankProfitTimeseriesResponse) {
+    option (google.api.http) = {
+      get: "/api/v1/profit/timeseries"
+    };
+  }
+
   // ReassignSupervisorAssets reassigns every fund managed by `from_user_id`
   // to `to_user_id`. Internal-only (no http annotation) — called by
   // user-svc inside SetEmployeePermissions when the funds.manage.supervisor
@@ -1556,6 +1566,42 @@ message ListBankFundPositionsRequest {}
 
 message ListBankFundPositionsResponse {
   repeated BankFundPosition rows = 1;
+}
+
+// GetBankProfitTimeseriesRequest buckets realized bank profit over a
+// calendar window. `bucket` is the granularity; `from`/`to` clip
+// realized_at inclusively. Both bounds are optional — when `from` is
+// unset the server returns a trailing default window ending at `to`
+// (or now() when `to` is unset too).
+message GetBankProfitTimeseriesRequest {
+  // "day" (default) / "week" / "month".
+  string                    bucket = 1;
+  google.protobuf.Timestamp from   = 2;
+  google.protobuf.Timestamp to     = 3;
+}
+
+// BankProfitBucket is one calendar period. profit_rsd uses the same
+// per-row loss clamp as the actuary leaderboard (Σ greatest(gain_rsd,
+// 0) on realized_gains where user_kind='employee'), so Σ profit_rsd
+// across every bucket of the full history reconciles with
+// Σ ListActuaryPerformances.profit_rsd. trading_rsd + fund_rsd
+// partition profit_rsd by source (realized_gains.security_id set vs
+// fund_id set). cumulative_rsd is the running total from the first
+// bucket in the response.
+message BankProfitBucket {
+  google.protobuf.Timestamp period_start   = 1;
+  string                    profit_rsd     = 2;
+  string                    trading_rsd    = 3;
+  string                    fund_rsd       = 4;
+  string                    cumulative_rsd = 5;
+  int64                     realized_count = 6;
+}
+
+message GetBankProfitTimeseriesResponse {
+  repeated BankProfitBucket buckets   = 1;
+  // Σ profit_rsd across every returned bucket (the last bucket's
+  // cumulative_rsd, or "0" when the window is empty).
+  string                    total_rsd = 2;
 }
 
 message ReassignSupervisorAssetsRequest {

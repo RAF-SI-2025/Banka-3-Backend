@@ -245,6 +245,83 @@ func (s *Store) ListActuaryPerformances(ctx context.Context, typeFilter string) 
 	return out, rows.Err()
 }
 
+// BankProfitBucket is one calendar period of realized bank profit.
+// ProfitRSD clamps per-row losses to zero (same reading as
+// ListActuaryPerformances and the tax cron); TradingRSD + FundRSD
+// partition it by source. CumulativeRSD is the running total from the
+// first returned bucket, computed with an exact numeric window so no
+// decimal math leaks into Go.
+type BankProfitBucket struct {
+	PeriodStart   time.Time
+	ProfitRSD     string
+	TradingRSD    string
+	FundRSD       string
+	CumulativeRSD string
+	RealizedCount int64
+}
+
+// LatestEmployeeRealizedAt returns the most recent realized_at across
+// bank-actuary (user_kind='employee') rows. ok=false when there are no
+// such rows yet. The profit-trend default window anchors `to` here
+// rather than at wall-clock so the chart always lands on the data even
+// when the last bank trade was a while ago.
+func (s *Store) LatestEmployeeRealizedAt(ctx context.Context) (time.Time, bool, error) {
+	const q = `select max(realized_at) from "trading".realized_gains where user_kind = 'employee'`
+	var t *time.Time
+	if err := s.Pool.QueryRow(ctx, q).Scan(&t); err != nil {
+		return time.Time{}, false, apperr.Internal("latest employee realized_at", err)
+	}
+	if t == nil {
+		return time.Time{}, false, nil
+	}
+	return *t, true, nil
+}
+
+// BankProfitTimeseries buckets realized_gains.gain_rsd (positive part
+// only, user_kind='employee') by `bucket` over [from, to] inclusive.
+// `bucket` must be one of "day" / "week" / "month" — the caller
+// validates; we still parameterize date_trunc's field so a bad value
+// errors in Postgres rather than corrupting the query. Empty periods
+// are not emitted (the FE renders the sparse series as a step line).
+func (s *Store) BankProfitTimeseries(ctx context.Context, bucket string, from, to time.Time) ([]*BankProfitBucket, error) {
+	const q = `
+        with b as (
+            select date_trunc($1, realized_at) as period_start,
+                   sum(case when gain_rsd > 0 then gain_rsd else 0 end) as profit,
+                   sum(case when gain_rsd > 0 and security_id is not null then gain_rsd else 0 end) as trading,
+                   sum(case when gain_rsd > 0 and fund_id is not null then gain_rsd else 0 end) as fund,
+                   count(*) as cnt
+            from "trading".realized_gains
+            where user_kind = 'employee'
+              and realized_at >= $2 and realized_at <= $3
+            group by 1
+        )
+        select period_start,
+               profit::text,
+               trading::text,
+               fund::text,
+               (sum(profit) over (order by period_start
+                                  rows between unbounded preceding and current row))::text as cumulative,
+               cnt::bigint
+        from b
+        order by period_start asc`
+	rows, err := s.Pool.Query(ctx, q, bucket, from, to)
+	if err != nil {
+		return nil, apperr.Internal("bank profit timeseries", err)
+	}
+	defer rows.Close()
+	var out []*BankProfitBucket
+	for rows.Next() {
+		var b BankProfitBucket
+		if err := rows.Scan(&b.PeriodStart, &b.ProfitRSD, &b.TradingRSD,
+			&b.FundRSD, &b.CumulativeRSD, &b.RealizedCount); err != nil {
+			return nil, apperr.Internal("scan bank profit bucket", err)
+		}
+		out = append(out, &b)
+	}
+	return out, rows.Err()
+}
+
 func scanRealizedGain(row pgx.Row) (*domain.RealizedGain, error) {
 	var (
 		g   domain.RealizedGain

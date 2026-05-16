@@ -70,6 +70,7 @@ const (
 	TradingService_ListFundTransactions_FullMethodName     = "/banka.trading.v1.TradingService/ListFundTransactions"
 	TradingService_ListActuaryPerformances_FullMethodName  = "/banka.trading.v1.TradingService/ListActuaryPerformances"
 	TradingService_ListBankFundPositions_FullMethodName    = "/banka.trading.v1.TradingService/ListBankFundPositions"
+	TradingService_GetBankProfitTimeseries_FullMethodName  = "/banka.trading.v1.TradingService/GetBankProfitTimeseries"
 	TradingService_ReassignSupervisorAssets_FullMethodName = "/banka.trading.v1.TradingService/ReassignSupervisorAssets"
 )
 
@@ -200,6 +201,11 @@ type TradingServiceClient interface {
 	ListFundTransactions(ctx context.Context, in *ListFundTransactionsRequest, opts ...grpc.CallOption) (*ListFundTransactionsResponse, error)
 	ListActuaryPerformances(ctx context.Context, in *ListActuaryPerformancesRequest, opts ...grpc.CallOption) (*ListActuaryPerformancesResponse, error)
 	ListBankFundPositions(ctx context.Context, in *ListBankFundPositionsRequest, opts ...grpc.CallOption) (*ListBankFundPositionsResponse, error)
+	// GetBankProfitTimeseries buckets realized bank profit over a time
+	// window. Same per-row loss clamp as ListActuaryPerformances, so
+	// Σ buckets over the whole history reconciles with
+	// Σ ListActuaryPerformances.profit_rsd. Gated by `bank.profit.read`.
+	GetBankProfitTimeseries(ctx context.Context, in *GetBankProfitTimeseriesRequest, opts ...grpc.CallOption) (*GetBankProfitTimeseriesResponse, error)
 	// ReassignSupervisorAssets reassigns every fund managed by `from_user_id`
 	// to `to_user_id`. Internal-only (no http annotation) — called by
 	// user-svc inside SetEmployeePermissions when the funds.manage.supervisor
@@ -717,6 +723,16 @@ func (c *tradingServiceClient) ListBankFundPositions(ctx context.Context, in *Li
 	return out, nil
 }
 
+func (c *tradingServiceClient) GetBankProfitTimeseries(ctx context.Context, in *GetBankProfitTimeseriesRequest, opts ...grpc.CallOption) (*GetBankProfitTimeseriesResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(GetBankProfitTimeseriesResponse)
+	err := c.cc.Invoke(ctx, TradingService_GetBankProfitTimeseries_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
 func (c *tradingServiceClient) ReassignSupervisorAssets(ctx context.Context, in *ReassignSupervisorAssetsRequest, opts ...grpc.CallOption) (*ReassignSupervisorAssetsResponse, error) {
 	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
 	out := new(ReassignSupervisorAssetsResponse)
@@ -854,6 +870,11 @@ type TradingServiceServer interface {
 	ListFundTransactions(context.Context, *ListFundTransactionsRequest) (*ListFundTransactionsResponse, error)
 	ListActuaryPerformances(context.Context, *ListActuaryPerformancesRequest) (*ListActuaryPerformancesResponse, error)
 	ListBankFundPositions(context.Context, *ListBankFundPositionsRequest) (*ListBankFundPositionsResponse, error)
+	// GetBankProfitTimeseries buckets realized bank profit over a time
+	// window. Same per-row loss clamp as ListActuaryPerformances, so
+	// Σ buckets over the whole history reconciles with
+	// Σ ListActuaryPerformances.profit_rsd. Gated by `bank.profit.read`.
+	GetBankProfitTimeseries(context.Context, *GetBankProfitTimeseriesRequest) (*GetBankProfitTimeseriesResponse, error)
 	// ReassignSupervisorAssets reassigns every fund managed by `from_user_id`
 	// to `to_user_id`. Internal-only (no http annotation) — called by
 	// user-svc inside SetEmployeePermissions when the funds.manage.supervisor
@@ -1019,6 +1040,9 @@ func (UnimplementedTradingServiceServer) ListActuaryPerformances(context.Context
 }
 func (UnimplementedTradingServiceServer) ListBankFundPositions(context.Context, *ListBankFundPositionsRequest) (*ListBankFundPositionsResponse, error) {
 	return nil, status.Error(codes.Unimplemented, "method ListBankFundPositions not implemented")
+}
+func (UnimplementedTradingServiceServer) GetBankProfitTimeseries(context.Context, *GetBankProfitTimeseriesRequest) (*GetBankProfitTimeseriesResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method GetBankProfitTimeseries not implemented")
 }
 func (UnimplementedTradingServiceServer) ReassignSupervisorAssets(context.Context, *ReassignSupervisorAssetsRequest) (*ReassignSupervisorAssetsResponse, error) {
 	return nil, status.Error(codes.Unimplemented, "method ReassignSupervisorAssets not implemented")
@@ -1943,6 +1967,24 @@ func _TradingService_ListBankFundPositions_Handler(srv interface{}, ctx context.
 	return interceptor(ctx, in, info, handler)
 }
 
+func _TradingService_GetBankProfitTimeseries_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(GetBankProfitTimeseriesRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(TradingServiceServer).GetBankProfitTimeseries(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: TradingService_GetBankProfitTimeseries_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(TradingServiceServer).GetBankProfitTimeseries(ctx, req.(*GetBankProfitTimeseriesRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
 func _TradingService_ReassignSupervisorAssets_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
 	in := new(ReassignSupervisorAssetsRequest)
 	if err := dec(in); err != nil {
@@ -2167,6 +2209,10 @@ var TradingService_ServiceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "ListBankFundPositions",
 			Handler:    _TradingService_ListBankFundPositions_Handler,
+		},
+		{
+			MethodName: "GetBankProfitTimeseries",
+			Handler:    _TradingService_GetBankProfitTimeseries_Handler,
 		},
 		{
 			MethodName: "ReassignSupervisorAssets",

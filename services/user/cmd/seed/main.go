@@ -820,7 +820,8 @@ func seedTrading(ctx context.Context, pool *pgxpool.Pool, clientID, adminID stri
 	insertStock := func(ticker, name, mic, currency string, outstanding int64, dividend string, listing struct {
 		price, ask, bid string
 		volume          int64
-	}) (string, error) {
+	},
+	) (string, error) {
 		// ON CONFLICT DO UPDATE SET <noop> so RETURNING fires whether we
 		// inserted or matched an existing (ticker, type) row. Cheap and
 		// keeps the seed re-runnable on partial state.
@@ -1226,6 +1227,75 @@ func seedTrading(ctx context.Context, pool *pgxpool.Pool, clientID, adminID stri
             `, aktuarID, supervisorID, aaplID, bankUSDAcctID,
 		); err != nil {
 			return fmt.Errorf("insert employee realized_gains: %w", err)
+		}
+	}
+
+	// Profit Banke — "Kretanje profita" demo series. The four base
+	// employee rows above all sit at one timestamp (~430 days back), so
+	// the profit-over-time chart renders a single bar. Plant a spread-
+	// out synthetic series (one row/week for ~60 weeks, deterministic
+	// gains so re-runs are stable, occasional loss rows) for the two
+	// seeded actuaries so the chart has a real shape — per-period bars
+	// + a rising cumulative line — across day/week/month buckets.
+	//
+	// taxed=true + a >366-day-old taxed_at keeps every demo row out of
+	// the /portal/porez board and the monthly tax cron exactly like the
+	// base block (ListUnpaidGainsForUser filters `not taxed`;
+	// ListTaxAggregates' YTD term needs a current-year taxed_at).
+	// realized_at is recent on purpose — the timeseries default window
+	// anchors to max(realized_at) — but tax filters key off taxed/
+	// taxed_at, never realized_at, so the recent dates are invisible to
+	// the tax surfaces.
+	//
+	// Gated by SEED_PROFIT_DEMO (cypress sets 0). The c4 profit spec +
+	// the soak reconciliation invariants assume the minimal known
+	// fixture (agent 61100 / supervisor 7960 / Σ 69060 over exactly
+	// 3+1 rows, reconciling with the SEED_ORDERS sells); these extra
+	// rows would skew the leaderboard totals and the order count, so
+	// the spec reseed opts out the same way it opts out of SEED_ORDERS.
+	// Idempotent: only plants while the base fixture (≤4 employee rows)
+	// is all that exists.
+	if isEnvTruthy(envOr("SEED_PROFIT_DEMO", "1")) {
+		var empTotal int
+		if err := tx.QueryRow(ctx,
+			`select count(*) from "trading".realized_gains where user_kind = 'employee'`,
+		).Scan(&empTotal); err != nil {
+			return fmt.Errorf("count employee realized_gains (demo): %w", err)
+		}
+		if empTotal <= 4 {
+			if _, err := tx.Exec(ctx, `
+            insert into "trading".realized_gains
+                (user_id, user_kind, security_id, account_id,
+                 quantity, cost_basis_amt, proceeds_amt, currency,
+                 gain_native, gain_rsd, realized_at, taxed, taxed_at)
+            select
+                case when g % 3 = 0 then $2::uuid else $1::uuid end,
+                'employee',
+                $3::uuid,
+                $4::uuid,
+                5 + (g % 8),
+                150.00,
+                150.00 + round((g_native)::numeric, 2),
+                'USD',
+                round((g_native)::numeric, 2),
+                round((g_rsd)::numeric, 2),
+                (now() - make_interval(days => g * 7))::timestamptz,
+                true,
+                now() - interval '400 days'
+            from generate_series(1, 60) as g,
+            lateral (
+                -- deterministic wave: mostly positive (1.1k–5.5k RSD),
+                -- every 7th row a small loss so the chart shows dips.
+                select case when g % 7 = 0
+                            then -(800 + 300 * (g % 5))::float
+                            else (2200 + 1650 * (1 + sin(g::float)))::float
+                       end as g_rsd
+            ) w,
+            lateral (select (w.g_rsd / 100.0) as g_native) n
+            `, aktuarID, supervisorID, aaplID, bankUSDAcctID,
+			); err != nil {
+				return fmt.Errorf("insert profit-demo realized_gains: %w", err)
+			}
 		}
 	}
 

@@ -4,6 +4,7 @@ import (
 	"context"
 	"log/slog"
 	"testing"
+	"time"
 
 	"github.com/RAF-SI-2025/Banka-3-Backend/pkg/auth"
 	"github.com/RAF-SI-2025/Banka-3-Backend/pkg/permissions"
@@ -33,6 +34,56 @@ func TestListBankFundPositions_RequiresProfitPerm(t *testing.T) {
 	})
 	if _, err := svc.ListBankFundPositions(ctx); err == nil {
 		t.Fatal("expected permission denied for client principal")
+	}
+}
+
+// TestGetBankProfitTimeseries_RequiresProfitPerm — same gate as the
+// other Profit Banke dashboards.
+func TestGetBankProfitTimeseries_RequiresProfitPerm(t *testing.T) {
+	svc := &Service{Log: slog.Default()}
+	ctx := auth.WithPrincipal(context.Background(), auth.Principal{
+		UserID:      "00000000-0000-0000-0000-000000000099",
+		UserKind:    auth.KindEmployee,
+		Permissions: []string{permissions.ActuaryAgent},
+	})
+	if _, err := svc.GetBankProfitTimeseries(ctx, GetBankProfitTimeseriesInput{}); err == nil {
+		t.Fatal("expected permission denied for principal without bank.profit.read")
+	}
+}
+
+// TestGetBankProfitTimeseries_RejectsBadBucket verifies an unknown
+// bucket is a Validation error and never reaches date_trunc. Store is
+// nil, so a regression that calls the store before validating would
+// panic here.
+func TestGetBankProfitTimeseries_RejectsBadBucket(t *testing.T) {
+	svc := &Service{Log: slog.Default()}
+	ctx := auth.WithPrincipal(context.Background(), auth.Principal{
+		UserID:      "00000000-0000-0000-0000-000000000099",
+		UserKind:    auth.KindEmployee,
+		Permissions: []string{permissions.Admin},
+	})
+	if _, err := svc.GetBankProfitTimeseries(ctx, GetBankProfitTimeseriesInput{Bucket: "hour"}); err == nil {
+		t.Fatal("expected validation error for unsupported bucket")
+	}
+}
+
+// TestGetBankProfitTimeseries_RejectsInvertedWindow guards the
+// from>to guard, which also runs before the store call.
+func TestGetBankProfitTimeseries_RejectsInvertedWindow(t *testing.T) {
+	svc := &Service{Log: slog.Default()}
+	ctx := auth.WithPrincipal(context.Background(), auth.Principal{
+		UserID:      "00000000-0000-0000-0000-000000000099",
+		UserKind:    auth.KindEmployee,
+		Permissions: []string{permissions.Admin},
+	})
+	now := time.Now()
+	_, err := svc.GetBankProfitTimeseries(ctx, GetBankProfitTimeseriesInput{
+		Bucket: "day",
+		From:   now,
+		To:     now.AddDate(0, 0, -1),
+	})
+	if err == nil {
+		t.Fatal("expected validation error when from is after to")
 	}
 }
 

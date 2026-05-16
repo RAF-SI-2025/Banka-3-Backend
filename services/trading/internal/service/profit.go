@@ -15,6 +15,7 @@ package service
 import (
 	"context"
 	"strings"
+	"time"
 
 	"github.com/RAF-SI-2025/Banka-3-Backend/pkg/apperr"
 	"github.com/RAF-SI-2025/Banka-3-Backend/pkg/permissions"
@@ -94,6 +95,88 @@ func (s *Service) ListActuaryPerformances(ctx context.Context, in ListActuaryPer
 		})
 	}
 	return out, nil
+}
+
+// GetBankProfitTimeseriesInput narrows the profit-over-time chart. A
+// zero From/To means "unset" (the handler passes time.Time{} for a nil
+// proto Timestamp); the service fills a trailing default window.
+type GetBankProfitTimeseriesInput struct {
+	Bucket string
+	From   time.Time
+	To     time.Time
+}
+
+// GetBankProfitTimeseriesResult is the decorated chart payload.
+type GetBankProfitTimeseriesResult struct {
+	Buckets  []*store.BankProfitBucket
+	TotalRSD string
+}
+
+// validProfitBuckets are the only date_trunc fields we let through to
+// Postgres. Trailing-window length per bucket keeps the default view
+// readable (~30 points).
+var validProfitBuckets = map[string]struct{}{"day": {}, "week": {}, "month": {}}
+
+// GetBankProfitTimeseries returns realized bank profit bucketed by
+// calendar period. Same `bank.profit.read` gate and same per-row loss
+// clamp as ListActuaryPerformances, so the all-time cumulative total
+// reconciles with the leaderboard sum.
+func (s *Service) GetBankProfitTimeseries(ctx context.Context, in GetBankProfitTimeseriesInput) (*GetBankProfitTimeseriesResult, error) {
+	p, err := s.requirePrincipal(ctx)
+	if err != nil {
+		return nil, err
+	}
+	if !permissions.HasAny(p.Permissions, permissions.Admin, permissions.BankProfitRead) {
+		return nil, apperr.PermissionDenied("nedovoljne permisije za Profit Banke")
+	}
+
+	bucket := strings.ToLower(strings.TrimSpace(in.Bucket))
+	if bucket == "" {
+		bucket = "day"
+	}
+	if _, ok := validProfitBuckets[bucket]; !ok {
+		return nil, apperr.Validation("bucket mora biti 'day', 'week' ili 'month'")
+	}
+
+	to := in.To
+	if to.IsZero() {
+		// Anchor the default window to the most recent bank-actuary
+		// activity, not wall-clock: seed/demo data and quiet periods
+		// otherwise render an empty chart even though profit exists.
+		if latest, ok, err := s.Store.LatestEmployeeRealizedAt(ctx); err != nil {
+			return nil, err
+		} else if ok {
+			to = latest
+		} else {
+			to = time.Now()
+		}
+	}
+	from := in.From
+	if from.IsZero() {
+		switch bucket {
+		case "month":
+			from = to.AddDate(0, -12, 0)
+		case "week":
+			from = to.AddDate(0, 0, -7*12)
+		default: // day
+			from = to.AddDate(0, 0, -30)
+		}
+	}
+	if from.After(to) {
+		return nil, apperr.Validation("from ne sme biti posle to")
+	}
+
+	buckets, err := s.Store.BankProfitTimeseries(ctx, bucket, from, to)
+	if err != nil {
+		return nil, err
+	}
+	total := "0"
+	if n := len(buckets); n > 0 {
+		// CumulativeRSD on the last bucket is Σ profit_rsd across the
+		// window (the store computes it with an exact numeric window).
+		total = buckets[n-1].CumulativeRSD
+	}
+	return &GetBankProfitTimeseriesResult{Buckets: buckets, TotalRSD: total}, nil
 }
 
 // BankFundPositionRow wraps the existing decorated fund-position with
