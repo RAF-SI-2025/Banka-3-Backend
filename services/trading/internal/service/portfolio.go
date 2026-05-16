@@ -5,6 +5,7 @@ import (
 	"math/big"
 
 	"github.com/RAF-SI-2025/Banka-3-Backend/pkg/apperr"
+	"github.com/RAF-SI-2025/Banka-3-Backend/pkg/auth"
 	"github.com/RAF-SI-2025/Banka-3-Backend/pkg/money"
 	"github.com/RAF-SI-2025/Banka-3-Backend/pkg/permissions"
 	"github.com/RAF-SI-2025/Banka-3-Backend/services/trading/internal/domain"
@@ -28,23 +29,42 @@ type ListHoldingsInput struct {
 	Type     domain.SecurityType
 }
 
+// holdingScope decides whose rows a ListHoldings call returns. Default is
+// the caller's own holdings; a supervisor/admin only widens to another
+// user when it passes an explicit user_id. The `inUserID == ""` arm is
+// the load-bearing fix — see ListHoldings for the failure it prevents.
+// store.ListHoldings treats an empty filter as "every holding", so a
+// supervisor must never reach it with a blank UserID.
+func holdingScope(p auth.Principal, supervisor bool, inUserID string, inUserKind domain.UserKind) store.HoldingFilter {
+	f := store.HoldingFilter{UserID: inUserID, UserKind: inUserKind}
+	if !supervisor || inUserID == "" {
+		f.UserID = p.UserID
+		f.UserKind = domain.UserKind(p.UserKind)
+	}
+	return f
+}
+
 // ListHoldings returns the caller's holdings (decorated). Visibility:
 //   - clients/agents: their own holdings only;
-//   - supervisors/admin: filterable by user_id / user_kind.
+//   - supervisors/admin: their own holdings by default; only when an
+//     explicit user_id is passed do they see that user's holdings.
+//
+// The default-to-self rule is load-bearing: without the `in.UserID == ""`
+// guard a supervisor's bare GET /portfolio left the HoldingFilter empty,
+// so the store returned *every* user's rows (clients, funds, every
+// employee). The FE renders each row with a "Prodaj" action, but a SELL
+// is scoped to the caller's own (employee-kind) inventory in
+// assertHoldingAvailable — so clicking Prodaj on someone else's row
+// always 500'd with "ne možete prodati više hartija nego što posedujete".
+// The FE only ever calls listHoldings() with no args; the user_id filter
+// is the explicit per-user inspection capability and is preserved.
 func (s *Service) ListHoldings(ctx context.Context, in ListHoldingsInput) ([]*HoldingDecorated, string, error) {
 	p, err := s.requirePrincipal(ctx)
 	if err != nil {
 		return nil, "0", err
 	}
 	supervisor := permissions.HasAny(p.Permissions, permissions.Admin, permissions.ActuarySupervisor)
-	f := store.HoldingFilter{
-		UserID:   in.UserID,
-		UserKind: in.UserKind,
-	}
-	if !supervisor {
-		f.UserID = p.UserID
-		f.UserKind = domain.UserKind(p.UserKind)
-	}
+	f := holdingScope(p, supervisor, in.UserID, in.UserKind)
 	rows, err := s.Store.ListHoldings(ctx, f)
 	if err != nil {
 		return nil, "0", err
