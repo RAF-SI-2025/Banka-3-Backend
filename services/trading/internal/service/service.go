@@ -142,17 +142,16 @@ type Service struct {
 	// service so the recovery worker can scan due rows without going
 	// through the orchestrator.
 	SagaStore *store.SagaStore
-	// Reservations is the c4 bank-side reservation surface — Reserve,
+	// Reservations is the bank-side reservation surface — Reserve,
 	// Release, Commit, TransferBetweenClients. SAGA step handlers dial
 	// this instead of the lower-level Settler. May be nil on a dev
-	// stack that doesn't run the c4 RPCs.
+	// stack that doesn't run the bank reservation RPCs.
 	Reservations BankReservations
 	// OTCNotifier sends counterparty-facing emails on OTC events
-	// (counter-offer, withdraw, accept, contract expired). c4-PR2 wires
-	// this directly to pkg/email per the c2 pattern; PR4 centralises
-	// the notification path through notification-svc and swaps the
-	// adapter without changing service callers. Nil-safe (no email on
-	// dev stacks without SMTP wired).
+	// (counter-offer, withdraw, accept, contract expired). Wired to an
+	// email.Sender — either pkg/email directly or notification-svc,
+	// decided by app wiring. Nil-safe (no email on dev stacks without
+	// SMTP wired).
 	OTCNotifier OTCNotifier
 	// Now is the wall-clock used by every time-dependent path. Tests
 	// pin it; production leaves it nil and falls through to time.Now.

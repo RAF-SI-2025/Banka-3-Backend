@@ -1,4 +1,4 @@
-// Investment funds (c4 PR3 — spec p.71-76).
+// Investment funds (spec p.71-76).
 //
 // CRUD + decorate
 // ===============
@@ -14,8 +14,8 @@
 // kickoff methods (InvestInFund / WithdrawFromFund) prepare the
 // payload + transaction-id and call saga.Start.
 //
-// Unit-pricing model (FUND-7, EDGE-10)
-// ===================================
+// Unit-pricing model
+// ==================
 // Each invested RSD buys `amount_rsd / unit_price` units, where
 //   unit_price = total_value_rsd / total_units (when total_units > 0).
 // First investment mints amount_rsd units at unit_price = 1 RSD (spec

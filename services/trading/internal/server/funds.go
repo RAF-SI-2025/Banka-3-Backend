@@ -1,4 +1,4 @@
-// Investment-fund gRPC handlers (c4 PR3). Translate the proto surface
+// Investment-fund gRPC handlers. Translate the proto surface
 // to the service layer and back. Pattern mirrors server/otc.go.
 
 package server

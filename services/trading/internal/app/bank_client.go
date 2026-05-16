@@ -20,18 +20,21 @@ type bankSettlerAdapter struct {
 	c bankpb.BankServiceClient
 }
 
-func (a *bankSettlerAdapter) Settle(ctx context.Context, in service.SettleInput) (string, error) {
-	// Internal call: pad outgoing metadata with an admin principal so
-	// the bank's incoming-metadata interceptor admits us as a
-	// principal. We use a sentinel UUID — the bank's auth interceptor
-	// rejects empty user-ids — and the bank-side SettleTrade handler
-	// clears it before calling the money-move engine so it doesn't
-	// land in transactions.initiator_client_id.
-	ctx = auth.AttachToOutgoing(ctx, auth.Principal{
+// withBankAdmin pads outgoing metadata with an admin principal so the
+// bank's incoming-metadata interceptor admits this internal call. The
+// sentinel UUID satisfies the interceptor's non-empty user-id check;
+// the bank-side handlers clear it before writing
+// transactions.initiator_client_id.
+func withBankAdmin(ctx context.Context) context.Context {
+	return auth.AttachToOutgoing(ctx, auth.Principal{
 		UserID:      "00000000-0000-0000-0000-00000000fffe",
 		UserKind:    auth.KindEmployee,
 		Permissions: []string{permissions.Admin},
 	})
+}
+
+func (a *bankSettlerAdapter) Settle(ctx context.Context, in service.SettleInput) (string, error) {
+	ctx = withBankAdmin(ctx)
 	resp, err := a.c.SettleTrade(ctx, &bankpb.SettleTradeRequest{
 		AccountId: in.AccountID,
 		Direction: in.Direction,
@@ -50,11 +53,7 @@ func (a *bankSettlerAdapter) Settle(ctx context.Context, in service.SettleInput)
 // SettleForex bridges service.ForexSettler to bank.SettleForexFill.
 // Same admin-metadata sentinel idiom as Settle.
 func (a *bankSettlerAdapter) SettleForex(ctx context.Context, in service.SettleForexInput) (string, error) {
-	ctx = auth.AttachToOutgoing(ctx, auth.Principal{
-		UserID:      "00000000-0000-0000-0000-00000000fffe",
-		UserKind:    auth.KindEmployee,
-		Permissions: []string{permissions.Admin},
-	})
+	ctx = withBankAdmin(ctx)
 	resp, err := a.c.SettleForexFill(ctx, &bankpb.SettleForexFillRequest{
 		Direction:     in.Direction,
 		BaseCurrency:  currencyToBankProto(in.BaseCurrency),
@@ -75,11 +74,7 @@ func (a *bankSettlerAdapter) SettleForex(ctx context.Context, in service.SettleF
 // rejects empty user-ids, and the bank-side handler clears the sentinel
 // before writing initiator_client_id.
 func (a *bankSettlerAdapter) SettleTax(ctx context.Context, in service.TaxSettleInput) (string, error) {
-	ctx = auth.AttachToOutgoing(ctx, auth.Principal{
-		UserID:      "00000000-0000-0000-0000-00000000fffe",
-		UserKind:    auth.KindEmployee,
-		Permissions: []string{permissions.Admin},
-	})
+	ctx = withBankAdmin(ctx)
 	resp, err := a.c.SettleCapitalGainsTax(ctx, &bankpb.SettleCapitalGainsTaxRequest{
 		AccountId: in.AccountID,
 		AmountRsd: in.AmountRSD,
@@ -97,11 +92,7 @@ func (a *bankSettlerAdapter) SettleTax(ctx context.Context, in service.TaxSettle
 // bank's canSeeAccount check admits the read regardless of who owns
 // the account.
 func (a *bankSettlerAdapter) AccountAvailable(ctx context.Context, accountID string) (domain.Currency, string, error) {
-	ctx = auth.AttachToOutgoing(ctx, auth.Principal{
-		UserID:      "00000000-0000-0000-0000-00000000fffe",
-		UserKind:    auth.KindEmployee,
-		Permissions: []string{permissions.Admin},
-	})
+	ctx = withBankAdmin(ctx)
 	resp, err := a.c.GetAccount(ctx, &bankpb.GetAccountRequest{Id: accountID})
 	if err != nil {
 		return "", "", fmt.Errorf("bank.GetAccount: %w", err)
@@ -114,11 +105,7 @@ func (a *bankSettlerAdapter) AccountAvailable(ctx context.Context, accountID str
 // canSeeAccount check admits the read regardless of who owns the
 // account.
 func (a *bankSettlerAdapter) AccountNumber(ctx context.Context, accountID string) (string, error) {
-	ctx = auth.AttachToOutgoing(ctx, auth.Principal{
-		UserID:      "00000000-0000-0000-0000-00000000fffe",
-		UserKind:    auth.KindEmployee,
-		Permissions: []string{permissions.Admin},
-	})
+	ctx = withBankAdmin(ctx)
 	resp, err := a.c.GetAccount(ctx, &bankpb.GetAccountRequest{Id: accountID})
 	if err != nil {
 		return "", fmt.Errorf("bank.GetAccount: %w", err)
@@ -129,11 +116,7 @@ func (a *bankSettlerAdapter) AccountNumber(ctx context.Context, accountID string
 // Reserve bridges service.BankReservations.Reserve to
 // bank.ReserveFunds with the admin-sentinel principal.
 func (a *bankSettlerAdapter) Reserve(ctx context.Context, in service.ReserveInput) (string, error) {
-	ctx = auth.AttachToOutgoing(ctx, auth.Principal{
-		UserID:      "00000000-0000-0000-0000-00000000fffe",
-		UserKind:    auth.KindEmployee,
-		Permissions: []string{permissions.Admin},
-	})
+	ctx = withBankAdmin(ctx)
 	resp, err := a.c.ReserveFunds(ctx, &bankpb.ReserveFundsRequest{
 		AccountId: in.AccountID,
 		Amount:    in.Amount,
@@ -151,11 +134,7 @@ func (a *bankSettlerAdapter) Reserve(ctx context.Context, in service.ReserveInpu
 // Returns whether the call moved the row from held→released (false on a
 // no-op release of an already-released or never-existed reservation).
 func (a *bankSettlerAdapter) Release(ctx context.Context, opID string) (bool, error) {
-	ctx = auth.AttachToOutgoing(ctx, auth.Principal{
-		UserID:      "00000000-0000-0000-0000-00000000fffe",
-		UserKind:    auth.KindEmployee,
-		Permissions: []string{permissions.Admin},
-	})
+	ctx = withBankAdmin(ctx)
 	resp, err := a.c.ReleaseFunds(ctx, &bankpb.ReleaseFundsRequest{OpId: opID})
 	if err != nil {
 		return false, fmt.Errorf("bank.ReleaseFunds: %w", err)
@@ -165,11 +144,7 @@ func (a *bankSettlerAdapter) Release(ctx context.Context, opID string) (bool, er
 
 // Commit bridges service.BankReservations.Commit to bank.CommitReservedFunds.
 func (a *bankSettlerAdapter) Commit(ctx context.Context, in service.CommitInput) (string, error) {
-	ctx = auth.AttachToOutgoing(ctx, auth.Principal{
-		UserID:      "00000000-0000-0000-0000-00000000fffe",
-		UserKind:    auth.KindEmployee,
-		Permissions: []string{permissions.Admin},
-	})
+	ctx = withBankAdmin(ctx)
 	resp, err := a.c.CommitReservedFunds(ctx, &bankpb.CommitReservedFundsRequest{
 		OpId:          in.OpID,
 		DestAccountId: in.DestAccountID,
@@ -187,11 +162,7 @@ func (a *bankSettlerAdapter) Commit(ctx context.Context, in service.CommitInput)
 // CreateFundAccount bridges service.BankReservations.CreateFundAccount
 // to bank.CreateFundAccount. Trading dials this at CreateFund time.
 func (a *bankSettlerAdapter) CreateFundAccount(ctx context.Context, name string, currency domain.Currency) (string, error) {
-	ctx = auth.AttachToOutgoing(ctx, auth.Principal{
-		UserID:      "00000000-0000-0000-0000-00000000fffe",
-		UserKind:    auth.KindEmployee,
-		Permissions: []string{permissions.Admin},
-	})
+	ctx = withBankAdmin(ctx)
 	resp, err := a.c.CreateFundAccount(ctx, &bankpb.CreateFundAccountRequest{
 		Name:     name,
 		Currency: currencyToBankProto(currency),
@@ -205,11 +176,7 @@ func (a *bankSettlerAdapter) CreateFundAccount(ctx context.Context, name string,
 // Transfer bridges service.BankReservations.Transfer to
 // bank.TransferBetweenClients.
 func (a *bankSettlerAdapter) Transfer(ctx context.Context, in service.TransferInput) (string, error) {
-	ctx = auth.AttachToOutgoing(ctx, auth.Principal{
-		UserID:      "00000000-0000-0000-0000-00000000fffe",
-		UserKind:    auth.KindEmployee,
-		Permissions: []string{permissions.Admin},
-	})
+	ctx = withBankAdmin(ctx)
 	resp, err := a.c.TransferBetweenClients(ctx, &bankpb.TransferBetweenClientsRequest{
 		FromAccountId: in.FromAccountID,
 		ToAccountId:   in.ToAccountID,
@@ -228,11 +195,7 @@ func (a *bankSettlerAdapter) Transfer(ctx context.Context, in service.TransferIn
 // ClientLargestActiveLoan picks the largest remaining_principal across
 // the client's active loans. Returns ("","",nil) when none exist.
 func (a *bankSettlerAdapter) ClientLargestActiveLoan(ctx context.Context, clientID string) (domain.Currency, string, error) {
-	ctx = auth.AttachToOutgoing(ctx, auth.Principal{
-		UserID:      "00000000-0000-0000-0000-00000000fffe",
-		UserKind:    auth.KindEmployee,
-		Permissions: []string{permissions.Admin},
-	})
+	ctx = withBankAdmin(ctx)
 	resp, err := a.c.ListLoans(ctx, &bankpb.ListLoansRequest{
 		ClientId: clientID,
 		Status:   bankpb.LoanStatus_LOAN_STATUS_APPROVED,

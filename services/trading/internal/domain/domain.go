@@ -40,10 +40,10 @@ type UserKind string
 const (
 	KindClient   UserKind = "client"
 	KindEmployee UserKind = "employee"
-	// KindFund identifies investment-fund-as-actor rows (c4 PR3, spec
+	// KindFund identifies investment-fund-as-actor rows (spec
 	// p.74-75). A fund-actor order books holdings to
 	// (user_id=fund.id, user_kind='fund') and skips realized_gains
-	// (funds are pre-tax; the client pays at withdrawal — EDGE-3).
+	// (funds are pre-tax; the client pays at withdrawal).
 	KindFund UserKind = "fund"
 )
 
@@ -246,20 +246,20 @@ type Order struct {
 	LastModification   time.Time
 	CreatedAt          time.Time
 
-	// c4 PR3 fund-actor (spec p.74-75). ActorKind discriminates whether
-	// the order was placed by a client/employee themselves or on behalf
-	// of an investment fund they manage. OnBehalfOfFundID is non-empty
-	// when ActorKind == KindFund; for backward compatibility the column
-	// defaults to KindClient/KindEmployee matching UserKind.
+	// Fund-actor (spec p.74-75). ActorKind discriminates whether the
+	// order was placed by a client/employee themselves or on behalf of
+	// an investment fund they manage. OnBehalfOfFundID is non-empty when
+	// ActorKind == KindFund; otherwise the column defaults to
+	// KindClient/KindEmployee matching UserKind.
 	ActorKind        UserKind
 	OnBehalfOfFundID string
 }
 
 // OrderExecution is one partial fill. Spec p.55-56.
 //
-// Status walks `pending -> settled` in the executeFill saga (BE-3): a
-// fill is inserted as `pending` before the bank call so a worker crash
-// between settle and book leaves a durable signal to resume.
+// Status walks `pending -> settled` in the executeFill saga: a fill is
+// inserted as `pending` before the bank call so a worker crash between
+// settle and book leaves a durable signal to resume.
 type OrderExecution struct {
 	ID            string
 	OrderID       string
@@ -425,7 +425,7 @@ type OTCContract struct {
 }
 
 // =====================================================================
-// Investment funds (c4 PR3 — spec p.71-76)
+// Investment funds (spec p.71-76)
 // =====================================================================
 
 // FundStatus is the lifecycle of an investment fund.
@@ -469,7 +469,7 @@ type Fund struct {
 
 // FundPosition is one client's stake in one fund. units is the
 // mutual-fund unit count; total_invested_rsd is the cash that bought
-// those units (cost basis for the EDGE-3 tax row at withdrawal time).
+// those units (cost basis for the tax row at withdrawal time).
 type FundPosition struct {
 	ID                 string
 	FundID             string
@@ -506,8 +506,8 @@ type FundPerformanceSnapshot struct {
 }
 
 // RealizedGain records one closing sell-execution for capital-gains
-// tax. Spec p.62. SecurityID is empty on c4 PR3 fund-withdrawal rows
-// (EDGE-3); FundID is non-empty there instead. The tax cron is
+// tax. Spec p.62. SecurityID is empty on fund-withdrawal rows;
+// FundID is non-empty there instead. The tax cron is
 // agnostic — it groups by (user_id, account_id) and doesn't read
 // security_id.
 type RealizedGain struct {

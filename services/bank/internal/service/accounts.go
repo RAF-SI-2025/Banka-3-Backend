@@ -284,7 +284,7 @@ func (s *Service) GetSystemAccount(ctx context.Context, currency domain.Currency
 }
 
 // CreateFundAccount mints the bank-side liquidity account for an
-// investment fund (c4 PR3, spec p.74). Internal RPC — the trading
+// investment fund (spec p.74). Internal RPC — the trading
 // service calls this at CreateFund time, authenticated with admin
 // metadata. Distinct from CreateAccount so the client-facing path can
 // keep rejecting kind=fund as a validation error.

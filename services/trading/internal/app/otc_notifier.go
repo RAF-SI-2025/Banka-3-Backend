@@ -1,9 +1,8 @@
-// OTC notifier adapter (c4-PR2, OTC-6).
+// OTC notifier adapter.
 //
-// Wires service.OTCNotifier directly to pkg/email per the c2 pattern;
-// PR4 centralises this through notification-svc and swaps the
-// adapter without touching the service layer. Email body is Serbian
-// (the user-facing language for this product).
+// Wires service.OTCNotifier to an email.Sender — either pkg/email
+// directly or notification-svc, decided by app wiring. Email body is
+// Serbian (the user-facing language for this product).
 //
 // Recipient resolution
 // ====================
@@ -20,7 +19,6 @@ import (
 	"time"
 
 	userpb "github.com/RAF-SI-2025/Banka-3-Backend/gen/proto/user/v1"
-	"github.com/RAF-SI-2025/Banka-3-Backend/pkg/auth"
 	"github.com/RAF-SI-2025/Banka-3-Backend/pkg/email"
 	"github.com/RAF-SI-2025/Banka-3-Backend/services/trading/internal/domain"
 	"github.com/RAF-SI-2025/Banka-3-Backend/services/trading/internal/service"
@@ -115,11 +113,7 @@ func (n *otcEmailNotifier) recipientEmail(ctx context.Context, userID string, ki
 	if n.users == nil {
 		return "", nil
 	}
-	ctx = auth.AttachToOutgoing(ctx, auth.Principal{
-		UserID:      "trading-service-internal",
-		UserKind:    auth.KindEmployee,
-		Permissions: []string{"admin", "client.read", "employee.read"},
-	})
+	ctx = withUserAdmin(ctx)
 	// Cap RPCs to a few seconds so a misbehaving user-svc can't pin the
 	// saga's notification post-step.
 	ctx, cancel := context.WithTimeout(ctx, 5*time.Second)

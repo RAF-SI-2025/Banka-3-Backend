@@ -1,4 +1,4 @@
-// OTC accept SAGA (c4-PR2, OTC-3). Spec p.67-69, 79.
+// OTC accept SAGA. Spec p.67-69, 79.
 //
 // Flow (intra-bank — c5 will swap the counterparty UUID for a
 // (bank_code, account) tuple without reshaping these steps):

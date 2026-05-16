@@ -1,4 +1,4 @@
-// OTC contract expiry sweep (c4-PR2, OTC-5). Spec p.69: a contract
+// OTC contract expiry sweep. Spec p.69: a contract
 // whose settlement_date has passed without exercise flips to `expired`.
 //
 // What happens
@@ -7,7 +7,7 @@
 //   * The seller's holding `reserved_count` decrements by the
 //     contract's quantity (the reservation locked at offer-accept time
 //     is released — the underlying shares are free to trade again).
-//   * The premium is **NOT** refunded (spec p.69 + EDGE-9 — the
+//   * The premium is **NOT** refunded (spec p.69 — the
 //     premium is the buyer's sunk cost; that's the entire reason an
 //     option carries a non-zero premium). No bank-side write happens
 //     in this path.

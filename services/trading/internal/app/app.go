@@ -97,10 +97,10 @@ func Run() error {
 		log.Warn("USER_GRPC_ADDR not set; tax dashboard display_name will be empty")
 	}
 
-	// c4 OTC email notifier. With NOTIFICATION_GRPC_ADDR set (PR4
-	// NOTIFY-1) outbound mail goes through notification-svc; otherwise
-	// fall back to pkg/email directly so dev/test setups without
-	// notification-svc keep working.
+	// OTC email notifier. With NOTIFICATION_GRPC_ADDR set, outbound
+	// mail goes through notification-svc; otherwise fall back to
+	// pkg/email directly so dev/test setups without notification-svc
+	// keep working.
 	var emailSender email.Sender
 	if notifAddr := config.String("NOTIFICATION_GRPC_ADDR", ""); notifAddr != "" {
 		conn, err := grpc.NewClient(notifAddr, grpc.WithTransportCredentials(insecure.NewCredentials()))
@@ -250,9 +250,8 @@ func Run() error {
 		return runOTCExpirySweep(gctx, log, svc, otcExpiryTick)
 	})
 
-	// c4 PR3 fund performance snapshot cron (FUND-6, spec p.74). One
-	// snapshot per active fund per day at 23:50 Europe/Belgrade. Feeds
-	// the FE chart in FE-FUND-2.
+	// Fund performance snapshot cron (spec p.74). One snapshot per
+	// active fund per day at 23:50 Europe/Belgrade. Feeds the FE chart.
 	g.Go(func() error {
 		return runFundPerformanceCron(gctx, log, svc, belgrade)
 	})

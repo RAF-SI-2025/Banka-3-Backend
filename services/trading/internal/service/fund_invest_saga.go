@@ -1,4 +1,4 @@
-// Fund-invest SAGA (c4 PR3 — spec p.71-75).
+// Fund-invest SAGA (spec p.71-75).
 //
 // Three forward steps:
 //
@@ -29,8 +29,8 @@
 // bank-side step uses op_id = NewSHA1(tx_id, step_name), matching
 // bank's (op_id, leg_index) unique index.
 //
-// Unit-pricing (FUND-7, EDGE-10)
-// =============================
+// Unit-pricing
+// ============
 // The number of units minted is captured at saga kick-off
 // (`unit_price = total_value_rsd / total_units` at request time;
 // first invest defaults unit_price = 1). The payload carries the

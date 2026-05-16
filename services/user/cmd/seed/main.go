@@ -1762,9 +1762,7 @@ func seedOTC(ctx context.Context, pool *pgxpool.Pool, clientID, client2ID, admin
 //     double-debit klijent's RSD account. The marker is scoped to the
 //     seeded fund ids (not a global count) so unrelated fund activity
 //     — e.g. cypress-created funds left behind by a soak run — can't
-//     suppress the seed's own fund fixtures, and a dev DB that was
-//     wrongly skipped by the old global marker self-heals on the next
-//     `make seed`.
+//     suppress the seed's own fund fixtures.
 func seedFunds(ctx context.Context, pool *pgxpool.Pool, clientID, adminID string) error {
 	if clientID == "" || adminID == "" {
 		return fmt.Errorf("seedFunds: clientID and adminID are required")

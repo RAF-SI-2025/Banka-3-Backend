@@ -1,4 +1,4 @@
-// OTC exercise SAGA (c4-PR2, OTC-4). Spec p.80 intra-bank flow:
+// OTC exercise SAGA. Spec p.80 intra-bank flow:
 //
 //   1. reserve_buyer_strike — bank.ReserveFunds on buyer's account for
 //      qty × strike, in the contract currency.
@@ -306,7 +306,7 @@ func registerOTCExerciseSaga(reg *saga.Registry, svc *Service) {
 						}
 						_ = buyerHolding
 
-						// 3. Seller realized gain (spec p.62 EDGE-2).
+						// 3. Seller realized gain (spec p.62).
 						strike, _ := money.Parse(sc.State.StrikePrice)
 						cost, _ := money.Parse(avg)
 						q := new(big.Rat).SetInt64(int64(sc.State.Quantity))

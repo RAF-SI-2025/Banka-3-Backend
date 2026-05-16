@@ -44,7 +44,7 @@ func (n bankNotifierAdapter) Send(ctx context.Context, to, subject, body string,
 	return n.sender.Send(ctx, email.Message{To: to, Subject: subject, Body: body, HTML: html})
 }
 
-// notifClientAdapter dials notification-svc.SendEmail (c4 PR4 NOTIFY-1).
+// notifClientAdapter dials notification-svc.SendEmail.
 // Templating still happens in bank-svc (the Serbian bodies are built in
 // notifications.go); this adapter only hands the rendered message to
 // the centralized dispatcher so SMTP credentials live in one place.

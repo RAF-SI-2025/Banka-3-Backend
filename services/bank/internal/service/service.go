@@ -26,8 +26,8 @@ type Service struct {
 	Cfg   Config
 	Log   *slog.Logger
 	// Rates is wired by the app layer (gRPC client to exchange). Nil
-	// during slice-1-only tests, in which case FX paths surface
-	// "exchange rate provider not configured".
+	// in unit tests that don't exercise FX, in which case FX paths
+	// surface "exchange rate provider not configured".
 	Rates RateProvider
 	// Notifier is used for c2 user-facing notifications (card state
 	// changes, loan decisions, missed installments). Nil → events are

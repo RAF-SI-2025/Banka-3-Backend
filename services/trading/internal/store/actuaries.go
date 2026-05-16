@@ -122,7 +122,7 @@ func (s *Store) AddUsedLimit(ctx context.Context, tx pgx.Tx, employeeID, deltaRS
 // the caller's transaction, clamped at 0 so a refund landing after the
 // daily cron has already reset the counter doesn't push it negative
 // (the constraint is `used_limit >= 0`). Spec p.38 implies "transakcija"
-// counts trades, not cancelled orders — see BE-13.
+// counts trades, not cancelled orders.
 func (s *Store) RefundUsedLimit(ctx context.Context, tx pgx.Tx, employeeID, deltaRSD string) error {
 	const q = `update "trading".actuary_info
 	           set used_limit = greatest(used_limit - $2, 0),

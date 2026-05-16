@@ -8,7 +8,7 @@
 //     price; cash leg credits the actuary's account, realized gain is
 //     `(strike − cost_basis) × qty × contract_size` per spec p.62.
 //
-// Two-phase saga (mirrors executeFill / BE-3): pre-write a pending row
+// Two-phase saga (mirrors executeFill): pre-write a pending row
 // in option_exercises, call bank.SettleTrade with that row's UUID as
 // op_id (idempotent at bank layer), then mark settled + apply portfolio
 // changes in one trading-side tx.

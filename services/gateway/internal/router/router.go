@@ -3,12 +3,10 @@ package router
 import (
 	"context"
 	"encoding/json"
-	"errors"
 	"net/http"
 
 	userpb "github.com/RAF-SI-2025/Banka-3-Backend/gen/proto/user/v1"
 	"github.com/RAF-SI-2025/Banka-3-Backend/pkg/verification"
-	"github.com/RAF-SI-2025/Banka-3-Backend/services/gateway/internal/auth"
 
 	"github.com/grpc-ecosystem/grpc-gateway/v2/runtime"
 	"google.golang.org/grpc/status"
@@ -141,12 +139,3 @@ func withCORS(next http.Handler) http.Handler {
 		next.ServeHTTP(w, r)
 	})
 }
-
-// auth and errors imports are referenced indirectly (auth via the
-// outer app wiring; errors by writeGRPCError-adjacent code below).
-// Surface them so an unused-import lint doesn't bite if a refactor
-// drops their last visible call site.
-var (
-	_ = auth.Middleware
-	_ = errors.New
-)

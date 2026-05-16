@@ -27,11 +27,11 @@ type CreateOrderInput struct {
 	AllOrNone  bool
 	Margin     bool
 	AccountID  string
-	// c4 PR3: when set, the caller (must be a supervisor admin or the
-	// fund's manager) is placing the order on behalf of an investment
-	// fund. The order's owner becomes (fund.id, KindFund), the account
-	// must equal fund.bank_account_id, and realized_gains writes are
-	// skipped on the fill (EDGE-3).
+	// When set, the caller (must be a supervisor admin or the fund's
+	// manager) is placing the order on behalf of an investment fund.
+	// The order's owner becomes (fund.id, KindFund), the account must
+	// equal fund.bank_account_id, and realized_gains writes are skipped
+	// on the fill (funds are taxed at the client withdrawal boundary).
 	OnBehalfOfFundID string
 }
 
@@ -65,7 +65,7 @@ func (s *Service) CreateOrder(ctx context.Context, in CreateOrderInput) (*Create
 	if err != nil {
 		return nil, err
 	}
-	// c4 PR3 fund-actor branch — supervisor places an order on behalf
+	// Fund-actor branch — supervisor places an order on behalf
 	// of an investment fund they manage. Routes through a dedicated
 	// helper that uses fund-scoped checks (holding availability + funds
 	// available read against the fund row, not the supervisor).
@@ -159,7 +159,7 @@ func (s *Service) CreateOrder(ctx context.Context, in CreateOrderInput) (*Create
 			return nil, err
 		}
 	} else if in.Direction == domain.DirectionBuy && sec.Type != domain.SecurityForex {
-		// BE-12: non-margin buys need a pre-fill funds check too.
+		// Non-margin buys need a pre-fill funds check too.
 		// Without it the order is accepted, the worker tries to fill,
 		// the bank refuses on insufficient funds, and the order stalls
 		// pending forever. Better to reject up front. Forex skips —
@@ -205,7 +205,7 @@ func (s *Service) CreateOrder(ctx context.Context, in CreateOrderInput) (*Create
 	// frozen on the row. Spec p.26 / p.55-56 use this on settle to gate
 	// FX-commission policy and to pick the bank-side house leg; deriving
 	// it from user_kind=='employee' over-includes any future non-actuary
-	// employee. See BE-10.
+	// employee.
 	isActuary := permissions.HasAny(p.Permissions,
 		permissions.Admin, permissions.ActuarySupervisor, permissions.ActuaryAgent)
 
@@ -467,7 +467,7 @@ func (s *Service) assertMarginEligible(
 // notional and the bank tx-tolerance has a few thousandths of slack
 // on the per-fill commission. If a buy fails mid-execution because
 // commission tipped the balance over, the worker stalls — same
-// recovery path as any other settle failure. See BE-12.
+// recovery path as any other settle failure.
 func (s *Service) assertFundsAvailable(
 	ctx context.Context,
 	accountID string,
@@ -489,8 +489,8 @@ func (s *Service) assertFundsAvailable(
 		// Bank-side lookup unavailable (dev stub or transient failure).
 		// Degrade to no pre-check rather than blocking trade flow; the
 		// bank's SettleTrade still rejects on insufficient funds at fill
-		// time, so the worst case is a stalled order — same as before
-		// BE-12. Production wires a real adapter so the check fires.
+		// time, so the worst case is a stalled order. Production wires a
+		// real adapter so the check fires.
 		s.Log.Warn("pre-fill funds check: account lookup failed; skipping",
 			"account_id", accountID, "err", err.Error())
 		return nil
@@ -719,7 +719,7 @@ func (s *Service) maybeChargeAgentLimit(ctx context.Context, o *domain.Order) {
 // Refund is clamped at 0 store-side: if the daily reset cron has
 // already zeroed used_limit between approval and cancel, the
 // constraint stays intact. Failure is logged, not propagated — the
-// order is already cancelled and the cap is best-effort. See BE-13.
+// order is already cancelled and the cap is best-effort.
 func (s *Service) maybeRefundAgentLimit(ctx context.Context, o *domain.Order) {
 	sec, err := s.Store.GetSecurity(ctx, o.SecurityID)
 	if err != nil {
@@ -800,7 +800,7 @@ func validateOrderShape(in CreateOrderInput) error {
 }
 
 // =====================================================================
-// Fund-actor order placement (c4 PR3, spec p.74-75)
+// Fund-actor order placement (spec p.74-75)
 // =====================================================================
 
 // fundActorOrderInput is the internal helper input. Used by both the

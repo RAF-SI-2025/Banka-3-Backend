@@ -11,7 +11,7 @@ import (
 // fundReassignerAdapter implements service.FundReassigner on top of the
 // trading-service gRPC client. User-svc calls this from
 // SetEmployeePermissions when the funds.manage.supervisor permission
-// is being revoked (c4 PR4 CASCADE-1, spec p.74). The caller is the
+// is being revoked (spec p.74). The caller is the
 // acting admin, but user-svc runs the cascade server-side after
 // permission gating has already admitted them; we attach an internal
 // admin sentinel principal on the outgoing metadata so the trading

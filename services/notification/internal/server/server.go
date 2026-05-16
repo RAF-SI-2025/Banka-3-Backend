@@ -11,9 +11,9 @@ import (
 )
 
 // Server is the gRPC implementation of NotificationService. The service
-// is a thin pass-through to pkg/email — for now templating still happens
-// in the caller; this service just owns the SMTP credentials and tags
-// outbound events with their kind for observability.
+// is a thin pass-through to pkg/email — templating happens in the
+// caller; this service owns the SMTP credentials and tags outbound
+// events with their kind for observability.
 type Server struct {
 	notifpb.UnimplementedNotificationServiceServer
 	Sender email.Sender
@@ -44,7 +44,7 @@ func (s *Server) SendEmail(ctx context.Context, in *notifpb.SendEmailRequest) (*
 	return &notifpb.SendEmailResponse{}, nil
 }
 
-// Health is the slice-1 stub kept for the probe path.
+// Health is a lightweight RPC kept for the probe path.
 func (s *Server) Health(ctx context.Context, _ *notifpb.HealthRequest) (*notifpb.HealthResponse, error) {
 	return &notifpb.HealthResponse{Status: "ok"}, nil
 }

@@ -84,11 +84,9 @@ func Run() error {
 	}
 
 	// Notifier wires to notification-svc when NOTIFICATION_GRPC_ADDR is
-	// set (c4 PR4 NOTIFY-1 centralization); otherwise pkg/email is used
-	// directly so slice-1 dev and unit tests keep working. Templating
-	// continues to live in bank-svc — notification-svc is currently a
-	// thin SMTP-credentials owner; typed event RPCs will migrate
-	// templates later.
+	// set; otherwise pkg/email is used directly so minimal dev and unit
+	// tests keep working. Templating continues to live in bank-svc —
+	// notification-svc is currently a thin SMTP-credentials owner.
 	if notifAddr := config.String("NOTIFICATION_GRPC_ADDR", ""); notifAddr != "" {
 		conn, err := grpc.NewClient(notifAddr, grpc.WithTransportCredentials(insecure.NewCredentials()))
 		if err != nil {

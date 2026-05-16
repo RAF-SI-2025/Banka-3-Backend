@@ -1,4 +1,4 @@
-// OTC gRPC handlers (c4-PR2). Translate the proto surface to the
+// OTC gRPC handlers. Translate the proto surface to the
 // service layer and back. Pattern mirrors server/portfolio.go.
 
 package server

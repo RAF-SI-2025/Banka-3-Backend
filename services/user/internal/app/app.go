@@ -64,9 +64,9 @@ func Run() error {
 		WebBaseURL:       config.String("WEB_BASE_URL", "http://localhost:5173"),
 	}, log)
 
-	// Optional trading-svc client for the c4 PR4 CASCADE-1 fund-manager
-	// reassignment on supervisor demotion. Skip wiring on a minimal dev
-	// stack that doesn't run trading (the cascade no-ops with a warning).
+	// Optional trading-svc client for the fund-manager reassignment on
+	// supervisor demotion. Skip wiring on a minimal dev stack that
+	// doesn't run trading (the cascade no-ops with a warning).
 	if tradingAddr := config.String("TRADING_GRPC_ADDR", ""); tradingAddr != "" {
 		conn, err := grpc.NewClient(tradingAddr, grpc.WithTransportCredentials(insecure.NewCredentials()))
 		if err != nil {
@@ -104,9 +104,9 @@ func Run() error {
 }
 
 // buildNotifier wires the email sender. When NOTIFICATION_GRPC_ADDR is
-// set the user service dials the centralized notification-svc (c4 PR4
-// NOTIFY-1); otherwise it falls back to pkg/email directly so slice-1
-// dev and unit tests keep working without the extra service.
+// set the user service dials the centralized notification-svc;
+// otherwise it falls back to pkg/email directly so minimal dev and
+// unit tests keep working without the extra service.
 func buildNotifier(ctx context.Context, log *slog.Logger) (service.Notifier, func(), error) {
 	if addr := config.String("NOTIFICATION_GRPC_ADDR", ""); addr != "" {
 		conn, err := grpc.NewClient(addr, grpc.WithTransportCredentials(insecure.NewCredentials()))
@@ -135,9 +135,9 @@ func (n notifierAdapter) Send(ctx context.Context, to, subject, body string, htm
 	return n.sender.Send(ctx, email.Message{To: to, Subject: subject, Body: body, HTML: html})
 }
 
-// notifClientAdapter dials notification-svc.SendEmail. Templating still
-// happens in the caller (user-svc renders the Serbian body itself); the
-// service is a thin SMTP-credentials owner for now.
+// notifClientAdapter dials notification-svc.SendEmail. Templating
+// happens in the caller (user-svc renders the Serbian body itself);
+// notification-svc is a thin SMTP-credentials owner.
 type notifClientAdapter struct {
 	c      notifpb.NotificationServiceClient
 	origin string

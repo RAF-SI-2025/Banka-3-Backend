@@ -1,4 +1,4 @@
-// Fund-withdraw SAGA (c4 PR3 — spec p.71-75).
+// Fund-withdraw SAGA (spec p.71-75).
 //
 // Two settlement paths share four logical steps. The liquid path runs
 // when the fund's bank account currently has at least amount_rsd of
@@ -32,11 +32,11 @@
 //   4. update_position        — One tx: decrement units +
 //      total_invested_rsd pro-rata on the client_fund_positions row;
 //      decrement fund.total_units; insert a realized_gains row for the
-//      client (EDGE-3 — taxation at the client boundary); flip the
+//      client (taxation at the client boundary); flip the
 //      audit row to `completed`.
 //
-// EDGE-3 taxation
-// ===============
+// Taxation
+// ========
 // Cost-basis removed (the part of total_invested_rsd attributed to
 // the withdrawn units) is the position's total_invested_rsd × (units
 // removed / position.units). Proceeds = amount_rsd. realized_gains.
@@ -421,7 +421,7 @@ func registerFundWithdrawSaga(reg *saga.Registry, svc *Service) {
 						); err != nil {
 							return err
 						}
-						// EDGE-3 — realized_gain at the client boundary.
+						// realized_gain at the client boundary.
 						gain := money.Sub(
 							money.MustParse(sc.State.AmountRSD),
 							money.MustParse(sc.State.CostBasisRemoved),
@@ -480,7 +480,7 @@ var autoLiquidationHeadroom = money.MustParse("1.25")
 // audit row flipped to failed) when the fund has no more sellable
 // holdings to cover the payout — far better than stranding the audit
 // row pending or transferring a short amount.
-// EDGE-6: greedy-largest-first; tunable policy.
+// Greedy-largest-first; tunable policy.
 func (s *Service) liquidateForWithdraw(ctx context.Context, sc *saga.Context[fundWithdrawPayload]) error {
 	// Re-quote the fund's available balance. If we're already liquid,
 	// short-circuit to the next step.

@@ -19,12 +19,20 @@ type userResolverAdapter struct {
 	c userpb.UserServiceClient
 }
 
-func (a *userResolverAdapter) DisplayName(ctx context.Context, userID string, kind domain.UserKind) (string, error) {
-	ctx = auth.AttachToOutgoing(ctx, auth.Principal{
+// withUserAdmin attaches the trading service's internal admin principal
+// to outgoing metadata. These calls run server-side after the relevant
+// permission gate has already admitted the caller, so there is no
+// end-user principal to forward.
+func withUserAdmin(ctx context.Context) context.Context {
+	return auth.AttachToOutgoing(ctx, auth.Principal{
 		UserID:      "trading-service-internal",
 		UserKind:    auth.KindEmployee,
 		Permissions: []string{"admin", "client.read", "employee.read"},
 	})
+}
+
+func (a *userResolverAdapter) DisplayName(ctx context.Context, userID string, kind domain.UserKind) (string, error) {
+	ctx = withUserAdmin(ctx)
 	switch kind {
 	case domain.KindClient:
 		resp, err := a.c.GetClient(ctx, &userpb.GetClientRequest{Id: userID})
@@ -44,11 +52,7 @@ func (a *userResolverAdapter) DisplayName(ctx context.Context, userID string, ki
 }
 
 func (a *userResolverAdapter) EmployeePermissions(ctx context.Context, userID string) ([]string, error) {
-	ctx = auth.AttachToOutgoing(ctx, auth.Principal{
-		UserID:      "trading-service-internal",
-		UserKind:    auth.KindEmployee,
-		Permissions: []string{"admin", "client.read", "employee.read"},
-	})
+	ctx = withUserAdmin(ctx)
 	resp, err := a.c.GetEmployee(ctx, &userpb.GetEmployeeRequest{Id: userID})
 	if err != nil {
 		return nil, fmt.Errorf("user.GetEmployee: %w", err)

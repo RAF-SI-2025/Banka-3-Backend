@@ -215,8 +215,8 @@ func (s *Service) SetEmployeePermissions(ctx context.Context, id string, perms [
 	if err := s.guardAdminOnAdmin(ctx, target); err != nil {
 		return nil, err
 	}
-	// c4 PR4 CASCADE-1 — when funds.manage.supervisor is being revoked,
-	// reassign the demoted employee's funds to the acting admin BEFORE
+	// When funds.manage.supervisor is being revoked, reassign the
+	// demoted employee's funds to the acting admin BEFORE
 	// persisting the new permission set, so no fund can ever be left
 	// without a manager. If the trading-side cascade fails we abort the
 	// permission write entirely — partial state would be worse than no

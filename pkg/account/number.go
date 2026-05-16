@@ -62,8 +62,8 @@ const (
 	// System bucket — bank's own house accounts (not in spec).
 	TypeSystem Type = 99
 
-	// TypeFund — investment-fund liquidity account (c4 PR3, not in spec
-	// — internal sentinel). Picks 98 so it stays in the 9x system
+	// TypeFund — investment-fund liquidity account (not in spec —
+	// internal sentinel). Picks 98 so it stays in the 9x system
 	// bucket but doesn't collide with TypeSystem=99.
 	TypeFund Type = 98
 )

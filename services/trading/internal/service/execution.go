@@ -24,9 +24,7 @@ import (
 	"time"
 
 	"github.com/RAF-SI-2025/Banka-3-Backend/pkg/apperr"
-	"github.com/RAF-SI-2025/Banka-3-Backend/pkg/auth"
 	"github.com/RAF-SI-2025/Banka-3-Backend/pkg/money"
-	"github.com/RAF-SI-2025/Banka-3-Backend/pkg/permissions"
 	"github.com/RAF-SI-2025/Banka-3-Backend/services/trading/internal/domain"
 	"github.com/jackc/pgx/v5"
 	"google.golang.org/grpc/codes"
@@ -119,9 +117,9 @@ var executionRand = rand.New(rand.NewSource(time.Now().UnixNano()))
 
 // processFillResult is the post-state returned from one fill.
 type processFillResult struct {
-	Fired       bool
-	Order       *domain.Order
-	Execution   *domain.OrderExecution
+	Fired        bool
+	Order        *domain.Order
+	Execution    *domain.OrderExecution
 	NextEarliest time.Time
 }
 
@@ -307,12 +305,12 @@ func (s *Service) ProcessOrderTick(ctx context.Context, o *domain.Order) (proces
 
 // executeFill drives a fresh partial-fill through the saga:
 //
-//   1. Insert a pending order_executions row in its own tx — its UUID
-//      is the deterministic op_id for the bank settle.
-//   2. Bank settles the cash leg, idempotent on op_id (bank migration
-//      0011's unique (op_id, leg_index) makes retries safe).
-//   3. In one tx: mark the row settled, advance order progress, apply
-//      the portfolio change, and write realized_gain on a sell.
+//  1. Insert a pending order_executions row in its own tx — its UUID
+//     is the deterministic op_id for the bank settle.
+//  2. Bank settles the cash leg, idempotent on op_id (bank migration
+//     0011's unique (op_id, leg_index) makes retries safe).
+//  3. In one tx: mark the row settled, advance order progress, apply
+//     the portfolio change, and write realized_gain on a sell.
 //
 // A worker crash anywhere between (1) and (3) leaves a pending row.
 // resumePendingFill picks it up on the next tick: bank.Settle is
@@ -482,9 +480,9 @@ func (s *Service) completeFill(
 			if err != nil {
 				return err
 			}
-			// EDGE-3 (c4 PR3, spec p.71-76): fund-actor sells are pre-tax;
-			// the tax bites the client at withdrawal time. Skip the
-			// realized_gain insert here so the monthly tax cron doesn't
+			// Spec p.71-76: fund-actor sells are pre-tax; the tax bites
+			// the client at withdrawal time. Skip the realized_gain
+			// insert here so the monthly tax cron doesn't
 			// double-tax the fund.
 			if o.UserKind == domain.KindFund {
 				break
@@ -669,10 +667,10 @@ func (s *Service) recordRealizedGain(
 // p.54 (STOP_LIMIT). Both order types compare ask for BUY and bid for
 // SELL, but with different strictness:
 //
-//   STOP buy:        ask  >  stop   (strict)
-//   STOP sell:       bid  <  stop   (strict)
-//   STOP_LIMIT buy:  ask  >= stop   (loose — "dostigne ili pređe")
-//   STOP_LIMIT sell: bid  <  stop   (strict — "padne ispod")
+//	STOP buy:        ask  >  stop   (strict)
+//	STOP sell:       bid  <  stop   (strict)
+//	STOP_LIMIT buy:  ask  >= stop   (loose — "dostigne ili pređe")
+//	STOP_LIMIT sell: bid  <  stop   (strict — "padne ispod")
 func (s *Service) stopTriggered(o *domain.Order, listing *domain.Listing) bool {
 	stop, err := money.Parse(o.StopPrice)
 	if err != nil {
@@ -780,9 +778,9 @@ func effectiveType(o *domain.Order) domain.OrderType {
 // cadenceReady decides whether enough time has passed since the last
 // fill for this order to fire another. Per spec p.56:
 //
-//   maxIntervalSeconds = 1440 / (volume / remaining) = 1440 * remaining / volume
-//   intervalSeconds    = Random(0, maxIntervalSeconds)
-//   if afterHours: interval += 30 minutes (added AFTER the roll)
+//	maxIntervalSeconds = 1440 / (volume / remaining) = 1440 * remaining / volume
+//	intervalSeconds    = Random(0, maxIntervalSeconds)
+//	if afterHours: interval += 30 minutes (added AFTER the roll)
 //
 // We compare since-last-fill (or since-creation when no fills yet) to
 // the freshly-rolled interval. This randomness is on every tick —
@@ -868,10 +866,10 @@ func (s *Service) timeSinceLastFill(ctx context.Context, o *domain.Order) (time.
 
 // commissionFor returns the per-fill commission per spec p.55-56.
 //
-//   Market    : min(14% × order_total_notional, $7) total across all fills
-//   Limit     : min(24% × order_total_notional, $12) total across all fills
-//   Stop      : same as Market once triggered
-//   StopLimit : same as Limit once triggered
+//	Market    : min(14% × order_total_notional, $7) total across all fills
+//	Limit     : min(24% × order_total_notional, $12) total across all fills
+//	Stop      : same as Market once triggered
+//	StopLimit : same as Limit once triggered
 //
 // Spec p.55 reads "14% od približne cene celokupnog naloga ili $7,
 // u zavisnosti od toga koji iznos je manji" — one cap on the whole
@@ -1049,11 +1047,3 @@ func (s *Service) RunExecutionTick(ctx context.Context) (int, error) {
 	}
 	return fired, nil
 }
-
-// (Re-export for the unit test file's vis on the helper.)
-var _ = func() bool {
-	// touch unused imports if any sneak in during refactor
-	_ = auth.KindEmployee
-	_ = permissions.Actuary
-	return true
-}()

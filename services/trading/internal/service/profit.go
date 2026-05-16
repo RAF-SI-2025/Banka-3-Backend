@@ -1,4 +1,4 @@
-// Profit Banke dashboards (c4 PR4 — spec p.76).
+// Profit Banke dashboards (spec p.76).
 //
 // Two read-only aggregations behind `bank.profit.read`:
 //
@@ -30,7 +30,7 @@ type ListActuaryPerformancesInput struct {
 	Type tdomain.ActuaryType
 	// NameQuery is a case-insensitive substring of "first last", applied
 	// after display-name resolution. Falls back to UUID substring when
-	// the user-resolver isn't wired (slice-1 tests).
+	// the user-resolver isn't wired.
 	NameQuery string
 }
 

@@ -8,7 +8,7 @@ import (
 )
 
 // notify is a best-effort email send. When Notifier or UserResolver is
-// not wired (slice-1 tests, dev without SMTP), we log and move on —
+// not wired (unit tests, dev without SMTP), we log and move on —
 // notifications must never fail a business operation.
 func (s *Service) notify(ctx context.Context, clientID, subject, body string) {
 	if s.Notifier == nil || s.UserResolver == nil {
