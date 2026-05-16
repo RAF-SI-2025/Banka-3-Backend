@@ -1577,9 +1577,14 @@ func seedOTC(ctx context.Context, pool *pgxpool.Pool, clientID, client2ID, admin
 // Idempotency:
 //   - fund creation skips funds whose name already exists in
 //     trading.investment_funds (per-fund tx).
-//   - mock data plants only on a clean slate (no rows in
-//     client_fund_transactions) so a partial prior run plus a re-run
-//     doesn't double-debit klijent's RSD account.
+//   - mock data plants only when none of *these seeded funds* has a
+//     client_fund_transactions row yet, so a re-run doesn't
+//     double-debit klijent's RSD account. The marker is scoped to the
+//     seeded fund ids (not a global count) so unrelated fund activity
+//     — e.g. cypress-created funds left behind by a soak run — can't
+//     suppress the seed's own fund fixtures, and a dev DB that was
+//     wrongly skipped by the old global marker self-heals on the next
+//     `make seed`.
 func seedFunds(ctx context.Context, pool *pgxpool.Pool, clientID, adminID string) error {
 	if clientID == "" || adminID == "" {
 		return fmt.Errorf("seedFunds: clientID and adminID are required")
@@ -1611,7 +1616,7 @@ func seedFunds(ctx context.Context, pool *pgxpool.Pool, clientID, adminID string
 		},
 		{
 			"Gama konzervativni fond",
-			"Konzervativna alokacija za očuvanje kapitala — pretežno fjučersi i RSD likvidnost.",
+			"Konzervativna alokacija za očuvanje kapitala — pretežno RSD likvidnost uz manju izloženost domaćim akcijama.",
 			"10000",
 		},
 	}
@@ -1694,17 +1699,25 @@ type fundRef struct{ id, bankAccountID string }
 
 // seedFundMockData plants the cross-fund mock state once: per-fund
 // pre-investments (klijent + bank-as-client), fund-actor stock
-// holdings, and 60 days of performance snapshots. Marker: skips if
-// any row already exists in trading.client_fund_transactions.
+// holdings, and 60 days of performance snapshots — for every seeded
+// fund, so /banking/fondovi has a non-flat chart on each one. Marker:
+// skips only if one of the *seeded* funds (by id) already has a
+// trading.client_fund_transactions row; unrelated funds are ignored.
 func seedFundMockData(
 	ctx context.Context,
 	pool *pgxpool.Pool,
 	clientID, supervisorID string,
 	refs map[string]fundRef,
 ) error {
+	seededFundIDs := make([]string, 0, len(refs))
+	for _, r := range refs {
+		seededFundIDs = append(seededFundIDs, r.id)
+	}
 	var prior int
 	if err := pool.QueryRow(ctx,
-		`select count(*) from "trading".client_fund_transactions`,
+		`select count(*) from "trading".client_fund_transactions
+		  where fund_id::text = any($1)`,
+		seededFundIDs,
 	).Scan(&prior); err != nil {
 		return fmt.Errorf("count existing fund transactions: %w", err)
 	}
@@ -1780,13 +1793,22 @@ func seedFundMockData(
 		initiatorEmployeeID string
 		amountRSD           string
 	}
+	//
+	// Every fund gets a klijent invest (so "Moji fondovi" lists all
+	// three) plus a larger supervisor-initiated bank-as-client invest
+	// (spec p.75 Napomena 2 — RSD drawn from the bank's house RSD
+	// account; surfaces in "Pozicije banke u fondovima"). The
+	// bank-side top-up gives each fund enough RSD liquidity to fund
+	// its seeded holdings and still leave a believable cash reserve.
+	// klijent's per-fund amounts sum to 160000 RSD, unchanged from
+	// before, so the klijent RSD account isn't drained any further.
 	investSteps := []investStep{
-		{"Alfa diverzifikovani fond", clientID, false, clientRSDAcct, "", "100000"},
-		{"Beta tehnološki fond", clientID, false, clientRSDAcct, "", "50000"},
-		{"Gama konzervativni fond", clientID, false, clientRSDAcct, "", "10000"},
-		// Bank-as-client invest into Beta — supervisor-initiated, RSD
-		// drawn from the bank's house RSD account (spec p.75 Napomena 2).
-		{"Beta tehnološki fond", account.BankAsClientOwnerID, true, bankSystemRSDAcct, supervisorID, "200000"},
+		{"Alfa diverzifikovani fond", clientID, false, clientRSDAcct, "", "60000"},
+		{"Beta tehnološki fond", clientID, false, clientRSDAcct, "", "60000"},
+		{"Gama konzervativni fond", clientID, false, clientRSDAcct, "", "40000"},
+		{"Alfa diverzifikovani fond", account.BankAsClientOwnerID, true, bankSystemRSDAcct, supervisorID, "170000"},
+		{"Beta tehnološki fond", account.BankAsClientOwnerID, true, bankSystemRSDAcct, supervisorID, "340000"},
+		{"Gama konzervativni fond", account.BankAsClientOwnerID, true, bankSystemRSDAcct, supervisorID, "110000"},
 	}
 
 	for _, s := range investSteps {
@@ -1851,27 +1873,45 @@ func seedFundMockData(
 		}
 	}
 
-	// Fund-actor holdings. buyPriceNative is set deliberately below the
-	// seeded listing price (NIS 850, MSFT 450.10) so the fund carries an
-	// unrealised gain — Moji fondovi / Profit show green out of the box
-	// instead of a flat break-even. The fund's RSD account is debited by
-	// the actual cost (buyPrice × qty × FX); weighted_avg_price stores
-	// the native-currency cost basis.
+	// Fund-actor holdings, themed per fund so each one's chart reflects
+	// a plausible portfolio. buyPriceNative is set deliberately below
+	// the seeded listing price (NIS 850, AAPL 190.50, MSFT 450.10,
+	// GOOGL 175.30) so the fund carries an unrealised gain — Moji
+	// fondovi / Profit show green out of the box instead of a flat
+	// break-even. The fund's RSD account is debited by the actual cost
+	// (buyPrice × qty × FX); weighted_avg_price stores the native-
+	// currency cost basis.
 	type holdingStep struct {
 		fundName       string
 		ticker         string
 		quantity       int
 		buyPriceNative float64
 	}
-	holdings := []holdingStep{
+	// Candidates by theme:
+	//   Alfa — diverzifikovani: domaća RSD akcija + jedna američka.
+	//   Beta — tehnološki: baš AAPL/MSFT/GOOGL iz opisa fonda.
+	//   Gama — konzervativni: mala domaća izloženost, ostalo RSD keš.
+	// NIS is RSD-listed so it resolves without the FX feed and is
+	// always kept; USD tickers are best-effort — skipped (not fatal)
+	// when the FX feed hasn't populated USD→RSD yet, in which case the
+	// snapshot loop below walks the fund's liquid line instead so the
+	// chart still isn't flat.
+	candidates := []holdingStep{
 		{"Alfa diverzifikovani fond", "NIS", 100, 760.00},
+		{"Alfa diverzifikovani fond", "AAPL", 5, 160.00},
+		{"Beta tehnološki fond", "AAPL", 6, 165.00},
+		{"Beta tehnološki fond", "MSFT", 4, 408.00},
+		{"Beta tehnološki fond", "GOOGL", 6, 150.00},
+		{"Gama konzervativni fond", "NIS", 30, 800.00},
 	}
-	// Beta gets MSFT only if the live FX rate is wired (it is, from the
-	// bank's seed).
-	if _, _, ferr := lookupSecurity("MSFT"); ferr == nil {
-		holdings = append(holdings, holdingStep{
-			"Beta tehnološki fond", "MSFT", 4, 408.00,
-		})
+	holdings := make([]holdingStep, 0, len(candidates))
+	for _, c := range candidates {
+		if _, _, ferr := lookupSecurity(c.ticker); ferr != nil {
+			fmt.Printf("seed: skipping fund holding %s/%s (FX not wired: %v)\n",
+				c.fundName, c.ticker, ferr)
+			continue
+		}
+		holdings = append(holdings, c)
 	}
 
 	for _, h := range holdings {
@@ -1905,11 +1945,15 @@ func seedFundMockData(
 		}
 	}
 
-	// Performance snapshots: 60 daily rows per fund, ending at "now".
-	// Walks holdings_value with a deterministic ±2%/day step seeded by
-	// fund_id, terminating at the fund's current holdings_value_rsd.
-	// Liquid stays flat at the current value — the chart's interesting
-	// line is total_value, which moves with holdings only.
+	// Performance snapshots: 60 daily rows per *every* seeded fund,
+	// ending at "now", so /banking/fondovi shows a non-flat chart on
+	// each. The FE charts total_value = liquid + holdings. Normally we
+	// hold liquid flat and walk holdings_value with a deterministic
+	// ±2%/day step (seeded by fund_id) terminating at the fund's
+	// current holdings_value_rsd. If a fund ended up with no holdings
+	// (a USD-only fund seeded while the FX feed was down), we instead
+	// walk the liquid line so total_value still moves — no fund gets a
+	// dead-flat chart.
 	const snapDays = 60
 	for name, ref := range refs {
 		// Today's state straight out of the DB so we don't drift from
@@ -1939,8 +1983,17 @@ func seedFundMockData(
 		_, _ = h.Write([]byte(ref.id))
 		rng := rand.New(rand.NewPCG(h.Sum64(), h.Sum64()^0x9e3779b97f4a7c15))
 
+		// Walk whichever line carries this fund's value. With holdings
+		// it's holdings_value (liquid held flat); a holdings-less fund
+		// falls back to walking liquid so the chart still isn't flat.
+		walkLiquid := holdingsNow <= 0
+		terminal := holdingsNow
+		if walkLiquid {
+			terminal = liquid
+		}
+
 		values := make([]float64, snapDays+1)
-		values[snapDays] = holdingsNow
+		values[snapDays] = terminal
 		for i := snapDays - 1; i >= 0; i-- {
 			step := 1.0 + (rng.Float64()*0.04 - 0.018) // ±2% with mild uptrend
 			if values[i+1] > 0 {
@@ -1952,14 +2005,18 @@ func seedFundMockData(
 		now := time.Now().UTC()
 		for i := 0; i <= snapDays; i++ {
 			at := now.AddDate(0, 0, -(snapDays - i))
+			liquidAt, holdingsAt := liquid, values[i]
+			if walkLiquid {
+				liquidAt, holdingsAt = values[i], 0
+			}
 			if _, err := tx.Exec(ctx, `
                 insert into "trading".fund_performance_snapshots
                     (fund_id, snapshot_at, liquid_rsd, holdings_value_rsd)
                 values ($1, $2, $3::numeric, $4::numeric)
                 on conflict (fund_id, snapshot_at) do nothing`,
 				ref.id, at,
-				strconv.FormatFloat(liquid, 'f', 4, 64),
-				strconv.FormatFloat(values[i], 'f', 4, 64),
+				strconv.FormatFloat(liquidAt, 'f', 4, 64),
+				strconv.FormatFloat(holdingsAt, 'f', 4, 64),
 			); err != nil {
 				return fmt.Errorf("insert snapshot %q: %w", name, err)
 			}
