@@ -441,6 +441,10 @@ service TradingService {
   //     the employee acting as a bank actuary; supervisors with
   //     account_kind=fund are intentionally excluded — funds book
   //     their own pre-tax basis at the client boundary, EDGE-3).
+  //     Lists the full spisak svih aktuara (spec p.76): an actuary
+  //     who never closed a position, or only at a loss, still appears
+  //     with profit_rsd "0" so the agent-vs-supervisor comparison is
+  //     complete.
   //   • ListBankFundPositions — every position the bank itself holds
   //     in an investment fund (client_id = BankAsClient sentinel),
   //     decorated with fund name + manager.
