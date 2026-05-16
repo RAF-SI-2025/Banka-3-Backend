@@ -1141,6 +1141,9 @@ message PublicHoldingItem {
   int32                     reserved_count  = 9;
   string                    current_price   = 10;
   Currency                  currency        = 11;
+  // last_updated is the holding's updated_at — spec p.67 OTC portal
+  // "Last updated" column.
+  google.protobuf.Timestamp last_updated    = 12;
 }
 
 message ListPublicHoldingsRequest {

@@ -7153,6 +7153,11 @@
         },
         "currency": {
           "$ref": "#/definitions/bankaTradingV1Currency"
+        },
+        "lastUpdated": {
+          "type": "string",
+          "format": "date-time",
+          "description": "last_updated is the holding's updated_at — spec p.67 OTC portal\n\"Last updated\" column."
         }
       },
       "description": "PublicHoldingItem is one row on the OTC discovery board. The\n\"available_count\" field is the share count visible to negotiations —\npublic_count minus reserved_count, clamped to zero."

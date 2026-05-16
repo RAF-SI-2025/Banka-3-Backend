@@ -34,6 +34,9 @@ func (s *Server) ListPublicHoldings(ctx context.Context, in *tradingpb.ListPubli
 			CurrentPrice:      r.CurrentPrice,
 			Currency:          currencyToProto(r.Security.Currency),
 		}
+		if !r.Holding.UpdatedAt.IsZero() {
+			item.LastUpdated = timestamppb.New(r.Holding.UpdatedAt)
+		}
 		out.Items = append(out.Items, item)
 	}
 	return out, nil

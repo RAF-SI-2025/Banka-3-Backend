@@ -116,7 +116,13 @@ func (s *Service) ListPublicHoldings(ctx context.Context, tickerFilter string) (
 		if listing, err := s.Store.GetListingBySecurityID(ctx, sec.ID); err == nil {
 			row.CurrentPrice = listing.Price
 		}
-		if s.Users != nil {
+		// Spec p.67: an actuary's holding is held "in the name of the
+		// bank", so on the supervisor-side board the Owner column shows
+		// the bank ("Za supervizore" → "Banka 1"), not the individual
+		// actuary. Client-side rows resolve the seller's personal name.
+		if h.UserKind == domain.KindEmployee {
+			row.SellerDisplayName = s.Cfg.BankName
+		} else if s.Users != nil {
 			if name, err := s.Users.DisplayName(ctx, h.UserID, h.UserKind); err == nil {
 				row.SellerDisplayName = name
 			}

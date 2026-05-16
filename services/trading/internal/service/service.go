@@ -42,6 +42,14 @@ type Config struct {
 	// cypress spec turns this on locally to drive scenarios 4/6/7/9 that
 	// have no FE-natural failure mode.
 	SagaDebugFaultInjection bool
+
+	// BankName is this bank's display name (env BANK_NAME). Spec p.67:
+	// on the OTC discovery board an actuary holding is owned "in the
+	// name of the bank", so the supervisor view renders the bank here
+	// as Owner instead of the individual actuary's name (the
+	// "Za supervizore" table shows "Banka 1", not a person). Defaults
+	// to "Banka 3".
+	BankName string
 }
 
 // RateProvider returns raw FX bid/ask between two currencies. Used by
@@ -221,6 +229,9 @@ func New(st *store.Store, cfg Config, log *slog.Logger) *Service {
 			loc = time.UTC
 		}
 		cfg.Belgrade = loc
+	}
+	if cfg.BankName == "" {
+		cfg.BankName = "Banka 3"
 	}
 	return &Service{Store: st, Cfg: cfg, Log: log}
 }
