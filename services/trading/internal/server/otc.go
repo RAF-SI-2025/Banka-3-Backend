@@ -226,6 +226,14 @@ func otcContractToProto(s *Server, ctx context.Context, c *domain.OTCContract) *
 	if sec, err := s.Svc.Store.GetSecurity(ctx, c.SecurityID); err == nil {
 		out.SecurityTicker = sec.Ticker
 	}
+	// Resolve the seller's human-readable name the same way the OTC
+	// discovery board does (service.ListPublicHoldings); without this
+	// the FE "Sklopljeni ugovori" page falls back to the raw UUID.
+	if s.Svc.Users != nil {
+		if name, err := s.Svc.Users.DisplayName(ctx, c.SellerID, c.SellerKind); err == nil {
+			out.SellerDisplayName = name
+		}
+	}
 	return out
 }
 

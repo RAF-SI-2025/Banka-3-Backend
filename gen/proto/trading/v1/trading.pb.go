@@ -5940,20 +5940,24 @@ type OTCContract struct {
 	SellerId        string                 `protobuf:"bytes,20,opt,name=seller_id,json=sellerId,proto3" json:"seller_id,omitempty"`
 	SellerKind      UserKind               `protobuf:"varint,21,opt,name=seller_kind,json=sellerKind,proto3,enum=banka.trading.v1.UserKind" json:"seller_kind,omitempty"`
 	SellerAccountId string                 `protobuf:"bytes,22,opt,name=seller_account_id,json=sellerAccountId,proto3" json:"seller_account_id,omitempty"`
-	Quantity        int32                  `protobuf:"varint,30,opt,name=quantity,proto3" json:"quantity,omitempty"`
-	StrikePrice     string                 `protobuf:"bytes,31,opt,name=strike_price,json=strikePrice,proto3" json:"strike_price,omitempty"`
-	PremiumPaid     string                 `protobuf:"bytes,32,opt,name=premium_paid,json=premiumPaid,proto3" json:"premium_paid,omitempty"`
-	Currency        Currency               `protobuf:"varint,33,opt,name=currency,proto3,enum=banka.trading.v1.Currency" json:"currency,omitempty"`
-	SettlementDate  *timestamppb.Timestamp `protobuf:"bytes,34,opt,name=settlement_date,json=settlementDate,proto3" json:"settlement_date,omitempty"`
-	PremiumOpId     string                 `protobuf:"bytes,40,opt,name=premium_op_id,json=premiumOpId,proto3" json:"premium_op_id,omitempty"`
-	Status          OTCContractStatus      `protobuf:"varint,41,opt,name=status,proto3,enum=banka.trading.v1.OTCContractStatus" json:"status,omitempty"`
-	ExercisedOpId   string                 `protobuf:"bytes,42,opt,name=exercised_op_id,json=exercisedOpId,proto3" json:"exercised_op_id,omitempty"`
-	ExerciseSagaId  string                 `protobuf:"bytes,43,opt,name=exercise_saga_id,json=exerciseSagaId,proto3" json:"exercise_saga_id,omitempty"`
-	ExercisedAt     *timestamppb.Timestamp `protobuf:"bytes,44,opt,name=exercised_at,json=exercisedAt,proto3" json:"exercised_at,omitempty"`
-	CreatedAt       *timestamppb.Timestamp `protobuf:"bytes,90,opt,name=created_at,json=createdAt,proto3" json:"created_at,omitempty"`
-	UpdatedAt       *timestamppb.Timestamp `protobuf:"bytes,91,opt,name=updated_at,json=updatedAt,proto3" json:"updated_at,omitempty"`
-	unknownFields   protoimpl.UnknownFields
-	sizeCache       protoimpl.SizeCache
+	// Resolved display name for the seller (mirrors
+	// PublicHoldingItem.seller_display_name). The FE renders this on
+	// "Sklopljeni ugovori"; it fell back to the raw UUID before this.
+	SellerDisplayName string                 `protobuf:"bytes,23,opt,name=seller_display_name,json=sellerDisplayName,proto3" json:"seller_display_name,omitempty"`
+	Quantity          int32                  `protobuf:"varint,30,opt,name=quantity,proto3" json:"quantity,omitempty"`
+	StrikePrice       string                 `protobuf:"bytes,31,opt,name=strike_price,json=strikePrice,proto3" json:"strike_price,omitempty"`
+	PremiumPaid       string                 `protobuf:"bytes,32,opt,name=premium_paid,json=premiumPaid,proto3" json:"premium_paid,omitempty"`
+	Currency          Currency               `protobuf:"varint,33,opt,name=currency,proto3,enum=banka.trading.v1.Currency" json:"currency,omitempty"`
+	SettlementDate    *timestamppb.Timestamp `protobuf:"bytes,34,opt,name=settlement_date,json=settlementDate,proto3" json:"settlement_date,omitempty"`
+	PremiumOpId       string                 `protobuf:"bytes,40,opt,name=premium_op_id,json=premiumOpId,proto3" json:"premium_op_id,omitempty"`
+	Status            OTCContractStatus      `protobuf:"varint,41,opt,name=status,proto3,enum=banka.trading.v1.OTCContractStatus" json:"status,omitempty"`
+	ExercisedOpId     string                 `protobuf:"bytes,42,opt,name=exercised_op_id,json=exercisedOpId,proto3" json:"exercised_op_id,omitempty"`
+	ExerciseSagaId    string                 `protobuf:"bytes,43,opt,name=exercise_saga_id,json=exerciseSagaId,proto3" json:"exercise_saga_id,omitempty"`
+	ExercisedAt       *timestamppb.Timestamp `protobuf:"bytes,44,opt,name=exercised_at,json=exercisedAt,proto3" json:"exercised_at,omitempty"`
+	CreatedAt         *timestamppb.Timestamp `protobuf:"bytes,90,opt,name=created_at,json=createdAt,proto3" json:"created_at,omitempty"`
+	UpdatedAt         *timestamppb.Timestamp `protobuf:"bytes,91,opt,name=updated_at,json=updatedAt,proto3" json:"updated_at,omitempty"`
+	unknownFields     protoimpl.UnknownFields
+	sizeCache         protoimpl.SizeCache
 }
 
 func (x *OTCContract) Reset() {
@@ -6059,6 +6063,13 @@ func (x *OTCContract) GetSellerKind() UserKind {
 func (x *OTCContract) GetSellerAccountId() string {
 	if x != nil {
 		return x.SellerAccountId
+	}
+	return ""
+}
+
+func (x *OTCContract) GetSellerDisplayName() string {
+	if x != nil {
+		return x.SellerDisplayName
 	}
 	return ""
 }
@@ -8890,7 +8901,7 @@ const file_trading_v1_trading_proto_rawDesc = "" +
 	"\tthread_id\x18\x01 \x01(\tB\b\xbaH\x05r\x03\xb0\x01\x01R\bthreadId\"w\n" +
 	"\x16AcceptOTCOfferResponse\x129\n" +
 	"\bcontract\x18\x01 \x01(\v2\x1d.banka.trading.v1.OTCContractR\bcontract\x12\"\n" +
-	"\rpremium_op_id\x18\x02 \x01(\tR\vpremiumOpId\"\xfd\a\n" +
+	"\rpremium_op_id\x18\x02 \x01(\tR\vpremiumOpId\"\xad\b\n" +
 	"\vOTCContract\x12\x0e\n" +
 	"\x02id\x18\x01 \x01(\tR\x02id\x12\x1b\n" +
 	"\tthread_id\x18\x02 \x01(\tR\bthreadId\x12\x1f\n" +
@@ -8906,7 +8917,8 @@ const file_trading_v1_trading_proto_rawDesc = "" +
 	"\tseller_id\x18\x14 \x01(\tR\bsellerId\x12;\n" +
 	"\vseller_kind\x18\x15 \x01(\x0e2\x1a.banka.trading.v1.UserKindR\n" +
 	"sellerKind\x12*\n" +
-	"\x11seller_account_id\x18\x16 \x01(\tR\x0fsellerAccountId\x12\x1a\n" +
+	"\x11seller_account_id\x18\x16 \x01(\tR\x0fsellerAccountId\x12.\n" +
+	"\x13seller_display_name\x18\x17 \x01(\tR\x11sellerDisplayName\x12\x1a\n" +
 	"\bquantity\x18\x1e \x01(\x05R\bquantity\x12!\n" +
 	"\fstrike_price\x18\x1f \x01(\tR\vstrikePrice\x12!\n" +
 	"\fpremium_paid\x18  \x01(\tR\vpremiumPaid\x126\n" +

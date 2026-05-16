@@ -1236,6 +1236,10 @@ message OTCContract {
   string                    seller_id         = 20;
   UserKind                  seller_kind       = 21;
   string                    seller_account_id = 22;
+  // Resolved display name for the seller (mirrors
+  // PublicHoldingItem.seller_display_name). The FE renders this on
+  // "Sklopljeni ugovori"; it fell back to the raw UUID before this.
+  string                    seller_display_name = 23;
 
   int32                     quantity          = 30;
   string                    strike_price      = 31;

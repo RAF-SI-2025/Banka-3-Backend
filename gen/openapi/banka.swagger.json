@@ -6693,6 +6693,10 @@
         "sellerAccountId": {
           "type": "string"
         },
+        "sellerDisplayName": {
+          "type": "string",
+          "description": "Resolved display name for the seller (mirrors\nPublicHoldingItem.seller_display_name). The FE renders this on\n\"Sklopljeni ugovori\"; it fell back to the raw UUID before this."
+        },
         "quantity": {
           "type": "integer",
           "format": "int32"
