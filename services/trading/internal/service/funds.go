@@ -41,6 +41,7 @@ import (
 	"github.com/RAF-SI-2025/Banka-3-Backend/pkg/permissions"
 	tdomain "github.com/RAF-SI-2025/Banka-3-Backend/services/trading/internal/domain"
 	"github.com/RAF-SI-2025/Banka-3-Backend/services/trading/internal/store"
+	"github.com/google/uuid"
 )
 
 // BankAsClientOwnerID re-exports the cross-service sentinel for use by
@@ -121,6 +122,12 @@ type HoldingView struct {
 	CurrentPrice string
 	MarketValue  string
 	ProfitNative string
+	// Spec p.74 fund-detail columns. ChangeAmt + Volume come off the
+	// listing; InitialMarginCost is 1.1 × maintenance margin (same
+	// derivation as the securities catalog, spec p.46-48).
+	ChangeAmt         string
+	Volume            int64
+	InitialMarginCost string
 }
 
 // GetFund returns the fund detail. Clients see public columns; the
@@ -195,8 +202,30 @@ func (s *Service) CreateFund(ctx context.Context, in CreateFundInput) (*tdomain.
 	manager := in.ManagerUserID
 	if manager == "" {
 		manager = p.UserID
-	} else if !permissions.Has(p.Permissions, permissions.Admin) {
-		return nil, apperr.PermissionDenied("samo admin može da odredi upravnika drugog korisnika")
+	} else {
+		if !permissions.Has(p.Permissions, permissions.Admin) {
+			return nil, apperr.PermissionDenied("samo admin može da odredi upravnika drugog korisnika")
+		}
+		if _, perr := uuid.Parse(manager); perr != nil {
+			return nil, apperr.Validation("upravnik nije validan korisnik")
+		}
+		// The manager must be a supervisor (spec p.74 "Menadžer –
+		// supervizor koji upravlja fondom"). Enforced when the user
+		// resolver is wired; on a minimal dev stack without user-svc we
+		// fall back to the UUID check only — same graceful-degradation
+		// policy the rest of this file uses for s.Users.
+		if s.Users != nil {
+			perms, perr := s.Users.EmployeePermissions(ctx, manager)
+			if perr != nil {
+				return nil, apperr.Validation("upravnik fonda nije zaposleni")
+			}
+			if !permissions.HasAny(perms, permissions.Admin, permissions.FundsManageSupervisor) {
+				return nil, apperr.FailedPrecondition("upravnik fonda mora biti supervizor")
+			}
+		} else {
+			s.Log.Warn("CreateFund manager override not validated — user resolver not wired",
+				"manager_user_id", manager)
+		}
 	}
 	if s.Reservations == nil {
 		return nil, apperr.Internal("bank client not wired", nil)
@@ -335,6 +364,11 @@ func (s *Service) decorateHolding(ctx context.Context, h *tdomain.Holding) *Hold
 		return v
 	}
 	v.CurrentPrice = listing.Price
+	v.ChangeAmt = listing.ChangeAmt
+	v.Volume = listing.Volume
+	if mm, ok := computeMaintenanceMargin(sec, listing); ok {
+		v.InitialMarginCost = money.FormatAmount(money.Mul(mm, money.MustParse("1.1")))
+	}
 	price, _ := money.Parse(listing.Price)
 	cs, _ := money.Parse(listing.ContractSize)
 	if cs == nil || cs.Sign() == 0 {
@@ -458,6 +492,10 @@ type DecoratedFundPosition struct {
 	SharePct        string
 	CurrentValueRSD string
 	ProfitRSD       string
+	// FundTotalValueRSD is the whole fund's value (spec p.75 client
+	// "Moji fondovi" — "Vrednost fonda"), distinct from the position's
+	// own CurrentValueRSD.
+	FundTotalValueRSD string
 }
 
 // ListFundPositions returns the caller's positions (default) or a
@@ -493,12 +531,13 @@ func (s *Service) ListFundPositions(ctx context.Context, in ListFundPositionsInp
 		dec := s.decorateFund(ctx, f)
 		share, value, profit := positionDerivations(pos, dec)
 		out = append(out, &DecoratedFundPosition{
-			Position:        pos,
-			Fund:            f,
-			FundName:        f.Name,
-			SharePct:        share,
-			CurrentValueRSD: value,
-			ProfitRSD:       profit,
+			Position:          pos,
+			Fund:              f,
+			FundName:          f.Name,
+			SharePct:          share,
+			CurrentValueRSD:   value,
+			ProfitRSD:         profit,
+			FundTotalValueRSD: dec.TotalValueRSD,
 		})
 	}
 	return out, nil
@@ -617,6 +656,13 @@ func requireFundManager(p auth.Principal, f *tdomain.Fund) error {
 // name of the bank.
 func resolveFundInvestor(p auth.Principal, onBehalfClientID string) (string, bool, error) {
 	if onBehalfClientID == "" {
+		// Employees hold no personal fund position — only clients, plus
+		// the bank's owner-client sentinel, do (spec p.75 Napomena 2). A
+		// supervisor must act in the name of the bank, picking a bank
+		// account, so a self-invest by an employee is rejected here.
+		if p.UserKind == auth.KindEmployee {
+			return "", false, apperr.Validation("supervizor mora delovati u ime banke — izaberite račun banke")
+		}
 		return p.UserID, false, nil
 	}
 	supervisor := permissions.HasAny(p.Permissions, permissions.Admin,

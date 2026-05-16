@@ -170,12 +170,13 @@ func (s *Service) ListBankFundPositions(ctx context.Context) ([]*BankFundPositio
 		dec := s.decorateFund(ctx, f)
 		share, value, profit := positionDerivations(pos, dec)
 		decPos := &DecoratedFundPosition{
-			Position:        pos,
-			Fund:            f,
-			FundName:        f.Name,
-			SharePct:        share,
-			CurrentValueRSD: value,
-			ProfitRSD:       profit,
+			Position:          pos,
+			Fund:              f,
+			FundName:          f.Name,
+			SharePct:          share,
+			CurrentValueRSD:   value,
+			ProfitRSD:         profit,
+			FundTotalValueRSD: dec.TotalValueRSD,
 		}
 		mgrName := ""
 		if s.Users != nil && f.ManagerUserID != "" {

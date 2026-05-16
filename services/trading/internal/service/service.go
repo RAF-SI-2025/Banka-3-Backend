@@ -63,6 +63,11 @@ type RateProvider interface {
 // a UUID substring match.
 type UserResolver interface {
 	DisplayName(ctx context.Context, userID string, kind domain.UserKind) (string, error)
+	// EmployeePermissions returns the permission strings for an
+	// employee. Used by CreateFund to validate an admin-supplied
+	// manager override is actually a supervisor (spec p.74). Errors
+	// when the id does not resolve to an employee.
+	EmployeePermissions(ctx context.Context, userID string) ([]string, error)
 }
 
 // MarginChecker reads the funding-source state needed by spec p.55

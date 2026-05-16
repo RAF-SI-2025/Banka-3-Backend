@@ -48,6 +48,7 @@ package service
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"math/big"
 	"sort"
@@ -460,10 +461,25 @@ func registerFundWithdrawSaga(reg *saga.Registry, svc *Service) {
 	saga.Register(reg, def)
 }
 
-// liquidateForWithdraw places fund-actor MARKET sells greedy by
-// market value until projected proceeds ≥ shortfall. Returns nil only
-// when the fund's account already has at least amount_rsd of
-// available_balance (the recovery worker resumes after orders settle).
+// autoLiquidationHeadroom over-raises the gross sale target so that
+// after the per-trade MARKET commission (spec p.55 — min(14%·notional,
+// $7)) and partial-fill price drift the fund still nets at least
+// amount_rsd. Over-raising only leaves the extra as fund liquidity
+// (benign — spec p.72 only requires the payout be covered); any
+// residual shortfall from drift is corrected by the top-up round in
+// liquidateForWithdraw.
+var autoLiquidationHeadroom = money.MustParse("1.25")
+
+// liquidateForWithdraw drives the illiquid path. It returns nil only
+// once the fund's bank account holds at least amount_rsd of
+// available_balance — so transfer_to_target can never run underfunded.
+// While a round of orders is outstanding it returns a transient error
+// so the recovery worker re-enters; once a round has fully settled but
+// the proceeds still fall short (commission / price drift) it places a
+// top-up round. It fails the saga permanently (FailedPrecondition,
+// audit row flipped to failed) when the fund has no more sellable
+// holdings to cover the payout — far better than stranding the audit
+// row pending or transferring a short amount.
 // EDGE-6: greedy-largest-first; tunable policy.
 func (s *Service) liquidateForWithdraw(ctx context.Context, sc *saga.Context[fundWithdrawPayload]) error {
 	// Re-quote the fund's available balance. If we're already liquid,
@@ -481,48 +497,70 @@ func (s *Service) liquidateForWithdraw(ctx context.Context, sc *saga.Context[fun
 		// Enough liquidity — no more orders needed; let the saga advance.
 		return nil
 	}
-	// Place new sell orders if we haven't already exhausted the basket.
-	if len(sc.State.ChildOrderIDs) == 0 {
-		if err := s.placeAutoLiquidationOrders(ctx, sc); err != nil {
+
+	// If a round is already outstanding, don't place more until it has
+	// fully settled (avoids double-selling the same inventory).
+	if len(sc.State.ChildOrderIDs) > 0 {
+		allDone, err := s.allOrdersDone(ctx, sc.State.ChildOrderIDs)
+		if err != nil {
 			return err
 		}
-		// Returning transient so the orchestrator schedules a recovery
-		// tick — the recovery worker will re-enter when the orders
-		// have had time to settle.
-		return status.Error(codes.Unavailable, "auto-liquidation orders placed; awaiting settlement")
+		if !allDone {
+			return status.Error(codes.Unavailable, "auto-liquidation orders still pending")
+		}
+		// Round fully settled but still short — fall through and place a
+		// top-up round for the residual.
 	}
-	// Already placed — check whether they're all done.
-	allDone, err := s.allOrdersDone(ctx, sc.State.ChildOrderIDs)
+
+	placed, err := s.placeAutoLiquidationOrders(ctx, sc)
 	if err != nil {
+		// FailedPrecondition (nothing sellable) is permanent: the
+		// orchestrator marks the saga failed. Flip the audit row so it
+		// doesn't linger pending, and never advance to a short transfer.
+		var ae *apperr.Error
+		if errors.As(err, &ae) && ae.Kind == apperr.KindFailedPrecondition {
+			if mErr := s.markFundTxFailed(ctx, sc.State.TransactionRowID, err.Error()); mErr != nil {
+				sc.Log.Warn("mark fund tx failed (liquidation exhausted)", "err", mErr.Error())
+			}
+		}
 		return err
 	}
-	if !allDone {
-		return status.Error(codes.Unavailable, "auto-liquidation orders still pending")
+	if placed == 0 {
+		reason := "fond ne može da obezbedi dovoljno sredstava za isplatu"
+		if mErr := s.markFundTxFailed(ctx, sc.State.TransactionRowID, reason); mErr != nil {
+			sc.Log.Warn("mark fund tx failed (no liquidation orders)", "err", mErr.Error())
+		}
+		return apperr.FailedPrecondition(reason)
 	}
-	return nil
+	// Returning transient so the orchestrator schedules a recovery tick;
+	// the recovery worker re-enters once the orders have had time to
+	// settle.
+	return status.Error(codes.Unavailable, "auto-liquidation orders placed; awaiting settlement")
 }
 
-// placeAutoLiquidationOrders walks the fund's holdings sorted by
-// market value descending and creates MARKET sell orders until the
-// projected proceeds clear the shortfall.
-func (s *Service) placeAutoLiquidationOrders(ctx context.Context, sc *saga.Context[fundWithdrawPayload]) error {
+// placeAutoLiquidationOrders walks the fund's holdings sorted by market
+// value descending and places MARKET sell orders for the *minimal*
+// quantity that covers the headroom-adjusted shortfall (spec p.72
+// "automatska likvidacija dovoljnog broja hartija"), appending the new
+// order ids to the payload. Returns the number of orders placed.
+// FailedPrecondition when the fund has nothing sellable left.
+func (s *Service) placeAutoLiquidationOrders(ctx context.Context, sc *saga.Context[fundWithdrawPayload]) (int, error) {
 	holdings, err := s.Store.ListHoldings(ctx, store.HoldingFilter{
 		UserID: sc.State.FundID, UserKind: domain.KindFund,
 	})
 	if err != nil {
-		return err
-	}
-	if len(holdings) == 0 {
-		return apperr.FailedPrecondition("fond nema raspoloživih hartija za likvidaciju")
+		return 0, err
 	}
 	type rankedHolding struct {
 		h         *domain.Holding
 		sec       *domain.Security
-		listing   *domain.Listing
-		marketVal *big.Rat
+		marketVal *big.Rat // RSD, whole holding
 	}
 	rows := make([]rankedHolding, 0, len(holdings))
 	for _, h := range holdings {
+		if h.Quantity <= 0 {
+			continue
+		}
 		sec, err := s.Store.GetSecurity(ctx, h.SecurityID)
 		if err != nil {
 			continue
@@ -541,9 +579,12 @@ func (s *Service) placeAutoLiquidationOrders(ctx context.Context, sc *saga.Conte
 		if cs == nil || cs.Sign() == 0 {
 			cs = money.MustParse("1")
 		}
+		if price == nil || !money.IsPositive(price) {
+			continue
+		}
 		qty := new(big.Rat).SetInt64(int64(h.Quantity))
 		mkt := money.Mul(money.Mul(qty, cs), price)
-		// FX into RSD for comparison with shortfall.
+		// FX into RSD for comparison with the shortfall.
 		if sec.Currency != domain.CurrencyRSD && sec.Currency != "" && s.Rates != nil {
 			_, ask, err := s.Rates.Quote(ctx, sec.Currency, domain.CurrencyRSD)
 			if err == nil {
@@ -552,16 +593,22 @@ func (s *Service) placeAutoLiquidationOrders(ctx context.Context, sc *saga.Conte
 				}
 			}
 		}
-		rows = append(rows, rankedHolding{h: h, sec: sec, listing: listing, marketVal: mkt})
+		if !money.IsPositive(mkt) {
+			continue
+		}
+		rows = append(rows, rankedHolding{h: h, sec: sec, marketVal: mkt})
+	}
+	if len(rows) == 0 {
+		return 0, apperr.FailedPrecondition("fond nema raspoloživih hartija za likvidaciju")
 	}
 	sort.SliceStable(rows, func(i, j int) bool {
 		return rows[i].marketVal.Cmp(rows[j].marketVal) > 0
 	})
 
-	// Pull current liquid balance to know how much we need to raise.
+	// Current shortfall, grossed up for commission + drift.
 	_, availStr, err := s.Reservations.AccountAvailable(ctx, sc.State.FundBankAccountID)
 	if err != nil {
-		return err
+		return 0, err
 	}
 	avail, _ := money.Parse(availStr)
 	if avail == nil {
@@ -570,39 +617,63 @@ func (s *Service) placeAutoLiquidationOrders(ctx context.Context, sc *saga.Conte
 	want, _ := money.Parse(sc.State.AmountRSD)
 	shortfall := money.Sub(want, avail)
 	if !money.IsPositive(shortfall) {
-		return nil
+		return 0, nil
 	}
+	target := money.Mul(shortfall, autoLiquidationHeadroom)
 
 	var ids []string
 	for _, r := range rows {
-		if !money.IsPositive(shortfall) {
+		if !money.IsPositive(target) {
 			break
 		}
-		// Sell whole holding for simplicity; service can refine to
-		// partial-qty later. Cancellation on compensation is whole-row
-		// anyway.
-		order, err := s.createFundActorOrder(ctx, fundActorOrderInput{
+		// Per-unit RSD value = whole-holding market value / quantity.
+		perUnit, derr := money.Div(r.marketVal, new(big.Rat).SetInt64(int64(r.h.Quantity)))
+		if derr != nil || !money.IsPositive(perUnit) {
+			continue
+		}
+		qtyNeeded := ceilUnits(target, perUnit)
+		if qtyNeeded < 1 {
+			qtyNeeded = 1
+		}
+		if qtyNeeded > int64(r.h.Quantity) {
+			qtyNeeded = int64(r.h.Quantity)
+		}
+		order, oerr := s.createFundActorOrder(ctx, fundActorOrderInput{
 			FundID:        sc.State.FundID,
 			SecurityID:    r.sec.ID,
 			AccountID:     sc.State.FundBankAccountID,
-			Quantity:      r.h.Quantity,
+			Quantity:      int32(qtyNeeded),
 			Direction:     domain.DirectionSell,
 			OrderType:     domain.OrderMarket,
 			AllOrNone:     true,
 			InitiatorUser: sc.State.InitiatorEmployeeID,
 		})
-		if err != nil {
-			sc.Log.Warn("auto-liquidation order failed", "ticker", r.sec.Ticker, "err", err.Error())
+		if oerr != nil {
+			sc.Log.Warn("auto-liquidation order failed", "ticker", r.sec.Ticker, "err", oerr.Error())
 			continue
 		}
 		ids = append(ids, order.ID)
-		shortfall = money.Sub(shortfall, r.marketVal)
+		raised := money.Mul(new(big.Rat).SetInt64(qtyNeeded), perUnit)
+		target = money.Sub(target, raised)
 	}
 	if len(ids) == 0 {
-		return apperr.FailedPrecondition("nije uspelo postavljanje naloga za auto-likvidaciju")
+		return 0, apperr.FailedPrecondition("nije uspelo postavljanje naloga za auto-likvidaciju")
 	}
-	sc.State.ChildOrderIDs = ids
-	return nil
+	sc.State.ChildOrderIDs = append(sc.State.ChildOrderIDs, ids...)
+	return len(ids), nil
+}
+
+// ceilUnits returns ceil(target / perUnit) as a whole-unit count. Both
+// arguments must be positive (the caller guarantees this).
+func ceilUnits(target, perUnit *big.Rat) int64 {
+	q := new(big.Rat).Quo(target, perUnit)
+	res := new(big.Int)
+	rem := new(big.Int)
+	res.QuoRem(q.Num(), q.Denom(), rem)
+	if rem.Sign() != 0 {
+		res.Add(res, big.NewInt(1))
+	}
+	return res.Int64()
 }
 
 // allOrdersDone returns true when every id in `ids` is either done or

@@ -1336,6 +1336,12 @@ message FundHolding {
   Currency                  currency             = 8;
   google.protobuf.Timestamp acquired_at          = 9;
   google.protobuf.Timestamp updated_at           = 10;
+  // Spec p.74 fund-detail holdings columns: daily change, traded
+  // volume, and the security's initial margin cost (1.1 ×
+  // maintenance margin), in the holding's currency.
+  string                    change_amt           = 11;
+  int64                     volume               = 12;
+  string                    initial_margin_cost  = 13;
 }
 
 message FundPosition {
@@ -1352,6 +1358,10 @@ message FundPosition {
   string                    share_pct               = 9; // 0..100
   google.protobuf.Timestamp created_at              = 10;
   google.protobuf.Timestamp updated_at              = 11;
+  // Fund-level context for the client "Moji fondovi" row (spec p.75:
+  // "Naziv i opis fonda, Vrednost fonda, …"). Computed at read time.
+  string                    fund_description        = 12;
+  string                    fund_total_value_rsd    = 13;
 }
 
 message FundTransaction {

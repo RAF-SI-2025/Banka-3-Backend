@@ -44,8 +44,12 @@ func (s *Server) ListBankFundPositions(ctx context.Context, in *tradingpb.ListBa
 	}
 	out := &tradingpb.ListBankFundPositionsResponse{Rows: make([]*tradingpb.BankFundPosition, 0, len(rows))}
 	for _, r := range rows {
+		desc := ""
+		if r.Position.Fund != nil {
+			desc = r.Position.Fund.Description
+		}
 		out.Rows = append(out.Rows, &tradingpb.BankFundPosition{
-			Position:           fundPositionToProto(r.Position.Position, r.Position.FundName, r.Position.SharePct, r.Position.CurrentValueRSD, r.Position.ProfitRSD),
+			Position:           fundPositionToProto(r.Position.Position, r.Position.FundName, r.Position.SharePct, r.Position.CurrentValueRSD, r.Position.ProfitRSD, desc, r.Position.FundTotalValueRSD),
 			FundName:           r.Position.FundName,
 			ManagerUserId:      r.ManagerUserID,
 			ManagerDisplayName: r.ManagerDisplayName,

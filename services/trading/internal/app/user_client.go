@@ -43,6 +43,19 @@ func (a *userResolverAdapter) DisplayName(ctx context.Context, userID string, ki
 	}
 }
 
+func (a *userResolverAdapter) EmployeePermissions(ctx context.Context, userID string) ([]string, error) {
+	ctx = auth.AttachToOutgoing(ctx, auth.Principal{
+		UserID:      "trading-service-internal",
+		UserKind:    auth.KindEmployee,
+		Permissions: []string{"admin", "client.read", "employee.read"},
+	})
+	resp, err := a.c.GetEmployee(ctx, &userpb.GetEmployeeRequest{Id: userID})
+	if err != nil {
+		return nil, fmt.Errorf("user.GetEmployee: %w", err)
+	}
+	return resp.GetPermissions(), nil
+}
+
 func joinName(first, last string) string {
 	switch {
 	case first == "" && last == "":

@@ -45,7 +45,7 @@ func (s *Server) GetFund(ctx context.Context, in *tradingpb.GetFundRequest) (*tr
 		out.Holdings = append(out.Holdings, fundHoldingToProto(h))
 	}
 	if res.Position != nil {
-		out.Position = fundPositionToProto(res.Position, res.Fund.Fund.Name, res.PositionSharePct, res.PositionValueRSD, res.PositionProfitRSD)
+		out.Position = fundPositionToProto(res.Position, res.Fund.Fund.Name, res.PositionSharePct, res.PositionValueRSD, res.PositionProfitRSD, res.Fund.Fund.Description, res.Fund.TotalValueRSD)
 	}
 	return out, nil
 }
@@ -118,8 +118,13 @@ func (s *Server) ListFundPositions(ctx context.Context, in *tradingpb.ListFundPo
 		Positions: make([]*tradingpb.FundPosition, 0, len(rows)),
 	}
 	for _, d := range rows {
+		desc := ""
+		if d.Fund != nil {
+			desc = d.Fund.Description
+		}
 		out.Positions = append(out.Positions, fundPositionToProto(
 			d.Position, d.FundName, d.SharePct, d.CurrentValueRSD, d.ProfitRSD,
+			desc, d.FundTotalValueRSD,
 		))
 	}
 	return out, nil
@@ -198,22 +203,24 @@ func decoratedFundToProto(d *service.DecoratedFund) *tradingpb.Fund {
 	}
 }
 
-func fundPositionToProto(p *domain.FundPosition, fundName, share, value, profit string) *tradingpb.FundPosition {
+func fundPositionToProto(p *domain.FundPosition, fundName, share, value, profit, fundDescription, fundTotalValue string) *tradingpb.FundPosition {
 	if p == nil {
 		return nil
 	}
 	return &tradingpb.FundPosition{
-		Id:               p.ID,
-		FundId:           p.FundID,
-		FundName:         fundName,
-		ClientId:         p.ClientID,
-		Units:            p.Units,
-		TotalInvestedRsd: p.TotalInvestedRSD,
-		CurrentValueRsd:  value,
-		ProfitRsd:        profit,
-		SharePct:         share,
-		CreatedAt:        timestamppb.New(p.CreatedAt),
-		UpdatedAt:        timestamppb.New(p.UpdatedAt),
+		Id:                p.ID,
+		FundId:            p.FundID,
+		FundName:          fundName,
+		ClientId:          p.ClientID,
+		Units:             p.Units,
+		TotalInvestedRsd:  p.TotalInvestedRSD,
+		CurrentValueRsd:   value,
+		ProfitRsd:         profit,
+		SharePct:          share,
+		FundDescription:   fundDescription,
+		FundTotalValueRsd: fundTotalValue,
+		CreatedAt:         timestamppb.New(p.CreatedAt),
+		UpdatedAt:         timestamppb.New(p.UpdatedAt),
 	}
 }
 
@@ -222,14 +229,17 @@ func fundHoldingToProto(v *service.HoldingView) *tradingpb.FundHolding {
 		return nil
 	}
 	out := &tradingpb.FundHolding{
-		HoldingId:        v.Holding.ID,
-		Quantity:         v.Holding.Quantity,
-		WeightedAvgPrice: v.Holding.WeightedAvgPrice,
-		CurrentPrice:     v.CurrentPrice,
-		MarketValue:      v.MarketValue,
-		ProfitNative:     v.ProfitNative,
-		AcquiredAt:       timestamppb.New(v.Holding.AcquiredAt),
-		UpdatedAt:        timestamppb.New(v.Holding.UpdatedAt),
+		HoldingId:         v.Holding.ID,
+		Quantity:          v.Holding.Quantity,
+		WeightedAvgPrice:  v.Holding.WeightedAvgPrice,
+		CurrentPrice:      v.CurrentPrice,
+		MarketValue:       v.MarketValue,
+		ProfitNative:      v.ProfitNative,
+		ChangeAmt:         v.ChangeAmt,
+		Volume:            v.Volume,
+		InitialMarginCost: v.InitialMarginCost,
+		AcquiredAt:        timestamppb.New(v.Holding.AcquiredAt),
+		UpdatedAt:         timestamppb.New(v.Holding.UpdatedAt),
 	}
 	if v.Security != nil {
 		out.Security = securityToProto(v.Security)

@@ -5517,6 +5517,17 @@
         "updatedAt": {
           "type": "string",
           "format": "date-time"
+        },
+        "changeAmt": {
+          "type": "string",
+          "description": "Spec p.74 fund-detail holdings columns: daily change, traded\nvolume, and the security's initial margin cost (1.1 ×\nmaintenance margin), in the holding's currency."
+        },
+        "volume": {
+          "type": "string",
+          "format": "int64"
+        },
+        "initialMarginCost": {
+          "type": "string"
         }
       }
     },
@@ -5577,6 +5588,13 @@
         "updatedAt": {
           "type": "string",
           "format": "date-time"
+        },
+        "fundDescription": {
+          "type": "string",
+          "description": "Fund-level context for the client \"Moji fondovi\" row (spec p.75:\n\"Naziv i opis fonda, Vrednost fonda, …\"). Computed at read time."
+        },
+        "fundTotalValueRsd": {
+          "type": "string"
         }
       }
     },

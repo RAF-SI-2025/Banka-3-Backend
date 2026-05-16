@@ -1671,7 +1671,8 @@ func TestIntegration_Tax_LossClamped(t *testing.T) {
 // so display_name + name_query are exercised without spinning up the
 // user service.
 type stubUsers struct {
-	names map[string]string // user_id → display name
+	names map[string]string   // user_id → display name
+	perms map[string][]string // user_id → permission strings (CreateFund manager validation)
 }
 
 func (s *stubUsers) DisplayName(_ context.Context, userID string, _ domain.UserKind) (string, error) {
@@ -1679,6 +1680,13 @@ func (s *stubUsers) DisplayName(_ context.Context, userID string, _ domain.UserK
 		return n, nil
 	}
 	return "", nil
+}
+
+func (s *stubUsers) EmployeePermissions(_ context.Context, userID string) ([]string, error) {
+	if p, ok := s.perms[userID]; ok {
+		return p, nil
+	}
+	return nil, nil
 }
 
 // writeRealizedGainAt seeds a realized_gain row at a chosen wall-clock

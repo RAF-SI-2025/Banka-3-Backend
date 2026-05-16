@@ -6601,8 +6601,14 @@ type FundHolding struct {
 	Currency         Currency               `protobuf:"varint,8,opt,name=currency,proto3,enum=banka.trading.v1.Currency" json:"currency,omitempty"`
 	AcquiredAt       *timestamppb.Timestamp `protobuf:"bytes,9,opt,name=acquired_at,json=acquiredAt,proto3" json:"acquired_at,omitempty"`
 	UpdatedAt        *timestamppb.Timestamp `protobuf:"bytes,10,opt,name=updated_at,json=updatedAt,proto3" json:"updated_at,omitempty"`
-	unknownFields    protoimpl.UnknownFields
-	sizeCache        protoimpl.SizeCache
+	// Spec p.74 fund-detail holdings columns: daily change, traded
+	// volume, and the security's initial margin cost (1.1 ×
+	// maintenance margin), in the holding's currency.
+	ChangeAmt         string `protobuf:"bytes,11,opt,name=change_amt,json=changeAmt,proto3" json:"change_amt,omitempty"`
+	Volume            int64  `protobuf:"varint,12,opt,name=volume,proto3" json:"volume,omitempty"`
+	InitialMarginCost string `protobuf:"bytes,13,opt,name=initial_margin_cost,json=initialMarginCost,proto3" json:"initial_margin_cost,omitempty"`
+	unknownFields     protoimpl.UnknownFields
+	sizeCache         protoimpl.SizeCache
 }
 
 func (x *FundHolding) Reset() {
@@ -6705,6 +6711,27 @@ func (x *FundHolding) GetUpdatedAt() *timestamppb.Timestamp {
 	return nil
 }
 
+func (x *FundHolding) GetChangeAmt() string {
+	if x != nil {
+		return x.ChangeAmt
+	}
+	return ""
+}
+
+func (x *FundHolding) GetVolume() int64 {
+	if x != nil {
+		return x.Volume
+	}
+	return 0
+}
+
+func (x *FundHolding) GetInitialMarginCost() string {
+	if x != nil {
+		return x.InitialMarginCost
+	}
+	return ""
+}
+
 type FundPosition struct {
 	state            protoimpl.MessageState `protogen:"open.v1"`
 	Id               string                 `protobuf:"bytes,1,opt,name=id,proto3" json:"id,omitempty"`
@@ -6716,12 +6743,16 @@ type FundPosition struct {
 	CurrentValueRsd  string                 `protobuf:"bytes,7,opt,name=current_value_rsd,json=currentValueRsd,proto3" json:"current_value_rsd,omitempty"`
 	// profit_rsd = current_value_rsd − total_invested_rsd. Negative when
 	// the fund has lost value since the client invested.
-	ProfitRsd     string                 `protobuf:"bytes,8,opt,name=profit_rsd,json=profitRsd,proto3" json:"profit_rsd,omitempty"`
-	SharePct      string                 `protobuf:"bytes,9,opt,name=share_pct,json=sharePct,proto3" json:"share_pct,omitempty"` // 0..100
-	CreatedAt     *timestamppb.Timestamp `protobuf:"bytes,10,opt,name=created_at,json=createdAt,proto3" json:"created_at,omitempty"`
-	UpdatedAt     *timestamppb.Timestamp `protobuf:"bytes,11,opt,name=updated_at,json=updatedAt,proto3" json:"updated_at,omitempty"`
-	unknownFields protoimpl.UnknownFields
-	sizeCache     protoimpl.SizeCache
+	ProfitRsd string                 `protobuf:"bytes,8,opt,name=profit_rsd,json=profitRsd,proto3" json:"profit_rsd,omitempty"`
+	SharePct  string                 `protobuf:"bytes,9,opt,name=share_pct,json=sharePct,proto3" json:"share_pct,omitempty"` // 0..100
+	CreatedAt *timestamppb.Timestamp `protobuf:"bytes,10,opt,name=created_at,json=createdAt,proto3" json:"created_at,omitempty"`
+	UpdatedAt *timestamppb.Timestamp `protobuf:"bytes,11,opt,name=updated_at,json=updatedAt,proto3" json:"updated_at,omitempty"`
+	// Fund-level context for the client "Moji fondovi" row (spec p.75:
+	// "Naziv i opis fonda, Vrednost fonda, …"). Computed at read time.
+	FundDescription   string `protobuf:"bytes,12,opt,name=fund_description,json=fundDescription,proto3" json:"fund_description,omitempty"`
+	FundTotalValueRsd string `protobuf:"bytes,13,opt,name=fund_total_value_rsd,json=fundTotalValueRsd,proto3" json:"fund_total_value_rsd,omitempty"`
+	unknownFields     protoimpl.UnknownFields
+	sizeCache         protoimpl.SizeCache
 }
 
 func (x *FundPosition) Reset() {
@@ -6829,6 +6860,20 @@ func (x *FundPosition) GetUpdatedAt() *timestamppb.Timestamp {
 		return x.UpdatedAt
 	}
 	return nil
+}
+
+func (x *FundPosition) GetFundDescription() string {
+	if x != nil {
+		return x.FundDescription
+	}
+	return ""
+}
+
+func (x *FundPosition) GetFundTotalValueRsd() string {
+	if x != nil {
+		return x.FundTotalValueRsd
+	}
+	return ""
 }
 
 type FundTransaction struct {
@@ -8915,7 +8960,7 @@ const file_trading_v1_trading_proto_rawDesc = "" +
 	"\n" +
 	"created_at\x18\x10 \x01(\v2\x1a.google.protobuf.TimestampR\tcreatedAt\x129\n" +
 	"\n" +
-	"updated_at\x18\x11 \x01(\v2\x1a.google.protobuf.TimestampR\tupdatedAt\"\xcb\x03\n" +
+	"updated_at\x18\x11 \x01(\v2\x1a.google.protobuf.TimestampR\tupdatedAt\"\xb2\x04\n" +
 	"\vFundHolding\x12\x1d\n" +
 	"\n" +
 	"holding_id\x18\x01 \x01(\tR\tholdingId\x126\n" +
@@ -8930,7 +8975,11 @@ const file_trading_v1_trading_proto_rawDesc = "" +
 	"acquiredAt\x129\n" +
 	"\n" +
 	"updated_at\x18\n" +
-	" \x01(\v2\x1a.google.protobuf.TimestampR\tupdatedAt\"\x93\x03\n" +
+	" \x01(\v2\x1a.google.protobuf.TimestampR\tupdatedAt\x12\x1d\n" +
+	"\n" +
+	"change_amt\x18\v \x01(\tR\tchangeAmt\x12\x16\n" +
+	"\x06volume\x18\f \x01(\x03R\x06volume\x12.\n" +
+	"\x13initial_margin_cost\x18\r \x01(\tR\x11initialMarginCost\"\xef\x03\n" +
 	"\fFundPosition\x12\x0e\n" +
 	"\x02id\x18\x01 \x01(\tR\x02id\x12\x17\n" +
 	"\afund_id\x18\x02 \x01(\tR\x06fundId\x12\x1b\n" +
@@ -8946,7 +8995,9 @@ const file_trading_v1_trading_proto_rawDesc = "" +
 	"created_at\x18\n" +
 	" \x01(\v2\x1a.google.protobuf.TimestampR\tcreatedAt\x129\n" +
 	"\n" +
-	"updated_at\x18\v \x01(\v2\x1a.google.protobuf.TimestampR\tupdatedAt\"\x99\x04\n" +
+	"updated_at\x18\v \x01(\v2\x1a.google.protobuf.TimestampR\tupdatedAt\x12)\n" +
+	"\x10fund_description\x18\f \x01(\tR\x0ffundDescription\x12/\n" +
+	"\x14fund_total_value_rsd\x18\r \x01(\tR\x11fundTotalValueRsd\"\x99\x04\n" +
 	"\x0fFundTransaction\x12\x0e\n" +
 	"\x02id\x18\x01 \x01(\tR\x02id\x12\x17\n" +
 	"\afund_id\x18\x02 \x01(\tR\x06fundId\x12\x1b\n" +
