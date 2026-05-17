@@ -4320,7 +4320,8 @@
       "type": "object",
       "properties": {
         "amountRsd": {
-          "type": "string"
+          "type": "string",
+          "description": "Empty when `withdraw_all` is set — the server then ignores this and\nredeems the full position. IGNORE_IF_ZERO_VALUE so an unset amount\nskips the pattern; a present-but-malformed amount is still caught,\nand an empty amount without withdraw_all is rejected by the handler."
         },
         "destAccountId": {
           "type": "string",

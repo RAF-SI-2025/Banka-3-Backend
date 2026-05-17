@@ -1467,7 +1467,11 @@ message InvestInFundRequest {
 
 message WithdrawFromFundRequest {
   string id              = 1 [(buf.validate.field).string.uuid = true];
-  string amount_rsd      = 2 [(buf.validate.field).string.pattern = "^[0-9]+(\\.[0-9]{1,4})?$"];
+  // Empty when `withdraw_all` is set — the server then ignores this and
+  // redeems the full position. IGNORE_IF_ZERO_VALUE so an unset amount
+  // skips the pattern; a present-but-malformed amount is still caught,
+  // and an empty amount without withdraw_all is rejected by the handler.
+  string amount_rsd      = 2 [(buf.validate.field).string.pattern = "^[0-9]+(\\.[0-9]{1,4})?$", (buf.validate.field).ignore = IGNORE_IF_ZERO_VALUE];
   // Destination account. Same rules as InvestInFundRequest.
   string dest_account_id = 3 [(buf.validate.field).string.uuid = true];
   string on_behalf_client_id = 4;

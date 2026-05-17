@@ -7494,9 +7494,13 @@ func (x *InvestInFundRequest) GetOnBehalfClientId() string {
 }
 
 type WithdrawFromFundRequest struct {
-	state     protoimpl.MessageState `protogen:"open.v1"`
-	Id        string                 `protobuf:"bytes,1,opt,name=id,proto3" json:"id,omitempty"`
-	AmountRsd string                 `protobuf:"bytes,2,opt,name=amount_rsd,json=amountRsd,proto3" json:"amount_rsd,omitempty"`
+	state protoimpl.MessageState `protogen:"open.v1"`
+	Id    string                 `protobuf:"bytes,1,opt,name=id,proto3" json:"id,omitempty"`
+	// Empty when `withdraw_all` is set — the server then ignores this and
+	// redeems the full position. IGNORE_IF_ZERO_VALUE so an unset amount
+	// skips the pattern; a present-but-malformed amount is still caught,
+	// and an empty amount without withdraw_all is rejected by the handler.
+	AmountRsd string `protobuf:"bytes,2,opt,name=amount_rsd,json=amountRsd,proto3" json:"amount_rsd,omitempty"`
 	// Destination account. Same rules as InvestInFundRequest.
 	DestAccountId    string `protobuf:"bytes,3,opt,name=dest_account_id,json=destAccountId,proto3" json:"dest_account_id,omitempty"`
 	OnBehalfClientId string `protobuf:"bytes,4,opt,name=on_behalf_client_id,json=onBehalfClientId,proto3" json:"on_behalf_client_id,omitempty"`
@@ -9285,11 +9289,11 @@ const file_trading_v1_trading_proto_rawDesc = "" +
 	"\n" +
 	"amount_rsd\x18\x02 \x01(\tB\x1e\xbaH\x1br\x192\x17^[0-9]+(\\.[0-9]{1,4})?$R\tamountRsd\x124\n" +
 	"\x11source_account_id\x18\x03 \x01(\tB\b\xbaH\x05r\x03\xb0\x01\x01R\x0fsourceAccountId\x12-\n" +
-	"\x13on_behalf_client_id\x18\x04 \x01(\tR\x10onBehalfClientId\"\xf6\x01\n" +
+	"\x13on_behalf_client_id\x18\x04 \x01(\tR\x10onBehalfClientId\"\xf9\x01\n" +
 	"\x17WithdrawFromFundRequest\x12\x18\n" +
-	"\x02id\x18\x01 \x01(\tB\b\xbaH\x05r\x03\xb0\x01\x01R\x02id\x12=\n" +
+	"\x02id\x18\x01 \x01(\tB\b\xbaH\x05r\x03\xb0\x01\x01R\x02id\x12@\n" +
 	"\n" +
-	"amount_rsd\x18\x02 \x01(\tB\x1e\xbaH\x1br\x192\x17^[0-9]+(\\.[0-9]{1,4})?$R\tamountRsd\x120\n" +
+	"amount_rsd\x18\x02 \x01(\tB!\xbaH\x1e\xd8\x01\x01r\x192\x17^[0-9]+(\\.[0-9]{1,4})?$R\tamountRsd\x120\n" +
 	"\x0fdest_account_id\x18\x03 \x01(\tB\b\xbaH\x05r\x03\xb0\x01\x01R\rdestAccountId\x12-\n" +
 	"\x13on_behalf_client_id\x18\x04 \x01(\tR\x10onBehalfClientId\x12!\n" +
 	"\fwithdraw_all\x18\x05 \x01(\bR\vwithdrawAll\"\x91\x01\n" +
