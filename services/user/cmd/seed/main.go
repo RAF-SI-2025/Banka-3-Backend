@@ -1003,6 +1003,34 @@ func seedTrading(ctx context.Context, pool *pgxpool.Pool, clientID, adminID stri
 		return err
 	}
 
+	// An already-expired future so QA can exercise the
+	// past-settlement paths (S32: "nemamo istekle futures" — order
+	// create / approve must reject it per spec p.50). Settlement is
+	// 30 days in the past; same XNYS/USD shape as CL.
+	var expFutureID string
+	if err := tx.QueryRow(ctx, `
+        insert into "trading".securities
+            (ticker, name, type, exchange_mic, currency,
+             contract_size, contract_unit, settlement_date)
+        values ('CLX', 'Crude Oil WTI (istekli)', 'future', 'XNYS', 'USD',
+                1000, 'Barrel', current_date - interval '30 days')
+        on conflict (ticker, type) do update set ticker = excluded.ticker
+        returning id`).Scan(&expFutureID); err != nil {
+		return fmt.Errorf("insert expired future: %w", err)
+	}
+	if _, err := tx.Exec(ctx, `
+        insert into "trading".listings
+            (security_id, exchange_mic, price, ask, bid, volume, change_amt, contract_size)
+        values ($1, 'XNYS', 71.20, 71.25, 71.15, 120000, 0, 1000)
+        on conflict (security_id) do nothing`,
+		expFutureID,
+	); err != nil {
+		return fmt.Errorf("insert expired future listing: %w", err)
+	}
+	if err := seedSyntheticHistory(expFutureID, 60); err != nil {
+		return err
+	}
+
 	// Forex: EUR/USD. Listings on forex are optional per spec p.45-48
 	// (Idea 1) but we plant one so the FE has a "live rate" row to
 	// render without falling through to the exchange service.
