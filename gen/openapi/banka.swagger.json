@@ -3709,18 +3709,16 @@
           },
           {
             "name": "minSettlement",
-            "description": "For futures/options: settlement-date range.",
+            "description": "For futures/options: settlement-date range. Plain YYYY-MM-DD\nstrings (the FE binds these straight from \u003cinput type=\"date\"\u003e);\na google.protobuf.Timestamp here can't be bound from a bare date\nquery param through grpc-gateway, which silently dropped the\nfilter. Empty string means unbounded.",
             "in": "query",
             "required": false,
-            "type": "string",
-            "format": "date-time"
+            "type": "string"
           },
           {
             "name": "maxSettlement",
             "in": "query",
             "required": false,
-            "type": "string",
-            "format": "date-time"
+            "type": "string"
           },
           {
             "name": "sortBy",

@@ -69,6 +69,16 @@ type ListSecuritiesInput struct {
 	ExchangeMIC   string
 	MinSettlement *time.Time
 	MaxSettlement *time.Time
+	MinPrice      string
+	MaxPrice      string
+	MinAsk        string
+	MaxAsk        string
+	MinBid        string
+	MaxBid        string
+	MinVolume     string
+	MaxVolume     string
+	SortBy        string
+	SortDesc      bool
 	Page          int
 	PageSize      int
 }
@@ -93,23 +103,18 @@ func (s *Service) ListSecurities(ctx context.Context, in ListSecuritiesInput) ([
 			// "all types" client query — fan out to stock+future-only
 			// by recursing. (The store can't OR easily on this enum
 			// shape; two queries are clearer than a 4-way union.)
-			stocks, totalS, err := s.ListSecurities(ctx, ListSecuritiesInput{
-				Type:        domain.SecurityStock,
-				Search:      in.Search,
-				ExchangeMIC: in.ExchangeMIC,
-				Page:        in.Page,
-				PageSize:    in.PageSize,
-			})
+			// Carry every filter/sort through to both legs; only the
+			// type (and the futures page reset) differ.
+			stockIn := in
+			stockIn.Type = domain.SecurityStock
+			stocks, totalS, err := s.ListSecurities(ctx, stockIn)
 			if err != nil {
 				return nil, 0, err
 			}
-			futures, totalF, err := s.ListSecurities(ctx, ListSecuritiesInput{
-				Type:        domain.SecurityFuture,
-				Search:      in.Search,
-				ExchangeMIC: in.ExchangeMIC,
-				Page:        1,
-				PageSize:    in.PageSize,
-			})
+			futureIn := in
+			futureIn.Type = domain.SecurityFuture
+			futureIn.Page = 1
+			futures, totalF, err := s.ListSecurities(ctx, futureIn)
 			if err != nil {
 				return nil, 0, err
 			}
@@ -123,6 +128,16 @@ func (s *Service) ListSecurities(ctx context.Context, in ListSecuritiesInput) ([
 		ExchangeMIC:   in.ExchangeMIC,
 		MinSettlement: in.MinSettlement,
 		MaxSettlement: in.MaxSettlement,
+		MinPrice:      in.MinPrice,
+		MaxPrice:      in.MaxPrice,
+		MinAsk:        in.MinAsk,
+		MaxAsk:        in.MaxAsk,
+		MinBid:        in.MinBid,
+		MaxBid:        in.MaxBid,
+		MinVolume:     in.MinVolume,
+		MaxVolume:     in.MaxVolume,
+		SortBy:        in.SortBy,
+		SortDesc:      in.SortDesc,
 	}, in.Page, in.PageSize)
 	if err != nil {
 		return nil, 0, err
