@@ -826,9 +826,14 @@ message GetListingRequest {
 }
 
 message GetListingDailyHistoryRequest {
-  string                    listing_id = 1 [(buf.validate.field).string.uuid = true];
-  google.protobuf.Timestamp from       = 2;
-  google.protobuf.Timestamp to         = 3;
+  string listing_id = 1 [(buf.validate.field).string.uuid = true];
+  // Plain YYYY-MM-DD strings (the FE binds these from its date range
+  // picker / isoNDaysAgo). A google.protobuf.Timestamp here cannot be
+  // bound from a bare date query param through grpc-gateway — the
+  // whole request 400s ("cannot parse … as RFC3339") so the price
+  // history chart never received data. Empty means unbounded.
+  string from = 2;
+  string to   = 3;
 }
 
 message ListingDailyPrice {

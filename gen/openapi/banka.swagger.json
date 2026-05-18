@@ -2221,17 +2221,16 @@
           },
           {
             "name": "from",
+            "description": "Plain YYYY-MM-DD strings (the FE binds these from its date range\npicker / isoNDaysAgo). A google.protobuf.Timestamp here cannot be\nbound from a bare date query param through grpc-gateway — the\nwhole request 400s (\"cannot parse … as RFC3339\") so the price\nhistory chart never received data. Empty means unbounded.",
             "in": "query",
             "required": false,
-            "type": "string",
-            "format": "date-time"
+            "type": "string"
           },
           {
             "name": "to",
             "in": "query",
             "required": false,
-            "type": "string",
-            "format": "date-time"
+            "type": "string"
           }
         ],
         "tags": [
