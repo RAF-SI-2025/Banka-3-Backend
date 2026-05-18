@@ -44,6 +44,15 @@ func (s *Service) UpsertActuaryInfo(ctx context.Context, in UpsertActuaryInfoInp
 	if err := validateNonNegativeAmount(limit); err != nil {
 		return nil, err
 	}
+	// Spec p.38: only supervisors have daily_limit=0 (it means "no
+	// cap" — agentNeedsApproval treats 0 as uncapped). An agent with a
+	// 0 limit would therefore trade without ever needing approval, so
+	// reject it; an agent's limit must be strictly positive.
+	if in.Type == domain.ActuaryAgent {
+		if err := requirePositiveAgentLimit(limit); err != nil {
+			return nil, err
+		}
+	}
 
 	return s.Store.UpsertActuaryInfo(ctx, &domain.ActuaryInfo{
 		EmployeeID:   in.EmployeeID,
@@ -97,6 +106,11 @@ func (s *Service) UpdateActuaryLimit(ctx context.Context, employeeID, dailyLimit
 	}
 	if cur.Type == domain.ActuarySupervisor {
 		return nil, apperr.FailedPrecondition("supervizor nema limit")
+	}
+	// Target is an agent here; their limit must stay strictly positive
+	// (0 is the supervisor "no cap" sentinel — see UpsertActuaryInfo).
+	if err := requirePositiveAgentLimit(dailyLimit); err != nil {
+		return nil, err
 	}
 	// Reject limits below the agent's current used_limit. Otherwise the
 	// supervisor can silently put an agent over their cap, which
@@ -162,6 +176,21 @@ func validateNonNegativeAmount(s string) error {
 	}
 	if !money.IsNonNegative(r) {
 		return apperr.Validation("amount must be non-negative")
+	}
+	return nil
+}
+
+// requirePositiveAgentLimit enforces spec p.38: an agent's daily limit
+// must be strictly positive. 0 is reserved as the supervisor "no cap"
+// sentinel (agentNeedsApproval treats 0 as uncapped), so a 0-limit
+// agent would never route to supervisor approval.
+func requirePositiveAgentLimit(s string) error {
+	r, err := money.Parse(s)
+	if err != nil {
+		return apperr.Validation(err.Error())
+	}
+	if !money.IsPositive(r) {
+		return apperr.Validation("dnevni limit aktuara mora biti veći od 0")
 	}
 	return nil
 }
