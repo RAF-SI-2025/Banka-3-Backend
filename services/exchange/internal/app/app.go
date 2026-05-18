@@ -63,9 +63,13 @@ func Run() error {
 		})
 	})
 
-	// Background FX feed: periodically pulls public mid rates and
-	// upserts X→RSD pairs. Disable with FX_FEED_INTERVAL=0.
-	feedInterval := config.Duration("FX_FEED_INTERVAL", time.Hour)
+	// Background FX feed: periodically pulls public mid rates from the
+	// keyless open.er-api.com endpoint and upserts X→RSD pairs. The
+	// first tick fires immediately on boot; the 5-minute cadence keeps
+	// the menjačnica board fresh without straining the free upstream
+	// (it refreshes its own data daily anyway). Disable with
+	// FX_FEED_INTERVAL=0.
+	feedInterval := config.Duration("FX_FEED_INTERVAL", 5*time.Minute)
 	if feedInterval > 0 {
 		feeder := &feed.Feeder{
 			Fetcher: &feed.OpenERAPI{BaseURL: config.String("FX_FEED_URL", "")},
