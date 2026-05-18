@@ -7637,6 +7637,13 @@
         "createdAt": {
           "type": "string",
           "format": "date-time"
+        },
+        "fromAccountNumber": {
+          "type": "string",
+          "description": "The 18-digit account numbers behind from/to_account_id, resolved\nserver-side. The FE renders these in the \"Drugi račun\" column — a\nclient can't (and mustn't be able to) resolve a counterparty\naccount UUID it doesn't own. Empty when the leg's account isn't a\nlocally-held bank account (e.g. a future c5 inter-bank peer)."
+        },
+        "toAccountNumber": {
+          "type": "string"
         }
       },
       "description": "Transaction is one ledger leg. UX-level operations (a payment, a\ntransfer) are reconstructed by grouping on op_id."

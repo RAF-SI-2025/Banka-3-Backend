@@ -78,6 +78,12 @@ type Transaction struct {
 	InitiatorClientID string
 	Status            TransactionStatus
 	CreatedAt         time.Time
+	// Resolved 18-digit numbers for From/ToAccountID. Populated only by
+	// the read paths (ListTransactions / GetTransactionsByOpID); the
+	// INSERT...RETURNING path leaves them empty (no counterparty join
+	// at write time, and nobody reads them there).
+	FromAccountNumber string
+	ToAccountNumber   string
 }
 
 // TransactionFilter narrows a ListTransactions call.

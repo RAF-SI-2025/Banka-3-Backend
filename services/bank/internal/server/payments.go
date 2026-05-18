@@ -251,6 +251,8 @@ func transactionToProto(t *domain.Transaction) *bankpb.Transaction {
 		InitiatorClientId: t.InitiatorClientID,
 		Status:            txStatusToProto(t.Status),
 		CreatedAt:         timestamppb.New(t.CreatedAt),
+		FromAccountNumber: t.FromAccountNumber,
+		ToAccountNumber:   t.ToAccountNumber,
 	}
 }
 
