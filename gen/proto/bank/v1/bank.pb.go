@@ -3069,6 +3069,13 @@ type Transaction struct {
 	InitiatorClientId string                 `protobuf:"bytes,14,opt,name=initiator_client_id,json=initiatorClientId,proto3" json:"initiator_client_id,omitempty"`
 	Status            TransactionStatus      `protobuf:"varint,15,opt,name=status,proto3,enum=banka.bank.v1.TransactionStatus" json:"status,omitempty"`
 	CreatedAt         *timestamppb.Timestamp `protobuf:"bytes,16,opt,name=created_at,json=createdAt,proto3" json:"created_at,omitempty"`
+	// The 18-digit account numbers behind from/to_account_id, resolved
+	// server-side. The FE renders these in the "Drugi račun" column — a
+	// client can't (and mustn't be able to) resolve a counterparty
+	// account UUID it doesn't own. Empty when the leg's account isn't a
+	// locally-held bank account (e.g. a future c5 inter-bank peer).
+	FromAccountNumber string `protobuf:"bytes,17,opt,name=from_account_number,json=fromAccountNumber,proto3" json:"from_account_number,omitempty"`
+	ToAccountNumber   string `protobuf:"bytes,18,opt,name=to_account_number,json=toAccountNumber,proto3" json:"to_account_number,omitempty"`
 	unknownFields     protoimpl.UnknownFields
 	sizeCache         protoimpl.SizeCache
 }
@@ -3213,6 +3220,20 @@ func (x *Transaction) GetCreatedAt() *timestamppb.Timestamp {
 		return x.CreatedAt
 	}
 	return nil
+}
+
+func (x *Transaction) GetFromAccountNumber() string {
+	if x != nil {
+		return x.FromAccountNumber
+	}
+	return ""
+}
+
+func (x *Transaction) GetToAccountNumber() string {
+	if x != nil {
+		return x.ToAccountNumber
+	}
+	return ""
 }
 
 type CreatePaymentRequest struct {
@@ -6220,7 +6241,7 @@ const file_bank_v1_bank_proto_rawDesc = "" +
 	"\apurpose\x18\a \x01(\tR\apurpose\"u\n" +
 	"\x1eTransferBetweenClientsResponse\x12\x13\n" +
 	"\x05op_id\x18\x01 \x01(\tR\x04opId\x12>\n" +
-	"\ftransactions\x18\x02 \x03(\v2\x1a.banka.bank.v1.TransactionR\ftransactions\"\xd5\x04\n" +
+	"\ftransactions\x18\x02 \x03(\v2\x1a.banka.bank.v1.TransactionR\ftransactions\"\xb1\x05\n" +
 	"\vTransaction\x12\x0e\n" +
 	"\x02id\x18\x01 \x01(\tR\x02id\x12\x13\n" +
 	"\x05op_id\x18\x02 \x01(\tR\x04opId\x122\n" +
@@ -6240,7 +6261,9 @@ const file_bank_v1_bank_proto_rawDesc = "" +
 	"\x13initiator_client_id\x18\x0e \x01(\tR\x11initiatorClientId\x128\n" +
 	"\x06status\x18\x0f \x01(\x0e2 .banka.bank.v1.TransactionStatusR\x06status\x129\n" +
 	"\n" +
-	"created_at\x18\x10 \x01(\v2\x1a.google.protobuf.TimestampR\tcreatedAt\"\xd0\x03\n" +
+	"created_at\x18\x10 \x01(\v2\x1a.google.protobuf.TimestampR\tcreatedAt\x12.\n" +
+	"\x13from_account_number\x18\x11 \x01(\tR\x11fromAccountNumber\x12*\n" +
+	"\x11to_account_number\x18\x12 \x01(\tR\x0ftoAccountNumber\"\xd0\x03\n" +
 	"\x14CreatePaymentRequest\x120\n" +
 	"\x0ffrom_account_id\x18\x01 \x01(\tB\b\xbaH\x05r\x03\xb0\x01\x01R\rfromAccountId\x12>\n" +
 	"\x11to_account_number\x18\x02 \x01(\tB\x12\xbaH\x0fr\r2\v^[0-9]{18}$R\x0ftoAccountNumber\x12X\n" +

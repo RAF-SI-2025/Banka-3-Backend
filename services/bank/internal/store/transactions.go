@@ -41,6 +41,52 @@ func scanTransaction(row interface{ Scan(...any) error }) (*domain.Transaction, 
 	return &t, nil
 }
 
+// transactionReadColumns mirrors transactionColumns but qualified to
+// the "t" alias and with the two resolved counterparty account numbers
+// appended (LEFT JOINed via fa/ta — see transactionReadFrom). The read
+// paths use this so the FE can render the 18-digit "Drugi račun"
+// instead of a raw account UUID; the INSERT...RETURNING path keeps the
+// unqualified transactionColumns (RETURNING can't join).
+const transactionReadColumns = `
+    t.id, t.op_id, t.op_kind, t.leg_index,
+    t.from_account_id, t.to_account_id,
+    t.from_amount::text, t.to_amount::text,
+    coalesce(t.rate::text, '') as rate,
+    coalesce(t.recipient_name, ''),
+    coalesce(t.payment_code, ''),
+    coalesce(t.reference_number, ''),
+    coalesce(t.purpose, ''),
+    coalesce(t.initiator_client_id::text, ''),
+    t.status, t.created_at,
+    coalesce(fa.number, ''),
+    coalesce(ta.number, '')
+`
+
+const transactionReadFrom = `
+    from "bank".transactions t
+    left join "bank".accounts fa on fa.id = t.from_account_id
+    left join "bank".accounts ta on ta.id = t.to_account_id
+`
+
+func scanTransactionWithNumbers(row interface{ Scan(...any) error }) (*domain.Transaction, error) {
+	var t domain.Transaction
+	var kind, status string
+	if err := row.Scan(
+		&t.ID, &t.OpID, &kind, &t.LegIndex,
+		&t.FromAccountID, &t.ToAccountID,
+		&t.FromAmount, &t.ToAmount, &t.Rate,
+		&t.RecipientName, &t.PaymentCode, &t.ReferenceNumber, &t.Purpose,
+		&t.InitiatorClientID,
+		&status, &t.CreatedAt,
+		&t.FromAccountNumber, &t.ToAccountNumber,
+	); err != nil {
+		return nil, err
+	}
+	t.Kind = domain.TransactionKind(kind)
+	t.Status = domain.TransactionStatus(status)
+	return &t, nil
+}
+
 // ExecuteAtomic runs fn inside a serialized transaction. Used to guard
 // the multi-step "debit source, credit destination, write ledger row"
 // invariant of every payment/transfer.
@@ -227,21 +273,24 @@ func (s *Store) ListTransactions(ctx context.Context, f domain.TransactionFilter
 	}
 	var conds []string
 	var args []any
+	// Conditions are qualified to the "t" alias: the read query LEFT
+	// JOINs "bank".accounts (which also has a `status` column), so an
+	// unqualified `status`/`number` would be ambiguous.
 	if f.AccountID != "" {
 		args = append(args, f.AccountID)
-		conds = append(conds, fmt.Sprintf("(from_account_id = $%d or to_account_id = $%d)", len(args), len(args)))
+		conds = append(conds, fmt.Sprintf("(t.from_account_id = $%d or t.to_account_id = $%d)", len(args), len(args)))
 	}
 	if f.OpKind != "" {
 		args = append(args, f.OpKind)
-		conds = append(conds, fmt.Sprintf("op_kind = $%d", len(args)))
+		conds = append(conds, fmt.Sprintf("t.op_kind = $%d", len(args)))
 	}
 	if f.Status != "" {
 		args = append(args, f.Status)
-		conds = append(conds, fmt.Sprintf("status = $%d", len(args)))
+		conds = append(conds, fmt.Sprintf("t.status = $%d", len(args)))
 	}
 	if f.InitiatorClientID != "" {
 		args = append(args, f.InitiatorClientID)
-		conds = append(conds, fmt.Sprintf("initiator_client_id = $%d", len(args)))
+		conds = append(conds, fmt.Sprintf("t.initiator_client_id = $%d", len(args)))
 	}
 	where := ""
 	if len(conds) > 0 {
@@ -249,14 +298,14 @@ func (s *Store) ListTransactions(ctx context.Context, f domain.TransactionFilter
 	}
 
 	var total int64
-	if err := s.Pool.QueryRow(ctx, `select count(*) from "bank".transactions`+where, args...).Scan(&total); err != nil {
+	if err := s.Pool.QueryRow(ctx, `select count(*) from "bank".transactions t`+where, args...).Scan(&total); err != nil {
 		return nil, 0, apperr.Internal("count transactions", err)
 	}
 
 	listArgs := append([]any{}, args...)
 	listArgs = append(listArgs, pageSize, (page-1)*pageSize)
-	listQ := `select ` + transactionColumns + ` from "bank".transactions` + where +
-		fmt.Sprintf(" order by created_at desc, leg_index limit $%d offset $%d", len(args)+1, len(args)+2)
+	listQ := `select ` + transactionReadColumns + transactionReadFrom + where +
+		fmt.Sprintf(" order by t.created_at desc, t.leg_index limit $%d offset $%d", len(args)+1, len(args)+2)
 
 	rows, err := s.Pool.Query(ctx, listQ, listArgs...)
 	if err != nil {
@@ -265,7 +314,7 @@ func (s *Store) ListTransactions(ctx context.Context, f domain.TransactionFilter
 	defer rows.Close()
 	var out []*domain.Transaction
 	for rows.Next() {
-		t, err := scanTransaction(rows)
+		t, err := scanTransactionWithNumbers(rows)
 		if err != nil {
 			return nil, 0, apperr.Internal("scan transaction", err)
 		}
@@ -278,7 +327,7 @@ func (s *Store) ListTransactions(ctx context.Context, f domain.TransactionFilter
 // payment / transfer / trade). Empty result is not an error — caller
 // distinguishes "not yet settled" from "no rows".
 func (s *Store) GetTransactionsByOpID(ctx context.Context, opID string) ([]*domain.Transaction, error) {
-	q := `select ` + transactionColumns + ` from "bank".transactions where op_id = $1 order by leg_index`
+	q := `select ` + transactionReadColumns + transactionReadFrom + ` where t.op_id = $1 order by t.leg_index`
 	rows, err := s.Pool.Query(ctx, q, opID)
 	if err != nil {
 		return nil, apperr.Internal("transactions by op", err)
@@ -286,7 +335,7 @@ func (s *Store) GetTransactionsByOpID(ctx context.Context, opID string) ([]*doma
 	defer rows.Close()
 	var out []*domain.Transaction
 	for rows.Next() {
-		t, err := scanTransaction(rows)
+		t, err := scanTransactionWithNumbers(rows)
 		if err != nil {
 			return nil, apperr.Internal("scan tx by op", err)
 		}

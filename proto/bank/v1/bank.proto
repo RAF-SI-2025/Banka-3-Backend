@@ -736,6 +736,13 @@ message Transaction {
   string            initiator_client_id = 14;
   TransactionStatus status              = 15;
   google.protobuf.Timestamp created_at  = 16;
+  // The 18-digit account numbers behind from/to_account_id, resolved
+  // server-side. The FE renders these in the "Drugi račun" column — a
+  // client can't (and mustn't be able to) resolve a counterparty
+  // account UUID it doesn't own. Empty when the leg's account isn't a
+  // locally-held bank account (e.g. a future c5 inter-bank peer).
+  string            from_account_number = 17;
+  string            to_account_number   = 18;
 }
 
 message CreatePaymentRequest {
