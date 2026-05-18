@@ -4,11 +4,28 @@ import (
 	"context"
 	"time"
 
+	"github.com/RAF-SI-2025/Banka-3-Backend/pkg/apperr"
 	tradingpb "github.com/RAF-SI-2025/Banka-3-Backend/gen/proto/trading/v1"
 	"github.com/RAF-SI-2025/Banka-3-Backend/services/trading/internal/domain"
 	"github.com/RAF-SI-2025/Banka-3-Backend/services/trading/internal/service"
 	"google.golang.org/protobuf/types/known/timestamppb"
 )
+
+// parseDatePtr turns an optional YYYY-MM-DD string into a *time.Time.
+// Empty → (nil, nil) meaning "unbounded". Used for the catalog
+// settlement-date range: the FE binds these from <input type="date">,
+// and a google.protobuf.Timestamp can't be bound from a bare date
+// query param through grpc-gateway (it silently dropped the filter).
+func parseDatePtr(v string) (*time.Time, error) {
+	if v == "" {
+		return nil, nil
+	}
+	t, err := time.Parse("2006-01-02", v)
+	if err != nil {
+		return nil, err
+	}
+	return &t, nil
+}
 
 func (s *Server) UpsertSecurity(ctx context.Context, in *tradingpb.UpsertSecurityRequest) (*tradingpb.Security, error) {
 	sec := &domain.Security{
@@ -56,17 +73,29 @@ func (s *Server) ListSecurities(ctx context.Context, in *tradingpb.ListSecuritie
 		Type:        securityTypeFromProto(in.GetType()),
 		Search:      in.GetSearch(),
 		ExchangeMIC: in.GetExchangeMic(),
+		MinPrice:    in.GetMinPrice(),
+		MaxPrice:    in.GetMaxPrice(),
+		MinAsk:      in.GetMinAsk(),
+		MaxAsk:      in.GetMaxAsk(),
+		MinBid:      in.GetMinBid(),
+		MaxBid:      in.GetMaxBid(),
+		MinVolume:   in.GetMinVolume(),
+		MaxVolume:   in.GetMaxVolume(),
+		SortBy:      in.GetSortBy(),
+		SortDesc:    in.GetSortDesc(),
 		Page:        int(in.GetPage()),
 		PageSize:    int(in.GetPageSize()),
 	}
-	if t := in.GetMinSettlement(); t != nil {
-		v := t.AsTime()
-		input.MinSettlement = &v
+	minS, err := parseDatePtr(in.GetMinSettlement())
+	if err != nil {
+		return nil, apperr.Validation("min_settlement: očekivan format YYYY-MM-DD")
 	}
-	if t := in.GetMaxSettlement(); t != nil {
-		v := t.AsTime()
-		input.MaxSettlement = &v
+	input.MinSettlement = minS
+	maxS, err := parseDatePtr(in.GetMaxSettlement())
+	if err != nil {
+		return nil, apperr.Validation("max_settlement: očekivan format YYYY-MM-DD")
 	}
+	input.MaxSettlement = maxS
 	rows, total, err := s.Svc.ListSecurities(ctx, input)
 	if err != nil {
 		return nil, err

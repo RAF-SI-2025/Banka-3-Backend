@@ -121,14 +121,38 @@ func (s *Store) GetSecurityByTicker(ctx context.Context, ticker string, t domain
 	return out, nil
 }
 
+// securityColsQ is securityCols qualified to the "s" alias, for the
+// listings-joined ListSecurities query (exchange_mic exists on both
+// tables, so bare columns there would be ambiguous).
+const securityColsQ = `s.id, s.ticker, s.name, s.type, s.exchange_mic, s.currency,
+    s.outstanding_shares, s.dividend_yield::text,
+    s.contract_size::text, s.contract_unit, s.settlement_date,
+    s.base_currency, s.quote_currency, s.liquidity,
+    s.underlying_security_id, s.option_type, s.strike_price::text,
+    s.implied_volatility::text, s.premium::text, s.open_interest,
+    s.created_at, s.updated_at`
+
 // SecurityFilter narrows ListSecurities. Range bounds are decimal
-// strings; empty means unbounded.
+// strings; empty means unbounded. Price/ask/bid/volume filter against
+// the security's listing row (LEFT JOINed); rows without a listing
+// fall out of any price/volume bound (NULL comparisons are false).
 type SecurityFilter struct {
-	Type           domain.SecurityType
-	Search         string
-	ExchangeMIC    string
-	MinSettlement  *time.Time
-	MaxSettlement  *time.Time
+	Type          domain.SecurityType
+	Search        string
+	ExchangeMIC   string
+	MinSettlement *time.Time
+	MaxSettlement *time.Time
+	MinPrice      string
+	MaxPrice      string
+	MinAsk        string
+	MaxAsk        string
+	MinBid        string
+	MaxBid        string
+	MinVolume     string
+	MaxVolume     string
+	// SortBy: "price" | "volume" | "" (default). SortDesc flips order.
+	SortBy   string
+	SortDesc bool
 }
 
 // ListSecurities returns rows joined with their listing (when present).
@@ -144,6 +168,9 @@ func (s *Store) ListSecurities(ctx context.Context, f SecurityFilter, page, page
 		page = 1
 	}
 
+	const fromJoin = ` from "trading".securities s
+        left join "trading".listings l on l.security_id = s.id`
+
 	var args []any
 	var conds []string
 	add := func(cond string, a any) {
@@ -151,20 +178,34 @@ func (s *Store) ListSecurities(ctx context.Context, f SecurityFilter, page, page
 		conds = append(conds, strings.ReplaceAll(cond, "?", intArg(len(args))))
 	}
 	if f.Type != "" {
-		add("type = ?", string(f.Type))
+		add("s.type = ?", string(f.Type))
 	}
 	if f.ExchangeMIC != "" {
-		add("exchange_mic = ?", f.ExchangeMIC)
+		add("s.exchange_mic = ?", f.ExchangeMIC)
 	}
 	if strings.TrimSpace(f.Search) != "" {
 		args = append(args, "%"+strings.ToLower(strings.TrimSpace(f.Search))+"%")
-		conds = append(conds, "(lower(ticker) like "+intArg(len(args))+" or lower(name) like "+intArg(len(args))+")")
+		conds = append(conds, "(lower(s.ticker) like "+intArg(len(args))+" or lower(s.name) like "+intArg(len(args))+")")
 	}
 	if f.MinSettlement != nil {
-		add("settlement_date >= ?", *f.MinSettlement)
+		add("s.settlement_date >= ?", *f.MinSettlement)
 	}
 	if f.MaxSettlement != nil {
-		add("settlement_date <= ?", *f.MaxSettlement)
+		add("s.settlement_date <= ?", *f.MaxSettlement)
+	}
+	// Price/ask/bid/volume live on the listing row. A row with no
+	// listing has NULL there, so any bound naturally excludes it.
+	for _, rb := range []struct {
+		val, col, op string
+	}{
+		{f.MinPrice, "l.price", ">="}, {f.MaxPrice, "l.price", "<="},
+		{f.MinAsk, "l.ask", ">="}, {f.MaxAsk, "l.ask", "<="},
+		{f.MinBid, "l.bid", ">="}, {f.MaxBid, "l.bid", "<="},
+		{f.MinVolume, "l.volume", ">="}, {f.MaxVolume, "l.volume", "<="},
+	} {
+		if strings.TrimSpace(rb.val) != "" {
+			add(rb.col+" "+rb.op+" ?::numeric", strings.TrimSpace(rb.val))
+		}
 	}
 
 	where := ""
@@ -173,12 +214,24 @@ func (s *Store) ListSecurities(ctx context.Context, f SecurityFilter, page, page
 	}
 
 	var total int64
-	if err := s.Pool.QueryRow(ctx, "select count(*) from \"trading\".securities"+where, args...).Scan(&total); err != nil {
+	if err := s.Pool.QueryRow(ctx, "select count(*)"+fromJoin+where, args...).Scan(&total); err != nil {
 		return nil, 0, apperr.Internal("count securities", err)
 	}
 
-	q := "select " + securityCols + " from \"trading\".securities" + where +
-		" order by ticker asc limit " + intArg(len(args)+1) + " offset " + intArg(len(args)+2)
+	dir := "asc"
+	if f.SortDesc {
+		dir = "desc"
+	}
+	order := " order by s.ticker asc"
+	switch f.SortBy {
+	case "price":
+		order = " order by l.price " + dir + " nulls last, s.ticker asc"
+	case "volume":
+		order = " order by l.volume " + dir + " nulls last, s.ticker asc"
+	}
+
+	q := "select " + securityColsQ + fromJoin + where +
+		order + " limit " + intArg(len(args)+1) + " offset " + intArg(len(args)+2)
 	args = append(args, pageSize, (page-1)*pageSize)
 
 	rows, err := s.Pool.Query(ctx, q, args...)

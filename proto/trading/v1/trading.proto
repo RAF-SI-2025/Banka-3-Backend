@@ -740,9 +740,13 @@ message ListSecuritiesRequest {
   string       max_bid        = 15;
   string       min_volume     = 16;
   string       max_volume     = 17;
-  // For futures/options: settlement-date range.
-  google.protobuf.Timestamp min_settlement = 20;
-  google.protobuf.Timestamp max_settlement = 21;
+  // For futures/options: settlement-date range. Plain YYYY-MM-DD
+  // strings (the FE binds these straight from <input type="date">);
+  // a google.protobuf.Timestamp here can't be bound from a bare date
+  // query param through grpc-gateway, which silently dropped the
+  // filter. Empty string means unbounded.
+  string min_settlement = 20;
+  string max_settlement = 21;
   // Sort by "price", "volume", "maintenance_margin".
   string       sort_by        = 30;
   bool         sort_desc      = 31;
