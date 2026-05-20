@@ -22,15 +22,24 @@ type bankSettlerAdapter struct {
 
 // withBankAdmin pads outgoing metadata with an admin principal so the
 // bank's incoming-metadata interceptor admits this internal call. The
-// sentinel UUID satisfies the interceptor's non-empty user-id check;
-// the bank-side handlers clear it before writing
-// transactions.initiator_client_id.
+// sentinel UUID satisfies the interceptor's non-empty user-id check.
+// We also forward the *origin* principal (the real client/actuary who
+// initiated the request, taken from the incoming ctx) under separate
+// metadata keys so the bank's audit layer can record the real
+// initiator instead of the sentinel — see
+// [[reference_be16_sentinel_origin_forwarding]].
+//
+// When the incoming ctx has no principal (background workers, recovery
+// sweep), the origin is empty and the bank falls back to its prior
+// "clear initiator" behaviour for those code paths.
 func withBankAdmin(ctx context.Context) context.Context {
-	return auth.AttachToOutgoing(ctx, auth.Principal{
+	admin := auth.Principal{
 		UserID:      "00000000-0000-0000-0000-00000000fffe",
 		UserKind:    auth.KindEmployee,
 		Permissions: []string{permissions.Admin},
-	})
+	}
+	origin, _ := auth.PrincipalFrom(ctx) // zero-value when absent
+	return auth.AttachWithOriginToOutgoing(ctx, admin, origin)
 }
 
 func (a *bankSettlerAdapter) Settle(ctx context.Context, in service.SettleInput) (string, error) {

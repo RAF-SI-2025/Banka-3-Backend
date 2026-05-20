@@ -90,3 +90,24 @@ func PrincipalFrom(ctx context.Context) (Principal, bool) {
 	p, ok := ctx.Value(principalCtxKey{}).(Principal)
 	return p, ok
 }
+
+// originCtxKey distinguishes the origin-principal from the regular
+// (authz) principal.
+type originCtxKey struct{}
+
+// WithOrigin stores the origin (real initiator) on ctx. Used by the
+// MetadataInterceptor when a service-to-service caller (trading→bank
+// via AttachWithOriginToOutgoing) forwards the real client/actuary
+// alongside the sentinel/admin authz principal.
+func WithOrigin(ctx context.Context, p Principal) context.Context {
+	return context.WithValue(ctx, originCtxKey{}, p)
+}
+
+// OriginPrincipalFrom returns the origin principal from ctx (the real
+// initiator of a service-to-service call), or false if absent. Bank
+// service audit code uses this to record the real client/actuary
+// when trading dispatches a settlement on their behalf.
+func OriginPrincipalFrom(ctx context.Context) (Principal, bool) {
+	p, ok := ctx.Value(originCtxKey{}).(Principal)
+	return p, ok
+}

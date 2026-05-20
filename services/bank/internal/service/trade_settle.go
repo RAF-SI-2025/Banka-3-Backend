@@ -135,10 +135,12 @@ func (s *Service) SettleTrade(ctx context.Context, in SettleTradeInput) (*domain
 	}
 
 	// Forward an actuary-flavored principal so the executeMoneyMove
-	// FX leg zeros commission when this is an actuary trade. We
-	// explicitly drop the caller's UserID so transactions.initiator_client_id
-	// stays NULL — the trading service's sentinel UUID isn't a real
-	// klijent and we don't want it indexed there.
+	// FX leg zeros commission when this is an actuary trade. By
+	// default initiator_client_id stays NULL — the trading service's
+	// sentinel UUID isn't a real klijent — but when the trading
+	// adapter forwarded the real origin (a client placing a direct
+	// order, not an actuary), we use that for audit instead. See
+	// [[reference_be16_sentinel_origin_forwarding]].
 	_ = p
 	initiator := auth.Principal{
 		UserID:      "",
@@ -147,6 +149,8 @@ func (s *Service) SettleTrade(ctx context.Context, in SettleTradeInput) (*domain
 	}
 	if in.IsActuary {
 		initiator.Permissions = append(initiator.Permissions, permissions.Actuary)
+	} else if origin, ok := auth.OriginPrincipalFrom(ctx); ok && origin.UserKind == auth.KindClient {
+		initiator.UserID = origin.UserID
 	}
 
 	purpose := in.Purpose
