@@ -14,6 +14,11 @@ import (
 	"github.com/jackc/pgx/v5"
 )
 
+// forexMinLot is the spec Banka2025-E2E.pdf p.7 minimum quantity for a
+// forex order — "minimalna veličina lota je 10". Smaller forex orders
+// are rejected at CreateOrder with the spec's exact wording.
+const forexMinLot int32 = 10
+
 // CreateOrderInput is the service-layer view of CreateOrderRequest.
 // AccountID is the bank account that funds the buy or receives the
 // sell-proceeds. UserID/UserKind are filled from the principal.
@@ -107,6 +112,14 @@ func (s *Service) CreateOrder(ctx context.Context, in CreateOrderInput) (*Create
 		case domain.SecurityForex, domain.SecurityOption:
 			return nil, apperr.PermissionDenied("klijenti ne mogu da trguju forex parovima ili opcijama")
 		}
+	}
+	// Spec Banka2025-E2E.pdf p.7: forex orders below the minimum lot
+	// size are rejected with the spec's exact wording. Same gate
+	// covers the c3-tests.pdf S27 "option ispod minimalne količine"
+	// intent — option contracts trade 1-at-a-time so minLot=1 is the
+	// effective floor there; spec gives no other type-specific lot.
+	if sec.Type == domain.SecurityForex && in.Quantity < forexMinLot {
+		return nil, apperr.Validation("Nalog ispod minimalne veličine lota")
 	}
 	now := s.now()
 	if sec.SettlementDate != nil && !sec.SettlementDate.After(now) {
@@ -363,12 +376,18 @@ func (s *Service) DeclineOrder(ctx context.Context, id, reason string) (*domain.
 // supervisor/admin) can cancel. Cancelling halts further fills; fills
 // that already settled stay sealed (spec p.50).
 //
+// Spec p.57: "otkazivanje celog ili dela Order-a". When partialQty is
+// 0 or >= remaining_quantity, the whole order is cancelled. When
+// 0 < partialQty < remaining_quantity, the order's target + remaining
+// drop by partialQty and the order keeps trading toward the smaller
+// target — already-filled portions are honoured.
+//
 // Spec p.38 reads "transakcija" as a trade — cancelling an approved
 // order that hasn't fully filled hands the agent's daily capacity back.
-// Refund is the order's RSD-equivalent at create-time; clamped at 0
+// Refund is the cancelled-portion's RSD-equivalent; clamped at 0
 // store-side so a refund landing after the daily reset cron doesn't
 // underflow.
-func (s *Service) CancelOrder(ctx context.Context, id string) (*domain.Order, error) {
+func (s *Service) CancelOrder(ctx context.Context, id string, partialQty int32) (*domain.Order, error) {
 	p, err := s.requirePrincipal(ctx)
 	if err != nil {
 		return nil, err
@@ -382,12 +401,31 @@ func (s *Service) CancelOrder(ctx context.Context, id string) (*domain.Order, er
 			return nil, apperr.PermissionDenied("nedovoljne permisije")
 		}
 	}
-	out, err := s.Store.CancelOrder(ctx, id)
-	if err != nil {
-		return nil, err
+	// partialQty > remaining is a user error — refuse rather than
+	// silently degrading to a full cancel.
+	if partialQty > 0 && partialQty > cur.RemainingQuantity {
+		return nil, apperr.Validation("količina prevazilazi preostalu količinu naloga")
+	}
+	var (
+		out          *domain.Order
+		cancelledQty int32
+		fullCancel   = partialQty == 0 || partialQty >= cur.RemainingQuantity
+	)
+	if fullCancel {
+		out, err = s.Store.CancelOrder(ctx, id)
+		if err != nil {
+			return nil, err
+		}
+		cancelledQty = cur.RemainingQuantity
+	} else {
+		out, err = s.Store.PartialCancelOrder(ctx, id, partialQty)
+		if err != nil {
+			return nil, err
+		}
+		cancelledQty = partialQty
 	}
 	if cur.Status == domain.OrderStatusApproved && cur.UserKind == domain.KindEmployee && cur.IsActuary {
-		s.maybeRefundAgentLimit(ctx, cur)
+		s.maybeRefundAgentLimitQty(ctx, cur, cancelledQty)
 	}
 	return out, nil
 }
@@ -720,13 +758,21 @@ func (s *Service) maybeChargeAgentLimit(ctx context.Context, o *domain.Order) {
 // already zeroed used_limit between approval and cancel, the
 // constraint stays intact. Failure is logged, not propagated — the
 // order is already cancelled and the cap is best-effort.
-func (s *Service) maybeRefundAgentLimit(ctx context.Context, o *domain.Order) {
+// maybeRefundAgentLimitQty hands the agent's daily capacity back for
+// the cancelled portion of an order (spec p.38). For a full cancel the
+// caller passes o.RemainingQuantity; for a partial cancel only the
+// dropped slice. Store-side clamp keeps the refund from underflowing
+// after the daily reset cron.
+func (s *Service) maybeRefundAgentLimitQty(ctx context.Context, o *domain.Order, qty int32) {
+	if qty <= 0 {
+		return
+	}
 	sec, err := s.Store.GetSecurity(ctx, o.SecurityID)
 	if err != nil {
 		s.Log.Warn("limit refund: security lookup failed", "order_id", o.ID, "err", err.Error())
 		return
 	}
-	rsd, err := s.tradeValueRSD(ctx, sec, o.Quantity, o.PricePerUnit, o.ContractSize)
+	rsd, err := s.tradeValueRSD(ctx, sec, qty, o.PricePerUnit, o.ContractSize)
 	if err != nil {
 		s.Log.Warn("limit refund: rsd math failed", "order_id", o.ID, "err", err.Error())
 		return

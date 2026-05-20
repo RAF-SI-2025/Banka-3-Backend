@@ -3949,8 +3949,15 @@ func (x *DeclineOrderRequest) GetReason() string {
 }
 
 type CancelOrderRequest struct {
-	state         protoimpl.MessageState `protogen:"open.v1"`
-	Id            string                 `protobuf:"bytes,1,opt,name=id,proto3" json:"id,omitempty"`
+	state protoimpl.MessageState `protogen:"open.v1"`
+	Id    string                 `protobuf:"bytes,1,opt,name=id,proto3" json:"id,omitempty"`
+	// Optional partial-cancel quantity (spec p.57 "otkazivanje celog ili
+	// dela Order-a"). When 0 or >= remaining_quantity, the whole order
+	// is cancelled. When 0 < quantity < remaining_quantity, the order's
+	// target quantity + remaining_quantity drop by this much; already-
+	// executed fills are honoured per spec ("sve ono što je već
+	// izvršeno i naplaćeno mora poštovati").
+	Quantity      int32 `protobuf:"varint,2,opt,name=quantity,proto3" json:"quantity,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -3990,6 +3997,13 @@ func (x *CancelOrderRequest) GetId() string {
 		return x.Id
 	}
 	return ""
+}
+
+func (x *CancelOrderRequest) GetQuantity() int32 {
+	if x != nil {
+		return x.Quantity
+	}
+	return 0
 }
 
 type Holding struct {
@@ -8966,9 +8980,10 @@ const file_trading_v1_trading_proto_rawDesc = "" +
 	"\x02id\x18\x01 \x01(\tB\b\xbaH\x05r\x03\xb0\x01\x01R\x02id\"G\n" +
 	"\x13DeclineOrderRequest\x12\x18\n" +
 	"\x02id\x18\x01 \x01(\tB\b\xbaH\x05r\x03\xb0\x01\x01R\x02id\x12\x16\n" +
-	"\x06reason\x18\x02 \x01(\tR\x06reason\".\n" +
+	"\x06reason\x18\x02 \x01(\tR\x06reason\"S\n" +
 	"\x12CancelOrderRequest\x12\x18\n" +
-	"\x02id\x18\x01 \x01(\tB\b\xbaH\x05r\x03\xb0\x01\x01R\x02id\"\xae\x04\n" +
+	"\x02id\x18\x01 \x01(\tB\b\xbaH\x05r\x03\xb0\x01\x01R\x02id\x12#\n" +
+	"\bquantity\x18\x02 \x01(\x05B\a\xbaH\x04\x1a\x02(\x00R\bquantity\"\xae\x04\n" +
 	"\aHolding\x12\x0e\n" +
 	"\x02id\x18\x01 \x01(\tR\x02id\x12\x17\n" +
 	"\auser_id\x18\x02 \x01(\tR\x06userId\x127\n" +

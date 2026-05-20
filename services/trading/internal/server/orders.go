@@ -86,7 +86,7 @@ func (s *Server) DeclineOrder(ctx context.Context, in *tradingpb.DeclineOrderReq
 }
 
 func (s *Server) CancelOrder(ctx context.Context, in *tradingpb.CancelOrderRequest) (*tradingpb.Order, error) {
-	o, err := s.Svc.CancelOrder(ctx, in.GetId())
+	o, err := s.Svc.CancelOrder(ctx, in.GetId(), in.GetQuantity())
 	if err != nil {
 		return nil, err
 	}

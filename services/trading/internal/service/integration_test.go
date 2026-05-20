@@ -1205,7 +1205,8 @@ func TestIntegration_CancelRefundsAgentLimit(t *testing.T) {
 		t.Fatalf("used_limit should be > 0 after auto-approve, got %q", info.UsedLimit)
 	}
 
-	if _, err := svc.CancelOrder(agentCtx(agentID), out.ID); err != nil {
+	// partialQty=0 → full cancel (back-compat with the pre-P1.3 signature).
+	if _, err := svc.CancelOrder(agentCtx(agentID), out.ID, 0); err != nil {
 		t.Fatalf("cancel: %v", err)
 	}
 	info, err = svc.Store.GetActuaryInfo(context.Background(), agentID)
@@ -1295,7 +1296,7 @@ func TestIntegration_ApproveDeclineCancel(t *testing.T) {
 	}
 
 	// 4. Cancel by supervisor lands cancelled.
-	cancelled, err := svc.CancelOrder(supervisorCtx(supervisorID), pending.ID)
+	cancelled, err := svc.CancelOrder(supervisorCtx(supervisorID), pending.ID, 0)
 	if err != nil {
 		t.Fatalf("cancel: %v", err)
 	}
@@ -1550,7 +1551,8 @@ func TestIntegration_Execution_ForexNoHolding(t *testing.T) {
 		SecurityID: sec.ID,
 		OrderType:  domain.OrderMarket,
 		Direction:  domain.DirectionBuy,
-		Quantity:   1,
+		// Spec p.7 (E2E doc): forex minimum lot = 10.
+		Quantity:   10,
 		AllOrNone:  true,
 		AccountID:  uuid.NewString(),
 	})
@@ -1580,11 +1582,12 @@ func TestIntegration_Execution_ForexNoHolding(t *testing.T) {
 	if fx.Direction != "buy" || fx.BaseCurrency != domain.CurrencyEUR || fx.QuoteCurrency != domain.CurrencyUSD {
 		t.Fatalf("forex call mis-shaped: %+v", fx)
 	}
-	if !numericEq(fx.BaseAmount, "1000") {
-		t.Fatalf("forex base_amount = %s, want 1000 (qty=1 × cs=1000)", fx.BaseAmount)
+	// qty=10 (forex min lot, spec p.7) × contract_size=1000 = 10000 base.
+	if !numericEq(fx.BaseAmount, "10000") {
+		t.Fatalf("forex base_amount = %s, want 10000 (qty=10 × cs=1000)", fx.BaseAmount)
 	}
-	if !numericEq(fx.QuoteAmount, "1100") {
-		t.Fatalf("forex quote_amount = %s, want 1100 (1000 × 1.10)", fx.QuoteAmount)
+	if !numericEq(fx.QuoteAmount, "11000") {
+		t.Fatalf("forex quote_amount = %s, want 11000 (10000 × 1.10)", fx.QuoteAmount)
 	}
 	if len(currentSettler.settleCalls) != 0 {
 		t.Fatalf("forex orders must not hit the regular SettleTrade path; got %d calls",
@@ -2848,7 +2851,8 @@ func TestIntegration_Execution_ForexSell(t *testing.T) {
 		SecurityID: sec.ID,
 		OrderType:  domain.OrderMarket,
 		Direction:  domain.DirectionSell,
-		Quantity:   1,
+		// Spec p.7 (E2E doc): forex minimum lot = 10. Use the floor.
+		Quantity:   10,
 		AllOrNone:  true,
 		AccountID:  uuid.NewString(),
 	})
@@ -2874,8 +2878,9 @@ func TestIntegration_Execution_ForexSell(t *testing.T) {
 		t.Fatalf("forex pair = %s/%s, want EUR/USD", fx.BaseCurrency, fx.QuoteCurrency)
 	}
 	// Sell takes the bid (1.10), not the ask, on the quote leg.
-	if !numericEq(fx.QuoteAmount, "1100") {
-		t.Fatalf("forex sell quote_amount = %s, want 1100 (1000 × 1.10 bid)", fx.QuoteAmount)
+	// qty=10 (forex min lot, spec p.7) × cs=1000 × bid=1.10 = 11000.
+	if !numericEq(fx.QuoteAmount, "11000") {
+		t.Fatalf("forex sell quote_amount = %s, want 11000 (10000 × 1.10 bid)", fx.QuoteAmount)
 	}
 
 	// No holding row landed.

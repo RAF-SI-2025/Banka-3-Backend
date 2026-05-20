@@ -217,6 +217,33 @@ func (s *Store) CancelOrder(ctx context.Context, orderID string) (*domain.Order,
 	return out, nil
 }
 
+// PartialCancelOrder reduces the order's target + remaining quantity
+// by qty (spec p.57 "otkazivanje celog ili dela"). The WHERE clause's
+// remaining_quantity > $2 invariant guarantees we never cross over
+// into a full cancel here — the caller routes qty >= remaining to the
+// regular CancelOrder path instead. Last_modification bumped per the
+// usual audit-trail rules.
+func (s *Store) PartialCancelOrder(ctx context.Context, orderID string, qty int32) (*domain.Order, error) {
+	const q = `
+        update "trading".orders
+        set quantity = quantity - $2,
+            remaining_quantity = remaining_quantity - $2,
+            last_modification = now()
+        where id = $1
+          and cancelled = false
+          and is_done = false
+          and remaining_quantity > $2
+        returning ` + orderCols
+	out, err := scanOrder(s.Pool.QueryRow(ctx, q, orderID, qty))
+	if err != nil {
+		if noRows(err) {
+			return nil, apperr.FailedPrecondition("nalog se ne može delimično otkazati")
+		}
+		return nil, apperr.Internal("partial cancel order", err)
+	}
+	return out, nil
+}
+
 // CancelOrderTx is the tx-bound idempotent variant used by the recovery
 // sweep when it abandons a pending row. Unlike CancelOrder it tolerates
 // an already-cancelled or done order — the goal is "ensure this order
