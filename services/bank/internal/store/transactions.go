@@ -292,6 +292,14 @@ func (s *Store) ListTransactions(ctx context.Context, f domain.TransactionFilter
 		args = append(args, f.InitiatorClientID)
 		conds = append(conds, fmt.Sprintf("t.initiator_client_id = $%d", len(args)))
 	}
+	if f.From != nil {
+		args = append(args, *f.From)
+		conds = append(conds, fmt.Sprintf("t.created_at >= $%d", len(args)))
+	}
+	if f.To != nil {
+		args = append(args, *f.To)
+		conds = append(conds, fmt.Sprintf("t.created_at <= $%d", len(args)))
+	}
 	where := ""
 	if len(conds) > 0 {
 		where = " where " + strings.Join(conds, " and ")

@@ -64,11 +64,20 @@ func (s *Server) QuoteExchange(ctx context.Context, in *bankpb.QuoteExchangeRequ
 }
 
 func (s *Server) ListTransactions(ctx context.Context, in *bankpb.ListTransactionsRequest) (*bankpb.ListTransactionsResponse, error) {
-	ts, total, err := s.Svc.ListTransactions(ctx, domain.TransactionFilter{
+	f := domain.TransactionFilter{
 		AccountID: in.GetAccountId(),
 		OpKind:    in.GetOpKind(),
 		Status:    in.GetStatus(),
-	}, int(in.GetPage()), int(in.GetPageSize()))
+	}
+	if from := in.GetFrom(); from != nil {
+		t := from.AsTime()
+		f.From = &t
+	}
+	if to := in.GetTo(); to != nil {
+		t := to.AsTime()
+		f.To = &t
+	}
+	ts, total, err := s.Svc.ListTransactions(ctx, f, int(in.GetPage()), int(in.GetPageSize()))
 	if err != nil {
 		return nil, err
 	}

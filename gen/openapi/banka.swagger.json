@@ -4044,6 +4044,21 @@
             "required": false,
             "type": "integer",
             "format": "int32"
+          },
+          {
+            "name": "from",
+            "description": "Spec p.18 / p.24: \"filtriranje po datumu\" on Pregled računa +\nPregled plaćanja. Both bounds inclusive against\ntransactions.created_at; either may be omitted.",
+            "in": "query",
+            "required": false,
+            "type": "string",
+            "format": "date-time"
+          },
+          {
+            "name": "to",
+            "in": "query",
+            "required": false,
+            "type": "string",
+            "format": "date-time"
           }
         ],
         "tags": [
@@ -4177,7 +4192,14 @@
       "type": "object"
     },
     "TradingServiceCancelOrderBody": {
-      "type": "object"
+      "type": "object",
+      "properties": {
+        "quantity": {
+          "type": "integer",
+          "format": "int32",
+          "description": "Optional partial-cancel quantity (spec p.57 \"otkazivanje celog ili\ndela Order-a\"). When 0 or \u003e= remaining_quantity, the whole order\nis cancelled. When 0 \u003c quantity \u003c remaining_quantity, the order's\ntarget quantity + remaining_quantity drop by this much; already-\nexecuted fills are honoured per spec (\"sve ono što je već\nizvršeno i naplaćeno mora poštovati\")."
+        }
+      }
     },
     "TradingServiceCounterOfferOTCBody": {
       "type": "object",

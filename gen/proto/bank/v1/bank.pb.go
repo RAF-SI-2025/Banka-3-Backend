@@ -3619,10 +3619,15 @@ type ListTransactionsRequest struct {
 	// accounts.
 	AccountId string `protobuf:"bytes,1,opt,name=account_id,json=accountId,proto3" json:"account_id,omitempty"`
 	// 'payment' | 'transfer' | 'exchange' | 'fee' — keep loose, server enforces.
-	OpKind        string `protobuf:"bytes,2,opt,name=op_kind,json=opKind,proto3" json:"op_kind,omitempty"`
-	Status        string `protobuf:"bytes,3,opt,name=status,proto3" json:"status,omitempty"`
-	Page          int32  `protobuf:"varint,4,opt,name=page,proto3" json:"page,omitempty"`
-	PageSize      int32  `protobuf:"varint,5,opt,name=page_size,json=pageSize,proto3" json:"page_size,omitempty"`
+	OpKind   string `protobuf:"bytes,2,opt,name=op_kind,json=opKind,proto3" json:"op_kind,omitempty"`
+	Status   string `protobuf:"bytes,3,opt,name=status,proto3" json:"status,omitempty"`
+	Page     int32  `protobuf:"varint,4,opt,name=page,proto3" json:"page,omitempty"`
+	PageSize int32  `protobuf:"varint,5,opt,name=page_size,json=pageSize,proto3" json:"page_size,omitempty"`
+	// Spec p.18 / p.24: "filtriranje po datumu" on Pregled računa +
+	// Pregled plaćanja. Both bounds inclusive against
+	// transactions.created_at; either may be omitted.
+	From          *timestamppb.Timestamp `protobuf:"bytes,6,opt,name=from,proto3" json:"from,omitempty"`
+	To            *timestamppb.Timestamp `protobuf:"bytes,7,opt,name=to,proto3" json:"to,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -3690,6 +3695,20 @@ func (x *ListTransactionsRequest) GetPageSize() int32 {
 		return x.PageSize
 	}
 	return 0
+}
+
+func (x *ListTransactionsRequest) GetFrom() *timestamppb.Timestamp {
+	if x != nil {
+		return x.From
+	}
+	return nil
+}
+
+func (x *ListTransactionsRequest) GetTo() *timestamppb.Timestamp {
+	if x != nil {
+		return x.To
+	}
+	return nil
 }
 
 type ListTransactionsResponse struct {
@@ -6296,7 +6315,7 @@ const file_bank_v1_bank_proto_rawDesc = "" +
 	"\x04rate\x18\x03 \x01(\tR\x04rate\x12\x1e\n" +
 	"\n" +
 	"commission\x18\x04 \x01(\tR\n" +
-	"commission\"\xce\x01\n" +
+	"commission\"\xaa\x02\n" +
 	"\x17ListTransactionsRequest\x12*\n" +
 	"\n" +
 	"account_id\x18\x01 \x01(\tB\v\xbaH\b\xd8\x01\x01r\x03\xb0\x01\x01R\taccountId\x12 \n" +
@@ -6304,7 +6323,9 @@ const file_bank_v1_bank_proto_rawDesc = "" +
 	"\x06status\x18\x03 \x01(\tB\a\xbaH\x04r\x02\x18 R\x06status\x12\x1b\n" +
 	"\x04page\x18\x04 \x01(\x05B\a\xbaH\x04\x1a\x02(\x00R\x04page\x12'\n" +
 	"\tpage_size\x18\x05 \x01(\x05B\n" +
-	"\xbaH\a\x1a\x05\x18\xc8\x01(\x00R\bpageSize\"\xa1\x01\n" +
+	"\xbaH\a\x1a\x05\x18\xc8\x01(\x00R\bpageSize\x12.\n" +
+	"\x04from\x18\x06 \x01(\v2\x1a.google.protobuf.TimestampR\x04from\x12*\n" +
+	"\x02to\x18\a \x01(\v2\x1a.google.protobuf.TimestampR\x02to\"\xa1\x01\n" +
 	"\x18ListTransactionsResponse\x12>\n" +
 	"\ftransactions\x18\x01 \x03(\v2\x1a.banka.bank.v1.TransactionR\ftransactions\x12\x12\n" +
 	"\x04page\x18\x02 \x01(\x05R\x04page\x12\x1b\n" +
@@ -6825,134 +6846,136 @@ var file_bank_v1_bank_proto_depIdxs = []int32{
 	4,   // 34: banka.bank.v1.PaymentResult.status:type_name -> banka.bank.v1.TransactionStatus
 	0,   // 35: banka.bank.v1.QuoteExchangeRequest.from:type_name -> banka.bank.v1.Currency
 	0,   // 36: banka.bank.v1.QuoteExchangeRequest.to:type_name -> banka.bank.v1.Currency
-	45,  // 37: banka.bank.v1.ListTransactionsResponse.transactions:type_name -> banka.bank.v1.Transaction
-	84,  // 38: banka.bank.v1.PaymentRecipient.created_at:type_name -> google.protobuf.Timestamp
-	53,  // 39: banka.bank.v1.ListPaymentRecipientsResponse.recipients:type_name -> banka.bank.v1.PaymentRecipient
-	6,   // 40: banka.bank.v1.Card.brand:type_name -> banka.bank.v1.CardBrand
-	7,   // 41: banka.bank.v1.Card.status:type_name -> banka.bank.v1.CardStatus
-	84,  // 42: banka.bank.v1.Card.expires_at:type_name -> google.protobuf.Timestamp
-	84,  // 43: banka.bank.v1.Card.created_at:type_name -> google.protobuf.Timestamp
-	84,  // 44: banka.bank.v1.Card.updated_at:type_name -> google.protobuf.Timestamp
-	6,   // 45: banka.bank.v1.CreateCardRequest.brand:type_name -> banka.bank.v1.CardBrand
-	59,  // 46: banka.bank.v1.ListCardsResponse.cards:type_name -> banka.bank.v1.Card
-	7,   // 47: banka.bank.v1.SetCardStatusRequest.status:type_name -> banka.bank.v1.CardStatus
-	8,   // 48: banka.bank.v1.AuthorizedPerson.gender:type_name -> banka.bank.v1.Gender
-	84,  // 49: banka.bank.v1.AuthorizedPerson.created_at:type_name -> google.protobuf.Timestamp
-	84,  // 50: banka.bank.v1.AuthorizedPerson.updated_at:type_name -> google.protobuf.Timestamp
-	8,   // 51: banka.bank.v1.CreateAuthorizedPersonRequest.gender:type_name -> banka.bank.v1.Gender
-	65,  // 52: banka.bank.v1.ListAuthorizedPersonsResponse.authorized_persons:type_name -> banka.bank.v1.AuthorizedPerson
-	9,   // 53: banka.bank.v1.LoanRequest.loan_type:type_name -> banka.bank.v1.LoanType
-	10,  // 54: banka.bank.v1.LoanRequest.interest_type:type_name -> banka.bank.v1.InterestType
-	0,   // 55: banka.bank.v1.LoanRequest.currency:type_name -> banka.bank.v1.Currency
-	11,  // 56: banka.bank.v1.LoanRequest.employment_status:type_name -> banka.bank.v1.EmploymentStatus
-	12,  // 57: banka.bank.v1.LoanRequest.status:type_name -> banka.bank.v1.LoanRequestStatus
-	84,  // 58: banka.bank.v1.LoanRequest.decided_at:type_name -> google.protobuf.Timestamp
-	84,  // 59: banka.bank.v1.LoanRequest.created_at:type_name -> google.protobuf.Timestamp
-	9,   // 60: banka.bank.v1.Loan.loan_type:type_name -> banka.bank.v1.LoanType
-	10,  // 61: banka.bank.v1.Loan.interest_type:type_name -> banka.bank.v1.InterestType
-	0,   // 62: banka.bank.v1.Loan.currency:type_name -> banka.bank.v1.Currency
-	13,  // 63: banka.bank.v1.Loan.status:type_name -> banka.bank.v1.LoanStatus
-	84,  // 64: banka.bank.v1.Loan.contracted_at:type_name -> google.protobuf.Timestamp
-	0,   // 65: banka.bank.v1.LoanInstallment.currency:type_name -> banka.bank.v1.Currency
-	84,  // 66: banka.bank.v1.LoanInstallment.actual_paid_at:type_name -> google.protobuf.Timestamp
-	14,  // 67: banka.bank.v1.LoanInstallment.status:type_name -> banka.bank.v1.InstallmentStatus
-	70,  // 68: banka.bank.v1.LoanWithInstallments.loan:type_name -> banka.bank.v1.Loan
-	71,  // 69: banka.bank.v1.LoanWithInstallments.installments:type_name -> banka.bank.v1.LoanInstallment
-	9,   // 70: banka.bank.v1.SubmitLoanRequestRequest.loan_type:type_name -> banka.bank.v1.LoanType
-	10,  // 71: banka.bank.v1.SubmitLoanRequestRequest.interest_type:type_name -> banka.bank.v1.InterestType
-	0,   // 72: banka.bank.v1.SubmitLoanRequestRequest.currency:type_name -> banka.bank.v1.Currency
-	11,  // 73: banka.bank.v1.SubmitLoanRequestRequest.employment_status:type_name -> banka.bank.v1.EmploymentStatus
-	12,  // 74: banka.bank.v1.ListLoanRequestsRequest.status:type_name -> banka.bank.v1.LoanRequestStatus
-	9,   // 75: banka.bank.v1.ListLoanRequestsRequest.loan_type:type_name -> banka.bank.v1.LoanType
-	69,  // 76: banka.bank.v1.ListLoanRequestsResponse.requests:type_name -> banka.bank.v1.LoanRequest
-	9,   // 77: banka.bank.v1.ListLoansRequest.loan_type:type_name -> banka.bank.v1.LoanType
-	13,  // 78: banka.bank.v1.ListLoansRequest.status:type_name -> banka.bank.v1.LoanStatus
-	70,  // 79: banka.bank.v1.ListLoansResponse.loans:type_name -> banka.bank.v1.Loan
-	17,  // 80: banka.bank.v1.BankService.CreateCompany:input_type -> banka.bank.v1.CreateCompanyRequest
-	18,  // 81: banka.bank.v1.BankService.ListCompanies:input_type -> banka.bank.v1.ListCompaniesRequest
-	20,  // 82: banka.bank.v1.BankService.GetCompany:input_type -> banka.bank.v1.GetCompanyRequest
-	21,  // 83: banka.bank.v1.BankService.UpdateCompany:input_type -> banka.bank.v1.UpdateCompanyRequest
-	22,  // 84: banka.bank.v1.BankService.CreateAccount:input_type -> banka.bank.v1.CreateAccountRequest
-	23,  // 85: banka.bank.v1.BankService.ListAccounts:input_type -> banka.bank.v1.ListAccountsRequest
-	25,  // 86: banka.bank.v1.BankService.GetAccount:input_type -> banka.bank.v1.GetAccountRequest
-	26,  // 87: banka.bank.v1.BankService.UpdateAccountLimits:input_type -> banka.bank.v1.UpdateAccountLimitsRequest
-	27,  // 88: banka.bank.v1.BankService.UpdateAccountName:input_type -> banka.bank.v1.UpdateAccountNameRequest
-	28,  // 89: banka.bank.v1.BankService.SetAccountStatus:input_type -> banka.bank.v1.SetAccountStatusRequest
-	29,  // 90: banka.bank.v1.BankService.GetSystemAccount:input_type -> banka.bank.v1.GetSystemAccountRequest
-	31,  // 91: banka.bank.v1.BankService.SettleTrade:input_type -> banka.bank.v1.SettleTradeRequest
-	33,  // 92: banka.bank.v1.BankService.SettleCapitalGainsTax:input_type -> banka.bank.v1.SettleCapitalGainsTaxRequest
-	35,  // 93: banka.bank.v1.BankService.SettleForexFill:input_type -> banka.bank.v1.SettleForexFillRequest
-	37,  // 94: banka.bank.v1.BankService.ReserveFunds:input_type -> banka.bank.v1.ReserveFundsRequest
-	39,  // 95: banka.bank.v1.BankService.ReleaseFunds:input_type -> banka.bank.v1.ReleaseFundsRequest
-	41,  // 96: banka.bank.v1.BankService.CommitReservedFunds:input_type -> banka.bank.v1.CommitReservedFundsRequest
-	43,  // 97: banka.bank.v1.BankService.TransferBetweenClients:input_type -> banka.bank.v1.TransferBetweenClientsRequest
-	30,  // 98: banka.bank.v1.BankService.CreateFundAccount:input_type -> banka.bank.v1.CreateFundAccountRequest
-	46,  // 99: banka.bank.v1.BankService.CreatePayment:input_type -> banka.bank.v1.CreatePaymentRequest
-	47,  // 100: banka.bank.v1.BankService.CreateTransfer:input_type -> banka.bank.v1.CreateTransferRequest
-	49,  // 101: banka.bank.v1.BankService.QuoteExchange:input_type -> banka.bank.v1.QuoteExchangeRequest
-	51,  // 102: banka.bank.v1.BankService.ListTransactions:input_type -> banka.bank.v1.ListTransactionsRequest
-	54,  // 103: banka.bank.v1.BankService.CreatePaymentRecipient:input_type -> banka.bank.v1.CreatePaymentRecipientRequest
-	55,  // 104: banka.bank.v1.BankService.ListPaymentRecipients:input_type -> banka.bank.v1.ListPaymentRecipientsRequest
-	57,  // 105: banka.bank.v1.BankService.UpdatePaymentRecipient:input_type -> banka.bank.v1.UpdatePaymentRecipientRequest
-	58,  // 106: banka.bank.v1.BankService.DeletePaymentRecipient:input_type -> banka.bank.v1.DeletePaymentRecipientRequest
-	60,  // 107: banka.bank.v1.BankService.CreateCard:input_type -> banka.bank.v1.CreateCardRequest
-	61,  // 108: banka.bank.v1.BankService.ListCards:input_type -> banka.bank.v1.ListCardsRequest
-	63,  // 109: banka.bank.v1.BankService.SetCardStatus:input_type -> banka.bank.v1.SetCardStatusRequest
-	64,  // 110: banka.bank.v1.BankService.UpdateCardLimit:input_type -> banka.bank.v1.UpdateCardLimitRequest
-	66,  // 111: banka.bank.v1.BankService.CreateAuthorizedPerson:input_type -> banka.bank.v1.CreateAuthorizedPersonRequest
-	67,  // 112: banka.bank.v1.BankService.ListAuthorizedPersons:input_type -> banka.bank.v1.ListAuthorizedPersonsRequest
-	73,  // 113: banka.bank.v1.BankService.SubmitLoanRequest:input_type -> banka.bank.v1.SubmitLoanRequestRequest
-	74,  // 114: banka.bank.v1.BankService.ListLoanRequests:input_type -> banka.bank.v1.ListLoanRequestsRequest
-	76,  // 115: banka.bank.v1.BankService.DecideLoanRequest:input_type -> banka.bank.v1.DecideLoanRequestRequest
-	77,  // 116: banka.bank.v1.BankService.ListLoans:input_type -> banka.bank.v1.ListLoansRequest
-	79,  // 117: banka.bank.v1.BankService.GetLoan:input_type -> banka.bank.v1.GetLoanRequest
-	80,  // 118: banka.bank.v1.BankService.RunInstallmentJob:input_type -> banka.bank.v1.RunInstallmentJobRequest
-	82,  // 119: banka.bank.v1.BankService.RunVariableRateJob:input_type -> banka.bank.v1.RunVariableRateJobRequest
-	15,  // 120: banka.bank.v1.BankService.CreateCompany:output_type -> banka.bank.v1.Company
-	19,  // 121: banka.bank.v1.BankService.ListCompanies:output_type -> banka.bank.v1.ListCompaniesResponse
-	15,  // 122: banka.bank.v1.BankService.GetCompany:output_type -> banka.bank.v1.Company
-	15,  // 123: banka.bank.v1.BankService.UpdateCompany:output_type -> banka.bank.v1.Company
-	16,  // 124: banka.bank.v1.BankService.CreateAccount:output_type -> banka.bank.v1.Account
-	24,  // 125: banka.bank.v1.BankService.ListAccounts:output_type -> banka.bank.v1.ListAccountsResponse
-	16,  // 126: banka.bank.v1.BankService.GetAccount:output_type -> banka.bank.v1.Account
-	16,  // 127: banka.bank.v1.BankService.UpdateAccountLimits:output_type -> banka.bank.v1.Account
-	16,  // 128: banka.bank.v1.BankService.UpdateAccountName:output_type -> banka.bank.v1.Account
-	16,  // 129: banka.bank.v1.BankService.SetAccountStatus:output_type -> banka.bank.v1.Account
-	16,  // 130: banka.bank.v1.BankService.GetSystemAccount:output_type -> banka.bank.v1.Account
-	32,  // 131: banka.bank.v1.BankService.SettleTrade:output_type -> banka.bank.v1.SettleTradeResponse
-	34,  // 132: banka.bank.v1.BankService.SettleCapitalGainsTax:output_type -> banka.bank.v1.SettleCapitalGainsTaxResponse
-	36,  // 133: banka.bank.v1.BankService.SettleForexFill:output_type -> banka.bank.v1.SettleForexFillResponse
-	38,  // 134: banka.bank.v1.BankService.ReserveFunds:output_type -> banka.bank.v1.ReserveFundsResponse
-	40,  // 135: banka.bank.v1.BankService.ReleaseFunds:output_type -> banka.bank.v1.ReleaseFundsResponse
-	42,  // 136: banka.bank.v1.BankService.CommitReservedFunds:output_type -> banka.bank.v1.CommitReservedFundsResponse
-	44,  // 137: banka.bank.v1.BankService.TransferBetweenClients:output_type -> banka.bank.v1.TransferBetweenClientsResponse
-	16,  // 138: banka.bank.v1.BankService.CreateFundAccount:output_type -> banka.bank.v1.Account
-	48,  // 139: banka.bank.v1.BankService.CreatePayment:output_type -> banka.bank.v1.PaymentResult
-	48,  // 140: banka.bank.v1.BankService.CreateTransfer:output_type -> banka.bank.v1.PaymentResult
-	50,  // 141: banka.bank.v1.BankService.QuoteExchange:output_type -> banka.bank.v1.QuoteExchangeResponse
-	52,  // 142: banka.bank.v1.BankService.ListTransactions:output_type -> banka.bank.v1.ListTransactionsResponse
-	53,  // 143: banka.bank.v1.BankService.CreatePaymentRecipient:output_type -> banka.bank.v1.PaymentRecipient
-	56,  // 144: banka.bank.v1.BankService.ListPaymentRecipients:output_type -> banka.bank.v1.ListPaymentRecipientsResponse
-	53,  // 145: banka.bank.v1.BankService.UpdatePaymentRecipient:output_type -> banka.bank.v1.PaymentRecipient
-	85,  // 146: banka.bank.v1.BankService.DeletePaymentRecipient:output_type -> google.protobuf.Empty
-	59,  // 147: banka.bank.v1.BankService.CreateCard:output_type -> banka.bank.v1.Card
-	62,  // 148: banka.bank.v1.BankService.ListCards:output_type -> banka.bank.v1.ListCardsResponse
-	59,  // 149: banka.bank.v1.BankService.SetCardStatus:output_type -> banka.bank.v1.Card
-	59,  // 150: banka.bank.v1.BankService.UpdateCardLimit:output_type -> banka.bank.v1.Card
-	65,  // 151: banka.bank.v1.BankService.CreateAuthorizedPerson:output_type -> banka.bank.v1.AuthorizedPerson
-	68,  // 152: banka.bank.v1.BankService.ListAuthorizedPersons:output_type -> banka.bank.v1.ListAuthorizedPersonsResponse
-	69,  // 153: banka.bank.v1.BankService.SubmitLoanRequest:output_type -> banka.bank.v1.LoanRequest
-	75,  // 154: banka.bank.v1.BankService.ListLoanRequests:output_type -> banka.bank.v1.ListLoanRequestsResponse
-	69,  // 155: banka.bank.v1.BankService.DecideLoanRequest:output_type -> banka.bank.v1.LoanRequest
-	78,  // 156: banka.bank.v1.BankService.ListLoans:output_type -> banka.bank.v1.ListLoansResponse
-	72,  // 157: banka.bank.v1.BankService.GetLoan:output_type -> banka.bank.v1.LoanWithInstallments
-	81,  // 158: banka.bank.v1.BankService.RunInstallmentJob:output_type -> banka.bank.v1.RunInstallmentJobResponse
-	83,  // 159: banka.bank.v1.BankService.RunVariableRateJob:output_type -> banka.bank.v1.RunVariableRateJobResponse
-	120, // [120:160] is the sub-list for method output_type
-	80,  // [80:120] is the sub-list for method input_type
-	80,  // [80:80] is the sub-list for extension type_name
-	80,  // [80:80] is the sub-list for extension extendee
-	0,   // [0:80] is the sub-list for field type_name
+	84,  // 37: banka.bank.v1.ListTransactionsRequest.from:type_name -> google.protobuf.Timestamp
+	84,  // 38: banka.bank.v1.ListTransactionsRequest.to:type_name -> google.protobuf.Timestamp
+	45,  // 39: banka.bank.v1.ListTransactionsResponse.transactions:type_name -> banka.bank.v1.Transaction
+	84,  // 40: banka.bank.v1.PaymentRecipient.created_at:type_name -> google.protobuf.Timestamp
+	53,  // 41: banka.bank.v1.ListPaymentRecipientsResponse.recipients:type_name -> banka.bank.v1.PaymentRecipient
+	6,   // 42: banka.bank.v1.Card.brand:type_name -> banka.bank.v1.CardBrand
+	7,   // 43: banka.bank.v1.Card.status:type_name -> banka.bank.v1.CardStatus
+	84,  // 44: banka.bank.v1.Card.expires_at:type_name -> google.protobuf.Timestamp
+	84,  // 45: banka.bank.v1.Card.created_at:type_name -> google.protobuf.Timestamp
+	84,  // 46: banka.bank.v1.Card.updated_at:type_name -> google.protobuf.Timestamp
+	6,   // 47: banka.bank.v1.CreateCardRequest.brand:type_name -> banka.bank.v1.CardBrand
+	59,  // 48: banka.bank.v1.ListCardsResponse.cards:type_name -> banka.bank.v1.Card
+	7,   // 49: banka.bank.v1.SetCardStatusRequest.status:type_name -> banka.bank.v1.CardStatus
+	8,   // 50: banka.bank.v1.AuthorizedPerson.gender:type_name -> banka.bank.v1.Gender
+	84,  // 51: banka.bank.v1.AuthorizedPerson.created_at:type_name -> google.protobuf.Timestamp
+	84,  // 52: banka.bank.v1.AuthorizedPerson.updated_at:type_name -> google.protobuf.Timestamp
+	8,   // 53: banka.bank.v1.CreateAuthorizedPersonRequest.gender:type_name -> banka.bank.v1.Gender
+	65,  // 54: banka.bank.v1.ListAuthorizedPersonsResponse.authorized_persons:type_name -> banka.bank.v1.AuthorizedPerson
+	9,   // 55: banka.bank.v1.LoanRequest.loan_type:type_name -> banka.bank.v1.LoanType
+	10,  // 56: banka.bank.v1.LoanRequest.interest_type:type_name -> banka.bank.v1.InterestType
+	0,   // 57: banka.bank.v1.LoanRequest.currency:type_name -> banka.bank.v1.Currency
+	11,  // 58: banka.bank.v1.LoanRequest.employment_status:type_name -> banka.bank.v1.EmploymentStatus
+	12,  // 59: banka.bank.v1.LoanRequest.status:type_name -> banka.bank.v1.LoanRequestStatus
+	84,  // 60: banka.bank.v1.LoanRequest.decided_at:type_name -> google.protobuf.Timestamp
+	84,  // 61: banka.bank.v1.LoanRequest.created_at:type_name -> google.protobuf.Timestamp
+	9,   // 62: banka.bank.v1.Loan.loan_type:type_name -> banka.bank.v1.LoanType
+	10,  // 63: banka.bank.v1.Loan.interest_type:type_name -> banka.bank.v1.InterestType
+	0,   // 64: banka.bank.v1.Loan.currency:type_name -> banka.bank.v1.Currency
+	13,  // 65: banka.bank.v1.Loan.status:type_name -> banka.bank.v1.LoanStatus
+	84,  // 66: banka.bank.v1.Loan.contracted_at:type_name -> google.protobuf.Timestamp
+	0,   // 67: banka.bank.v1.LoanInstallment.currency:type_name -> banka.bank.v1.Currency
+	84,  // 68: banka.bank.v1.LoanInstallment.actual_paid_at:type_name -> google.protobuf.Timestamp
+	14,  // 69: banka.bank.v1.LoanInstallment.status:type_name -> banka.bank.v1.InstallmentStatus
+	70,  // 70: banka.bank.v1.LoanWithInstallments.loan:type_name -> banka.bank.v1.Loan
+	71,  // 71: banka.bank.v1.LoanWithInstallments.installments:type_name -> banka.bank.v1.LoanInstallment
+	9,   // 72: banka.bank.v1.SubmitLoanRequestRequest.loan_type:type_name -> banka.bank.v1.LoanType
+	10,  // 73: banka.bank.v1.SubmitLoanRequestRequest.interest_type:type_name -> banka.bank.v1.InterestType
+	0,   // 74: banka.bank.v1.SubmitLoanRequestRequest.currency:type_name -> banka.bank.v1.Currency
+	11,  // 75: banka.bank.v1.SubmitLoanRequestRequest.employment_status:type_name -> banka.bank.v1.EmploymentStatus
+	12,  // 76: banka.bank.v1.ListLoanRequestsRequest.status:type_name -> banka.bank.v1.LoanRequestStatus
+	9,   // 77: banka.bank.v1.ListLoanRequestsRequest.loan_type:type_name -> banka.bank.v1.LoanType
+	69,  // 78: banka.bank.v1.ListLoanRequestsResponse.requests:type_name -> banka.bank.v1.LoanRequest
+	9,   // 79: banka.bank.v1.ListLoansRequest.loan_type:type_name -> banka.bank.v1.LoanType
+	13,  // 80: banka.bank.v1.ListLoansRequest.status:type_name -> banka.bank.v1.LoanStatus
+	70,  // 81: banka.bank.v1.ListLoansResponse.loans:type_name -> banka.bank.v1.Loan
+	17,  // 82: banka.bank.v1.BankService.CreateCompany:input_type -> banka.bank.v1.CreateCompanyRequest
+	18,  // 83: banka.bank.v1.BankService.ListCompanies:input_type -> banka.bank.v1.ListCompaniesRequest
+	20,  // 84: banka.bank.v1.BankService.GetCompany:input_type -> banka.bank.v1.GetCompanyRequest
+	21,  // 85: banka.bank.v1.BankService.UpdateCompany:input_type -> banka.bank.v1.UpdateCompanyRequest
+	22,  // 86: banka.bank.v1.BankService.CreateAccount:input_type -> banka.bank.v1.CreateAccountRequest
+	23,  // 87: banka.bank.v1.BankService.ListAccounts:input_type -> banka.bank.v1.ListAccountsRequest
+	25,  // 88: banka.bank.v1.BankService.GetAccount:input_type -> banka.bank.v1.GetAccountRequest
+	26,  // 89: banka.bank.v1.BankService.UpdateAccountLimits:input_type -> banka.bank.v1.UpdateAccountLimitsRequest
+	27,  // 90: banka.bank.v1.BankService.UpdateAccountName:input_type -> banka.bank.v1.UpdateAccountNameRequest
+	28,  // 91: banka.bank.v1.BankService.SetAccountStatus:input_type -> banka.bank.v1.SetAccountStatusRequest
+	29,  // 92: banka.bank.v1.BankService.GetSystemAccount:input_type -> banka.bank.v1.GetSystemAccountRequest
+	31,  // 93: banka.bank.v1.BankService.SettleTrade:input_type -> banka.bank.v1.SettleTradeRequest
+	33,  // 94: banka.bank.v1.BankService.SettleCapitalGainsTax:input_type -> banka.bank.v1.SettleCapitalGainsTaxRequest
+	35,  // 95: banka.bank.v1.BankService.SettleForexFill:input_type -> banka.bank.v1.SettleForexFillRequest
+	37,  // 96: banka.bank.v1.BankService.ReserveFunds:input_type -> banka.bank.v1.ReserveFundsRequest
+	39,  // 97: banka.bank.v1.BankService.ReleaseFunds:input_type -> banka.bank.v1.ReleaseFundsRequest
+	41,  // 98: banka.bank.v1.BankService.CommitReservedFunds:input_type -> banka.bank.v1.CommitReservedFundsRequest
+	43,  // 99: banka.bank.v1.BankService.TransferBetweenClients:input_type -> banka.bank.v1.TransferBetweenClientsRequest
+	30,  // 100: banka.bank.v1.BankService.CreateFundAccount:input_type -> banka.bank.v1.CreateFundAccountRequest
+	46,  // 101: banka.bank.v1.BankService.CreatePayment:input_type -> banka.bank.v1.CreatePaymentRequest
+	47,  // 102: banka.bank.v1.BankService.CreateTransfer:input_type -> banka.bank.v1.CreateTransferRequest
+	49,  // 103: banka.bank.v1.BankService.QuoteExchange:input_type -> banka.bank.v1.QuoteExchangeRequest
+	51,  // 104: banka.bank.v1.BankService.ListTransactions:input_type -> banka.bank.v1.ListTransactionsRequest
+	54,  // 105: banka.bank.v1.BankService.CreatePaymentRecipient:input_type -> banka.bank.v1.CreatePaymentRecipientRequest
+	55,  // 106: banka.bank.v1.BankService.ListPaymentRecipients:input_type -> banka.bank.v1.ListPaymentRecipientsRequest
+	57,  // 107: banka.bank.v1.BankService.UpdatePaymentRecipient:input_type -> banka.bank.v1.UpdatePaymentRecipientRequest
+	58,  // 108: banka.bank.v1.BankService.DeletePaymentRecipient:input_type -> banka.bank.v1.DeletePaymentRecipientRequest
+	60,  // 109: banka.bank.v1.BankService.CreateCard:input_type -> banka.bank.v1.CreateCardRequest
+	61,  // 110: banka.bank.v1.BankService.ListCards:input_type -> banka.bank.v1.ListCardsRequest
+	63,  // 111: banka.bank.v1.BankService.SetCardStatus:input_type -> banka.bank.v1.SetCardStatusRequest
+	64,  // 112: banka.bank.v1.BankService.UpdateCardLimit:input_type -> banka.bank.v1.UpdateCardLimitRequest
+	66,  // 113: banka.bank.v1.BankService.CreateAuthorizedPerson:input_type -> banka.bank.v1.CreateAuthorizedPersonRequest
+	67,  // 114: banka.bank.v1.BankService.ListAuthorizedPersons:input_type -> banka.bank.v1.ListAuthorizedPersonsRequest
+	73,  // 115: banka.bank.v1.BankService.SubmitLoanRequest:input_type -> banka.bank.v1.SubmitLoanRequestRequest
+	74,  // 116: banka.bank.v1.BankService.ListLoanRequests:input_type -> banka.bank.v1.ListLoanRequestsRequest
+	76,  // 117: banka.bank.v1.BankService.DecideLoanRequest:input_type -> banka.bank.v1.DecideLoanRequestRequest
+	77,  // 118: banka.bank.v1.BankService.ListLoans:input_type -> banka.bank.v1.ListLoansRequest
+	79,  // 119: banka.bank.v1.BankService.GetLoan:input_type -> banka.bank.v1.GetLoanRequest
+	80,  // 120: banka.bank.v1.BankService.RunInstallmentJob:input_type -> banka.bank.v1.RunInstallmentJobRequest
+	82,  // 121: banka.bank.v1.BankService.RunVariableRateJob:input_type -> banka.bank.v1.RunVariableRateJobRequest
+	15,  // 122: banka.bank.v1.BankService.CreateCompany:output_type -> banka.bank.v1.Company
+	19,  // 123: banka.bank.v1.BankService.ListCompanies:output_type -> banka.bank.v1.ListCompaniesResponse
+	15,  // 124: banka.bank.v1.BankService.GetCompany:output_type -> banka.bank.v1.Company
+	15,  // 125: banka.bank.v1.BankService.UpdateCompany:output_type -> banka.bank.v1.Company
+	16,  // 126: banka.bank.v1.BankService.CreateAccount:output_type -> banka.bank.v1.Account
+	24,  // 127: banka.bank.v1.BankService.ListAccounts:output_type -> banka.bank.v1.ListAccountsResponse
+	16,  // 128: banka.bank.v1.BankService.GetAccount:output_type -> banka.bank.v1.Account
+	16,  // 129: banka.bank.v1.BankService.UpdateAccountLimits:output_type -> banka.bank.v1.Account
+	16,  // 130: banka.bank.v1.BankService.UpdateAccountName:output_type -> banka.bank.v1.Account
+	16,  // 131: banka.bank.v1.BankService.SetAccountStatus:output_type -> banka.bank.v1.Account
+	16,  // 132: banka.bank.v1.BankService.GetSystemAccount:output_type -> banka.bank.v1.Account
+	32,  // 133: banka.bank.v1.BankService.SettleTrade:output_type -> banka.bank.v1.SettleTradeResponse
+	34,  // 134: banka.bank.v1.BankService.SettleCapitalGainsTax:output_type -> banka.bank.v1.SettleCapitalGainsTaxResponse
+	36,  // 135: banka.bank.v1.BankService.SettleForexFill:output_type -> banka.bank.v1.SettleForexFillResponse
+	38,  // 136: banka.bank.v1.BankService.ReserveFunds:output_type -> banka.bank.v1.ReserveFundsResponse
+	40,  // 137: banka.bank.v1.BankService.ReleaseFunds:output_type -> banka.bank.v1.ReleaseFundsResponse
+	42,  // 138: banka.bank.v1.BankService.CommitReservedFunds:output_type -> banka.bank.v1.CommitReservedFundsResponse
+	44,  // 139: banka.bank.v1.BankService.TransferBetweenClients:output_type -> banka.bank.v1.TransferBetweenClientsResponse
+	16,  // 140: banka.bank.v1.BankService.CreateFundAccount:output_type -> banka.bank.v1.Account
+	48,  // 141: banka.bank.v1.BankService.CreatePayment:output_type -> banka.bank.v1.PaymentResult
+	48,  // 142: banka.bank.v1.BankService.CreateTransfer:output_type -> banka.bank.v1.PaymentResult
+	50,  // 143: banka.bank.v1.BankService.QuoteExchange:output_type -> banka.bank.v1.QuoteExchangeResponse
+	52,  // 144: banka.bank.v1.BankService.ListTransactions:output_type -> banka.bank.v1.ListTransactionsResponse
+	53,  // 145: banka.bank.v1.BankService.CreatePaymentRecipient:output_type -> banka.bank.v1.PaymentRecipient
+	56,  // 146: banka.bank.v1.BankService.ListPaymentRecipients:output_type -> banka.bank.v1.ListPaymentRecipientsResponse
+	53,  // 147: banka.bank.v1.BankService.UpdatePaymentRecipient:output_type -> banka.bank.v1.PaymentRecipient
+	85,  // 148: banka.bank.v1.BankService.DeletePaymentRecipient:output_type -> google.protobuf.Empty
+	59,  // 149: banka.bank.v1.BankService.CreateCard:output_type -> banka.bank.v1.Card
+	62,  // 150: banka.bank.v1.BankService.ListCards:output_type -> banka.bank.v1.ListCardsResponse
+	59,  // 151: banka.bank.v1.BankService.SetCardStatus:output_type -> banka.bank.v1.Card
+	59,  // 152: banka.bank.v1.BankService.UpdateCardLimit:output_type -> banka.bank.v1.Card
+	65,  // 153: banka.bank.v1.BankService.CreateAuthorizedPerson:output_type -> banka.bank.v1.AuthorizedPerson
+	68,  // 154: banka.bank.v1.BankService.ListAuthorizedPersons:output_type -> banka.bank.v1.ListAuthorizedPersonsResponse
+	69,  // 155: banka.bank.v1.BankService.SubmitLoanRequest:output_type -> banka.bank.v1.LoanRequest
+	75,  // 156: banka.bank.v1.BankService.ListLoanRequests:output_type -> banka.bank.v1.ListLoanRequestsResponse
+	69,  // 157: banka.bank.v1.BankService.DecideLoanRequest:output_type -> banka.bank.v1.LoanRequest
+	78,  // 158: banka.bank.v1.BankService.ListLoans:output_type -> banka.bank.v1.ListLoansResponse
+	72,  // 159: banka.bank.v1.BankService.GetLoan:output_type -> banka.bank.v1.LoanWithInstallments
+	81,  // 160: banka.bank.v1.BankService.RunInstallmentJob:output_type -> banka.bank.v1.RunInstallmentJobResponse
+	83,  // 161: banka.bank.v1.BankService.RunVariableRateJob:output_type -> banka.bank.v1.RunVariableRateJobResponse
+	122, // [122:162] is the sub-list for method output_type
+	82,  // [82:122] is the sub-list for method input_type
+	82,  // [82:82] is the sub-list for extension type_name
+	82,  // [82:82] is the sub-list for extension extendee
+	0,   // [0:82] is the sub-list for field type_name
 }
 
 func init() { file_bank_v1_bank_proto_init() }

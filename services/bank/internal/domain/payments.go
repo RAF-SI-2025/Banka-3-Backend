@@ -92,6 +92,10 @@ type TransactionFilter struct {
 	OpKind            string
 	Status            string
 	InitiatorClientID string
+	// Spec p.18 / p.24 "filtriranje po datumu" — inclusive bounds on
+	// transactions.created_at. Nil means "no bound on that side".
+	From *time.Time
+	To   *time.Time
 }
 
 // PaymentResult bundles every leg of a single payment/transfer/exchange
