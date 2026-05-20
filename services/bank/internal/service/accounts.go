@@ -218,9 +218,25 @@ func (s *Service) ListAccounts(ctx context.Context, f domain.AccountFilter, page
 	return s.Store.ListAccounts(ctx, f, page, pageSize)
 }
 
+// UpdateAccountLimits is gated to the account owner per spec p.20
+// ("Promenu limita može uraditi samo vlasnik računa"). Unlike
+// UpdateAccountName (which falls back to AccountWrite for back-office
+// corrections), the spec is explicit that limit changes are owner-only
+// — employees with AccountWrite cannot change a client's limits, and
+// clients (who don't carry AccountWrite anyway) must be allowed to
+// change their own. The verification-code middleware on the gateway
+// gates the request additionally per spec p.11.
 func (s *Service) UpdateAccountLimits(ctx context.Context, id, daily, monthly string) (*domain.Account, error) {
-	if err := s.requirePermission(ctx, permissions.AccountWrite); err != nil {
+	current, err := s.Store.GetAccountByID(ctx, id)
+	if err != nil {
 		return nil, err
+	}
+	p, ok := auth.PrincipalFrom(ctx)
+	if !ok {
+		return nil, apperr.Unauthenticated("not authenticated")
+	}
+	if current.OwnerClientID != p.UserID {
+		return nil, apperr.PermissionDenied("samo vlasnik računa može menjati limit")
 	}
 	return s.Store.UpdateAccountLimits(ctx, id, strings.TrimSpace(daily), strings.TrimSpace(monthly))
 }
