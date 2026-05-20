@@ -150,6 +150,13 @@ func (s *Service) AcceptOTCOffer(ctx context.Context, in AcceptOTCOfferInput) (*
 		return nil, fmt.Errorf("otc accept saga: %w", err)
 	}
 	if row.Status != saga.StatusCompleted {
+		// Transient park: saga.Start suppresses the err, only signal
+		// is row.Status=Running. Surface as Unavailable so the caller
+		// polls/backoffs; recovery worker will drive it forward.
+		// See [[reference_saga_park_status_mapping]] for the pattern.
+		if row.Status == saga.StatusRunning {
+			return nil, status.Error(codes.Unavailable, "otc accept saga parked for retry")
+		}
 		return nil, apperr.Internal("otc accept saga did not complete", nil)
 	}
 

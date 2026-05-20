@@ -52,6 +52,8 @@ import (
 	"github.com/RAF-SI-2025/Banka-3-Backend/services/trading/internal/saga"
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5"
+	"google.golang.org/grpc/codes"
+	"google.golang.org/grpc/status"
 )
 
 const fundInvestSagaType = "fund_invest"
@@ -220,6 +222,13 @@ func (s *Service) InvestInFund(ctx context.Context, in InvestInFundInput) (*Inve
 		return nil, fmt.Errorf("fund invest saga: %w", err)
 	}
 	if row.Status != saga.StatusCompleted {
+		// Transient park: saga.Start suppresses the err, only signal
+		// is row.Status=Running. Surface as Unavailable so the caller
+		// polls/backoffs; recovery worker will drive it forward.
+		// See [[reference_saga_park_status_mapping]] for the pattern.
+		if row.Status == saga.StatusRunning {
+			return nil, status.Error(codes.Unavailable, "fund invest saga parked for retry")
+		}
 		return nil, apperr.Internal("fund invest saga did not complete", nil)
 	}
 
