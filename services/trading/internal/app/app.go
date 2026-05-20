@@ -12,6 +12,7 @@ import (
 	tradingpb "github.com/RAF-SI-2025/Banka-3-Backend/gen/proto/trading/v1"
 	notifpb "github.com/RAF-SI-2025/Banka-3-Backend/gen/proto/notification/v1"
 	userpb "github.com/RAF-SI-2025/Banka-3-Backend/gen/proto/user/v1"
+	"github.com/RAF-SI-2025/Banka-3-Backend/pkg/clock"
 	"github.com/RAF-SI-2025/Banka-3-Backend/pkg/config"
 	"github.com/RAF-SI-2025/Banka-3-Backend/pkg/email"
 	"github.com/RAF-SI-2025/Banka-3-Backend/pkg/grpcserver"
@@ -64,6 +65,18 @@ func Run() error {
 		SagaDebugFaultInjection: config.Bool("SAGA_DEBUG_FAULT_INJECTION", false),
 		BankName:                config.String("BANK_NAME", "Banka 3"),
 	}, log)
+
+	// QA-adjustable clock (pkg/clock). When CLOCK_DEBUG=true the
+	// gateway's POST /api/v1/_debug/clock writes an offset to Redis
+	// that this Clock picks up via the StartRefresher goroutine, so
+	// the entire service observes shifted business time uniformly
+	// (every settlement/expiry/after-hours/cron check on the service
+	// layer routes through svc.Clock.Now() via Service.now()).
+	// Production leaves CLOCK_DEBUG unset and the Clock is a no-op
+	// passthrough to time.Now().UTC().
+	adj := clock.NewAdjustable(rdb, config.Bool("CLOCK_DEBUG", false))
+	adj.StartRefresher(ctx)
+	svc.Clock = adj
 
 	// Exchange-rate client for foreign-currency → RSD conversions used
 	// by the agent-limit check and the capital-gains tax math. The

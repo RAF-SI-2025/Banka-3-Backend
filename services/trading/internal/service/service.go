@@ -8,6 +8,7 @@ import (
 
 	"github.com/RAF-SI-2025/Banka-3-Backend/pkg/apperr"
 	"github.com/RAF-SI-2025/Banka-3-Backend/pkg/auth"
+	"github.com/RAF-SI-2025/Banka-3-Backend/pkg/clock"
 	"github.com/RAF-SI-2025/Banka-3-Backend/pkg/permissions"
 	"github.com/RAF-SI-2025/Banka-3-Backend/services/trading/internal/domain"
 	"github.com/RAF-SI-2025/Banka-3-Backend/services/trading/internal/saga"
@@ -153,9 +154,17 @@ type Service struct {
 	// decided by app wiring. Nil-safe (no email on dev stacks without
 	// SMTP wired).
 	OTCNotifier OTCNotifier
-	// Now is the wall-clock used by every time-dependent path. Tests
-	// pin it; production leaves it nil and falls through to time.Now.
+	// Now is the legacy wall-clock seam. Tests still pin it
+	// (`s.Now = func() time.Time { return fixed }`). Production
+	// leaves it nil and now() falls through to Clock, then time.Now
+	// as a last resort. Newer callers should prefer Clock.
 	Now func() time.Time
+
+	// Clock is the QA-adjustable business-time provider (pkg/clock).
+	// app/ constructs it as a *clock.Adjustable wired to Redis when
+	// CLOCK_DEBUG=true so the gateway debug endpoint can advance time
+	// uniformly across services. Nil-safe (now() falls back).
+	Clock clock.Clock
 }
 
 // OTCNotifier is the trading-service view of the notification surface
@@ -238,6 +247,9 @@ func New(st *store.Store, cfg Config, log *slog.Logger) *Service {
 func (s *Service) now() time.Time {
 	if s.Now != nil {
 		return s.Now()
+	}
+	if s.Clock != nil {
+		return s.Clock.Now()
 	}
 	return time.Now()
 }

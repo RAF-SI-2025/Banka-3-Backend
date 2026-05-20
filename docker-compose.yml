@@ -28,6 +28,7 @@ x-service-defaults: &service-defaults
     SMTP_PASSWORD: "${SMTP_PASSWORD:-}"
     SMTP_FROM: "${SMTP_FROM:-no-reply@banka.local}"
     SMTP_TLS: "${SMTP_TLS:-false}"
+    CLOCK_DEBUG: "${CLOCK_DEBUG:-false}"
 
 # App services share this depends-on block so they all wait for the
 # migrate one-shot to finish before booting. Without it they'd race

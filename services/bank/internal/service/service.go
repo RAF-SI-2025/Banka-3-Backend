@@ -8,6 +8,7 @@ import (
 
 	"github.com/RAF-SI-2025/Banka-3-Backend/pkg/apperr"
 	"github.com/RAF-SI-2025/Banka-3-Backend/pkg/auth"
+	"github.com/RAF-SI-2025/Banka-3-Backend/pkg/clock"
 	"github.com/RAF-SI-2025/Banka-3-Backend/pkg/permissions"
 	"github.com/RAF-SI-2025/Banka-3-Backend/services/bank/internal/store"
 )
@@ -37,12 +38,16 @@ type Service struct {
 	// backed flows so the bank service doesn't have to keep its own
 	// copy of the email (cross-schema joins are forbidden).
 	UserResolver UserResolver
-	// Now is the wall-clock used by every time-dependent service path
-	// (card expiry stamps, loan installment schedules, due-date probes,
-	// maintenance/spent-reset cron defaults). Tests overwrite it to
-	// pin the clock; production leaves it nil and falls through to
-	// time.Now via s.now.
+	// Now is the legacy wall-clock seam — tests still pin it to a
+	// deterministic value. Production leaves it nil and now() falls
+	// through to Clock, then time.Now as a last resort.
 	Now func() time.Time
+
+	// Clock is the QA-adjustable business-time provider (pkg/clock).
+	// app/ wires a *clock.Adjustable when CLOCK_DEBUG=true so the
+	// gateway debug endpoint can advance time uniformly across
+	// services. Nil-safe.
+	Clock clock.Clock
 }
 
 // now returns the service clock, defaulting to time.Now when no
@@ -52,6 +57,9 @@ type Service struct {
 func (s *Service) now() time.Time {
 	if s.Now != nil {
 		return s.Now()
+	}
+	if s.Clock != nil {
+		return s.Clock.Now()
 	}
 	return time.Now()
 }

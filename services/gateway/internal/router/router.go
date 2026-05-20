@@ -4,8 +4,12 @@ import (
 	"context"
 	"encoding/json"
 	"net/http"
+	"time"
 
 	userpb "github.com/RAF-SI-2025/Banka-3-Backend/gen/proto/user/v1"
+	"github.com/RAF-SI-2025/Banka-3-Backend/pkg/auth"
+	"github.com/RAF-SI-2025/Banka-3-Backend/pkg/clock"
+	"github.com/RAF-SI-2025/Banka-3-Backend/pkg/permissions"
 	"github.com/RAF-SI-2025/Banka-3-Backend/pkg/verification"
 
 	"github.com/grpc-ecosystem/grpc-gateway/v2/runtime"
@@ -20,6 +24,10 @@ type Router struct {
 	VerificationMW func(http.Handler) http.Handler
 	Verifier       verification.Verifier
 	SecureCookies  bool
+	// Clock drives the QA debug endpoint POST /api/v1/_debug/clock.
+	// Wired only when CLOCK_DEBUG=true; the endpoint isn't registered
+	// otherwise so production traffic can't accidentally reach it.
+	Clock *clock.Adjustable
 }
 
 // Mount returns the gateway's top-level handler. Public auth endpoints
@@ -76,6 +84,18 @@ func (r *Router) Mount(ctx context.Context, gwMux *runtime.ServeMux, registerGW 
 		writeJSON(w, http.StatusOK, map[string]string{"status": "ok"})
 	})
 
+	// QA-only clock-offset endpoint (spec edge: S7 23:59 daily reset,
+	// monthly tax, loan installments — all driven by cron schedules
+	// that QA can't wait real seconds for). Registered only when
+	// CLOCK_DEBUG=true so production traffic can't reach it. Admin-
+	// gated inside the handler; the AuthMW upstream attaches the
+	// principal. Cross-service propagation is via the Redis key the
+	// pkg/clock.Adjustable.StartRefresher goroutine polls.
+	if r.Clock != nil && r.Clock.Enabled() {
+		mux.Handle("POST /api/v1/_debug/clock", r.AuthMW(http.HandlerFunc(r.DebugClockSetHandler())))
+		mux.Handle("GET /api/v1/_debug/clock", r.AuthMW(http.HandlerFunc(r.DebugClockGetHandler())))
+	}
+
 	return withCORS(mux), nil
 }
 
@@ -83,6 +103,53 @@ func writeJSON(w http.ResponseWriter, status int, body any) {
 	w.Header().Set("Content-Type", "application/json; charset=utf-8")
 	w.WriteHeader(status)
 	_ = json.NewEncoder(w).Encode(body)
+}
+
+// DebugClockSetHandler handles POST /api/v1/_debug/clock with body
+// {"offset":"24h"} (any time.ParseDuration string). Admin-only. Writes
+// to Redis via the Adjustable; other services pick it up within
+// pkg/clock.RefreshInterval.
+func (r *Router) DebugClockSetHandler() http.HandlerFunc {
+	type req struct {
+		Offset string `json:"offset"`
+	}
+	return func(w http.ResponseWriter, httpReq *http.Request) {
+		p, ok := auth.PrincipalFrom(httpReq.Context())
+		if !ok || !permissions.Has(p.Permissions, permissions.Admin) {
+			writeJSON(w, http.StatusForbidden, errBody{Code: http.StatusForbidden, Message: "admin only"})
+			return
+		}
+		var in req
+		if err := json.NewDecoder(httpReq.Body).Decode(&in); err != nil {
+			writeJSON(w, http.StatusBadRequest, errBody{Code: http.StatusBadRequest, Message: "invalid body"})
+			return
+		}
+		d, err := time.ParseDuration(in.Offset)
+		if err != nil {
+			writeJSON(w, http.StatusBadRequest, errBody{Code: http.StatusBadRequest, Message: "offset: " + err.Error()})
+			return
+		}
+		if err := r.Clock.SetOffset(httpReq.Context(), d); err != nil {
+			writeJSON(w, http.StatusInternalServerError, errBody{Code: http.StatusInternalServerError, Message: err.Error()})
+			return
+		}
+		writeJSON(w, http.StatusOK, map[string]any{
+			"offset": d.String(),
+			"now":    r.Clock.Now().Format(time.RFC3339),
+		})
+	}
+}
+
+// DebugClockGetHandler returns the current offset + adjusted now.
+// Auth-gated (anyone authenticated can read; the offset isn't a
+// secret), but only registered when CLOCK_DEBUG=true.
+func (r *Router) DebugClockGetHandler() http.HandlerFunc {
+	return func(w http.ResponseWriter, _ *http.Request) {
+		writeJSON(w, http.StatusOK, map[string]any{
+			"offset": r.Clock.Offset().String(),
+			"now":    r.Clock.Now().Format(time.RFC3339),
+		})
+	}
 }
 
 type errBody struct {

@@ -12,6 +12,7 @@ import (
 	"time"
 
 	pkgauth "github.com/RAF-SI-2025/Banka-3-Backend/pkg/auth"
+	"github.com/RAF-SI-2025/Banka-3-Backend/pkg/clock"
 	"github.com/RAF-SI-2025/Banka-3-Backend/pkg/config"
 	pkgidem "github.com/RAF-SI-2025/Banka-3-Backend/pkg/idempotency"
 	"github.com/RAF-SI-2025/Banka-3-Backend/pkg/logger"
@@ -97,6 +98,13 @@ func Run() error {
 	}
 	verifMW := gwverif.Middleware(verifier, gwverif.DefaultRules(), log)
 
+	// QA-adjustable clock — only enabled with CLOCK_DEBUG=true. Wired
+	// here so the gateway debug endpoint (POST /api/v1/_debug/clock)
+	// can update the Redis-persisted offset that trading + bank
+	// services observe via their own Adjustable instances.
+	gwClock := clock.NewAdjustable(rdb, config.Bool("CLOCK_DEBUG", false))
+	gwClock.StartRefresher(ctx)
+
 	r := &router.Router{
 		Users:          cs.User,
 		AuthMW:         authMW,
@@ -104,6 +112,7 @@ func Run() error {
 		VerificationMW: verifMW,
 		Verifier:       verifier,
 		SecureCookies:  config.Bool("SECURE_COOKIES", false),
+		Clock:          gwClock,
 	}
 
 	// Annotator forwards the authenticated principal (set on the request

@@ -11,6 +11,7 @@ import (
 	exchangepb "github.com/RAF-SI-2025/Banka-3-Backend/gen/proto/exchange/v1"
 	notifpb "github.com/RAF-SI-2025/Banka-3-Backend/gen/proto/notification/v1"
 	userpb "github.com/RAF-SI-2025/Banka-3-Backend/gen/proto/user/v1"
+	"github.com/RAF-SI-2025/Banka-3-Backend/pkg/clock"
 	"github.com/RAF-SI-2025/Banka-3-Backend/pkg/config"
 	"github.com/RAF-SI-2025/Banka-3-Backend/pkg/email"
 	"github.com/RAF-SI-2025/Banka-3-Backend/pkg/grpcserver"
@@ -57,6 +58,16 @@ func Run() error {
 		// the pepper; .env.example carries a placeholder for dev.
 		CVVPepper: config.MustString("BANK_CVV_PEPPER"),
 	}, log)
+
+	// QA-adjustable clock (pkg/clock). When CLOCK_DEBUG=true the
+	// gateway's POST /api/v1/_debug/clock writes an offset to Redis
+	// that this Clock picks up via the StartRefresher goroutine, so
+	// every business-time decision in the service layer (loan
+	// installments, card expiry, due-date probes) observes the
+	// shifted time uniformly with the trading service.
+	adj := clock.NewAdjustable(rdb, config.Bool("CLOCK_DEBUG", false))
+	adj.StartRefresher(ctx)
+	svc.Clock = adj
 
 	if exAddr := config.String("EXCHANGE_GRPC_ADDR", ""); exAddr != "" {
 		conn, err := grpc.NewClient(exAddr, grpc.WithTransportCredentials(insecure.NewCredentials()))
