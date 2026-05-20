@@ -857,16 +857,19 @@ func seedTrading(ctx context.Context, pool *pgxpool.Pool, clientID, adminID stri
 	if err != nil {
 		return err
 	}
-	if _, err := insertStock("MSFT", "Microsoft Corporation", "XNYS", "USD", 7430000000, "0.0072",
-		quote{"450.10", "450.20", "450.00", 25000000}); err != nil {
+	msftID, err := insertStock("MSFT", "Microsoft Corporation", "XNYS", "USD", 7430000000, "0.0072",
+		quote{"450.10", "450.20", "450.00", 25000000})
+	if err != nil {
 		return err
 	}
-	if _, err := insertStock("GOOGL", "Alphabet Inc.", "XNYS", "USD", 12500000000, "0",
-		quote{"175.30", "175.40", "175.20", 18000000}); err != nil {
+	googlID, err := insertStock("GOOGL", "Alphabet Inc.", "XNYS", "USD", 12500000000, "0",
+		quote{"175.30", "175.40", "175.20", 18000000})
+	if err != nil {
 		return err
 	}
-	if _, err := insertStock("VOD", "Vodafone Group plc", "XLON", "GBP", 25700000000, "0.097",
-		quote{"68.40", "68.50", "68.30", 32000000}); err != nil {
+	vodID, err := insertStock("VOD", "Vodafone Group plc", "XLON", "GBP", 25700000000, "0.097",
+		quote{"68.40", "68.50", "68.30", 32000000})
+	if err != nil {
 		return err
 	}
 	nisID, err := insertStock("NIS", "Naftna industrija Srbije", "XBEL", "RSD", 163000000, "0.06",
@@ -877,28 +880,32 @@ func seedTrading(ctx context.Context, pool *pgxpool.Pool, clientID, adminID stri
 	// Extra USD stocks that exist purely to give the OTC discovery
 	// board ("Dostupne hartije") more inventory — klijent2 holds and
 	// publishes these in seedOTC so klijent sees a fuller board.
-	if _, err := insertStock("AMZN", "Amazon.com, Inc.", "XNYS", "USD", 10300000000, "0",
-		quote{"185.20", "185.30", "185.10", 22000000}); err != nil {
+	amznID, err := insertStock("AMZN", "Amazon.com, Inc.", "XNYS", "USD", 10300000000, "0",
+		quote{"185.20", "185.30", "185.10", 22000000})
+	if err != nil {
 		return err
 	}
-	if _, err := insertStock("TSLA", "Tesla, Inc.", "XNYS", "USD", 3180000000, "0",
-		quote{"242.75", "242.90", "242.60", 41000000}); err != nil {
+	tslaID, err := insertStock("TSLA", "Tesla, Inc.", "XNYS", "USD", 3180000000, "0",
+		quote{"242.75", "242.90", "242.60", 41000000})
+	if err != nil {
 		return err
 	}
 
 	// seedSyntheticHistory plants ~60 business days of random-walk price
-	// history into trading.listing_daily_price_info. Used for:
-	//   - NIS (Alpha Vantage doesn't cover BELEX)
-	//   - CL  (futures, seed-only per spec p.41)
-	//   - EURUSD (AV ships only spot for forex via the wired
-	//     CURRENCY_EXCHANGE_RATE endpoint; FX_DAILY isn't wired)
+	// history into trading.listing_daily_price_info so the listing-
+	// detail chart has something to draw on a keyless dev stack. This
+	// mirrors the old codebase's seed.sql, which planted synthetic
+	// history for *every* listing (no Alpha Vantage key shipped in
+	// dev). Applied to every stock plus the futures + forex pair.
+	//
 	// The walk is deterministic in the listing UUID — re-runs of the
 	// seed (or fresh DBs that happen to mint the same UUIDs) produce
 	// the same chart shape. ON CONFLICT (listing_id, date) DO NOTHING
-	// leaves any row already written by today's AV refresh untouched.
-	// AV-covered stocks (AAPL/MSFT/GOOGL/VOD) are intentionally skipped:
-	// their daily refresh accumulates real history naturally and mixing
-	// real today + synthetic past would lie about the chart.
+	// keeps re-seeds idempotent and, in the normal `make up && make
+	// seed` order (trading boots before the seed runs), never clobbers
+	// a real row the AV-keyed startup backfill already wrote. When an
+	// Alpha Vantage key *is* configured, that backfill's UpsertListingDaily
+	// (an upsert) overwrites these synthetic rows with real history.
 	seedSyntheticHistory := func(securityID string, days int) error {
 		var (
 			listingID string
@@ -972,8 +979,11 @@ func seedTrading(ctx context.Context, pool *pgxpool.Pool, clientID, adminID stri
 		return nil
 	}
 
-	if err := seedSyntheticHistory(nisID, 60); err != nil {
-		return err
+	// Every stock gets the synthetic series (keyless-dev chart source).
+	for _, stockID := range []string{aaplID, msftID, googlID, vodID, nisID, amznID, tslaID} {
+		if err := seedSyntheticHistory(stockID, 60); err != nil {
+			return err
+		}
 	}
 
 	// Future: WTI crude oil, NYMEX-listed (we use XNYS for the seed
@@ -1176,6 +1186,36 @@ func seedTrading(ctx context.Context, pool *pgxpool.Pool, clientID, adminID stri
 		clientID, aaplID, usdAccountID, clFutID,
 	); err != nil {
 		return fmt.Errorf("insert client holdings: %w", err)
+	}
+
+	// Actuary tradeable inventory: 10 GOOGL + 2 CL on the bank USD
+	// forex_book account. The FE forces an actuary's BUY/SELL account
+	// to the bank's per-currency forex_book account (actuaries trade
+	// "u ime banke"), so the sell-side holding-availability check
+	// (assertHoldingAvailable: user_id + user_kind + security_id +
+	// account_id) only ever sees that account. Without a seeded
+	// holding there, an actuary could not sell any seeded security
+	// ("ne možete prodati više hartija nego što posedujete") — they'd
+	// have to buy first. user_kind is 'employee' to match the actuary
+	// principal end-to-end.
+	//
+	// Deliberately NOT AAPL: option-exercise.cy.ts exercises the
+	// seeded AAPL-C-190 contract and asserts the delivered AAPL stock
+	// row equals exactly one contract (100 shares); a pre-seeded AAPL
+	// actuary holding would offset that count. GOOGL is a neutral USD
+	// stock no spec makes holding assumptions about, and CL is not an
+	// option underlying.
+	if _, err := tx.Exec(ctx, `
+        insert into "trading".portfolio_holdings
+            (user_id, user_kind, security_id, account_id,
+             quantity, weighted_avg_price)
+        values
+            ($1, 'employee', $2, $3, 10, 150.00),
+            ($1, 'employee', $4, $3, 2, 70.00)
+        on conflict (user_id, security_id, account_id) do nothing`,
+		aktuarID, googlID, bankUSDAcctID, clFutID,
+	); err != nil {
+		return fmt.Errorf("insert actuary holdings: %w", err)
 	}
 
 	// Realized-gain ledger entries: one positive ($99.50 ≈ ~10000 RSD,
