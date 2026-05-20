@@ -161,8 +161,17 @@ func run() error {
 		return fmt.Errorf("seed second client: %w", err)
 	}
 
-	if err := seedOTC(ctx, pool, clientID, client2ID, adminID); err != nil {
-		return fmt.Errorf("seed otc: %w", err)
+	// OTC demo threads + the contract acceptance reserve klijent's AAPL
+	// holding by +3 (thread 1) and CL by +2 (thread 4). The c4 soak
+	// expects a pristine zero-reserved baseline, so the cypress soak
+	// runner sets SEED_OTC=0 to opt out. Default on for cold boot /
+	// manual demo. Pattern mirrors SEED_FUNDS below.
+	if isEnvTruthy(envOr("SEED_OTC", "1")) {
+		if err := seedOTC(ctx, pool, clientID, client2ID, adminID); err != nil {
+			return fmt.Errorf("seed otc: %w", err)
+		}
+	} else {
+		fmt.Println("seed: SEED_OTC disabled; skipping OTC demo threads")
 	}
 
 	// Investment funds + their demo mock data (invests, holdings,
@@ -1494,15 +1503,21 @@ func seedOTC(ctx context.Context, pool *pgxpool.Pool, clientID, client2ID, admin
 		{client2ID, "AMZN", "stock", 12},  // qty 12, reserved 0  ⇒ 12 available
 		{client2ID, "TSLA", "stock", 8},   // qty 8,  reserved 0  ⇒ 8 available
 	} {
+		// Clamp to current quantity so the heal can't violate the
+		// `public_count <= quantity` check constraint on partially-
+		// consumed seeds — e.g. a prior cypress run exercised AAPL
+		// options against the underlying and left qty < target. Bumps
+		// the row to the larger of (current public_count, min(target,
+		// quantity)) so a hand-edit isn't lowered either.
 		if _, err := pool.Exec(ctx, `
             update "trading".portfolio_holdings h
-               set public_count = $1
+               set public_count = least($1, h.quantity)
               from "trading".securities s
              where s.id = h.security_id
                and h.user_id = $2
                and s.ticker = $3
                and s.type   = $4
-               and h.public_count < $1`,
+               and h.public_count < least($1, h.quantity)`,
 			row.target, row.userID, row.ticker, row.kind,
 		); err != nil {
 			return fmt.Errorf("heal public_count %s: %w", row.ticker, err)
