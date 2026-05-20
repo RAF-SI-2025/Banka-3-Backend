@@ -169,6 +169,15 @@ func (s *Service) ExerciseOTCContract(ctx context.Context, in ExerciseOTCContrac
 		return nil, apperr.FailedPrecondition(sagaFailureMessage(row, err))
 	}
 	if row.Status != saga.StatusCompleted {
+		// A transient step error parks the saga at StatusRunning with
+		// next_attempt_at set; saga.Start suppresses the err so this
+		// is the only signal the caller sees. The recovery worker
+		// will drive it forward — surface as Unavailable so the
+		// caller knows to poll/backoff rather than treating this as
+		// a permanent failure (c4-aggressive W4 expects 503 here).
+		if row.Status == saga.StatusRunning {
+			return nil, status.Error(codes.Unavailable, sagaFailureMessage(row, nil))
+		}
 		return nil, apperr.FailedPrecondition(sagaFailureMessage(row, nil))
 	}
 
