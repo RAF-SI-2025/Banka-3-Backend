@@ -181,6 +181,25 @@ func (s *Service) GetOptionChain(ctx context.Context, stockID string, settlement
 		return nil, err
 	}
 
+	// Lazy chain generation. A stock with no options at all gets its
+	// Black-Scholes chain synthesised on first access. The seed writes
+	// securities/listings via raw SQL, so a stock added after the
+	// trading container's last refresh tick (spec p.43, default 24h)
+	// would otherwise have no chain until the next tick or a restart —
+	// the symptom QA saw for AMZN/TSLA. Generating on read makes the
+	// chain consistent for every stock with no timing dependency; the
+	// periodic refresh still recomputes premiums as prices drift. Only
+	// when unfiltered (settlement == nil): an empty result under a
+	// settlement filter is a legitimately absent expiry, not a missing
+	// chain.
+	if len(options) == 0 && settlement == nil && s.Options != nil && listing != nil && listing.Price != "" {
+		if _, gerr := s.Options.generateForStock(ctx, stock, listing); gerr != nil {
+			s.Log.Warn("lazy option-chain generation failed", "stock", stock.Ticker, "err", gerr.Error())
+		} else if options, err = s.Store.ListOptionsForUnderlying(ctx, stockID, settlement); err != nil {
+			return nil, err
+		}
+	}
+
 	type strikeKey struct {
 		settle time.Time
 		strike string

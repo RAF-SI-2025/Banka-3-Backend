@@ -178,6 +178,30 @@ func runMarketDataRefresh(ctx context.Context, log *slog.Logger, svc *service.Se
 	}
 }
 
+// runStockHistoryBackfill runs the Alpha Vantage daily-history
+// backfill exactly once at startup (spec p.40). It is a no-op when no
+// AV key is configured (MarketData / History nil), in which case the
+// keyless synthetic seed remains the chart's source. A failed pass is
+// logged, not fatal — the service still serves whatever history the
+// seed planted.
+func runStockHistoryBackfill(ctx context.Context, log *slog.Logger, svc *service.Service) error {
+	if svc.MarketData == nil || svc.MarketData.History == nil {
+		return nil
+	}
+	res, err := svc.MarketData.BackfillStockHistory(ctx)
+	if err != nil {
+		log.Warn("stock-history backfill failed", "err", err.Error())
+		return nil
+	}
+	log.Info("stock-history backfill ran",
+		"symbols", res.SymbolsBackfilled,
+		"rows", res.RowsWritten,
+		"skipped", res.Skipped,
+		"errors", res.UpstreamErrors,
+		"throttled", res.UpstreamThrottled)
+	return nil
+}
+
 // runExecutionWorker is the spec p.55-56 partial-fill loop. It wakes
 // up every interval and asks the service to walk every active order;
 // the service decides per-order whether to fire one fill on this tick

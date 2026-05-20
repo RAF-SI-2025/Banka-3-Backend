@@ -44,3 +44,26 @@ func (a *alphaForexAdapter) FXQuote(ctx context.Context, from, to string) (bid, 
 	}
 	return q.Bid, q.Ask, nil
 }
+
+// alphaHistoryAdapter implements service.StockHistoryProvider against
+// the Alpha Vantage TIME_SERIES_DAILY endpoint, translating
+// alphavantage.ErrThrottled into the provider-agnostic
+// service.ErrMarketDataThrottled sentinel like the other adapters.
+type alphaHistoryAdapter struct {
+	c *alphavantage.Client
+}
+
+func (a *alphaHistoryAdapter) DailyHistory(ctx context.Context, symbol string) ([]service.HistoryBar, error) {
+	bars, err := a.c.TimeSeriesDaily(ctx, symbol)
+	if err != nil {
+		if errors.Is(err, alphavantage.ErrThrottled) {
+			return nil, fmt.Errorf("%w: %v", service.ErrMarketDataThrottled, err)
+		}
+		return nil, err
+	}
+	out := make([]service.HistoryBar, 0, len(bars))
+	for _, b := range bars {
+		out = append(out, service.HistoryBar{Date: b.Date, Close: b.Close, Volume: b.Volume})
+	}
+	return out, nil
+}

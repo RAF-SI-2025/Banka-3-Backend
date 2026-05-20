@@ -39,6 +39,24 @@ type ForexQuoteProvider interface {
 	FXQuote(ctx context.Context, from, to string) (bid, ask string, err error)
 }
 
+// HistoryBar is one daily close from a stock-history feed. The trading
+// service stores a single price per day, so only the close + volume
+// are carried; bid/ask are synthesised from StockSpread on persist.
+type HistoryBar struct {
+	Date   time.Time
+	Close  string
+	Volume int64
+}
+
+// StockHistoryProvider returns the recent daily-close series for a
+// symbol, oldest-first. The Alpha Vantage TIME_SERIES_DAILY adapter
+// implements it; tests inject a stub. Returns ErrMarketDataThrottled
+// (wrapped or equal) on an upstream quota envelope so the backfill can
+// stop cleanly, like the live refresher.
+type StockHistoryProvider interface {
+	DailyHistory(ctx context.Context, symbol string) ([]HistoryBar, error)
+}
+
 // MarketData orchestrates one refresh pass across stock + forex
 // listings. It walks the catalog, calls the upstream provider for each
 // listing, synthesises bid/ask for stocks (where the provider only
@@ -56,6 +74,11 @@ type MarketData struct {
 	Stocks StockQuoteProvider
 	// Forex may be nil; in that case forex listings are skipped.
 	Forex ForexQuoteProvider
+	// History backfills the daily-close chart series for stocks (Alpha
+	// Vantage TIME_SERIES_DAILY). May be nil; when nil
+	// BackfillStockHistory is a no-op and the keyless synthetic seed
+	// remains the chart's only source.
+	History StockHistoryProvider
 	// StockSpread is the symmetric ±bid/ask offset around the provider's
 	// single price for stocks (e.g. 0.001 → bid = price·0.999, ask =
 	// price·1.001). The bank's profit on stock trades comes from the
@@ -96,6 +119,97 @@ func (m *MarketData) RunOnce(ctx context.Context) (*MarketDataResult, error) {
 	}
 	if err := m.refreshForex(ctx, res); err != nil {
 		return res, err
+	}
+	return res, nil
+}
+
+// StockHistoryBackfillResult summarises one backfill pass.
+type StockHistoryBackfillResult struct {
+	SymbolsBackfilled int
+	RowsWritten       int
+	Skipped           int
+	UpstreamThrottled bool
+	UpstreamErrors    int
+}
+
+// BackfillStockHistory pulls the recent daily-close series for every
+// stock listing and writes it into listing_daily_price_info so the
+// listing-detail chart has real history whenever an Alpha Vantage key
+// is configured (spec p.40). UpsertListingDaily is an upsert, so this
+// overwrites whatever the keyless synthetic seed planted — matching the
+// old codebase's "synthetic seed for keyless dev, real history when
+// keyed" split.
+//
+// A symbol that already has a row stamped today is skipped: the daily
+// series doesn't change intraday, so re-running on every container
+// restart would burn the free-tier quota for no new data. On an
+// upstream quota envelope the pass stops cleanly, keeping whatever it
+// fetched before the limit.
+func (m *MarketData) BackfillStockHistory(ctx context.Context) (*StockHistoryBackfillResult, error) {
+	res := &StockHistoryBackfillResult{}
+	if m == nil || m.History == nil {
+		return res, nil
+	}
+	rows, err := m.allListings(ctx, domain.SecurityStock)
+	if err != nil {
+		return res, err
+	}
+	today := m.today()
+	for _, r := range rows {
+		if ctx.Err() != nil {
+			return res, nil
+		}
+		sym := r.Security.Ticker
+		if existing, herr := m.Store.GetListingDailyHistory(ctx, r.Listing.ID, today, today); herr == nil && len(existing) > 0 {
+			res.Skipped++
+			continue
+		}
+		bars, err := m.History.DailyHistory(ctx, sym)
+		if err != nil {
+			if errors.Is(err, ErrMarketDataThrottled) {
+				res.UpstreamThrottled = true
+				m.Log.Warn("stock-history backfill hit upstream quota", "symbol", sym)
+				return res, nil
+			}
+			res.UpstreamErrors++
+			m.Log.Warn("stock-history backfill failed", "symbol", sym, "err", err.Error())
+			m.sleep(ctx)
+			continue
+		}
+		prev := ""
+		wrote := 0
+		for _, b := range bars {
+			bid, ask, serr := stockSpread(b.Close, m.StockSpread)
+			if serr != nil {
+				continue
+			}
+			change, cerr := changeAmt(prev, b.Close)
+			if cerr != nil {
+				change = "0"
+			}
+			y, mo, d := b.Date.Date()
+			day := time.Date(y, mo, d, 0, 0, 0, 0, today.Location())
+			if perr := m.Store.UpsertListingDaily(ctx, &domain.ListingDailyPrice{
+				ListingID: r.Listing.ID,
+				Date:      day,
+				Price:     b.Close,
+				Ask:       ask,
+				Bid:       bid,
+				ChangeAmt: change,
+				Volume:    b.Volume,
+			}); perr != nil {
+				res.UpstreamErrors++
+				m.Log.Warn("stock-history persist failed", "symbol", sym, "err", perr.Error())
+				continue
+			}
+			prev = b.Close
+			wrote++
+		}
+		if wrote > 0 {
+			res.SymbolsBackfilled++
+			res.RowsWritten += wrote
+		}
+		m.sleep(ctx)
 	}
 	return res, nil
 }

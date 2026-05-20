@@ -150,6 +150,7 @@ func Run() error {
 			Log:         log,
 			Stocks:      &alphaStockAdapter{c: client},
 			Forex:       &alphaForexAdapter{c: client},
+			History:     &alphaHistoryAdapter{c: client},
 			StockSpread: config.Float("STOCK_BIDASK_SPREAD", 0.001),
 			Pause:       config.Duration("MARKET_DATA_PAUSE", 13*time.Second),
 			Belgrade:    belgrade,
@@ -230,6 +231,15 @@ func Run() error {
 	mdInterval := config.Duration("MARKET_DATA_REFRESH_INTERVAL", 6*time.Hour)
 	g.Go(func() error {
 		return runMarketDataRefresh(gctx, log, svc, mdInterval)
+	})
+
+	// One-shot stock-history backfill (spec p.40). When an Alpha
+	// Vantage key is configured this pulls real daily history at
+	// startup so the listing-detail chart isn't limited to the keyless
+	// synthetic seed; the 6h live refresh above keeps today's point
+	// fresh thereafter. No-op when MarketData / History is nil.
+	g.Go(func() error {
+		return runStockHistoryBackfill(gctx, log, svc)
 	})
 
 	// c4 SAGA recovery worker — scans trading.saga_executions for rows

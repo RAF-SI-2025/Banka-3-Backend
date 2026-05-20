@@ -15,6 +15,7 @@ import (
 	"fmt"
 	"net/http"
 	"net/url"
+	"sort"
 	"strconv"
 	"strings"
 	"time"
@@ -92,6 +93,17 @@ type FXQuote struct {
 	UpdatedAt    time.Time
 }
 
+// DailyBar is one row of the TIME_SERIES_DAILY series. Only the close
+// and volume are surfaced — the chart plots close and the trading
+// service stores a single price per day. Date is the series' own
+// (US/Eastern) calendar day; the caller restamps to Belgrade when it
+// persists.
+type DailyBar struct {
+	Date   time.Time
+	Close  string
+	Volume int64
+}
+
 // Quote fetches a single stock/ETF quote.
 func (c *Client) Quote(ctx context.Context, symbol string) (*StockQuote, error) {
 	body, err := c.do(ctx, url.Values{
@@ -133,6 +145,53 @@ func (c *Client) Quote(ctx context.Context, symbol string) (*StockQuote, error) 
 	if out.Price == "" {
 		return nil, ErrEmpty
 	}
+	return out, nil
+}
+
+// TimeSeriesDaily fetches the recent daily-close history for a symbol.
+// outputsize=compact returns ~100 most-recent trading days, which keeps
+// the payload under do()'s 1 MiB cap (outputsize=full is 20+ years and
+// overflows it) and is plenty for the listing-detail chart. Bars come
+// back oldest-first so the caller can persist them in chart order.
+// ErrThrottled / ErrEmpty propagate from do() exactly as in Quote.
+func (c *Client) TimeSeriesDaily(ctx context.Context, symbol string) ([]DailyBar, error) {
+	body, err := c.do(ctx, url.Values{
+		"function":   {"TIME_SERIES_DAILY"},
+		"symbol":     {symbol},
+		"outputsize": {"compact"},
+	})
+	if err != nil {
+		return nil, err
+	}
+	var env struct {
+		Series map[string]map[string]string `json:"Time Series (Daily)"`
+	}
+	if err := json.Unmarshal(body, &env); err != nil {
+		return nil, fmt.Errorf("alphavantage: decode daily series: %w", err)
+	}
+	if len(env.Series) == 0 {
+		return nil, ErrEmpty
+	}
+	out := make([]DailyBar, 0, len(env.Series))
+	for day, cols := range env.Series {
+		d, perr := time.Parse("2006-01-02", day)
+		if perr != nil {
+			continue
+		}
+		closePx := strings.TrimSpace(cols["4. close"])
+		if closePx == "" {
+			continue
+		}
+		var vol int64
+		if v := strings.TrimSpace(cols["5. volume"]); v != "" {
+			vol, _ = strconv.ParseInt(v, 10, 64)
+		}
+		out = append(out, DailyBar{Date: d, Close: closePx, Volume: vol})
+	}
+	if len(out) == 0 {
+		return nil, ErrEmpty
+	}
+	sort.Slice(out, func(i, j int) bool { return out[i].Date.Before(out[j].Date) })
 	return out, nil
 }
 
