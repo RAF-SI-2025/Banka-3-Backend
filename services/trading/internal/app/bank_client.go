@@ -42,6 +42,33 @@ func withBankAdmin(ctx context.Context) context.Context {
 	return auth.AttachWithOriginToOutgoing(ctx, admin, origin)
 }
 
+// withBankAdminOrigin is withBankAdmin with the origin principal
+// supplied explicitly. Callers reach for this when the ctx principal
+// (e.g. tax cron's admin) is not the real initiator of the action —
+// the tax cron iterates over users and needs the taxpayer's identity
+// to land on `transactions.initiator_client_id`.
+func withBankAdminOrigin(ctx context.Context, origin auth.Principal) context.Context {
+	admin := auth.Principal{
+		UserID:      "00000000-0000-0000-0000-00000000fffe",
+		UserKind:    auth.KindEmployee,
+		Permissions: []string{permissions.Admin},
+	}
+	return auth.AttachWithOriginToOutgoing(ctx, admin, origin)
+}
+
+// bankUserKindFromTrading maps trading's domain.UserKind constants
+// onto pkg/auth's. Mobile + bank share the auth constants; trading
+// has its own copy because the domain layer there carries a
+// "fund" kind not present elsewhere. "fund" actors trade in the
+// bank's name and shouldn't surface as a client-visible initiator,
+// so they fall back to KindEmployee for the bank's audit.
+func bankUserKindFromTrading(k domain.UserKind) auth.UserKind {
+	if k == domain.KindClient {
+		return auth.KindClient
+	}
+	return auth.KindEmployee
+}
+
 func (a *bankSettlerAdapter) Settle(ctx context.Context, in service.SettleInput) (string, error) {
 	ctx = withBankAdmin(ctx)
 	resp, err := a.c.SettleTrade(ctx, &bankpb.SettleTradeRequest{
@@ -80,10 +107,19 @@ func (a *bankSettlerAdapter) SettleForex(ctx context.Context, in service.SettleF
 
 // SettleTax bridges service.TaxSettler to bank.SettleCapitalGainsTax.
 // Same admin-metadata sentinel idiom as Settle — bank's interceptor
-// rejects empty user-ids, and the bank-side handler clears the sentinel
-// before writing initiator_client_id.
+// rejects empty user-ids — plus an explicit per-call origin override
+// (the taxpayer) so the bank stamps `transactions.initiator_client_id`
+// with the *user being taxed* rather than the cron's admin principal.
+// See [[reference_be16_sentinel_origin_forwarding]].
 func (a *bankSettlerAdapter) SettleTax(ctx context.Context, in service.TaxSettleInput) (string, error) {
-	ctx = withBankAdmin(ctx)
+	if in.InitiatorClientID != "" {
+		ctx = withBankAdminOrigin(ctx, auth.Principal{
+			UserID:   in.InitiatorClientID,
+			UserKind: bankUserKindFromTrading(in.InitiatorClientKind),
+		})
+	} else {
+		ctx = withBankAdmin(ctx)
+	}
 	resp, err := a.c.SettleCapitalGainsTax(ctx, &bankpb.SettleCapitalGainsTaxRequest{
 		AccountId: in.AccountID,
 		AmountRsd: in.AmountRSD,

@@ -71,12 +71,19 @@ func (s *Service) SettleCapitalGainsTax(ctx context.Context, in SettleCapitalGai
 	}
 
 	// Forward actuary-flavored principal so the FX leg's commission
-	// zeroes out (spec p.62).  Drop the caller's UserID so it doesn't
-	// land in transactions.initiator_client_id.
+	// zeroes out (spec p.62).  Drop the caller's UserID so the
+	// sentinel-admin doesn't land in transactions.initiator_client_id.
+	// When trading forwards an origin principal alongside the sentinel
+	// (the real taxpayer — see [[reference_be16_sentinel_origin_forwarding]])
+	// and that origin is a client, stamp the client there so the tax
+	// debit shows up on the user's own statement.
 	initiator := auth.Principal{
 		UserID:      "",
 		UserKind:    auth.KindEmployee,
 		Permissions: []string{permissions.Admin, permissions.Actuary},
+	}
+	if origin, ok := auth.OriginPrincipalFrom(ctx); ok && origin.UserKind == auth.KindClient {
+		initiator.UserID = origin.UserID
 	}
 
 	purpose := in.Purpose

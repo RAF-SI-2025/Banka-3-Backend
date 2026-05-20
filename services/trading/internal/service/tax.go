@@ -69,12 +69,20 @@ func taxOpID(accountID string, gainIDs []string, period time.Time) string {
 	return uuid.NewSHA1(taxNamespace, []byte(payload)).String()
 }
 
-// TaxSettleInput mirrors bank.SettleCapitalGainsTax.
+// TaxSettleInput mirrors bank.SettleCapitalGainsTax. InitiatorClient*
+// carry the taxpayer's identity so the bank can stamp
+// `transactions.initiator_client_id` correctly — without it the tax
+// debit lands with NULL initiator and never appears on the client's
+// own statement (spec p.20 "pregled svojih transakcija"). Same BE-16
+// pattern the trade settle path uses; see
+// [[reference_be16_sentinel_origin_forwarding]].
 type TaxSettleInput struct {
-	AccountID string
-	AmountRSD string
-	OpID      string
-	Purpose   string
+	AccountID           string
+	AmountRSD           string
+	OpID                string
+	Purpose             string
+	InitiatorClientID   string
+	InitiatorClientKind domain.UserKind
 }
 
 // TaxSettler is the trading service's view of bank.SettleCapitalGainsTax.
@@ -279,10 +287,12 @@ func (s *Service) runTaxForUser(ctx context.Context, userID string, kind domain.
 		opID := taxOpID(g.accountID, g.ids, period)
 		if money.IsPositive(taxAmt) {
 			settledOpID, err := s.TaxSettler.SettleTax(ctx, TaxSettleInput{
-				AccountID: g.accountID,
-				AmountRSD: money.FormatAmount(taxAmt),
-				OpID:      opID,
-				Purpose:   "Porez na kapitalni dobitak",
+				AccountID:           g.accountID,
+				AmountRSD:           money.FormatAmount(taxAmt),
+				OpID:                opID,
+				Purpose:             "Porez na kapitalni dobitak",
+				InitiatorClientID:   userID,
+				InitiatorClientKind: kind,
 			})
 			if err != nil {
 				return nil, err
