@@ -183,22 +183,7 @@ func RegisterExternalOTCInternalHTTP(mux *http.ServeMux, srv *Server, apiKey str
 			writeExternalOTCJSON(w, http.StatusBadRequest, map[string]string{"error": "invalid JSON"})
 			return
 		}
-		thread, err := srv.CreateExternalOTCOfferForCaller(ctx, CreateExternalOTCOfferInput{
-			RemoteBankCode:    in.RemoteBankCode,
-			RemoteThreadID:    in.RemoteThreadID,
-			RemoteUserRef:     in.RemoteUserRef,
-			RemoteDisplayName: in.RemoteDisplayName,
-			RemoteAccountRef:  in.RemoteAccountRef,
-			BuyerAccountID:    in.BuyerAccountID,
-			SellerHoldingID:   in.SellerHoldingID,
-			SecurityTicker:    in.SecurityTicker,
-			SecurityType:      in.SecurityType,
-			Currency:          in.Currency,
-			Quantity:          in.Quantity,
-			PricePerUnit:      in.PricePerUnit,
-			Premium:           in.Premium,
-			SettlementDate:    in.SettlementDate,
-		})
+		thread, err := srv.CreateExternalOTCOfferForCaller(ctx, CreateExternalOTCOfferInput(in))
 		if err != nil {
 			writeExternalOTCStatusError(w, err)
 			return

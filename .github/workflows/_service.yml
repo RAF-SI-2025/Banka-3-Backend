@@ -16,6 +16,7 @@ jobs:
       - uses: actions/setup-go@v6
         with:
           go-version-file: services/${{ inputs.service }}/go.mod
+          cache-dependency-path: services/${{ inputs.service }}/go.sum
       - run: test -z "$(gofmt -s -l services/${{ inputs.service }})"
 
   tidy:
@@ -26,6 +27,7 @@ jobs:
       - uses: actions/setup-go@v6
         with:
           go-version-file: services/${{ inputs.service }}/go.mod
+          cache-dependency-path: services/${{ inputs.service }}/go.sum
       - working-directory: services/${{ inputs.service }}
         run: |
           go mod tidy
@@ -39,6 +41,7 @@ jobs:
       - uses: actions/setup-go@v6
         with:
           go-version-file: services/${{ inputs.service }}/go.mod
+          cache-dependency-path: services/${{ inputs.service }}/go.sum
       - uses: golangci/golangci-lint-action@v9
         with:
           version: v2.4
@@ -52,6 +55,7 @@ jobs:
       - uses: actions/setup-go@v6
         with:
           go-version-file: services/${{ inputs.service }}/go.mod
+          cache-dependency-path: services/${{ inputs.service }}/go.sum
       - working-directory: services/${{ inputs.service }}
         run: go build ./...
 
@@ -63,6 +67,7 @@ jobs:
       - uses: actions/setup-go@v6
         with:
           go-version-file: services/${{ inputs.service }}/go.mod
+          cache-dependency-path: services/${{ inputs.service }}/go.sum
       - working-directory: services/${{ inputs.service }}
         run: go test -race -count=1 ./...
 
