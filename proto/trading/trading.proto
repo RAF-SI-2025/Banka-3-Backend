@@ -11,6 +11,7 @@ import "trading/option.proto";
 import "trading/order.proto";
 import "trading/holding.proto";
 import "trading/tax.proto";
+import "trading/external_otc.proto";
 
 service TradingService {
   // Exchanges
@@ -42,6 +43,16 @@ service TradingService {
   rpc ListHoldings(ListHoldingsRequest) returns (ListHoldingsResponse);
   rpc SellHolding(SellHoldingRequest) returns (SellHoldingResponse);
   rpc SetHoldingPublic(SetHoldingPublicRequest) returns (SetHoldingPublicResponse);
+
+  // Celina 5 external OTC
+  rpc ListExternalOTCThreads(ListExternalOTCThreadsRequest) returns (ListExternalOTCThreadsResponse);
+  rpc GetExternalOTCThread(GetExternalOTCThreadRequest) returns (GetExternalOTCThreadResponse);
+  rpc CreateExternalOTCOffer(CreateExternalOTCOfferRequest) returns (CreateExternalOTCOfferResponse);
+  rpc CounterExternalOTCOffer(ExternalOTCActionRequest) returns (ExternalOTCActionResponse);
+  rpc WithdrawExternalOTCOffer(ExternalOTCActionRequest) returns (ExternalOTCActionResponse);
+  rpc AcceptExternalOTCOffer(ExternalOTCActionRequest) returns (ExternalOTCActionResponse);
+  rpc ListExternalOTCContracts(ListExternalOTCContractsRequest) returns (ListExternalOTCContractsResponse);
+  rpc ExerciseExternalOTCContract(ExerciseExternalOTCContractRequest) returns (ExerciseExternalOTCContractResponse);
 
   // Tax
   rpc RunCapitalGains(RunCapitalGainsRequest) returns (RunCapitalGainsResponse);

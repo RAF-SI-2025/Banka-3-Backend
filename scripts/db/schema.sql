@@ -572,3 +572,107 @@ CREATE TABLE IF NOT EXISTS order_idempotency_keys (
 );
 CREATE INDEX IF NOT EXISTS order_idempotency_keys_created_at_idx
     ON order_idempotency_keys (created_at);
+
+-- Celina 5 raw /interbank compatibility. The fresh backend stores enough
+-- protocol state to deduplicate repeated partner messages and to continue
+-- commit / rollback after transient transport failures.
+CREATE TABLE IF NOT EXISTS interbank_protocol_transactions (
+    sender_routing_number INTEGER     NOT NULL,
+    transaction_id        TEXT        NOT NULL,
+    transaction_body      TEXT        NOT NULL,
+    status                TEXT        NOT NULL CHECK (status IN ('prepared', 'committed', 'rolled_back')),
+    created_at            TIMESTAMP   NOT NULL DEFAULT NOW(),
+    updated_at            TIMESTAMP   NOT NULL DEFAULT NOW(),
+    PRIMARY KEY (sender_routing_number, transaction_id)
+);
+
+CREATE TABLE IF NOT EXISTS interbank_protocol_messages (
+    sender_routing_number INTEGER     NOT NULL,
+    idempotence_key       TEXT        NOT NULL,
+    message_type          TEXT        NOT NULL CHECK (message_type IN ('NEW_TX', 'COMMIT_TX', 'ROLLBACK_TX')),
+    transaction_id        TEXT        NOT NULL DEFAULT '',
+    response_status       INTEGER     NOT NULL CHECK (response_status IN (200, 202, 204)),
+    response_body         TEXT        NOT NULL DEFAULT '',
+    created_at            TIMESTAMP   NOT NULL DEFAULT NOW(),
+    updated_at            TIMESTAMP   NOT NULL DEFAULT NOW(),
+    PRIMARY KEY (sender_routing_number, idempotence_key)
+);
+
+CREATE TABLE IF NOT EXISTS external_otc_threads (
+    id                   TEXT          PRIMARY KEY,
+    direction            VARCHAR(16)   NOT NULL,
+    remote_bank_code     VARCHAR(8)    NOT NULL,
+    remote_thread_id     TEXT          NOT NULL DEFAULT '',
+    remote_user_ref      TEXT          NOT NULL,
+    remote_display_name  TEXT          NOT NULL,
+    remote_account_ref   TEXT          NOT NULL DEFAULT '',
+    local_user_id        TEXT          NOT NULL,
+    local_user_kind      VARCHAR(16)   NOT NULL,
+    local_account_id     TEXT          NOT NULL,
+    local_account_number VARCHAR(20)   NOT NULL,
+    local_role           VARCHAR(16)   NOT NULL,
+    security_id          TEXT          NOT NULL,
+    security_ticker      VARCHAR(32)   NOT NULL,
+    seller_holding_id    TEXT          NOT NULL DEFAULT '',
+    quantity             BIGINT        NOT NULL CHECK (quantity > 0),
+    price_per_unit       NUMERIC(20,4) NOT NULL,
+    premium              NUMERIC(20,4) NOT NULL,
+    currency             VARCHAR(8)    NOT NULL,
+    settlement_date      DATE          NOT NULL,
+    modified_by_side     VARCHAR(16)   NOT NULL,
+    status               VARCHAR(16)   NOT NULL,
+    created_at           TIMESTAMP     NOT NULL DEFAULT NOW(),
+    updated_at           TIMESTAMP     NOT NULL DEFAULT NOW()
+);
+CREATE INDEX IF NOT EXISTS external_otc_threads_local_user_idx
+    ON external_otc_threads (local_user_id, updated_at DESC);
+CREATE INDEX IF NOT EXISTS external_otc_threads_remote_idx
+    ON external_otc_threads (remote_bank_code, remote_thread_id);
+
+CREATE TABLE IF NOT EXISTS external_otc_iterations (
+    id               TEXT          PRIMARY KEY,
+    thread_id        TEXT          NOT NULL REFERENCES external_otc_threads(id) ON DELETE CASCADE,
+    proposed_by_side VARCHAR(16)   NOT NULL,
+    quantity         BIGINT        NOT NULL CHECK (quantity > 0),
+    price_per_unit   NUMERIC(20,4) NOT NULL,
+    premium          NUMERIC(20,4) NOT NULL,
+    settlement_date  DATE          NOT NULL,
+    created_at       TIMESTAMP     NOT NULL DEFAULT NOW()
+);
+CREATE INDEX IF NOT EXISTS external_otc_iterations_thread_idx
+    ON external_otc_iterations (thread_id, created_at ASC);
+
+CREATE TABLE IF NOT EXISTS external_otc_contracts (
+    id                   TEXT          PRIMARY KEY,
+    thread_id            TEXT          NOT NULL REFERENCES external_otc_threads(id) ON DELETE CASCADE,
+    direction            VARCHAR(16)   NOT NULL,
+    remote_bank_code     VARCHAR(8)    NOT NULL,
+    remote_thread_id     TEXT          NOT NULL DEFAULT '',
+    remote_user_ref      TEXT          NOT NULL,
+    remote_display_name  TEXT          NOT NULL,
+    remote_account_ref   TEXT          NOT NULL DEFAULT '',
+    local_user_id        TEXT          NOT NULL,
+    local_user_kind      VARCHAR(16)   NOT NULL,
+    local_account_id     TEXT          NOT NULL,
+    local_account_number VARCHAR(20)   NOT NULL,
+    local_role           VARCHAR(16)   NOT NULL,
+    security_id          TEXT          NOT NULL,
+    security_ticker      VARCHAR(32)   NOT NULL,
+    seller_holding_id    TEXT          NOT NULL DEFAULT '',
+    quantity             BIGINT        NOT NULL CHECK (quantity > 0),
+    strike_price         NUMERIC(20,4) NOT NULL,
+    premium_paid         NUMERIC(20,4) NOT NULL,
+    currency             VARCHAR(8)    NOT NULL,
+    settlement_date      DATE          NOT NULL,
+    accepted_by_side     VARCHAR(16)   NOT NULL,
+    status               VARCHAR(16)   NOT NULL,
+    premium_op_id        TEXT          NOT NULL DEFAULT '',
+    exercise_op_id       TEXT          NOT NULL DEFAULT '',
+    exercised_at         TIMESTAMP,
+    created_at           TIMESTAMP     NOT NULL DEFAULT NOW(),
+    updated_at           TIMESTAMP     NOT NULL DEFAULT NOW()
+);
+CREATE INDEX IF NOT EXISTS external_otc_contracts_local_user_idx
+    ON external_otc_contracts (local_user_id, updated_at DESC);
+CREATE INDEX IF NOT EXISTS external_otc_contracts_thread_idx
+    ON external_otc_contracts (thread_id);

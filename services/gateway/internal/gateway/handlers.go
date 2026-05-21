@@ -204,6 +204,19 @@ func SetupApi(router *gin.Engine, server *Server) {
 	}
 	api.POST("/options/:id/exercise", auth, secured("role:employee"), server.ExerciseOption)
 
+	otc := api.Group("/otc", auth, secured("role:client|employee"))
+	{
+		otc.GET("/external-discovery", server.ListExternalPublicHoldings)
+		otc.POST("/external-offers", server.CreateExternalOtcOffer)
+		otc.GET("/external-offers", server.ListExternalOtcThreads)
+		otc.GET("/external-offers/:threadId", server.GetExternalOtcThread)
+		otc.POST("/external-offers/:bankCode/:threadId/counter", server.CounterExternalOtcOffer)
+		otc.POST("/external-offers/:bankCode/:threadId/withdraw", server.WithdrawExternalOtcOffer)
+		otc.POST("/external-offers/:bankCode/:threadId/accept", server.AcceptExternalOtcOffer)
+		otc.GET("/external-contracts", server.ListExternalOtcContracts)
+		otc.POST("/external-contracts/:bankCode/:contractId/exercise", totp, server.ExerciseExternalOtcContract)
+	}
+
 	// Supervisor-only toggle used to exercise the trading flow outside real
 	// market hours (see spec p.40 and issue #194). Admin bypass still applies
 	// through `secured("supervisor")`.

@@ -50,6 +50,7 @@ services:
     environment:
       DATABASE_URL: "postgres://${POSTGRES_USER}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB}?sslmode=disable"
       GRPC_PORT: "50051"
+      BANK_INTERNAL_API_KEY: ${BANK_INTERNAL_API_KEY:-dev-internal-banka3}
       # Cypress on-demand cron trigger (cron_debug.go). Set to empty to
       # disable. Bound only on the docker-internal port; the host mapping
       # is what cypress hits at localhost:${BANK_DEBUG_HTTP_PORT}.
@@ -150,6 +151,11 @@ services:
       BANK_GRPC_ADDR: "bank:50051"
       EXCHANGE_GRPC_ADDR: "exchange:50051"
       TRADING_GRPC_ADDR: "bank:50051"
+      INTERBANK_ROUTES: ${INTERBANK_ROUTES:-}
+      INTERBANK_API_KEY: ${INTERBANK_API_KEY:-dev-outbound-banka3}
+      BANK_ROUTING_NUMBER: ${BANK_ROUTING_NUMBER:-333}
+      BANK_INTERNAL_HTTP_URL: ${BANK_INTERNAL_HTTP_URL:-http://bank:50090}
+      BANK_INTERNAL_API_KEY: ${BANK_INTERNAL_API_KEY:-dev-internal-banka3}
       LOG_LEVEL: ${LOG_LEVEL:-info}
       LOG_FORMAT: ${LOG_FORMAT:-text}
     depends_on:

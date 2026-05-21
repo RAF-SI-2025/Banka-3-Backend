@@ -24,7 +24,7 @@ var File_trading_trading_proto protoreflect.FileDescriptor
 
 const file_trading_trading_proto_rawDesc = "" +
 	"\n" +
-	"\x15trading/trading.proto\x12\atrading\x1a\x16trading/exchange.proto\x1a\x15trading/listing.proto\x1a\x13trading/forex.proto\x1a\x14trading/option.proto\x1a\x13trading/order.proto\x1a\x15trading/holding.proto\x1a\x11trading/tax.proto2\xd0\r\n" +
+	"\x15trading/trading.proto\x12\atrading\x1a\x16trading/exchange.proto\x1a\x15trading/listing.proto\x1a\x13trading/forex.proto\x1a\x14trading/option.proto\x1a\x13trading/order.proto\x1a\x15trading/holding.proto\x1a\x11trading/tax.proto\x1a\x1atrading/external_otc.proto2\x9c\x14\n" +
 	"\x0eTradingService\x12N\n" +
 	"\rListExchanges\x12\x1d.trading.ListExchangesRequest\x1a\x1e.trading.ListExchangesResponse\x12l\n" +
 	"\x17SetExchangeOpenOverride\x12'.trading.SetExchangeOpenOverrideRequest\x1a(.trading.SetExchangeOpenOverrideResponse\x12r\n" +
@@ -45,54 +45,74 @@ const file_trading_trading_proto_rawDesc = "" +
 	"\vCancelOrder\x12\x1b.trading.CancelOrderRequest\x1a\x1c.trading.CancelOrderResponse\x12K\n" +
 	"\fListHoldings\x12\x1c.trading.ListHoldingsRequest\x1a\x1d.trading.ListHoldingsResponse\x12H\n" +
 	"\vSellHolding\x12\x1b.trading.SellHoldingRequest\x1a\x1c.trading.SellHoldingResponse\x12W\n" +
-	"\x10SetHoldingPublic\x12 .trading.SetHoldingPublicRequest\x1a!.trading.SetHoldingPublicResponse\x12T\n" +
+	"\x10SetHoldingPublic\x12 .trading.SetHoldingPublicRequest\x1a!.trading.SetHoldingPublicResponse\x12i\n" +
+	"\x16ListExternalOTCThreads\x12&.trading.ListExternalOTCThreadsRequest\x1a'.trading.ListExternalOTCThreadsResponse\x12c\n" +
+	"\x14GetExternalOTCThread\x12$.trading.GetExternalOTCThreadRequest\x1a%.trading.GetExternalOTCThreadResponse\x12i\n" +
+	"\x16CreateExternalOTCOffer\x12&.trading.CreateExternalOTCOfferRequest\x1a'.trading.CreateExternalOTCOfferResponse\x12`\n" +
+	"\x17CounterExternalOTCOffer\x12!.trading.ExternalOTCActionRequest\x1a\".trading.ExternalOTCActionResponse\x12a\n" +
+	"\x18WithdrawExternalOTCOffer\x12!.trading.ExternalOTCActionRequest\x1a\".trading.ExternalOTCActionResponse\x12_\n" +
+	"\x16AcceptExternalOTCOffer\x12!.trading.ExternalOTCActionRequest\x1a\".trading.ExternalOTCActionResponse\x12o\n" +
+	"\x18ListExternalOTCContracts\x12(.trading.ListExternalOTCContractsRequest\x1a).trading.ListExternalOTCContractsResponse\x12x\n" +
+	"\x1bExerciseExternalOTCContract\x12+.trading.ExerciseExternalOTCContractRequest\x1a,.trading.ExerciseExternalOTCContractResponse\x12T\n" +
 	"\x0fRunCapitalGains\x12\x1f.trading.RunCapitalGainsRequest\x1a .trading.RunCapitalGainsResponse\x12K\n" +
 	"\fListTaxDebts\x12\x1c.trading.ListTaxDebtsRequest\x1a\x1d.trading.ListTaxDebtsResponse\x12K\n" +
 	"\fGetMyTaxInfo\x12\x1c.trading.GetMyTaxInfoRequest\x1a\x1d.trading.GetMyTaxInfoResponseB:Z8github.com/RAF-SI-2025/Banka-3-Backend/pkg/proto/tradingb\x06proto3"
 
 var file_trading_trading_proto_goTypes = []any{
-	(*ListExchangesRequest)(nil),              // 0: trading.ListExchangesRequest
-	(*SetExchangeOpenOverrideRequest)(nil),    // 1: trading.SetExchangeOpenOverrideRequest
-	(*SetExchangeClosedOverrideRequest)(nil),  // 2: trading.SetExchangeClosedOverrideRequest
-	(*ListListingsRequest)(nil),               // 3: trading.ListListingsRequest
-	(*GetListingRequest)(nil),                 // 4: trading.GetListingRequest
-	(*ListListingHistoryRequest)(nil),         // 5: trading.ListListingHistoryRequest
-	(*ListForexPairsRequest)(nil),             // 6: trading.ListForexPairsRequest
-	(*ListOptionDatesRequest)(nil),            // 7: trading.ListOptionDatesRequest
-	(*ListOptionsRequest)(nil),                // 8: trading.ListOptionsRequest
-	(*ExerciseOptionRequest)(nil),             // 9: trading.ExerciseOptionRequest
-	(*CreateOrderRequest)(nil),                // 10: trading.CreateOrderRequest
-	(*ListOrdersRequest)(nil),                 // 11: trading.ListOrdersRequest
-	(*ApproveOrderRequest)(nil),               // 12: trading.ApproveOrderRequest
-	(*DeclineOrderRequest)(nil),               // 13: trading.DeclineOrderRequest
-	(*CancelOrderRequest)(nil),                // 14: trading.CancelOrderRequest
-	(*ListHoldingsRequest)(nil),               // 15: trading.ListHoldingsRequest
-	(*SellHoldingRequest)(nil),                // 16: trading.SellHoldingRequest
-	(*SetHoldingPublicRequest)(nil),           // 17: trading.SetHoldingPublicRequest
-	(*RunCapitalGainsRequest)(nil),            // 18: trading.RunCapitalGainsRequest
-	(*ListTaxDebtsRequest)(nil),               // 19: trading.ListTaxDebtsRequest
-	(*GetMyTaxInfoRequest)(nil),               // 20: trading.GetMyTaxInfoRequest
-	(*ListExchangesResponse)(nil),             // 21: trading.ListExchangesResponse
-	(*SetExchangeOpenOverrideResponse)(nil),   // 22: trading.SetExchangeOpenOverrideResponse
-	(*SetExchangeClosedOverrideResponse)(nil), // 23: trading.SetExchangeClosedOverrideResponse
-	(*ListListingsResponse)(nil),              // 24: trading.ListListingsResponse
-	(*GetListingResponse)(nil),                // 25: trading.GetListingResponse
-	(*ListListingHistoryResponse)(nil),        // 26: trading.ListListingHistoryResponse
-	(*ListForexPairsResponse)(nil),            // 27: trading.ListForexPairsResponse
-	(*ListOptionDatesResponse)(nil),           // 28: trading.ListOptionDatesResponse
-	(*ListOptionsResponse)(nil),               // 29: trading.ListOptionsResponse
-	(*ExerciseOptionResponse)(nil),            // 30: trading.ExerciseOptionResponse
-	(*CreateOrderResponse)(nil),               // 31: trading.CreateOrderResponse
-	(*ListOrdersResponse)(nil),                // 32: trading.ListOrdersResponse
-	(*ApproveOrderResponse)(nil),              // 33: trading.ApproveOrderResponse
-	(*DeclineOrderResponse)(nil),              // 34: trading.DeclineOrderResponse
-	(*CancelOrderResponse)(nil),               // 35: trading.CancelOrderResponse
-	(*ListHoldingsResponse)(nil),              // 36: trading.ListHoldingsResponse
-	(*SellHoldingResponse)(nil),               // 37: trading.SellHoldingResponse
-	(*SetHoldingPublicResponse)(nil),          // 38: trading.SetHoldingPublicResponse
-	(*RunCapitalGainsResponse)(nil),           // 39: trading.RunCapitalGainsResponse
-	(*ListTaxDebtsResponse)(nil),              // 40: trading.ListTaxDebtsResponse
-	(*GetMyTaxInfoResponse)(nil),              // 41: trading.GetMyTaxInfoResponse
+	(*ListExchangesRequest)(nil),                // 0: trading.ListExchangesRequest
+	(*SetExchangeOpenOverrideRequest)(nil),      // 1: trading.SetExchangeOpenOverrideRequest
+	(*SetExchangeClosedOverrideRequest)(nil),    // 2: trading.SetExchangeClosedOverrideRequest
+	(*ListListingsRequest)(nil),                 // 3: trading.ListListingsRequest
+	(*GetListingRequest)(nil),                   // 4: trading.GetListingRequest
+	(*ListListingHistoryRequest)(nil),           // 5: trading.ListListingHistoryRequest
+	(*ListForexPairsRequest)(nil),               // 6: trading.ListForexPairsRequest
+	(*ListOptionDatesRequest)(nil),              // 7: trading.ListOptionDatesRequest
+	(*ListOptionsRequest)(nil),                  // 8: trading.ListOptionsRequest
+	(*ExerciseOptionRequest)(nil),               // 9: trading.ExerciseOptionRequest
+	(*CreateOrderRequest)(nil),                  // 10: trading.CreateOrderRequest
+	(*ListOrdersRequest)(nil),                   // 11: trading.ListOrdersRequest
+	(*ApproveOrderRequest)(nil),                 // 12: trading.ApproveOrderRequest
+	(*DeclineOrderRequest)(nil),                 // 13: trading.DeclineOrderRequest
+	(*CancelOrderRequest)(nil),                  // 14: trading.CancelOrderRequest
+	(*ListHoldingsRequest)(nil),                 // 15: trading.ListHoldingsRequest
+	(*SellHoldingRequest)(nil),                  // 16: trading.SellHoldingRequest
+	(*SetHoldingPublicRequest)(nil),             // 17: trading.SetHoldingPublicRequest
+	(*ListExternalOTCThreadsRequest)(nil),       // 18: trading.ListExternalOTCThreadsRequest
+	(*GetExternalOTCThreadRequest)(nil),         // 19: trading.GetExternalOTCThreadRequest
+	(*CreateExternalOTCOfferRequest)(nil),       // 20: trading.CreateExternalOTCOfferRequest
+	(*ExternalOTCActionRequest)(nil),            // 21: trading.ExternalOTCActionRequest
+	(*ListExternalOTCContractsRequest)(nil),     // 22: trading.ListExternalOTCContractsRequest
+	(*ExerciseExternalOTCContractRequest)(nil),  // 23: trading.ExerciseExternalOTCContractRequest
+	(*RunCapitalGainsRequest)(nil),              // 24: trading.RunCapitalGainsRequest
+	(*ListTaxDebtsRequest)(nil),                 // 25: trading.ListTaxDebtsRequest
+	(*GetMyTaxInfoRequest)(nil),                 // 26: trading.GetMyTaxInfoRequest
+	(*ListExchangesResponse)(nil),               // 27: trading.ListExchangesResponse
+	(*SetExchangeOpenOverrideResponse)(nil),     // 28: trading.SetExchangeOpenOverrideResponse
+	(*SetExchangeClosedOverrideResponse)(nil),   // 29: trading.SetExchangeClosedOverrideResponse
+	(*ListListingsResponse)(nil),                // 30: trading.ListListingsResponse
+	(*GetListingResponse)(nil),                  // 31: trading.GetListingResponse
+	(*ListListingHistoryResponse)(nil),          // 32: trading.ListListingHistoryResponse
+	(*ListForexPairsResponse)(nil),              // 33: trading.ListForexPairsResponse
+	(*ListOptionDatesResponse)(nil),             // 34: trading.ListOptionDatesResponse
+	(*ListOptionsResponse)(nil),                 // 35: trading.ListOptionsResponse
+	(*ExerciseOptionResponse)(nil),              // 36: trading.ExerciseOptionResponse
+	(*CreateOrderResponse)(nil),                 // 37: trading.CreateOrderResponse
+	(*ListOrdersResponse)(nil),                  // 38: trading.ListOrdersResponse
+	(*ApproveOrderResponse)(nil),                // 39: trading.ApproveOrderResponse
+	(*DeclineOrderResponse)(nil),                // 40: trading.DeclineOrderResponse
+	(*CancelOrderResponse)(nil),                 // 41: trading.CancelOrderResponse
+	(*ListHoldingsResponse)(nil),                // 42: trading.ListHoldingsResponse
+	(*SellHoldingResponse)(nil),                 // 43: trading.SellHoldingResponse
+	(*SetHoldingPublicResponse)(nil),            // 44: trading.SetHoldingPublicResponse
+	(*ListExternalOTCThreadsResponse)(nil),      // 45: trading.ListExternalOTCThreadsResponse
+	(*GetExternalOTCThreadResponse)(nil),        // 46: trading.GetExternalOTCThreadResponse
+	(*CreateExternalOTCOfferResponse)(nil),      // 47: trading.CreateExternalOTCOfferResponse
+	(*ExternalOTCActionResponse)(nil),           // 48: trading.ExternalOTCActionResponse
+	(*ListExternalOTCContractsResponse)(nil),    // 49: trading.ListExternalOTCContractsResponse
+	(*ExerciseExternalOTCContractResponse)(nil), // 50: trading.ExerciseExternalOTCContractResponse
+	(*RunCapitalGainsResponse)(nil),             // 51: trading.RunCapitalGainsResponse
+	(*ListTaxDebtsResponse)(nil),                // 52: trading.ListTaxDebtsResponse
+	(*GetMyTaxInfoResponse)(nil),                // 53: trading.GetMyTaxInfoResponse
 }
 var file_trading_trading_proto_depIdxs = []int32{
 	0,  // 0: trading.TradingService.ListExchanges:input_type -> trading.ListExchangesRequest
@@ -113,32 +133,48 @@ var file_trading_trading_proto_depIdxs = []int32{
 	15, // 15: trading.TradingService.ListHoldings:input_type -> trading.ListHoldingsRequest
 	16, // 16: trading.TradingService.SellHolding:input_type -> trading.SellHoldingRequest
 	17, // 17: trading.TradingService.SetHoldingPublic:input_type -> trading.SetHoldingPublicRequest
-	18, // 18: trading.TradingService.RunCapitalGains:input_type -> trading.RunCapitalGainsRequest
-	19, // 19: trading.TradingService.ListTaxDebts:input_type -> trading.ListTaxDebtsRequest
-	20, // 20: trading.TradingService.GetMyTaxInfo:input_type -> trading.GetMyTaxInfoRequest
-	21, // 21: trading.TradingService.ListExchanges:output_type -> trading.ListExchangesResponse
-	22, // 22: trading.TradingService.SetExchangeOpenOverride:output_type -> trading.SetExchangeOpenOverrideResponse
-	23, // 23: trading.TradingService.SetExchangeClosedOverride:output_type -> trading.SetExchangeClosedOverrideResponse
-	24, // 24: trading.TradingService.ListListings:output_type -> trading.ListListingsResponse
-	25, // 25: trading.TradingService.GetListing:output_type -> trading.GetListingResponse
-	26, // 26: trading.TradingService.ListListingHistory:output_type -> trading.ListListingHistoryResponse
-	27, // 27: trading.TradingService.ListForexPairs:output_type -> trading.ListForexPairsResponse
-	28, // 28: trading.TradingService.ListOptionDates:output_type -> trading.ListOptionDatesResponse
-	29, // 29: trading.TradingService.ListOptions:output_type -> trading.ListOptionsResponse
-	30, // 30: trading.TradingService.ExerciseOption:output_type -> trading.ExerciseOptionResponse
-	31, // 31: trading.TradingService.CreateOrder:output_type -> trading.CreateOrderResponse
-	32, // 32: trading.TradingService.ListOrders:output_type -> trading.ListOrdersResponse
-	33, // 33: trading.TradingService.ApproveOrder:output_type -> trading.ApproveOrderResponse
-	34, // 34: trading.TradingService.DeclineOrder:output_type -> trading.DeclineOrderResponse
-	35, // 35: trading.TradingService.CancelOrder:output_type -> trading.CancelOrderResponse
-	36, // 36: trading.TradingService.ListHoldings:output_type -> trading.ListHoldingsResponse
-	37, // 37: trading.TradingService.SellHolding:output_type -> trading.SellHoldingResponse
-	38, // 38: trading.TradingService.SetHoldingPublic:output_type -> trading.SetHoldingPublicResponse
-	39, // 39: trading.TradingService.RunCapitalGains:output_type -> trading.RunCapitalGainsResponse
-	40, // 40: trading.TradingService.ListTaxDebts:output_type -> trading.ListTaxDebtsResponse
-	41, // 41: trading.TradingService.GetMyTaxInfo:output_type -> trading.GetMyTaxInfoResponse
-	21, // [21:42] is the sub-list for method output_type
-	0,  // [0:21] is the sub-list for method input_type
+	18, // 18: trading.TradingService.ListExternalOTCThreads:input_type -> trading.ListExternalOTCThreadsRequest
+	19, // 19: trading.TradingService.GetExternalOTCThread:input_type -> trading.GetExternalOTCThreadRequest
+	20, // 20: trading.TradingService.CreateExternalOTCOffer:input_type -> trading.CreateExternalOTCOfferRequest
+	21, // 21: trading.TradingService.CounterExternalOTCOffer:input_type -> trading.ExternalOTCActionRequest
+	21, // 22: trading.TradingService.WithdrawExternalOTCOffer:input_type -> trading.ExternalOTCActionRequest
+	21, // 23: trading.TradingService.AcceptExternalOTCOffer:input_type -> trading.ExternalOTCActionRequest
+	22, // 24: trading.TradingService.ListExternalOTCContracts:input_type -> trading.ListExternalOTCContractsRequest
+	23, // 25: trading.TradingService.ExerciseExternalOTCContract:input_type -> trading.ExerciseExternalOTCContractRequest
+	24, // 26: trading.TradingService.RunCapitalGains:input_type -> trading.RunCapitalGainsRequest
+	25, // 27: trading.TradingService.ListTaxDebts:input_type -> trading.ListTaxDebtsRequest
+	26, // 28: trading.TradingService.GetMyTaxInfo:input_type -> trading.GetMyTaxInfoRequest
+	27, // 29: trading.TradingService.ListExchanges:output_type -> trading.ListExchangesResponse
+	28, // 30: trading.TradingService.SetExchangeOpenOverride:output_type -> trading.SetExchangeOpenOverrideResponse
+	29, // 31: trading.TradingService.SetExchangeClosedOverride:output_type -> trading.SetExchangeClosedOverrideResponse
+	30, // 32: trading.TradingService.ListListings:output_type -> trading.ListListingsResponse
+	31, // 33: trading.TradingService.GetListing:output_type -> trading.GetListingResponse
+	32, // 34: trading.TradingService.ListListingHistory:output_type -> trading.ListListingHistoryResponse
+	33, // 35: trading.TradingService.ListForexPairs:output_type -> trading.ListForexPairsResponse
+	34, // 36: trading.TradingService.ListOptionDates:output_type -> trading.ListOptionDatesResponse
+	35, // 37: trading.TradingService.ListOptions:output_type -> trading.ListOptionsResponse
+	36, // 38: trading.TradingService.ExerciseOption:output_type -> trading.ExerciseOptionResponse
+	37, // 39: trading.TradingService.CreateOrder:output_type -> trading.CreateOrderResponse
+	38, // 40: trading.TradingService.ListOrders:output_type -> trading.ListOrdersResponse
+	39, // 41: trading.TradingService.ApproveOrder:output_type -> trading.ApproveOrderResponse
+	40, // 42: trading.TradingService.DeclineOrder:output_type -> trading.DeclineOrderResponse
+	41, // 43: trading.TradingService.CancelOrder:output_type -> trading.CancelOrderResponse
+	42, // 44: trading.TradingService.ListHoldings:output_type -> trading.ListHoldingsResponse
+	43, // 45: trading.TradingService.SellHolding:output_type -> trading.SellHoldingResponse
+	44, // 46: trading.TradingService.SetHoldingPublic:output_type -> trading.SetHoldingPublicResponse
+	45, // 47: trading.TradingService.ListExternalOTCThreads:output_type -> trading.ListExternalOTCThreadsResponse
+	46, // 48: trading.TradingService.GetExternalOTCThread:output_type -> trading.GetExternalOTCThreadResponse
+	47, // 49: trading.TradingService.CreateExternalOTCOffer:output_type -> trading.CreateExternalOTCOfferResponse
+	48, // 50: trading.TradingService.CounterExternalOTCOffer:output_type -> trading.ExternalOTCActionResponse
+	48, // 51: trading.TradingService.WithdrawExternalOTCOffer:output_type -> trading.ExternalOTCActionResponse
+	48, // 52: trading.TradingService.AcceptExternalOTCOffer:output_type -> trading.ExternalOTCActionResponse
+	49, // 53: trading.TradingService.ListExternalOTCContracts:output_type -> trading.ListExternalOTCContractsResponse
+	50, // 54: trading.TradingService.ExerciseExternalOTCContract:output_type -> trading.ExerciseExternalOTCContractResponse
+	51, // 55: trading.TradingService.RunCapitalGains:output_type -> trading.RunCapitalGainsResponse
+	52, // 56: trading.TradingService.ListTaxDebts:output_type -> trading.ListTaxDebtsResponse
+	53, // 57: trading.TradingService.GetMyTaxInfo:output_type -> trading.GetMyTaxInfoResponse
+	29, // [29:58] is the sub-list for method output_type
+	0,  // [0:29] is the sub-list for method input_type
 	0,  // [0:0] is the sub-list for extension type_name
 	0,  // [0:0] is the sub-list for extension extendee
 	0,  // [0:0] is the sub-list for field type_name
@@ -156,6 +192,7 @@ func file_trading_trading_proto_init() {
 	file_trading_order_proto_init()
 	file_trading_holding_proto_init()
 	file_trading_tax_proto_init()
+	file_trading_external_otc_proto_init()
 	type x struct{}
 	out := protoimpl.TypeBuilder{
 		File: protoimpl.DescBuilder{

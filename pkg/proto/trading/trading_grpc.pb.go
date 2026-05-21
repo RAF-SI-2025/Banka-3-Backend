@@ -19,27 +19,35 @@ import (
 const _ = grpc.SupportPackageIsVersion9
 
 const (
-	TradingService_ListExchanges_FullMethodName             = "/trading.TradingService/ListExchanges"
-	TradingService_SetExchangeOpenOverride_FullMethodName   = "/trading.TradingService/SetExchangeOpenOverride"
-	TradingService_SetExchangeClosedOverride_FullMethodName = "/trading.TradingService/SetExchangeClosedOverride"
-	TradingService_ListListings_FullMethodName              = "/trading.TradingService/ListListings"
-	TradingService_GetListing_FullMethodName                = "/trading.TradingService/GetListing"
-	TradingService_ListListingHistory_FullMethodName        = "/trading.TradingService/ListListingHistory"
-	TradingService_ListForexPairs_FullMethodName            = "/trading.TradingService/ListForexPairs"
-	TradingService_ListOptionDates_FullMethodName           = "/trading.TradingService/ListOptionDates"
-	TradingService_ListOptions_FullMethodName               = "/trading.TradingService/ListOptions"
-	TradingService_ExerciseOption_FullMethodName            = "/trading.TradingService/ExerciseOption"
-	TradingService_CreateOrder_FullMethodName               = "/trading.TradingService/CreateOrder"
-	TradingService_ListOrders_FullMethodName                = "/trading.TradingService/ListOrders"
-	TradingService_ApproveOrder_FullMethodName              = "/trading.TradingService/ApproveOrder"
-	TradingService_DeclineOrder_FullMethodName              = "/trading.TradingService/DeclineOrder"
-	TradingService_CancelOrder_FullMethodName               = "/trading.TradingService/CancelOrder"
-	TradingService_ListHoldings_FullMethodName              = "/trading.TradingService/ListHoldings"
-	TradingService_SellHolding_FullMethodName               = "/trading.TradingService/SellHolding"
-	TradingService_SetHoldingPublic_FullMethodName          = "/trading.TradingService/SetHoldingPublic"
-	TradingService_RunCapitalGains_FullMethodName           = "/trading.TradingService/RunCapitalGains"
-	TradingService_ListTaxDebts_FullMethodName              = "/trading.TradingService/ListTaxDebts"
-	TradingService_GetMyTaxInfo_FullMethodName              = "/trading.TradingService/GetMyTaxInfo"
+	TradingService_ListExchanges_FullMethodName               = "/trading.TradingService/ListExchanges"
+	TradingService_SetExchangeOpenOverride_FullMethodName     = "/trading.TradingService/SetExchangeOpenOverride"
+	TradingService_SetExchangeClosedOverride_FullMethodName   = "/trading.TradingService/SetExchangeClosedOverride"
+	TradingService_ListListings_FullMethodName                = "/trading.TradingService/ListListings"
+	TradingService_GetListing_FullMethodName                  = "/trading.TradingService/GetListing"
+	TradingService_ListListingHistory_FullMethodName          = "/trading.TradingService/ListListingHistory"
+	TradingService_ListForexPairs_FullMethodName              = "/trading.TradingService/ListForexPairs"
+	TradingService_ListOptionDates_FullMethodName             = "/trading.TradingService/ListOptionDates"
+	TradingService_ListOptions_FullMethodName                 = "/trading.TradingService/ListOptions"
+	TradingService_ExerciseOption_FullMethodName              = "/trading.TradingService/ExerciseOption"
+	TradingService_CreateOrder_FullMethodName                 = "/trading.TradingService/CreateOrder"
+	TradingService_ListOrders_FullMethodName                  = "/trading.TradingService/ListOrders"
+	TradingService_ApproveOrder_FullMethodName                = "/trading.TradingService/ApproveOrder"
+	TradingService_DeclineOrder_FullMethodName                = "/trading.TradingService/DeclineOrder"
+	TradingService_CancelOrder_FullMethodName                 = "/trading.TradingService/CancelOrder"
+	TradingService_ListHoldings_FullMethodName                = "/trading.TradingService/ListHoldings"
+	TradingService_SellHolding_FullMethodName                 = "/trading.TradingService/SellHolding"
+	TradingService_SetHoldingPublic_FullMethodName            = "/trading.TradingService/SetHoldingPublic"
+	TradingService_ListExternalOTCThreads_FullMethodName      = "/trading.TradingService/ListExternalOTCThreads"
+	TradingService_GetExternalOTCThread_FullMethodName        = "/trading.TradingService/GetExternalOTCThread"
+	TradingService_CreateExternalOTCOffer_FullMethodName      = "/trading.TradingService/CreateExternalOTCOffer"
+	TradingService_CounterExternalOTCOffer_FullMethodName     = "/trading.TradingService/CounterExternalOTCOffer"
+	TradingService_WithdrawExternalOTCOffer_FullMethodName    = "/trading.TradingService/WithdrawExternalOTCOffer"
+	TradingService_AcceptExternalOTCOffer_FullMethodName      = "/trading.TradingService/AcceptExternalOTCOffer"
+	TradingService_ListExternalOTCContracts_FullMethodName    = "/trading.TradingService/ListExternalOTCContracts"
+	TradingService_ExerciseExternalOTCContract_FullMethodName = "/trading.TradingService/ExerciseExternalOTCContract"
+	TradingService_RunCapitalGains_FullMethodName             = "/trading.TradingService/RunCapitalGains"
+	TradingService_ListTaxDebts_FullMethodName                = "/trading.TradingService/ListTaxDebts"
+	TradingService_GetMyTaxInfo_FullMethodName                = "/trading.TradingService/GetMyTaxInfo"
 )
 
 // TradingServiceClient is the client API for TradingService service.
@@ -70,6 +78,15 @@ type TradingServiceClient interface {
 	ListHoldings(ctx context.Context, in *ListHoldingsRequest, opts ...grpc.CallOption) (*ListHoldingsResponse, error)
 	SellHolding(ctx context.Context, in *SellHoldingRequest, opts ...grpc.CallOption) (*SellHoldingResponse, error)
 	SetHoldingPublic(ctx context.Context, in *SetHoldingPublicRequest, opts ...grpc.CallOption) (*SetHoldingPublicResponse, error)
+	// Celina 5 external OTC
+	ListExternalOTCThreads(ctx context.Context, in *ListExternalOTCThreadsRequest, opts ...grpc.CallOption) (*ListExternalOTCThreadsResponse, error)
+	GetExternalOTCThread(ctx context.Context, in *GetExternalOTCThreadRequest, opts ...grpc.CallOption) (*GetExternalOTCThreadResponse, error)
+	CreateExternalOTCOffer(ctx context.Context, in *CreateExternalOTCOfferRequest, opts ...grpc.CallOption) (*CreateExternalOTCOfferResponse, error)
+	CounterExternalOTCOffer(ctx context.Context, in *ExternalOTCActionRequest, opts ...grpc.CallOption) (*ExternalOTCActionResponse, error)
+	WithdrawExternalOTCOffer(ctx context.Context, in *ExternalOTCActionRequest, opts ...grpc.CallOption) (*ExternalOTCActionResponse, error)
+	AcceptExternalOTCOffer(ctx context.Context, in *ExternalOTCActionRequest, opts ...grpc.CallOption) (*ExternalOTCActionResponse, error)
+	ListExternalOTCContracts(ctx context.Context, in *ListExternalOTCContractsRequest, opts ...grpc.CallOption) (*ListExternalOTCContractsResponse, error)
+	ExerciseExternalOTCContract(ctx context.Context, in *ExerciseExternalOTCContractRequest, opts ...grpc.CallOption) (*ExerciseExternalOTCContractResponse, error)
 	// Tax
 	RunCapitalGains(ctx context.Context, in *RunCapitalGainsRequest, opts ...grpc.CallOption) (*RunCapitalGainsResponse, error)
 	ListTaxDebts(ctx context.Context, in *ListTaxDebtsRequest, opts ...grpc.CallOption) (*ListTaxDebtsResponse, error)
@@ -264,6 +281,86 @@ func (c *tradingServiceClient) SetHoldingPublic(ctx context.Context, in *SetHold
 	return out, nil
 }
 
+func (c *tradingServiceClient) ListExternalOTCThreads(ctx context.Context, in *ListExternalOTCThreadsRequest, opts ...grpc.CallOption) (*ListExternalOTCThreadsResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(ListExternalOTCThreadsResponse)
+	err := c.cc.Invoke(ctx, TradingService_ListExternalOTCThreads_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *tradingServiceClient) GetExternalOTCThread(ctx context.Context, in *GetExternalOTCThreadRequest, opts ...grpc.CallOption) (*GetExternalOTCThreadResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(GetExternalOTCThreadResponse)
+	err := c.cc.Invoke(ctx, TradingService_GetExternalOTCThread_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *tradingServiceClient) CreateExternalOTCOffer(ctx context.Context, in *CreateExternalOTCOfferRequest, opts ...grpc.CallOption) (*CreateExternalOTCOfferResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(CreateExternalOTCOfferResponse)
+	err := c.cc.Invoke(ctx, TradingService_CreateExternalOTCOffer_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *tradingServiceClient) CounterExternalOTCOffer(ctx context.Context, in *ExternalOTCActionRequest, opts ...grpc.CallOption) (*ExternalOTCActionResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(ExternalOTCActionResponse)
+	err := c.cc.Invoke(ctx, TradingService_CounterExternalOTCOffer_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *tradingServiceClient) WithdrawExternalOTCOffer(ctx context.Context, in *ExternalOTCActionRequest, opts ...grpc.CallOption) (*ExternalOTCActionResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(ExternalOTCActionResponse)
+	err := c.cc.Invoke(ctx, TradingService_WithdrawExternalOTCOffer_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *tradingServiceClient) AcceptExternalOTCOffer(ctx context.Context, in *ExternalOTCActionRequest, opts ...grpc.CallOption) (*ExternalOTCActionResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(ExternalOTCActionResponse)
+	err := c.cc.Invoke(ctx, TradingService_AcceptExternalOTCOffer_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *tradingServiceClient) ListExternalOTCContracts(ctx context.Context, in *ListExternalOTCContractsRequest, opts ...grpc.CallOption) (*ListExternalOTCContractsResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(ListExternalOTCContractsResponse)
+	err := c.cc.Invoke(ctx, TradingService_ListExternalOTCContracts_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *tradingServiceClient) ExerciseExternalOTCContract(ctx context.Context, in *ExerciseExternalOTCContractRequest, opts ...grpc.CallOption) (*ExerciseExternalOTCContractResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(ExerciseExternalOTCContractResponse)
+	err := c.cc.Invoke(ctx, TradingService_ExerciseExternalOTCContract_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
 func (c *tradingServiceClient) RunCapitalGains(ctx context.Context, in *RunCapitalGainsRequest, opts ...grpc.CallOption) (*RunCapitalGainsResponse, error) {
 	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
 	out := new(RunCapitalGainsResponse)
@@ -322,6 +419,15 @@ type TradingServiceServer interface {
 	ListHoldings(context.Context, *ListHoldingsRequest) (*ListHoldingsResponse, error)
 	SellHolding(context.Context, *SellHoldingRequest) (*SellHoldingResponse, error)
 	SetHoldingPublic(context.Context, *SetHoldingPublicRequest) (*SetHoldingPublicResponse, error)
+	// Celina 5 external OTC
+	ListExternalOTCThreads(context.Context, *ListExternalOTCThreadsRequest) (*ListExternalOTCThreadsResponse, error)
+	GetExternalOTCThread(context.Context, *GetExternalOTCThreadRequest) (*GetExternalOTCThreadResponse, error)
+	CreateExternalOTCOffer(context.Context, *CreateExternalOTCOfferRequest) (*CreateExternalOTCOfferResponse, error)
+	CounterExternalOTCOffer(context.Context, *ExternalOTCActionRequest) (*ExternalOTCActionResponse, error)
+	WithdrawExternalOTCOffer(context.Context, *ExternalOTCActionRequest) (*ExternalOTCActionResponse, error)
+	AcceptExternalOTCOffer(context.Context, *ExternalOTCActionRequest) (*ExternalOTCActionResponse, error)
+	ListExternalOTCContracts(context.Context, *ListExternalOTCContractsRequest) (*ListExternalOTCContractsResponse, error)
+	ExerciseExternalOTCContract(context.Context, *ExerciseExternalOTCContractRequest) (*ExerciseExternalOTCContractResponse, error)
 	// Tax
 	RunCapitalGains(context.Context, *RunCapitalGainsRequest) (*RunCapitalGainsResponse, error)
 	ListTaxDebts(context.Context, *ListTaxDebtsRequest) (*ListTaxDebtsResponse, error)
@@ -389,6 +495,30 @@ func (UnimplementedTradingServiceServer) SellHolding(context.Context, *SellHoldi
 }
 func (UnimplementedTradingServiceServer) SetHoldingPublic(context.Context, *SetHoldingPublicRequest) (*SetHoldingPublicResponse, error) {
 	return nil, status.Error(codes.Unimplemented, "method SetHoldingPublic not implemented")
+}
+func (UnimplementedTradingServiceServer) ListExternalOTCThreads(context.Context, *ListExternalOTCThreadsRequest) (*ListExternalOTCThreadsResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method ListExternalOTCThreads not implemented")
+}
+func (UnimplementedTradingServiceServer) GetExternalOTCThread(context.Context, *GetExternalOTCThreadRequest) (*GetExternalOTCThreadResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method GetExternalOTCThread not implemented")
+}
+func (UnimplementedTradingServiceServer) CreateExternalOTCOffer(context.Context, *CreateExternalOTCOfferRequest) (*CreateExternalOTCOfferResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method CreateExternalOTCOffer not implemented")
+}
+func (UnimplementedTradingServiceServer) CounterExternalOTCOffer(context.Context, *ExternalOTCActionRequest) (*ExternalOTCActionResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method CounterExternalOTCOffer not implemented")
+}
+func (UnimplementedTradingServiceServer) WithdrawExternalOTCOffer(context.Context, *ExternalOTCActionRequest) (*ExternalOTCActionResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method WithdrawExternalOTCOffer not implemented")
+}
+func (UnimplementedTradingServiceServer) AcceptExternalOTCOffer(context.Context, *ExternalOTCActionRequest) (*ExternalOTCActionResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method AcceptExternalOTCOffer not implemented")
+}
+func (UnimplementedTradingServiceServer) ListExternalOTCContracts(context.Context, *ListExternalOTCContractsRequest) (*ListExternalOTCContractsResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method ListExternalOTCContracts not implemented")
+}
+func (UnimplementedTradingServiceServer) ExerciseExternalOTCContract(context.Context, *ExerciseExternalOTCContractRequest) (*ExerciseExternalOTCContractResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method ExerciseExternalOTCContract not implemented")
 }
 func (UnimplementedTradingServiceServer) RunCapitalGains(context.Context, *RunCapitalGainsRequest) (*RunCapitalGainsResponse, error) {
 	return nil, status.Error(codes.Unimplemented, "method RunCapitalGains not implemented")
@@ -744,6 +874,150 @@ func _TradingService_SetHoldingPublic_Handler(srv interface{}, ctx context.Conte
 	return interceptor(ctx, in, info, handler)
 }
 
+func _TradingService_ListExternalOTCThreads_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(ListExternalOTCThreadsRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(TradingServiceServer).ListExternalOTCThreads(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: TradingService_ListExternalOTCThreads_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(TradingServiceServer).ListExternalOTCThreads(ctx, req.(*ListExternalOTCThreadsRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _TradingService_GetExternalOTCThread_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(GetExternalOTCThreadRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(TradingServiceServer).GetExternalOTCThread(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: TradingService_GetExternalOTCThread_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(TradingServiceServer).GetExternalOTCThread(ctx, req.(*GetExternalOTCThreadRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _TradingService_CreateExternalOTCOffer_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(CreateExternalOTCOfferRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(TradingServiceServer).CreateExternalOTCOffer(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: TradingService_CreateExternalOTCOffer_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(TradingServiceServer).CreateExternalOTCOffer(ctx, req.(*CreateExternalOTCOfferRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _TradingService_CounterExternalOTCOffer_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(ExternalOTCActionRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(TradingServiceServer).CounterExternalOTCOffer(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: TradingService_CounterExternalOTCOffer_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(TradingServiceServer).CounterExternalOTCOffer(ctx, req.(*ExternalOTCActionRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _TradingService_WithdrawExternalOTCOffer_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(ExternalOTCActionRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(TradingServiceServer).WithdrawExternalOTCOffer(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: TradingService_WithdrawExternalOTCOffer_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(TradingServiceServer).WithdrawExternalOTCOffer(ctx, req.(*ExternalOTCActionRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _TradingService_AcceptExternalOTCOffer_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(ExternalOTCActionRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(TradingServiceServer).AcceptExternalOTCOffer(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: TradingService_AcceptExternalOTCOffer_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(TradingServiceServer).AcceptExternalOTCOffer(ctx, req.(*ExternalOTCActionRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _TradingService_ListExternalOTCContracts_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(ListExternalOTCContractsRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(TradingServiceServer).ListExternalOTCContracts(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: TradingService_ListExternalOTCContracts_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(TradingServiceServer).ListExternalOTCContracts(ctx, req.(*ListExternalOTCContractsRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _TradingService_ExerciseExternalOTCContract_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(ExerciseExternalOTCContractRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(TradingServiceServer).ExerciseExternalOTCContract(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: TradingService_ExerciseExternalOTCContract_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(TradingServiceServer).ExerciseExternalOTCContract(ctx, req.(*ExerciseExternalOTCContractRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
 func _TradingService_RunCapitalGains_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
 	in := new(RunCapitalGainsRequest)
 	if err := dec(in); err != nil {
@@ -876,6 +1150,38 @@ var TradingService_ServiceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "SetHoldingPublic",
 			Handler:    _TradingService_SetHoldingPublic_Handler,
+		},
+		{
+			MethodName: "ListExternalOTCThreads",
+			Handler:    _TradingService_ListExternalOTCThreads_Handler,
+		},
+		{
+			MethodName: "GetExternalOTCThread",
+			Handler:    _TradingService_GetExternalOTCThread_Handler,
+		},
+		{
+			MethodName: "CreateExternalOTCOffer",
+			Handler:    _TradingService_CreateExternalOTCOffer_Handler,
+		},
+		{
+			MethodName: "CounterExternalOTCOffer",
+			Handler:    _TradingService_CounterExternalOTCOffer_Handler,
+		},
+		{
+			MethodName: "WithdrawExternalOTCOffer",
+			Handler:    _TradingService_WithdrawExternalOTCOffer_Handler,
+		},
+		{
+			MethodName: "AcceptExternalOTCOffer",
+			Handler:    _TradingService_AcceptExternalOTCOffer_Handler,
+		},
+		{
+			MethodName: "ListExternalOTCContracts",
+			Handler:    _TradingService_ListExternalOTCContracts_Handler,
+		},
+		{
+			MethodName: "ExerciseExternalOTCContract",
+			Handler:    _TradingService_ExerciseExternalOTCContract_Handler,
 		},
 		{
 			MethodName: "RunCapitalGains",

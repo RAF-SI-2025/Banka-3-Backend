@@ -1,6 +1,7 @@
 package gateway
 
 import (
+	"net/http"
 	"os"
 
 	"google.golang.org/grpc"
@@ -29,6 +30,12 @@ type Server struct {
 	BankClient         bankpb.BankServiceClient
 	ExchangeClient     exchangepb.ExchangeServiceClient
 	TradingClient      tradingpb.TradingServiceClient
+	HTTPClient         *http.Client
+	InterbankRoutes    map[string]string
+	InterbankAPIKey    string
+	BankInternalHTTPURL string
+	BankInternalAPIKey  string
+	RoutingNumber      string
 }
 
 func NewServer() (*Server, error) {
@@ -55,6 +62,15 @@ func NewServer() (*Server, error) {
 	tradingAddr := os.Getenv("TRADING_GRPC_ADDR")
 	if tradingAddr == "" {
 		tradingAddr = "bank:50051"
+	}
+	interbankRoutes := parseInterbankRoutes(os.Getenv("INTERBANK_ROUTES"))
+	bankInternalHTTPURL := os.Getenv("BANK_INTERNAL_HTTP_URL")
+	if bankInternalHTTPURL == "" {
+		bankInternalHTTPURL = "http://bank:50090"
+	}
+	bankInternalAPIKey := os.Getenv("BANK_INTERNAL_API_KEY")
+	if bankInternalAPIKey == "" {
+		bankInternalAPIKey = "dev-internal-banka3"
 	}
 
 	userConn, err := grpc.NewClient(userAddr, dialOpts()...)
@@ -99,5 +115,11 @@ func NewServer() (*Server, error) {
 		BankClient:         bankpb.NewBankServiceClient(bankConn),
 		ExchangeClient:     exchangepb.NewExchangeServiceClient(exchangeConn),
 		TradingClient:      tradingpb.NewTradingServiceClient(tradingConn),
+		HTTPClient:         newInterbankHTTPClient(),
+		InterbankRoutes:    interbankRoutes,
+		InterbankAPIKey:    interbankOutboundAPIKey(),
+		BankInternalHTTPURL: bankInternalHTTPURL,
+		BankInternalAPIKey:  bankInternalAPIKey,
+		RoutingNumber:      ownRoutingNumber(),
 	}, nil
 }
