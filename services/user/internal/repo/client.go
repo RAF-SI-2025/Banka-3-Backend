@@ -4,6 +4,7 @@ import (
 	"errors"
 	"fmt"
 	"sort"
+	"time"
 
 	"github.com/RAF-SI-2025/Banka-3-Backend/pkg/logger"
 	"github.com/RAF-SI-2025/Banka-3-Backend/services/user/internal/model"
@@ -104,20 +105,39 @@ func (r *Repository) UpdateClient(client model.Client) (*model.Client, error) {
 	if !r.ClientExists(client) {
 		return nil, ErrClientNotFound
 	}
-	result := r.Gorm.Model(&client).Updates(client)
+
+	updates := map[string]any{
+		"margin_enabled": client.Margin_enabled,
+		"updated_at":     time.Now(),
+	}
+	if client.First_name != "" {
+		updates["first_name"] = client.First_name
+	}
+	if client.Last_name != "" {
+		updates["last_name"] = client.Last_name
+	}
+	if !client.Date_of_birth.IsZero() {
+		updates["date_of_birth"] = client.Date_of_birth
+	}
+	if client.Gender != "" {
+		updates["gender"] = client.Gender
+	}
+	if client.Email != "" {
+		updates["email"] = client.Email
+	}
+	if client.Phone_number != "" {
+		updates["phone_number"] = client.Phone_number
+	}
+	if client.Address != "" {
+		updates["address"] = client.Address
+	}
+
+	result := r.Gorm.Model(&model.Client{}).Where("id = ?", client.Id).Updates(updates)
 	if result.Error != nil {
 		if isUniqueViolation(result.Error) {
 			return nil, ErrClientEmailExists
 		}
 		return nil, fmt.Errorf("updating client: %w", result.Error)
-	}
-	// gorm.Updates skips zero-valued boolean fields, so margin_enabled=false
-	// would otherwise be a no-op. Force the column explicitly so the admin
-	// can revoke margin trading by toggling the flag back off.
-	if err := r.Gorm.Model(&model.Client{}).
-		Where("id = ?", client.Id).
-		Update("margin_enabled", client.Margin_enabled).Error; err != nil {
-		return nil, fmt.Errorf("updating client.margin_enabled: %w", err)
 	}
 	if result.RowsAffected == 0 {
 		return nil, ErrClientNotFound
