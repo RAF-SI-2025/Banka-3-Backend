@@ -16,12 +16,15 @@ import (
 // is "the port isn't exposed", not "the handler checks a token". Setting the
 // env var in any environment that's reachable from outside the docker
 // network is a misconfiguration.
-func (s *Server) StartDebugHTTP(port string) func() {
+func (s *Server) StartDebugHTTP(port string, register func(*http.ServeMux)) func() {
 	if port == "" {
 		return func() {}
 	}
 
 	mux := http.NewServeMux()
+	if register != nil {
+		register(mux)
+	}
 	mux.HandleFunc("/debug/cron/used-limit-reset", func(w http.ResponseWriter, r *http.Request) {
 		if r.Method != http.MethodPost {
 			http.Error(w, "POST only", http.StatusMethodNotAllowed)

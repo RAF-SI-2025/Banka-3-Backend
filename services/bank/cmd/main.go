@@ -4,6 +4,7 @@ import (
 	"database/sql"
 	"fmt"
 	"net"
+	"net/http"
 	"os"
 	"strings"
 
@@ -147,10 +148,16 @@ func main() {
 
 	// Debug-only cron trigger HTTP (cypress consumer). No-op when
 	// BANK_DEBUG_HTTP_PORT is unset — never bound in production.
-	stopDebugHTTP := bankService.StartDebugHTTP(os.Getenv("BANK_DEBUG_HTTP_PORT"))
+	tradingService := internalTrading.NewServer(gorm_db, bankService)
+	internalAPIKey := os.Getenv("BANK_INTERNAL_API_KEY")
+	if internalAPIKey == "" {
+		internalAPIKey = "dev-internal-banka3"
+	}
+	stopDebugHTTP := bankService.StartDebugHTTP(os.Getenv("BANK_DEBUG_HTTP_PORT"), func(mux *http.ServeMux) {
+		internalTrading.RegisterExternalOTCInternalHTTP(mux, tradingService, internalAPIKey)
+	})
 	defer stopDebugHTTP()
 
-	tradingService := internalTrading.NewServer(gorm_db, bankService)
 	stopExecutor := tradingService.StartExecutor()
 	defer stopExecutor()
 
