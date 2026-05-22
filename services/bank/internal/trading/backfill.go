@@ -45,16 +45,22 @@ type DailyHistoryClient interface {
 type Backfiller struct {
 	DB           *gorm.DB
 	Client       DailyHistoryClient
+	MarketData   MarketDataStore
 	Interval     time.Duration
 	PerCallDelay time.Duration
 	WindowDays   int
 	Now          func() time.Time
 }
 
-func NewBackfiller(db *gorm.DB, client DailyHistoryClient) *Backfiller {
+func NewBackfiller(db *gorm.DB, client DailyHistoryClient, marketData ...MarketDataStore) *Backfiller {
+	store := MarketDataStore(noopMarketDataStore{})
+	if len(marketData) > 0 && marketData[0] != nil {
+		store = marketData[0]
+	}
 	return &Backfiller{
 		DB:           db,
 		Client:       client,
+		MarketData:   store,
 		Interval:     backfillDefaultInterval,
 		PerCallDelay: backfillPerCallDelay,
 		WindowDays:   backfillWindowDays,
@@ -152,14 +158,25 @@ func (b *Backfiller) backfillOne(ctx context.Context, tgt refreshTarget) error {
 	if len(bars) > window {
 		bars = bars[:window]
 	}
+	rows := make([]ListingDailyPriceInfo, 0, len(bars))
+	for _, bar := range bars {
+		rows = append(rows, ListingDailyPriceInfo{
+			ListingID: tgt.ListingID,
+			Date:      bar.Date,
+			Price:     bar.CloseCents,
+			AskPrice:  bar.CloseCents,
+			BidPrice:  bar.CloseCents,
+			Change:    bar.CloseCents - bar.OpenCents,
+			Volume:    0,
+		})
+	}
 
-	return b.DB.Transaction(func(tx *gorm.DB) error {
-		for _, bar := range bars {
+	if err := b.DB.Transaction(func(tx *gorm.DB) error {
+		for _, row := range rows {
 			// Intraday change (close - open). AV's daily endpoint doesn't
 			// hand back a "change" field, and computing close-vs-previous-
 			// close would require ordering across rows that aren't all in
 			// scope on every run.
-			change := bar.CloseCents - bar.OpenCents
 			err := tx.Exec(
 				`INSERT INTO listing_daily_price_info (listing_id, date, price, ask_price, bid_price, change, volume)
 				 VALUES (?, ?, ?, ?, ?, ?, 0)
@@ -168,12 +185,23 @@ func (b *Backfiller) backfillOne(ctx context.Context, tgt refreshTarget) error {
 				               ask_price = EXCLUDED.ask_price,
 				               bid_price = EXCLUDED.bid_price,
 				               change = EXCLUDED.change`,
-				tgt.ListingID, bar.Date, bar.CloseCents, bar.CloseCents, bar.CloseCents, change,
+				row.ListingID, row.Date, row.Price, row.AskPrice, row.BidPrice, row.Change,
 			).Error
 			if err != nil {
 				return err
 			}
 		}
 		return nil
-	})
+	}); err != nil {
+		return err
+	}
+	if b.MarketData != nil && b.MarketData.Enabled() {
+		for _, row := range rows {
+			if err := b.MarketData.WriteDaily(ctx, row); err != nil {
+				logger.L().Warn("influx backfill write failed", "listing_id", row.ListingID, "err", err)
+				break
+			}
+		}
+	}
+	return nil
 }

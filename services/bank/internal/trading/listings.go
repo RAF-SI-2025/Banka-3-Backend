@@ -6,6 +6,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/RAF-SI-2025/Banka-3-Backend/pkg/logger"
 	tradingpb "github.com/RAF-SI-2025/Banka-3-Backend/pkg/proto/trading"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
@@ -98,6 +99,15 @@ func (s *Server) latestDailyInfo(ids []int64) (map[int64]ListingDailyPriceInfo, 
 	out := map[int64]ListingDailyPriceInfo{}
 	if len(ids) == 0 {
 		return out, nil
+	}
+	if s.marketData != nil && s.marketData.Enabled() {
+		rows, err := s.marketData.LatestDaily(context.Background(), ids)
+		if err == nil && len(rows) > 0 {
+			return rows, nil
+		}
+		if err != nil {
+			logger.L().Warn("influx latestDailyInfo failed, falling back to postgres", "err", err)
+		}
 	}
 	var rows []ListingDailyPriceInfo
 	// DISTINCT ON is Postgres-specific; the project is PG-only.
@@ -268,7 +278,7 @@ func (s *Server) GetListing(_ context.Context, req *tradingpb.GetListingRequest)
 // ListListingHistory returns the daily price info rows for the requested
 // period, ordered ascending by date so the chart can plot directly. "all"
 // skips the lower bound entirely.
-func (s *Server) ListListingHistory(_ context.Context, req *tradingpb.ListListingHistoryRequest) (*tradingpb.ListListingHistoryResponse, error) {
+func (s *Server) ListListingHistory(ctx context.Context, req *tradingpb.ListListingHistoryRequest) (*tradingpb.ListListingHistoryResponse, error) {
 	if req.ListingId <= 0 {
 		return nil, status.Error(codes.InvalidArgument, "listing_id required")
 	}
@@ -287,13 +297,23 @@ func (s *Server) ListListingHistory(_ context.Context, req *tradingpb.ListListin
 		return nil, status.Error(codes.NotFound, "listing not found")
 	}
 
-	q := s.db.Where("listing_id = ?", req.ListingId).Order("date ASC")
-	if !since.IsZero() {
-		q = q.Where("date >= ?", since)
-	}
 	var rows []ListingDailyPriceInfo
-	if err := q.Find(&rows).Error; err != nil {
-		return nil, status.Errorf(codes.Internal, "%v", err)
+	if s.marketData != nil && s.marketData.Enabled() {
+		history, err := s.marketData.History(ctx, req.ListingId, since)
+		if err == nil {
+			rows = history
+		} else {
+			logger.L().Warn("influx listing history failed, falling back to postgres", "listing_id", req.ListingId, "err", err)
+		}
+	}
+	if len(rows) == 0 {
+		q := s.db.Where("listing_id = ?", req.ListingId).Order("date ASC")
+		if !since.IsZero() {
+			q = q.Where("date >= ?", since)
+		}
+		if err := q.Find(&rows).Error; err != nil {
+			return nil, status.Errorf(codes.Internal, "%v", err)
+		}
 	}
 
 	points := make([]*tradingpb.ListingHistoryPoint, 0, len(rows))

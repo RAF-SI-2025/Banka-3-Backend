@@ -203,6 +203,7 @@ func stopTrigger(o *Order) int64 {
 // for the next chunk; the zero time signals "order is complete, drop it".
 func (s *Server) executeFill(o *Order, now time.Time) (time.Time, error) {
 	var next time.Time
+	var marketPoint *ListingDailyPriceInfo
 	err := s.db.Transaction(func(tx *gorm.DB) error {
 		// Re-lock + re-check: a concurrent cancel or prior fill on the same
 		// order might have moved the row out from under this tick.
@@ -328,6 +329,15 @@ func (s *Server) executeFill(o *Order, now time.Time) (time.Time, error) {
 		if err != nil {
 			return err
 		}
+		marketPoint = &ListingDailyPriceInfo{
+			ListingID: *locked.ListingID,
+			Date:      time.Date(now.Year(), now.Month(), now.Day(), 0, 0, 0, 0, now.Location()).UTC(),
+			Price:     listing.Price,
+			AskPrice:  listing.AskPrice,
+			BidPrice:  listing.BidPrice,
+			Change:    0,
+			Volume:    newVolume,
+		}
 
 		newRemaining := locked.RemainingPortions - chunk
 		updates := map[string]any{
@@ -351,6 +361,11 @@ func (s *Server) executeFill(o *Order, now time.Time) (time.Time, error) {
 	})
 	if err != nil {
 		return time.Time{}, err
+	}
+	if marketPoint != nil && s.marketData != nil && s.marketData.Enabled() {
+		if writeErr := s.marketData.WriteDaily(context.Background(), *marketPoint); writeErr != nil {
+			logger.L().Warn("influx market-data write failed", "listing_id", marketPoint.ListingID, "err", writeErr)
+		}
 	}
 	return next, nil
 }
