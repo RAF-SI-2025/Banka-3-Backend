@@ -126,12 +126,51 @@ func (s *Service) SettleTrade(ctx context.Context, in SettleTradeInput) (*domain
 		return nil, apperr.Validation("aktuari moraju izabrati trading-book račun, ne menjačnicu")
 	}
 
+	// Counterparty + source-currency amount selection. The trading
+	// service passes `amt` in the security's currency (in.Currency).
+	//
+	// Same-currency case (klijent USD account buying USD AAPL,
+	// actuary on forex_book USD buying USD AAPL): the menjačnica
+	// house is a valid distinct counterparty and `amt` is already in
+	// the user account's currency. Original path.
+	//
+	// Cross-currency case (fund-actor with RSD bank account buying
+	// USD security): if we used the menjačnica house as counterparty
+	// the cross-currency hop in executeMoneyMove would resolve
+	// bankTo = house[in.Currency] = counterparty, collapsing leg 2
+	// to a self-loop and effectively giving the fund the principal
+	// for free (only the commission moves). Two changes:
+	//   1. Counterparty becomes the bank's forex_book in the security
+	//      currency — bank-owned, distinct from the menjačnica house,
+	//      so the FX hop has a real destination.
+	//   2. For BUY (debit) we convert `amt` from security currency to
+	//      the user account's currency, since executeMoneyMove
+	//      interprets fromAmt as denominated in from.Currency. For
+	//      SELL (credit) the counterparty is the source and `amt` is
+	//      already in from.Currency (= in.Currency), so no conversion.
+	counterparty := house
+	fromAmt := amt
+	if user.Currency != in.Currency {
+		fb, err := s.Store.GetForexBookAccount(ctx, in.Currency)
+		if err != nil {
+			return nil, err
+		}
+		counterparty = fb
+		if dir == "debit" {
+			_, conv, cerr := s.rateAndConvert(ctx, in.Currency, user.Currency, amt)
+			if cerr != nil {
+				return nil, cerr
+			}
+			fromAmt = conv
+		}
+	}
+
 	// Direction selects which side is debited.
 	var from, to *domain.Account
 	if dir == "debit" {
-		from, to = user, house
+		from, to = user, counterparty
 	} else {
-		from, to = house, user
+		from, to = counterparty, user
 	}
 
 	// Forward an actuary-flavored principal so the executeMoneyMove
@@ -159,7 +198,7 @@ func (s *Service) SettleTrade(ctx context.Context, in SettleTradeInput) (*domain
 	}
 
 	return s.idempotentSettle(ctx, in.OpID, func(tx pgx.Tx) ([]*domain.Transaction, error) {
-		return s.executeMoneyMove(ctx, tx, from, to, amt, domain.TxKindTrade, in.OpID, initiator, paymentMeta{Purpose: purpose}, 0)
+		return s.executeMoneyMove(ctx, tx, from, to, fromAmt, domain.TxKindTrade, in.OpID, initiator, paymentMeta{Purpose: purpose}, 0)
 	})
 }
 
