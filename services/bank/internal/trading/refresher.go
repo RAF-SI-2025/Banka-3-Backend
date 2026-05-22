@@ -37,9 +37,10 @@ const (
 )
 
 type Refresher struct {
-	DB       *gorm.DB
-	Client   pricing.Client
-	Interval time.Duration
+	DB         *gorm.DB
+	Client     pricing.Client
+	MarketData MarketDataStore
+	Interval   time.Duration
 	// PerCallDelay throttles successive calls within one tick. Defaulted to
 	// refresherPerCallDelay; tests override it to 0.
 	PerCallDelay time.Duration
@@ -47,10 +48,15 @@ type Refresher struct {
 	Now func() time.Time
 }
 
-func NewRefresher(db *gorm.DB, client pricing.Client) *Refresher {
+func NewRefresher(db *gorm.DB, client pricing.Client, marketData ...MarketDataStore) *Refresher {
+	store := MarketDataStore(noopMarketDataStore{})
+	if len(marketData) > 0 && marketData[0] != nil {
+		store = marketData[0]
+	}
 	return &Refresher{
 		DB:           db,
 		Client:       client,
+		MarketData:   store,
 		Interval:     refresherDefaultInterval,
 		PerCallDelay: refresherPerCallDelay,
 		Now:          time.Now,

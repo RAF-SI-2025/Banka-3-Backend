@@ -145,10 +145,11 @@ func main() {
 	}
 	stopScheduler := bankService.StartScheduler()
 	defer stopScheduler()
+	marketDataStore := internalTrading.NewMarketDataStoreFromEnv()
 
 	// Debug-only cron trigger HTTP (cypress consumer). No-op when
 	// BANK_DEBUG_HTTP_PORT is unset — never bound in production.
-	tradingService := internalTrading.NewServer(gorm_db, bankService)
+	tradingService := internalTrading.NewServer(gorm_db, bankService, marketDataStore)
 	internalAPIKey := os.Getenv("BANK_INTERNAL_API_KEY")
 	if internalAPIKey == "" {
 		internalAPIKey = "dev-internal-banka3"
@@ -164,11 +165,11 @@ func main() {
 	// External-pricing refresher (#184). No-op when no API keys are
 	// configured, so dev/CI keep operating off the static seed data from
 	// #195.
-	stopRefresher := internalTrading.NewRefresher(gorm_db, buildPricingClient()).Start()
+	stopRefresher := internalTrading.NewRefresher(gorm_db, buildPricingClient(), marketDataStore).Start()
 	defer stopRefresher()
 
 	// Daily-history backfiller (#228). No-op without ALPHAVANTAGE_KEY.
-	stopBackfiller := internalTrading.NewBackfiller(gorm_db, buildDailyHistoryClient()).Start()
+	stopBackfiller := internalTrading.NewBackfiller(gorm_db, buildDailyHistoryClient(), marketDataStore).Start()
 	defer stopBackfiller()
 
 	// Stock metadata syncer (#229). Weekly OVERVIEW pull. No-op without

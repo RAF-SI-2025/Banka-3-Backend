@@ -16,15 +16,20 @@ import (
 
 type Server struct {
 	tradingpb.UnimplementedTradingServiceServer
-	db   *gorm.DB
-	bank *bank.Server
+	db         *gorm.DB
+	bank       *bank.Server
+	marketData MarketDataStore
 }
 
 // NewServer wires trading to the bank server running in the same process —
 // trading reuses bank's auth (ResolveCaller) and account lookups since orders
 // always debit a bank account.
-func NewServer(db *gorm.DB, bankSrv *bank.Server) *Server {
-	return &Server{db: db, bank: bankSrv}
+func NewServer(db *gorm.DB, bankSrv *bank.Server, marketData ...MarketDataStore) *Server {
+	store := MarketDataStore(noopMarketDataStore{})
+	if len(marketData) > 0 && marketData[0] != nil {
+		store = marketData[0]
+	}
+	return &Server{db: db, bank: bankSrv, marketData: store}
 }
 
 func (s *Server) ListExchanges(_ context.Context, _ *tradingpb.ListExchangesRequest) (*tradingpb.ListExchangesResponse, error) {
