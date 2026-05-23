@@ -236,6 +236,38 @@ services:
       - exchange
     networks: [banka]
 
+  spark_analytics:
+    profiles: ["analytics"]
+    build:
+      context: .
+      dockerfile: analytics/spark/Dockerfile
+    environment:
+      ANALYTICS_DB_READ_URL: "jdbc:postgresql://postgres_replica:5432/${POSTGRES_DB}"
+      ANALYTICS_DB_WRITE_URL: "jdbc:postgresql://postgres:5432/${POSTGRES_DB}"
+      ANALYTICS_DB_USER: ${POSTGRES_USER}
+      ANALYTICS_DB_PASSWORD: ${POSTGRES_PASSWORD}
+      ANALYTICS_LOOKBACK_DAYS: ${ANALYTICS_LOOKBACK_DAYS:-90}
+      ANALYTICS_TOP_N: ${ANALYTICS_TOP_N:-5}
+      SPARK_DRIVER_MEMORY: 1g
+      SPARK_EXECUTOR_MEMORY: 1g
+    command:
+      - /opt/spark/bin/spark-submit
+      - --master
+      - local[2]
+      - --jars
+      - /opt/spark/jars/postgresql-42.7.5.jar
+      - --conf
+      - spark.driver.extraClassPath=/opt/spark/jars/postgresql-42.7.5.jar
+      - --conf
+      - spark.executor.extraClassPath=/opt/spark/jars/postgresql-42.7.5.jar
+      - local:///opt/banka-analytics/jobs/trading_analytics.py
+    depends_on:
+      postgres:
+        condition: service_healthy
+      postgres_replica:
+        condition: service_healthy
+    networks: [banka]
+
 volumes:
   pgdata:
   pgreplicadata:

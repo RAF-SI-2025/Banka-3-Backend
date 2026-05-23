@@ -829,3 +829,36 @@ CREATE INDEX IF NOT EXISTS external_otc_contracts_local_user_status_idx
     ON external_otc_contracts (local_user_id, status, updated_at DESC);
 CREATE INDEX IF NOT EXISTS external_otc_contracts_thread_idx
     ON external_otc_contracts (thread_id);
+
+-- Spark analytics snapshots. The Spark job reads operational data from the
+-- physical read replica and writes curated daily aggregates back to primary.
+CREATE TABLE IF NOT EXISTS analytics_daily_platform_metrics (
+    metric_date             DATE        PRIMARY KEY,
+    payments_count          BIGINT      NOT NULL DEFAULT 0,
+    payments_volume         BIGINT      NOT NULL DEFAULT 0,
+    transfers_count         BIGINT      NOT NULL DEFAULT 0,
+    transfers_volume        BIGINT      NOT NULL DEFAULT 0,
+    orders_created          BIGINT      NOT NULL DEFAULT 0,
+    orders_completed        BIGINT      NOT NULL DEFAULT 0,
+    fills_count             BIGINT      NOT NULL DEFAULT 0,
+    filled_quantity         BIGINT      NOT NULL DEFAULT 0,
+    fills_notional          BIGINT      NOT NULL DEFAULT 0,
+    otc_contracts_created   BIGINT      NOT NULL DEFAULT 0,
+    otc_contracts_exercised BIGINT      NOT NULL DEFAULT 0,
+    generated_at            TIMESTAMP   NOT NULL DEFAULT NOW()
+);
+
+CREATE TABLE IF NOT EXISTS analytics_daily_top_listings (
+    metric_date      DATE         NOT NULL,
+    rank             SMALLINT     NOT NULL CHECK (rank > 0),
+    listing_id       BIGINT       NOT NULL REFERENCES listings(id) ON UPDATE CASCADE ON DELETE CASCADE,
+    ticker           VARCHAR(32)  NOT NULL,
+    security_name    VARCHAR(127) NOT NULL,
+    fills_count      BIGINT       NOT NULL DEFAULT 0,
+    traded_quantity  BIGINT       NOT NULL DEFAULT 0,
+    traded_notional  BIGINT       NOT NULL DEFAULT 0,
+    generated_at     TIMESTAMP    NOT NULL DEFAULT NOW(),
+    PRIMARY KEY (metric_date, rank)
+);
+CREATE INDEX IF NOT EXISTS idx_analytics_daily_top_listings_listing
+    ON analytics_daily_top_listings (listing_id, metric_date DESC);

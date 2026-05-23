@@ -8,6 +8,7 @@ Aktuelni stack u `newestbackend` sada ukljucuje:
 - hash-particionisane Celina 5 interbank audit tabele po `sender_routing_number`
 - dodatni read-heavy indeksi za transaction history, kreditne cron upite i trading/OTC portale
 - InfluxDB za time-series berzanske podatke
+- Spark analytics pipeline koji cita sa read replike i pise dnevne agregate nazad u Postgres, sa Kubernetes `ScheduledSparkApplication` manifestima
 
 ## API
 
@@ -49,6 +50,9 @@ pokretanje (potreban Go na sistemu).
 | `make verify-replica` | Proveri da li je replica u recovery/read-only modu |
 | `make verify-partitions` | Ispisi aktivne particije za bonus tabele |
 | `make verify-indexes` | Ispisi dodatne read-heavy indekse za DB tuning |
+| `make spark-analytics-image` | Builduj Spark analytics image |
+| `make spark-analytics-local` | Pokreni Spark analytics lokalno preko docker compose profila |
+| `make verify-spark-analytics` | Ispisi poslednje Spark analytics agregate iz Postgresa |
 | `make nuke`    | Obrisi sve i ucitaj schema i seed            |
 | `make build`   | Builduj sve servise (Docker)                 |
 | `make build-l` | Builduj sve servise (lokalno)                |
@@ -74,6 +78,33 @@ Dodatni tuning je fokusiran na query obrasce koji vec postoje u kodu:
 - `loans` / `loan_request`: cron i pregled zahteva po statusu i datumu
 - `orders`: execution queue + portal listing po statusu / placeru
 - `external_otc_*`: korisnicki thread/contract listing sa status filterom
+
+## Spark analytics
+
+Analytics sloj je izdvojen u `analytics/spark/` i koristi isti read/write split
+kao aplikacioni servisi:
+- raw podaci se citaju sa `postgres_replica`
+- kurirani agregati se upisuju na `postgres`
+
+PySpark job racuna dnevne operativne metrike za:
+- payments / transfers
+- orders / order fills
+- external OTC contracts
+- top listings po dnevnom prometu
+
+Lokalni dry-run ide preko compose profila:
+
+```bash
+make spark-analytics-local
+make verify-spark-analytics
+```
+
+Za Kubernetes deployment dodate su dve putanje:
+- `analytics/spark/k8s/`: `ScheduledSparkApplication` za klastere sa Spark operatorom
+- `analytics/spark/k8s/vanilla/`: obican Kubernetes `CronJob` / `Job` koji vrti Spark pod bez dodatnog operatora
+
+To omogucava i strogu demonstraciju zahteva "Spark podignut na Kubernetesu"
+i praktican lokalni run na Docker Desktop Kubernetes-u.
 
 ## CI
 
