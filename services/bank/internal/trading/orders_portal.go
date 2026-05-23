@@ -320,7 +320,8 @@ func (s *Server) ListOrders(ctx context.Context, req *tradingpb.ListOrdersReques
 		return nil, err
 	}
 
-	q := s.db.Model(&Order{}).Joins("JOIN order_placers p ON p.id = orders.placer_id")
+	readDB := s.roDB()
+	q := readDB.Model(&Order{}).Joins("JOIN order_placers p ON p.id = orders.placer_id")
 
 	if mine {
 		// "Moji orderi" — auth via bank.ResolveCaller, scope by placer_id. We
@@ -330,7 +331,7 @@ func (s *Server) ListOrders(ctx context.Context, req *tradingpb.ListOrdersReques
 		if err != nil {
 			return nil, err
 		}
-		placerID, err := lookupPlacerID(s.db, caller.IsClient, caller.ClientID, caller.Email)
+		placerID, err := lookupPlacerID(readDB, caller.IsClient, caller.ClientID, caller.Email)
 		if err != nil {
 			return nil, err
 		}
@@ -339,7 +340,7 @@ func (s *Server) ListOrders(ctx context.Context, req *tradingpb.ListOrdersReques
 		}
 		q = q.Where("orders.placer_id = ?", placerID)
 	} else {
-		if !callerIsSupervisor(s.db, req.CallerEmail) {
+		if !callerIsSupervisor(readDB, req.CallerEmail) {
 			return nil, status.Error(codes.PermissionDenied, "supervisor permission required")
 		}
 		if req.AgentId > 0 {
@@ -360,7 +361,7 @@ func (s *Server) ListOrders(ctx context.Context, req *tradingpb.ListOrdersReques
 	now := time.Now()
 	out := make([]*tradingpb.OrderDetail, 0, len(orders))
 	for i := range orders {
-		d, err := s.buildOrderDetail(s.db, &orders[i], now)
+		d, err := s.buildOrderDetail(readDB, &orders[i], now)
 		if err != nil {
 			return nil, status.Errorf(codes.Internal, "%v", err)
 		}

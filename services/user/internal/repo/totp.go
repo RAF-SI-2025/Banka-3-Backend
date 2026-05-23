@@ -41,7 +41,7 @@ func (r *Repository) GetTempSecret(tx *sql.Tx, id uint64) (*string, error) {
 // GetSecret returns the active TOTP secret for a user.
 func (r *Repository) GetSecret(id uint64) (*string, error) {
 	var secret string
-	row := r.Database.QueryRow(`
+	row := r.readDB().QueryRow(`
 		SELECT secret
 		FROM verification_codes
 		WHERE client_id = $1 AND enabled = TRUE

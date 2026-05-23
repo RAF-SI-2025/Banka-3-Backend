@@ -45,8 +45,10 @@ func NewTotpServer(conn *Connections) *TOTPServer {
 		totpDisableUrl:      baseURL,
 		db:                  conn.Sql_db,
 		repo: repo.Repository{
-			Database: conn.Sql_db,
-			Gorm:     conn.Gorm,
+			Database:     conn.Sql_db,
+			ReadDatabase: conn.ReadSql_db,
+			Gorm:         conn.Gorm,
+			ReadGorm:     conn.ReadGorm,
 		},
 	}
 }

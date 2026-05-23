@@ -198,7 +198,7 @@ func (s *Server) GetCompanyByTaxCode(taxCode int64) (*Company, error) {
 }
 
 func (s *Server) GetCompaniesRecords() ([]*Company, error) {
-	rows, err := s.database.Query(`
+	rows, err := s.roDB().Query(`
 		SELECT id, registered_id, name, tax_code, activity_code_id, address, owner_id
 		FROM companies
 		ORDER BY id
@@ -336,7 +336,7 @@ func (s *Server) CreateCardRecord(card Card) (*Card, error) {
 }
 
 func (s *Server) GetCardsRecords() ([]*Card, error) {
-	rows, err := s.database.Query(`
+	rows, err := s.roDB().Query(`
 		SELECT id, number, type, brand, creation_date, valid_until, account_number, cvv, card_limit, status
 		FROM cards
 	`)
@@ -364,7 +364,7 @@ func (s *Server) GetCardsRecords() ([]*Card, error) {
 func (s *Server) GetAccountIDByCardID(cardID int64) (int64, error) {
 	var accountID int64
 
-	err := s.db_gorm.
+	err := s.roGorm().
 		Model(&Card{}).
 		Select("accounts.id").
 		Joins("JOIN accounts ON accounts.number = cards.account_number").
@@ -495,7 +495,7 @@ func (s *Server) GetEmployeeIDByEmail(email string) (int64, error) {
 	}
 	var emp empRow
 
-	err := s.db_gorm.
+	err := s.roGorm().
 		Table("employees").
 		Select("id").
 		Where("email = ?", email).
@@ -509,7 +509,7 @@ func (s *Server) GetEmployeeIDByEmail(email string) (int64, error) {
 func (s *Server) IsEmployeeByEmail(email string) (bool, error) {
 	var count int64
 
-	err := s.db_gorm.
+	err := s.roGorm().
 		Table("employees").
 		Where("email = ?", email).
 		Count(&count).Error
@@ -527,7 +527,7 @@ func (s *Server) GetClientIDByEmail(email string) (int64, error) {
 
 	var client clientRow
 
-	err := s.db_gorm.
+	err := s.roGorm().
 		Table("clients").
 		Select("id").
 		Where("email = ?", email).
@@ -542,7 +542,7 @@ func (s *Server) GetClientIDByEmail(email string) (int64, error) {
 func (s *Server) GetCardsByOwnerID(ownerID int64) ([]Card, error) {
 	var cards []Card
 
-	err := s.db_gorm.
+	err := s.roGorm().
 		Model(&Card{}).
 		Joins("JOIN accounts ON accounts.number = cards.account_number").
 		Where("accounts.owner = ?", ownerID).
@@ -558,7 +558,7 @@ func (s *Server) GetCardsByOwnerID(ownerID int64) ([]Card, error) {
 func (s *Server) GetCardsForEmployee() ([]Card, error) {
 	var cards []Card
 
-	err := s.db_gorm.
+	err := s.roGorm().
 		Model(&Card{}).
 		Order("id DESC").
 		Find(&cards).Error
@@ -618,7 +618,7 @@ func (s *Server) getCurrencyByLabel(label string) (*Currency, error) {
 func (s *Server) getLoansForClient(clientEmail string, loanType string, accountNumber string, loanStatus string) ([]loanView, error) {
 	var loans []loanView
 
-	query := s.db_gorm.
+	query := s.roGorm().
 		Model(&Loan{}).
 		Joins("JOIN accounts ON accounts.id = loans.account_id").
 		Joins("JOIN clients ON clients.id = accounts.owner").
@@ -668,7 +668,7 @@ func (s *Server) getLoansForClient(clientEmail string, loanType string, accountN
 func (s *Server) getLoanByIDForClient(clientEmail string, loanID int64) (*loanView, error) {
 	var loan loanView
 
-	err := s.db_gorm.
+	err := s.roGorm().
 		Model(&Loan{}).
 		Joins("JOIN accounts ON accounts.id = loans.account_id").
 		Joins("JOIN clients ON clients.id = accounts.owner").
@@ -701,7 +701,7 @@ func (s *Server) getLoanByIDForClient(clientEmail string, loanID int64) (*loanVi
 func (s *Server) getLoanByID(loanID int64) (*loanView, error) {
 	var loan loanView
 
-	err := s.db_gorm.
+	err := s.roGorm().
 		Model(&Loan{}).
 		Joins("JOIN accounts ON accounts.id = loans.account_id").
 		Joins("JOIN currencies ON currencies.id = loans.currency_id").
@@ -869,7 +869,7 @@ func (s *Server) GetTransferHistory(clientEmail string, page, pageSize int32) (*
 
 	offset := (page - 1) * pageSize
 
-	rows, err := s.database.Query(`
+	rows, err := s.roDB().Query(`
 		SELECT t.transaction_id, t.from_account, t.to_account,
 		       t.start_amount, t.end_amount,
 		       t.start_currency_id, t.exchange_rate,
@@ -944,7 +944,7 @@ type loanRequestView struct {
 func (s *Server) getLoanRequests(loanType, accountNumber string) ([]loanRequestView, error) {
 	var requests []loanRequestView
 
-	query := s.db_gorm.
+	query := s.roGorm().
 		Model(&LoanRequest{}).
 		Joins("JOIN accounts ON accounts.id = loan_request.account_id").
 		Joins("JOIN currencies ON currencies.id = loan_request.currency_id").
@@ -1055,7 +1055,7 @@ func (s *Server) getClientEmailByAccountID(accountID int64) (string, error) {
 func (s *Server) getAllLoans(loanType, accountNumber, loanStatus string) ([]loanView, error) {
 	var loans []loanView
 
-	query := s.db_gorm.
+	query := s.roGorm().
 		Model(&Loan{}).
 		Joins("JOIN accounts ON accounts.id = loans.account_id").
 		Joins("JOIN currencies ON currencies.id = loans.currency_id").

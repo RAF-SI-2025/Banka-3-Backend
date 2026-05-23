@@ -123,7 +123,7 @@ func (s *Server) GetExternalOTCContractByThreadRecord(threadID string) (*Externa
 
 func (s *Server) ListExternalOTCThreadsRecords(localUserID, status string) ([]ExternalOTCThreadRecord, error) {
 	var out []ExternalOTCThreadRecord
-	tx := s.db.Where("local_user_id = ?", localUserID)
+	tx := s.roDB().Where("local_user_id = ?", localUserID)
 	if status != "" && status != "any" {
 		tx = tx.Where("status = ?", status)
 	}
@@ -135,7 +135,7 @@ func (s *Server) ListExternalOTCThreadsRecords(localUserID, status string) ([]Ex
 
 func (s *Server) ListExternalOTCThreadIterationsRecord(threadID string) ([]ExternalOTCIterationRecord, error) {
 	var out []ExternalOTCIterationRecord
-	if err := s.db.Where("thread_id = ?", threadID).Order("created_at ASC").Find(&out).Error; err != nil {
+	if err := s.roDB().Where("thread_id = ?", threadID).Order("created_at ASC").Find(&out).Error; err != nil {
 		return nil, err
 	}
 	return out, nil
@@ -143,7 +143,7 @@ func (s *Server) ListExternalOTCThreadIterationsRecord(threadID string) ([]Exter
 
 func (s *Server) ListExternalOTCContractsRecords(localUserID, status string) ([]ExternalOTCContractRecord, error) {
 	var out []ExternalOTCContractRecord
-	tx := s.db.Where("local_user_id = ?", localUserID)
+	tx := s.roDB().Where("local_user_id = ?", localUserID)
 	if status != "" && status != "any" {
 		tx = tx.Where("status = ?", status)
 	}

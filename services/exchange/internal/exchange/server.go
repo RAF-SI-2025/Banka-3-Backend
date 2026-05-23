@@ -18,13 +18,27 @@ import (
 
 type Server struct {
 	exchangepb.UnsafeExchangeServiceServer
-	db_gorm *gorm.DB
+	db_gorm   *gorm.DB
+	read_gorm *gorm.DB
 }
 
 func NewServer(gorm_db *gorm.DB) *Server {
 	return &Server{
 		db_gorm: gorm_db,
 	}
+}
+
+func (s *Server) ConfigureReadReplica(readGorm *gorm.DB) {
+	if readGorm != nil {
+		s.read_gorm = readGorm
+	}
+}
+
+func (s *Server) readDB() *gorm.DB {
+	if s.read_gorm != nil {
+		return s.read_gorm
+	}
+	return s.db_gorm
 }
 
 func (s *Server) fetchAndStoreRates() error {

@@ -27,7 +27,9 @@ import (
 type Server struct {
 	bankpb.UnimplementedBankServiceServer
 	database            *sql.DB
+	readDatabase        *sql.DB
 	db_gorm             *gorm.DB
+	readGorm            *gorm.DB
 	ExchangeService     exchangepb.ExchangeServiceClient
 	NotificationService notificationpb.NotificationServiceClient
 	UserService         userpb.UserServiceClient
@@ -68,6 +70,29 @@ func NewServer(database *sql.DB, gorm_db *gorm.DB) (*Server, error) {
 		NotificationService: notificationpb.NewNotificationServiceClient(notificationConn),
 		UserService:         userpb.NewUserServiceClient(userConn),
 	}, nil
+}
+
+func (s *Server) ConfigureReadReplica(readDB *sql.DB, readGorm *gorm.DB) {
+	if readDB != nil {
+		s.readDatabase = readDB
+	}
+	if readGorm != nil {
+		s.readGorm = readGorm
+	}
+}
+
+func (s *Server) roDB() *sql.DB {
+	if s.readDatabase != nil {
+		return s.readDatabase
+	}
+	return s.database
+}
+
+func (s *Server) roGorm() *gorm.DB {
+	if s.readGorm != nil {
+		return s.readGorm
+	}
+	return s.db_gorm
 }
 
 func mapCompanyToProto(company *Company) *bankpb.Company {
@@ -518,7 +543,7 @@ func (s *Server) GetPaymentRecipients(
 		return nil, status.Error(codes.InvalidArgument, "client_id must be provided")
 	}
 
-	rows, err := s.database.QueryContext(ctx, `
+	rows, err := s.roDB().QueryContext(ctx, `
 		SELECT
 			id,
 			name,

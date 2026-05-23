@@ -24,7 +24,9 @@ const (
 type Connections struct {
 	NotificationClient notificationpb.NotificationServiceClient
 	Sql_db             *sql.DB
+	ReadSql_db         *sql.DB
 	Gorm               *gorm.DB
+	ReadGorm           *gorm.DB
 	Rdb                *redis.Client
 }
 
@@ -43,8 +45,10 @@ func NewServer(accessJwtSecret string, refreshJwtSecret string, conn *Connection
 		refreshJwtSecret: refreshJwtSecret,
 		rdb:              conn.Rdb,
 		repo: repo.Repository{
-			Database: conn.Sql_db,
-			Gorm:     conn.Gorm,
+			Database:     conn.Sql_db,
+			ReadDatabase: conn.ReadSql_db,
+			Gorm:         conn.Gorm,
+			ReadGorm:     conn.ReadGorm,
 		},
 	}
 }

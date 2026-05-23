@@ -41,7 +41,7 @@ func (s *Server) CreateEmployeeAccount(ctx context.Context, req *userpb.CreateEm
 	permissions := make([]model.Permission, 0, len(reqPerms))
 	for _, permName := range reqPerms {
 		var perm model.Permission
-		if err := s.repo.Gorm.First(&perm, "name = ?", permName).Error; err != nil {
+		if err := s.repo.ReadGormDB().First(&perm, "name = ?", permName).Error; err != nil {
 			logger.FromContext(ctx).WarnContext(ctx, "permission not found, skipping", "name", permName)
 			continue
 		}

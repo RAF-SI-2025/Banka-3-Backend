@@ -105,6 +105,7 @@ services:
       - "${BANK_DEBUG_HTTP_PORT:-50090}:50090"
     environment:
       DATABASE_URL: "postgres://${POSTGRES_USER}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB}?sslmode=disable"
+      DATABASE_READ_URL: "${DATABASE_READ_URL:-postgres://${POSTGRES_USER}:${POSTGRES_PASSWORD}@postgres_replica:5432/${POSTGRES_DB}?sslmode=disable}"
       GRPC_PORT: "50051"
       BANK_INTERNAL_API_KEY: ${BANK_INTERNAL_API_KEY:-dev-internal-banka3}
       INFLUX_URL: ${INFLUX_URL:-http://influxdb:8086}
@@ -120,6 +121,8 @@ services:
       LOG_FORMAT: ${LOG_FORMAT:-text}
     depends_on:
       postgres:
+        condition: service_healthy
+      postgres_replica:
         condition: service_healthy
       influxdb:
         condition: service_started
@@ -137,12 +140,15 @@ services:
       - "${EXCHANGE_GRPC_PORT:-50054}:50051"
     environment:
       DATABASE_URL: "postgres://${POSTGRES_USER}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB}?sslmode=disable"
+      DATABASE_READ_URL: "${DATABASE_READ_URL:-postgres://${POSTGRES_USER}:${POSTGRES_PASSWORD}@postgres_replica:5432/${POSTGRES_DB}?sslmode=disable}"
       GRPC_PORT: "50051"
       EXCHANGE_RATE_API_KEY: ${EXCHANGE_RATE_API_KEY}
       LOG_LEVEL: ${LOG_LEVEL:-info}
       LOG_FORMAT: ${LOG_FORMAT:-text}
     depends_on:
       postgres:
+        condition: service_healthy
+      postgres_replica:
         condition: service_healthy
     networks: [banka]
 
@@ -158,6 +164,7 @@ services:
       - "${USER_GRPC_PORT:-50051}:50051"
     environment:
       DATABASE_URL: "postgres://${POSTGRES_USER}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB}?sslmode=disable"
+      DATABASE_READ_URL: "${DATABASE_READ_URL:-postgres://${POSTGRES_USER}:${POSTGRES_PASSWORD}@postgres_replica:5432/${POSTGRES_DB}?sslmode=disable}"
       GRPC_PORT: "50051"
       ACCESS_JWT_SECRET: ${ACCESS_JWT_SECRET}
       REFRESH_JWT_SECRET: ${REFRESH_JWT_SECRET}
@@ -171,6 +178,8 @@ services:
       LOG_FORMAT: ${LOG_FORMAT:-text}
     depends_on:
       postgres:
+        condition: service_healthy
+      postgres_replica:
         condition: service_healthy
       redis:
         condition: service_healthy

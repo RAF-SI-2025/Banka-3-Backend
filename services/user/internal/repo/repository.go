@@ -10,8 +10,32 @@ import (
 
 // Repository holds database connections for all operations
 type Repository struct {
-	Database *sql.DB
-	Gorm     *gorm.DB
+	Database     *sql.DB
+	ReadDatabase *sql.DB
+	Gorm         *gorm.DB
+	ReadGorm     *gorm.DB
+}
+
+func (r *Repository) readDB() *sql.DB {
+	if r.ReadDatabase != nil {
+		return r.ReadDatabase
+	}
+	return r.Database
+}
+
+func (r *Repository) readGormDB() *gorm.DB {
+	if r.ReadGorm != nil {
+		return r.ReadGorm
+	}
+	return r.Gorm
+}
+
+func (r *Repository) ReadDB() *sql.DB {
+	return r.readDB()
+}
+
+func (r *Repository) ReadGormDB() *gorm.DB {
+	return r.readGormDB()
 }
 
 // Common errors

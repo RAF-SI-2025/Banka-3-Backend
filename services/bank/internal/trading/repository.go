@@ -2,7 +2,7 @@ package trading
 
 func (s *Server) ListExchangesRecord() ([]Exchange, error) {
 	var out []Exchange
-	if err := s.db.Find(&out).Error; err != nil {
+	if err := s.roDB().Find(&out).Error; err != nil {
 		return nil, err
 	}
 	return out, nil
@@ -18,7 +18,7 @@ func (s *Server) CreateOrderRecord(o *Order) error {
 
 func (s *Server) GetOrderRecord(id int64) (*Order, error) {
 	var o Order
-	if err := s.db.First(&o, id).Error; err != nil {
+	if err := s.roDB().First(&o, id).Error; err != nil {
 		return nil, err
 	}
 	return &o, nil

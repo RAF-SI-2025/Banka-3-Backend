@@ -73,7 +73,7 @@ func (s *Server) UpdateAccountLimitsRecord(accountNumber string, dailyLimit *int
 
 func (s *Server) GetActiveAccountsByOwnerID(ownerID int64) ([]Account, error) {
 	var accounts []Account
-	result := s.db_gorm.Where(&Account{Owner: ownerID, Active: true}).
+	result := s.roGorm().Where(&Account{Owner: ownerID, Active: true}).
 		Order("balance DESC").
 		Find(&accounts)
 	return accounts, result.Error
@@ -91,7 +91,7 @@ func (s *Server) GetActiveAccountsByOwnerID(ownerID int64) ([]Account, error) {
 func (s *Server) GetTradingAccounts() ([]Account, error) {
 	const systemOwnerEmail = "system@banka3.rs"
 	var accounts []Account
-	err := s.db_gorm.Model(&Account{}).
+	err := s.roGorm().Model(&Account{}).
 		Joins("JOIN clients ON clients.id = accounts.owner").
 		Where("clients.email = ?", systemOwnerEmail).
 		Where("accounts.active = ?", true).
@@ -101,7 +101,7 @@ func (s *Server) GetTradingAccounts() ([]Account, error) {
 
 func (s *Server) GetAccountsForEmployee(firstName, lastName, accountNumber string) ([]Account, error) {
 	var accounts []Account
-	query := s.db_gorm.Model(&Account{})
+	query := s.roGorm().Model(&Account{})
 
 	if accountNumber != "" {
 		query = query.Where("number = ?", accountNumber)
@@ -123,7 +123,7 @@ func (s *Server) GetAccountsForEmployee(firstName, lastName, accountNumber strin
 
 func (s *Server) GetAccountByNumber(accNumber string) (*Account, error) {
 	var acc Account
-	result := s.db_gorm.Where(&Account{Number: accNumber}).First(&acc)
+	result := s.roGorm().Where(&Account{Number: accNumber}).First(&acc)
 	if result.Error != nil {
 		return nil, result.Error
 	}
@@ -132,7 +132,7 @@ func (s *Server) GetAccountByNumber(accNumber string) (*Account, error) {
 
 func (s *Server) GetCompanyByOwnerID(ownerID int64) (*Company, error) {
 	var company Company
-	result := s.db_gorm.Where(&Company{Owner_id: ownerID}).First(&company)
+	result := s.roGorm().Where(&Company{Owner_id: ownerID}).First(&company)
 	if result.Error != nil {
 		return nil, result.Error
 	}
@@ -143,7 +143,7 @@ func (s *Server) GetFilteredTransactions(accNumbers []string, accountNumber stri
 	var pbTransactions []*bankpb.ClientTransaction
 
 	var payments []Payment
-	payQuery := s.db_gorm.Model(&Payment{}).Where("from_account IN ? OR to_account IN ?", accNumbers, accNumbers)
+	payQuery := s.roGorm().Model(&Payment{}).Where("from_account IN ? OR to_account IN ?", accNumbers, accNumbers)
 	if accountNumber != "" {
 		payQuery = payQuery.Where("from_account = ? OR to_account = ?", accountNumber, accountNumber)
 	}
@@ -174,7 +174,7 @@ func (s *Server) GetFilteredTransactions(accNumbers []string, accountNumber stri
 	}
 
 	var transfers []Transfer
-	transQuery := s.db_gorm.Model(&Transfer{}).Where("from_account IN ? OR to_account IN ?", accNumbers, accNumbers)
+	transQuery := s.roGorm().Model(&Transfer{}).Where("from_account IN ? OR to_account IN ?", accNumbers, accNumbers)
 	if accountNumber != "" {
 		transQuery = transQuery.Where("from_account = ? OR to_account = ?", accountNumber, accountNumber)
 	}

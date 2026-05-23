@@ -44,7 +44,7 @@ func (s *Server) GetFilteredTransactionsRepo(accNumbers []string, req *bankpb.Ge
 	}
 
 	// 1. Sub-query for Payments: Mapping payment-specific fields and casting status to text for UNION compatibility
-	paymentSub := s.db_gorm.Table("payments p").
+	paymentSub := s.roGorm().Table("payments p").
 		Select(`p.transaction_id AS id, 'payment' AS type, p.from_account, p.to_account, 
                 p.start_amount AS initial_amount, p.end_amount AS final_amount, p.commission AS fee, 
                 a.currency AS currency, p.transaction_code::text AS payment_code, 
@@ -54,7 +54,7 @@ func (s *Server) GetFilteredTransactionsRepo(accNumbers []string, req *bankpb.Ge
 		Where("p.from_account IN ? OR p.to_account IN ?", accNumbers, accNumbers)
 
 	// 2. Sub-query for Transfers: Mapping transfer-specific fields and casting status to text
-	transferSub := s.db_gorm.Table("transfers t").
+	transferSub := s.roGorm().Table("transfers t").
 		Select(`t.transaction_id AS id, 'transfer' AS type, t.from_account, t.to_account, 
                 t.start_amount AS initial_amount, t.end_amount AS final_amount, t.commission AS fee, 
                 a.currency AS currency, '' AS payment_code, '' AS reference_number, '' AS purpose, 
@@ -63,8 +63,8 @@ func (s *Server) GetFilteredTransactionsRepo(accNumbers []string, req *bankpb.Ge
 		Where("t.from_account IN ? OR t.to_account IN ?", accNumbers, accNumbers)
 
 	// 3. Combine both tables using UNION ALL
-	unionQuery := s.db_gorm.Raw("? UNION ALL ?", paymentSub, transferSub)
-	query := s.db_gorm.Table("(?) AS tx", unionQuery)
+	unionQuery := s.roGorm().Raw("? UNION ALL ?", paymentSub, transferSub)
+	query := s.roGorm().Table("(?) AS tx", unionQuery)
 
 	// 4. Applying Request Filters
 	if req.AccountNumber != "" {
@@ -135,7 +135,7 @@ func (s *Server) GetSingleTransactionRepo(id int64, txType string) (UnifiedTrans
 	var row UnifiedTransaction
 
 	if txType == "payment" {
-		err := s.db_gorm.Table("payments p").
+		err := s.roGorm().Table("payments p").
 			Select(`p.transaction_id AS id, 'payment' AS type, p.from_account, p.to_account, 
                     p.start_amount AS initial_amount, p.end_amount AS final_amount, p.commission AS fee, 
                     a.currency AS currency, p.transaction_code::text AS payment_code, 
@@ -148,7 +148,7 @@ func (s *Server) GetSingleTransactionRepo(id int64, txType string) (UnifiedTrans
 	}
 
 	// Fetching from transfers table if type is not payment
-	err := s.db_gorm.Table("transfers t").
+	err := s.roGorm().Table("transfers t").
 		Select(`t.transaction_id AS id, 'transfer' AS type, t.from_account, t.to_account, 
                 t.start_amount AS initial_amount, t.end_amount AS final_amount, t.commission AS fee, 
                 a.currency AS currency, '' AS payment_code, '' AS reference_number, '' AS purpose, 
@@ -164,7 +164,7 @@ func (s *Server) GetSingleTransactionRepo(id int64, txType string) (UnifiedTrans
 // GetClientAccountNumbers returns a slice of all account numbers owned by a specific client.
 func (s *Server) GetClientAccountNumbers(clientID int64) ([]string, error) {
 	var accountNumbers []string
-	err := s.db_gorm.Table("accounts").
+	err := s.roGorm().Table("accounts").
 		Where("owner = ?", clientID).
 		Pluck("number", &accountNumbers).Error
 
@@ -175,7 +175,7 @@ func (s *Server) GetClientAccountNumbers(clientID int64) ([]string, error) {
 // in a transaction to enforce security policies.
 func (s *Server) CheckTransactionOwnership(clientID int64, fromAccount string, toAccount string) (bool, error) {
 	var count int64
-	err := s.db_gorm.Table("accounts").
+	err := s.roGorm().Table("accounts").
 		Where("owner = ? AND (number = ? OR number = ?)", clientID, fromAccount, toAccount).
 		Count(&count).Error
 

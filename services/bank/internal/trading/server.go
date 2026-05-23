@@ -17,6 +17,7 @@ import (
 type Server struct {
 	tradingpb.UnimplementedTradingServiceServer
 	db         *gorm.DB
+	readDB     *gorm.DB
 	bank       *bank.Server
 	marketData MarketDataStore
 }
@@ -30,6 +31,19 @@ func NewServer(db *gorm.DB, bankSrv *bank.Server, marketData ...MarketDataStore)
 		store = marketData[0]
 	}
 	return &Server{db: db, bank: bankSrv, marketData: store}
+}
+
+func (s *Server) ConfigureReadReplica(readDB *gorm.DB) {
+	if readDB != nil {
+		s.readDB = readDB
+	}
+}
+
+func (s *Server) roDB() *gorm.DB {
+	if s.readDB != nil {
+		return s.readDB
+	}
+	return s.db
 }
 
 func (s *Server) ListExchanges(_ context.Context, _ *tradingpb.ListExchangesRequest) (*tradingpb.ListExchangesResponse, error) {
