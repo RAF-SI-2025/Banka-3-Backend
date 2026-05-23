@@ -22,7 +22,7 @@ TARGET_DIR := $(if $(TARGET),$(foreach t,$(TARGET),$(call module_path,$(t))),$(M
 $(NAMES):
 	@:
 
-.PHONY: all up down down-v proto schema seed nuke lint lint-l build build-l test test-l test-integration test-integration-l fmt fmt-l $(NAMES)
+.PHONY: all up down down-v proto schema seed nuke refresh-partitions verify-replica verify-partitions verify-indexes lint lint-l build build-l test test-l test-integration test-integration-l fmt fmt-l $(NAMES)
 
 all: proto up schema seed
 
@@ -53,6 +53,18 @@ seed:
 
 nuke:
 	docker compose exec -T postgres psql -U $(POSTGRES_USER) -d $(POSTGRES_DB) -c "DROP SCHEMA public CASCADE; CREATE SCHEMA public;"
+
+refresh-partitions:
+	docker compose exec -T postgres psql -U $(POSTGRES_USER) -d $(POSTGRES_DB) < scripts/db/refresh_partitions.sql
+
+verify-replica:
+	docker compose exec -T postgres_replica psql -U $(POSTGRES_USER) -d $(POSTGRES_DB) < scripts/db/verify_replica.sql
+
+verify-partitions:
+	docker compose exec -T postgres psql -U $(POSTGRES_USER) -d $(POSTGRES_DB) < scripts/db/verify_partitions.sql
+
+verify-indexes:
+	docker compose exec -T postgres psql -U $(POSTGRES_USER) -d $(POSTGRES_DB) < scripts/db/verify_indexes.sql
 
 lint:
 	@for m in $(TARGET_DIR); do \
