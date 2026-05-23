@@ -14,12 +14,53 @@ services:
     # at boot. See docker-library/postgres#1259.
     volumes:
       - pgdata:/var/lib/postgresql
+      - ./docker/postgres/init:/docker-entrypoint-initdb.d:ro
+    command:
+      - "postgres"
+      - "-c"
+      - "wal_level=replica"
+      - "-c"
+      - "max_wal_senders=5"
+      - "-c"
+      - "max_replication_slots=5"
+      - "-c"
+      - "hot_standby=on"
 
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER} -d ${POSTGRES_DB}"]
       interval: 2s
       timeout: 5s
       retries: 10
+    networks: [banka]
+
+  postgres_replica:
+    image: postgres:18-alpine
+    environment:
+      PGUSER: ${POSTGRES_USER}
+      PGDATA: /var/lib/postgresql/18/docker
+      PRIMARY_HOST: postgres
+      PRIMARY_PORT: "5432"
+      PRIMARY_DB: ${POSTGRES_DB}
+      PRIMARY_USER: ${POSTGRES_USER}
+      PRIMARY_PASSWORD: ${POSTGRES_PASSWORD}
+      REPLICATION_USER: ${POSTGRES_REPLICATION_USER:-replicator}
+      REPLICATION_PASSWORD: ${POSTGRES_REPLICATION_PASSWORD:-replicator_pass}
+      REPLICATION_SLOT: ${POSTGRES_REPLICATION_SLOT:-banka_replica_slot}
+    ports:
+      - "${POSTGRES_REPLICA_PORT:-5433}:5432"
+    volumes:
+      - pgreplicadata:/var/lib/postgresql
+      - ./docker/postgres/replica/bootstrap-replica.sh:/usr/local/bin/bootstrap-replica.sh:ro
+    entrypoint: ["sh", "/usr/local/bin/bootstrap-replica.sh"]
+    depends_on:
+      postgres:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER} -d ${POSTGRES_DB} && psql -U ${POSTGRES_USER} -d ${POSTGRES_DB} -tAc 'SELECT pg_is_in_recovery()' | grep -q 't'"]
+      interval: 5s
+      timeout: 5s
+      retries: 20
+      start_period: 30s
     networks: [banka]
 
   redis:
@@ -188,6 +229,7 @@ services:
 
 volumes:
   pgdata:
+  pgreplicadata:
   redisdata:
   influxdata:
 

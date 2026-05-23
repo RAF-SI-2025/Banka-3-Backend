@@ -112,8 +112,28 @@ CREATE TABLE IF NOT EXISTS companies (
     UNIQUE(tax_code)
 );
 
-CREATE TYPE owner_type AS ENUM ('personal', 'business');
-CREATE TYPE account_type AS ENUM ('checking', 'foreign');
+CREATE OR REPLACE FUNCTION ensure_enum_type(
+    type_name TEXT,
+    labels TEXT[]
+) RETURNS VOID AS $$
+BEGIN
+    IF EXISTS (SELECT 1 FROM pg_type WHERE typname = type_name) THEN
+        RETURN;
+    END IF;
+
+    EXECUTE format(
+        'CREATE TYPE %I AS ENUM (%s)',
+        type_name,
+        array_to_string(
+            ARRAY(SELECT quote_literal(label) FROM unnest(labels) AS label),
+            ', '
+        )
+    );
+END;
+$$ LANGUAGE plpgsql;
+
+SELECT ensure_enum_type('owner_type', ARRAY['personal', 'business']);
+SELECT ensure_enum_type('account_type', ARRAY['checking', 'foreign']);
 
 CREATE TABLE IF NOT EXISTS accounts (
     id                  BIGSERIAL       PRIMARY KEY,
@@ -136,10 +156,12 @@ CREATE TABLE IF NOT EXISTS accounts (
     monthly_expenditure BIGINT,
     UNIQUE(number)
 );
+CREATE INDEX IF NOT EXISTS idx_accounts_owner ON accounts(owner);
+CREATE INDEX IF NOT EXISTS idx_accounts_owner_currency ON accounts(owner, currency);
 
-CREATE TYPE card_type AS ENUM ('debit', 'credit');
-CREATE TYPE card_status AS ENUM ('active', 'blocked');
-CREATE TYPE card_brand AS ENUM ('visa', 'mastercard', 'amex', 'dinacard');
+SELECT ensure_enum_type('card_type', ARRAY['debit', 'credit']);
+SELECT ensure_enum_type('card_status', ARRAY['active', 'blocked']);
+SELECT ensure_enum_type('card_brand', ARRAY['visa', 'mastercard', 'amex', 'dinacard']);
 
 CREATE TABLE IF NOT EXISTS cards (
     id              BIGSERIAL        PRIMARY KEY,
@@ -154,6 +176,7 @@ CREATE TABLE IF NOT EXISTS cards (
     status          card_status     NOT NULL DEFAULT 'active',
     UNIQUE(number)
 );
+CREATE INDEX IF NOT EXISTS idx_cards_account_number ON cards(account_number);
 
 CREATE TABLE IF NOT EXISTS card_requests (
     id              BIGSERIAL       PRIMARY KEY,
@@ -191,9 +214,13 @@ CREATE TABLE IF NOT EXISTS payments (
     reason              VARCHAR(255)    NOT NULL,
     timestamp           TIMESTAMP       NOT NULL DEFAULT NOW()
 );
+CREATE INDEX IF NOT EXISTS idx_payments_from_account_ts_desc
+    ON payments(from_account, timestamp DESC);
+CREATE INDEX IF NOT EXISTS idx_payments_to_account_ts_desc
+    ON payments(to_account, timestamp DESC);
 
 
-CREATE TYPE transfer_status AS ENUM ('pending', 'realized', 'rejected');
+SELECT ensure_enum_type('transfer_status', ARRAY['pending', 'realized', 'rejected']);
 
 CREATE TABLE IF NOT EXISTS transfers (
     transaction_id      BIGSERIAL       PRIMARY KEY,
@@ -207,15 +234,19 @@ CREATE TABLE IF NOT EXISTS transfers (
     status              transfer_status  NOT NULL DEFAULT 'pending',
     timestamp           TIMESTAMP       NOT NULL DEFAULT NOW()
 );
+CREATE INDEX IF NOT EXISTS idx_transfers_from_account_ts_desc
+    ON transfers(from_account, timestamp DESC);
+CREATE INDEX IF NOT EXISTS idx_transfers_to_account_ts_desc
+    ON transfers(to_account, timestamp DESC);
 
 CREATE TABLE IF NOT EXISTS payment_codes (
     code        BIGINT          PRIMARY KEY,
     description VARCHAR(255)    NOT NULL
 );
 
-CREATE TYPE loan_type AS ENUM ('cash', 'mortgage', 'car', 'refinancing', 'student');
-CREATE TYPE loan_status AS ENUM ('approved', 'rejected', 'paid', 'late');
-CREATE TYPE interest_rate_type AS ENUM ('fixed', 'variable');
+SELECT ensure_enum_type('loan_type', ARRAY['cash', 'mortgage', 'car', 'refinancing', 'student']);
+SELECT ensure_enum_type('loan_status', ARRAY['approved', 'rejected', 'paid', 'late']);
+SELECT ensure_enum_type('interest_rate_type', ARRAY['fixed', 'variable']);
 
 CREATE TABLE IF NOT EXISTS loans (
     id                  BIGSERIAL           PRIMARY KEY,
@@ -234,8 +265,13 @@ CREATE TABLE IF NOT EXISTS loans (
     loan_status         loan_status         NOT NULL DEFAULT 'approved',
     interest_rate_type  interest_rate_type  NOT NULL
 );
+CREATE INDEX IF NOT EXISTS idx_loans_account_id ON loans(account_id);
+CREATE INDEX IF NOT EXISTS idx_loans_interest_rate_status
+    ON loans(interest_rate_type, loan_status);
+CREATE INDEX IF NOT EXISTS idx_loans_status_next_payment_due
+    ON loans(loan_status, next_payment_due);
 
-CREATE TYPE installment_status AS ENUM ('paid', 'due', 'late');
+SELECT ensure_enum_type('installment_status', ARRAY['paid', 'due', 'late']);
 
 CREATE TABLE IF NOT EXISTS loan_installment (
     id                  BIGSERIAL           PRIMARY KEY,
@@ -248,8 +284,8 @@ CREATE TABLE IF NOT EXISTS loan_installment (
     status              installment_status  NOT NULL DEFAULT 'due'
 );
 
-CREATE TYPE employment_status AS ENUM ('full_time', 'temporary', 'unemployed'); -- unused due to this change, remove later?
-CREATE TYPE loan_request_status AS ENUM ('pending', 'approved', 'rejected');
+SELECT ensure_enum_type('employment_status', ARRAY['full_time', 'temporary', 'unemployed']); -- unused due to this change, remove later?
+SELECT ensure_enum_type('loan_request_status', ARRAY['pending', 'approved', 'rejected']);
 
 -- I will revert the previous DB change in sprint 3 in case it was meant to be used for employee loan endpoints later
 CREATE TABLE IF NOT EXISTS loan_request (
@@ -268,6 +304,10 @@ CREATE TABLE IF NOT EXISTS loan_request (
     phone_number        VARCHAR(32),
     interest_rate_type  interest_rate_type   NOT NULL DEFAULT 'fixed'
 );
+CREATE INDEX IF NOT EXISTS idx_loan_request_status_submission
+    ON loan_request(status, submission_date DESC);
+CREATE INDEX IF NOT EXISTS idx_loan_request_account_submission
+    ON loan_request(account_id, submission_date DESC);
 
 CREATE TABLE IF NOT EXISTS verification_codes (
     client_id       BIGINT      PRIMARY KEY REFERENCES clients(id) ON DELETE CASCADE,
@@ -332,7 +372,7 @@ CREATE TABLE IF NOT EXISTS futures (
     UNIQUE(ticker)
 );
 
-CREATE TYPE forex_liquidity AS ENUM ('high', 'medium', 'low');
+SELECT ensure_enum_type('forex_liquidity', ARRAY['high', 'medium', 'low']);
 
 CREATE TABLE IF NOT EXISTS forex_pairs (
     id                  BIGSERIAL       PRIMARY KEY,
@@ -346,7 +386,7 @@ CREATE TABLE IF NOT EXISTS forex_pairs (
     UNIQUE(base_currency, quote_currency)
 );
 
-CREATE TYPE option_type AS ENUM ('call', 'put');
+SELECT ensure_enum_type('option_type', ARRAY['call', 'put']);
 
 CREATE TABLE IF NOT EXISTS options (
     id                  BIGSERIAL       PRIMARY KEY,
@@ -383,7 +423,7 @@ CREATE TABLE IF NOT EXISTS listings (
 );
 
 CREATE TABLE IF NOT EXISTS listing_daily_price_info (
-    id                  BIGSERIAL       PRIMARY KEY,
+    id                  BIGSERIAL,
     listing_id          BIGINT          NOT NULL REFERENCES listings(id) ON UPDATE CASCADE ON DELETE CASCADE,
     date                DATE            NOT NULL,
     price               BIGINT          NOT NULL,
@@ -391,8 +431,61 @@ CREATE TABLE IF NOT EXISTS listing_daily_price_info (
     bid_price           BIGINT          NOT NULL,
     change              BIGINT          NOT NULL DEFAULT 0,
     volume              BIGINT          NOT NULL DEFAULT 0,
-    UNIQUE(listing_id, date)
-);
+    PRIMARY KEY (listing_id, date)
+) PARTITION BY RANGE (date);
+CREATE INDEX IF NOT EXISTS idx_listing_daily_price_info_listing_date_desc
+    ON listing_daily_price_info(listing_id, date DESC);
+
+CREATE OR REPLACE FUNCTION ensure_monthly_range_partitions(
+    parent_table TEXT,
+    archive_partition TEXT,
+    anchor_month DATE DEFAULT CURRENT_DATE,
+    months_ahead INTEGER DEFAULT 12
+) RETURNS VOID AS $$
+DECLARE
+    month_start DATE := date_trunc('month', anchor_month)::date;
+    part_from   DATE;
+    part_to     DATE;
+    part_name   TEXT;
+BEGIN
+    EXECUTE format(
+        'CREATE TABLE IF NOT EXISTS %I PARTITION OF %I FOR VALUES FROM (%L) TO (%L)',
+        archive_partition,
+        parent_table,
+        DATE '1900-01-01',
+        month_start
+    );
+
+    FOR offset_month IN 0..months_ahead LOOP
+        part_from := (month_start + make_interval(months => offset_month))::date;
+        part_to := (month_start + make_interval(months => offset_month + 1))::date;
+        part_name := format('%s_%s', parent_table, to_char(part_from, 'YYYY_MM'));
+        EXECUTE format(
+            'CREATE TABLE IF NOT EXISTS %I PARTITION OF %I FOR VALUES FROM (%L) TO (%L)',
+            part_name,
+            parent_table,
+            part_from,
+            part_to
+        );
+    END LOOP;
+END;
+$$ LANGUAGE plpgsql;
+
+CREATE OR REPLACE FUNCTION ensure_listing_daily_price_partitions(
+    anchor_month DATE DEFAULT CURRENT_DATE,
+    months_ahead INTEGER DEFAULT 12
+) RETURNS VOID AS $$
+BEGIN
+    PERFORM ensure_monthly_range_partitions(
+        'listing_daily_price_info',
+        'listing_daily_price_info_archive',
+        anchor_month,
+        months_ahead
+    );
+END;
+$$ LANGUAGE plpgsql;
+
+SELECT ensure_listing_daily_price_partitions();
 
 -- Orders can be placed by either a client or an employee (actuary); the
 -- order_placers table holds exactly one of the two, so `orders` carries a
@@ -410,13 +503,13 @@ CREATE TABLE IF NOT EXISTS order_placers (
 CREATE UNIQUE INDEX IF NOT EXISTS order_placers_client_uniq   ON order_placers(client_id)   WHERE client_id   IS NOT NULL;
 CREATE UNIQUE INDEX IF NOT EXISTS order_placers_employee_uniq ON order_placers(employee_id) WHERE employee_id IS NOT NULL;
 
-CREATE TYPE order_type AS ENUM ('market', 'limit', 'stop', 'stop_limit');
-CREATE TYPE order_direction AS ENUM ('buy', 'sell');
+SELECT ensure_enum_type('order_type', ARRAY['market', 'limit', 'stop', 'stop_limit']);
+SELECT ensure_enum_type('order_direction', ARRAY['buy', 'sell']);
 -- 'cancelled' distinguishes supervisor/owner withdrawals from supervisor-declined
 -- orders: declined is for pending orders that never went live (and get a
 -- commission refund); cancelled is for orders that were approved but are being
 -- withdrawn against their remaining unfilled portion (spec pp.57–58, #204).
-CREATE TYPE order_status AS ENUM ('pending', 'approved', 'declined', 'done', 'cancelled');
+SELECT ensure_enum_type('order_status', ARRAY['pending', 'approved', 'declined', 'done', 'cancelled']);
 
 CREATE TABLE IF NOT EXISTS orders (
     id                  BIGSERIAL       PRIMARY KEY,
@@ -454,6 +547,13 @@ CREATE TABLE IF NOT EXISTS orders (
     created_at          TIMESTAMP       NOT NULL DEFAULT NOW(),
     CHECK ((listing_id IS NOT NULL)::int + (option_id IS NOT NULL)::int + (forex_pair_id IS NOT NULL)::int = 1)
 );
+CREATE INDEX IF NOT EXISTS idx_orders_placer_created_at
+    ON orders(placer_id, created_at DESC);
+CREATE INDEX IF NOT EXISTS idx_orders_status_created_at
+    ON orders(status, created_at DESC);
+CREATE INDEX IF NOT EXISTS idx_orders_execution_queue
+    ON orders(status, is_done, listing_id)
+    WHERE listing_id IS NOT NULL;
 
 -- Portfolio holdings (#207, spec p.62). Polymorphic over the four asset
 -- kinds — stock / future / forex_pair / option — same exactly-one pattern
@@ -525,6 +625,25 @@ CREATE INDEX IF NOT EXISTS idx_capital_gains_period_unpaid
     ON capital_gains(period, seller_placer_id)
     WHERE paid_at IS NULL;
 
+CREATE OR REPLACE FUNCTION ensure_table_trigger(
+    trigger_name TEXT,
+    target_table TEXT,
+    trigger_sql TEXT
+) RETURNS VOID AS $$
+BEGIN
+    IF EXISTS (
+        SELECT 1
+        FROM pg_trigger
+        WHERE tgname = trigger_name
+          AND tgrelid = target_table::regclass
+    ) THEN
+        RETURN;
+    END IF;
+
+    EXECUTE trigger_sql;
+END;
+$$ LANGUAGE plpgsql;
+
 -- Notify Redis when employee permissions change
 CREATE OR REPLACE FUNCTION notify_permission_change() RETURNS trigger AS $$
 DECLARE
@@ -540,9 +659,13 @@ BEGIN
 END;
 $$ LANGUAGE plpgsql;
 
-CREATE TRIGGER trg_permission_change
-    AFTER INSERT OR UPDATE OR DELETE ON employee_permissions
-    FOR EACH ROW EXECUTE FUNCTION notify_permission_change();
+SELECT ensure_table_trigger(
+    'trg_permission_change',
+    'employee_permissions',
+    'CREATE TRIGGER trg_permission_change
+        AFTER INSERT OR UPDATE OR DELETE ON employee_permissions
+        FOR EACH ROW EXECUTE FUNCTION notify_permission_change()'
+);
 
 -- Notify Redis when employee active status changes
 CREATE OR REPLACE FUNCTION notify_employee_status_change() RETURNS trigger AS $$
@@ -554,9 +677,13 @@ BEGIN
 END;
 $$ LANGUAGE plpgsql;
 
-CREATE TRIGGER trg_employee_status_change
-    AFTER UPDATE ON employees
-    FOR EACH ROW EXECUTE FUNCTION notify_employee_status_change();
+SELECT ensure_table_trigger(
+    'trg_employee_status_change',
+    'employees',
+    'CREATE TRIGGER trg_employee_status_change
+        AFTER UPDATE ON employees
+        FOR EACH ROW EXECUTE FUNCTION notify_employee_status_change()'
+);
 
 -- Idempotency keys for POST /orders (review §S34). Same (key, email)
 -- pair always returns the originally-created order id, so a curl loop
@@ -584,7 +711,27 @@ CREATE TABLE IF NOT EXISTS interbank_protocol_transactions (
     created_at            TIMESTAMP   NOT NULL DEFAULT NOW(),
     updated_at            TIMESTAMP   NOT NULL DEFAULT NOW(),
     PRIMARY KEY (sender_routing_number, transaction_id)
-);
+) PARTITION BY HASH (sender_routing_number);
+
+CREATE OR REPLACE FUNCTION ensure_hash_partitions(
+    parent_table TEXT,
+    partition_prefix TEXT,
+    modulus_count INTEGER
+) RETURNS VOID AS $$
+BEGIN
+    FOR remainder IN 0..(modulus_count - 1) LOOP
+        EXECUTE format(
+            'CREATE TABLE IF NOT EXISTS %I PARTITION OF %I FOR VALUES WITH (MODULUS %s, REMAINDER %s)',
+            format('%s_p%s', partition_prefix, remainder),
+            parent_table,
+            modulus_count,
+            remainder
+        );
+    END LOOP;
+END;
+$$ LANGUAGE plpgsql;
+
+SELECT ensure_hash_partitions('interbank_protocol_transactions', 'interbank_protocol_transactions', 4);
 
 CREATE TABLE IF NOT EXISTS interbank_protocol_messages (
     sender_routing_number INTEGER     NOT NULL,
@@ -596,7 +743,9 @@ CREATE TABLE IF NOT EXISTS interbank_protocol_messages (
     created_at            TIMESTAMP   NOT NULL DEFAULT NOW(),
     updated_at            TIMESTAMP   NOT NULL DEFAULT NOW(),
     PRIMARY KEY (sender_routing_number, idempotence_key)
-);
+) PARTITION BY HASH (sender_routing_number);
+
+SELECT ensure_hash_partitions('interbank_protocol_messages', 'interbank_protocol_messages', 4);
 
 CREATE TABLE IF NOT EXISTS external_otc_threads (
     id                   TEXT          PRIMARY KEY,
@@ -626,6 +775,8 @@ CREATE TABLE IF NOT EXISTS external_otc_threads (
 );
 CREATE INDEX IF NOT EXISTS external_otc_threads_local_user_idx
     ON external_otc_threads (local_user_id, updated_at DESC);
+CREATE INDEX IF NOT EXISTS external_otc_threads_local_user_status_idx
+    ON external_otc_threads (local_user_id, status, updated_at DESC);
 CREATE INDEX IF NOT EXISTS external_otc_threads_remote_idx
     ON external_otc_threads (remote_bank_code, remote_thread_id);
 
@@ -674,5 +825,7 @@ CREATE TABLE IF NOT EXISTS external_otc_contracts (
 );
 CREATE INDEX IF NOT EXISTS external_otc_contracts_local_user_idx
     ON external_otc_contracts (local_user_id, updated_at DESC);
+CREATE INDEX IF NOT EXISTS external_otc_contracts_local_user_status_idx
+    ON external_otc_contracts (local_user_id, status, updated_at DESC);
 CREATE INDEX IF NOT EXISTS external_otc_contracts_thread_idx
     ON external_otc_contracts (thread_id);

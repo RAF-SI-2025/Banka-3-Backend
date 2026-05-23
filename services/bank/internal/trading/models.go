@@ -126,9 +126,9 @@ type Listing struct {
 func (Listing) TableName() string { return "listings" }
 
 type ListingDailyPriceInfo struct {
-	ID        int64     `gorm:"column:id;primaryKey"`
-	ListingID int64     `gorm:"column:listing_id;not null"`
-	Date      time.Time `gorm:"column:date;type:date;not null"`
+	ID        int64     `gorm:"column:id;type:bigserial;autoIncrement"`
+	ListingID int64     `gorm:"column:listing_id;not null;primaryKey"`
+	Date      time.Time `gorm:"column:date;type:date;not null;primaryKey"`
 	Price     int64     `gorm:"column:price;not null"`
 	AskPrice  int64     `gorm:"column:ask_price;not null"`
 	BidPrice  int64     `gorm:"column:bid_price;not null"`
