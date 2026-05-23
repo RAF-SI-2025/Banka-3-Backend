@@ -37,7 +37,7 @@ func (r *Repository) GetAllClients(constraints UserRestrictions) ([]model.Client
 	}
 
 	var clients []model.Client
-	query := r.Gorm.Model(&model.Client{})
+	query := r.readGormDB().Model(&model.Client{})
 	query = addConstraints(query, constraints)
 	err := query.Find(&clients).Error
 	if err != nil {
@@ -62,7 +62,7 @@ func (r *Repository) CreateClient(client model.Client) error {
 // GetClientByAttribute retrieves a client by a specific attribute (e.g., "email").
 func (r *Repository) GetClientByAttribute(attributeName string, attributeValue any) (*model.Client, error) {
 	var client model.Client
-	err := r.Gorm.Model(&model.Client{}).Where(attributeName+" = ?", attributeValue).First(&client).Error
+	err := r.readGormDB().Model(&model.Client{}).Where(attributeName+" = ?", attributeValue).First(&client).Error
 	if err != nil {
 		if errors.Is(err, gorm.ErrRecordNotFound) {
 			return nil, ErrUserNotFound
@@ -89,7 +89,7 @@ func (r *Repository) DeleteClient(client model.Client) error {
 
 // ClientExists checks if a client exists.
 func (r *Repository) ClientExists(client model.Client) bool {
-	result := r.Gorm.First(&client)
+	result := r.readGormDB().First(&client)
 	if errors.Is(result.Error, gorm.ErrRecordNotFound) {
 		return false
 	}

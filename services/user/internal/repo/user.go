@@ -14,7 +14,7 @@ func (r *Repository) GetUserByEmail(email string) (*User, error) {
 	`
 
 	var user User
-	err := r.Database.QueryRow(query, email).Scan(&user.Email, &user.HashedPassword, &user.Salt)
+	err := r.readDB().QueryRow(query, email).Scan(&user.Email, &user.HashedPassword, &user.Salt)
 	if err == sql.ErrNoRows {
 		return nil, nil
 	}
@@ -33,7 +33,7 @@ func (r *Repository) GetUserIdByEmail(email string) (*uint64, error) {
 		LIMIT 1
 	`
 	var id uint64
-	err := r.Database.QueryRow(query, email).Scan(&id)
+	err := r.readDB().QueryRow(query, email).Scan(&id)
 	if err == sql.ErrNoRows {
 		return nil, ErrUserNotFound
 	}

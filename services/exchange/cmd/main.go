@@ -42,6 +42,19 @@ func connect_to_db_gorm() *gorm.DB {
 	return gorm_db
 }
 
+func connect_read_db_gorm() *gorm.DB {
+	dsn := strings.TrimSpace(os.Getenv("DATABASE_READ_URL"))
+	if dsn == "" {
+		dsn = os.Getenv("DATABASE_URL")
+	}
+	gorm_db, gorm_err := gorm.Open(postgres.Open(dsnWithExecMode(dsn)), &gorm.Config{})
+	if gorm_err != nil {
+		logger.L().Error("read-replica gorm open failed", "err", gorm_err)
+		os.Exit(1)
+	}
+	return gorm_db
+}
+
 func connectToDB() *sql.DB {
 	connStr := dsnWithExecMode(os.Getenv("DATABASE_URL"))
 	db, err := sql.Open("pgx", connStr)
@@ -68,10 +81,12 @@ func main() {
 
 	db := connectToDB()
 	gorm_db := connect_to_db_gorm()
+	read_gorm_db := connect_read_db_gorm()
 	logger.L().Info("connected to database")
 	defer func() { _ = db.Close() }()
 
 	exchangeService := internalExchange.NewServer(gorm_db)
+	exchangeService.ConfigureReadReplica(read_gorm_db)
 
 	srv := grpc.NewServer(
 		grpc.UnaryInterceptor(logger.UnaryServerInterceptor()),

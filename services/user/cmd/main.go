@@ -45,6 +45,19 @@ func connect_to_db_gorm() *gorm.DB {
 	return gorm_db
 }
 
+func connect_read_db_gorm() *gorm.DB {
+	dsn := strings.TrimSpace(os.Getenv("DATABASE_READ_URL"))
+	if dsn == "" {
+		dsn = os.Getenv("DATABASE_URL")
+	}
+	gorm_db, gorm_err := gorm.Open(postgres.Open(dsnWithExecMode(dsn)), &gorm.Config{})
+	if gorm_err != nil {
+		logger.L().Error("read-replica gorm open failed", "err", gorm_err)
+		os.Exit(1)
+	}
+	return gorm_db
+}
+
 func connectToDB() *sql.DB {
 	connStr := dsnWithExecMode(os.Getenv("DATABASE_URL"))
 	db, err := sql.Open("pgx", connStr)
@@ -54,6 +67,19 @@ func connectToDB() *sql.DB {
 	}
 
 	logger.L().Info("connected to database")
+	return db
+}
+
+func connectReadDB() *sql.DB {
+	connStr := strings.TrimSpace(os.Getenv("DATABASE_READ_URL"))
+	if connStr == "" {
+		connStr = os.Getenv("DATABASE_URL")
+	}
+	db, err := sql.Open("pgx", dsnWithExecMode(connStr))
+	if err != nil {
+		logger.L().Error("read-replica sql open failed", "err", err)
+		os.Exit(1)
+	}
 	return db
 }
 
@@ -74,10 +100,14 @@ func connect() (*server.Connections, error) {
 
 	db := connectToDB()
 	dbGorm := connect_to_db_gorm()
+	readDB := connectReadDB()
+	readGorm := connect_read_db_gorm()
 	return &server.Connections{
 		NotificationClient: notification.NewNotificationServiceClient(notificationConn),
 		Sql_db:             db,
+		ReadSql_db:         readDB,
 		Gorm:               dbGorm,
+		ReadGorm:           readGorm,
 	}, nil
 }
 

@@ -12,7 +12,7 @@ var ErrRateNotFound = errors.New("exchange rate not found")
 
 func (s *Server) GetRatesRecord() ([]Rate, error) {
 	var rates []Rate
-	result := s.db_gorm.Find(&rates)
+	result := s.readDB().Find(&rates)
 	if result.Error != nil {
 		return nil, result.Error
 	}
@@ -25,7 +25,7 @@ func (s *Server) GetRateByCodeRecord(code string) (*Rate, error) {
 	}
 
 	var r Rate
-	result := s.db_gorm.Where("currency_code = ?", code).First(&r)
+	result := s.readDB().Where("currency_code = ?", code).First(&r)
 
 	if result.Error != nil {
 		if errors.Is(result.Error, gorm.ErrRecordNotFound) {

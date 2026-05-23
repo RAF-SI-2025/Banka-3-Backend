@@ -36,7 +36,7 @@ func (r *Repository) GetAllEmployees(constraints UserRestrictions) ([]model.Empl
 	}
 
 	var employees []model.Employee
-	query := r.Gorm.Model(&model.Employee{}).Preload("Permissions")
+	query := r.readGormDB().Model(&model.Employee{}).Preload("Permissions")
 	query = addConstraints(query, constraints)
 	err := query.Find(&employees).Error
 	if err != nil {
@@ -61,7 +61,7 @@ func (r *Repository) CreateEmployee(employee model.Employee) error {
 // GetEmployeeByAttribute retrieves an employee by a specific attribute, preloading Permissions.
 func (r *Repository) GetEmployeeByAttribute(attributeName string, attributeValue any) (*model.Employee, error) {
 	var employee model.Employee
-	err := r.Gorm.Preload("Permissions").Where(attributeName+" = ?", attributeValue).First(&employee).Error
+	err := r.readGormDB().Preload("Permissions").Where(attributeName+" = ?", attributeValue).First(&employee).Error
 	if err != nil {
 		if errors.Is(err, gorm.ErrRecordNotFound) {
 			return nil, ErrUserNotFound
@@ -88,7 +88,7 @@ func (r *Repository) DeleteEmployee(employee model.Employee) error {
 
 // EmployeeExists checks if an employee exists.
 func (r *Repository) EmployeeExists(employee model.Employee) bool {
-	result := r.Gorm.First(&employee)
+	result := r.readGormDB().First(&employee)
 	if errors.Is(result.Error, gorm.ErrRecordNotFound) {
 		return false
 	}
@@ -104,7 +104,7 @@ func (r *Repository) UpdateEmployee(employee model.Employee) (*model.Employee, e
 	// find permission IDs by name
 	findPermByName := func(permName string) uint64 {
 		var perm model.Permission
-		r.Gorm.First(&perm, "name = ?", permName)
+		r.readGormDB().First(&perm, "name = ?", permName)
 		return perm.Id
 	}
 	for i, val := range employee.Permissions {
