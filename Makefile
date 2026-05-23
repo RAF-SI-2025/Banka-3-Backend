@@ -3,6 +3,7 @@ export
 
 GO_IMAGE := golang:1.25
 GO_RUN   := docker run --rm -v $(PWD):/app -w /app $(GO_IMAGE)
+SPARK_ANALYTICS_IMAGE ?= banka-analytics-spark:latest
 
 ADMIN_EMAIL  ?= admin@banka.raf
 CLIENT_EMAIL ?= petar@primer.raf
@@ -22,7 +23,7 @@ TARGET_DIR := $(if $(TARGET),$(foreach t,$(TARGET),$(call module_path,$(t))),$(M
 $(NAMES):
 	@:
 
-.PHONY: all up down down-v proto schema seed nuke refresh-partitions verify-replica verify-partitions verify-indexes lint lint-l build build-l test test-l test-integration test-integration-l fmt fmt-l $(NAMES)
+.PHONY: all up down down-v proto schema seed nuke refresh-partitions verify-replica verify-partitions verify-indexes verify-spark-analytics spark-analytics-image spark-analytics-local lint lint-l build build-l test test-l test-integration test-integration-l fmt fmt-l $(NAMES)
 
 all: proto up schema seed
 
@@ -65,6 +66,15 @@ verify-partitions:
 
 verify-indexes:
 	docker compose exec -T postgres psql -U $(POSTGRES_USER) -d $(POSTGRES_DB) < scripts/db/verify_indexes.sql
+
+verify-spark-analytics:
+	docker compose exec -T postgres psql -U $(POSTGRES_USER) -d $(POSTGRES_DB) < scripts/db/verify_spark_analytics.sql
+
+spark-analytics-image:
+	docker build -t $(SPARK_ANALYTICS_IMAGE) -f analytics/spark/Dockerfile .
+
+spark-analytics-local:
+	docker compose run --rm spark_analytics
 
 lint:
 	@for m in $(TARGET_DIR); do \

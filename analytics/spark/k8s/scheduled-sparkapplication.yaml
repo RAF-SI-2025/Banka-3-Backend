@@ -1,0 +1,38 @@
+apiVersion: sparkoperator.k8s.io/v1beta2
+kind: ScheduledSparkApplication
+metadata:
+  name: banka-trading-analytics
+  namespace: banka-analytics
+spec:
+  schedule: "0 2 * * *"
+  concurrencyPolicy: Forbid
+  template:
+    type: Python
+    mode: cluster
+    sparkVersion: "4.1.2"
+    image: banka-analytics-spark:latest
+    imagePullPolicy: IfNotPresent
+    mainApplicationFile: local:///opt/banka-analytics/jobs/trading_analytics.py
+    restartPolicy:
+      type: Never
+    timeToLiveSeconds: 900
+    sparkConf:
+      spark.sql.session.timeZone: UTC
+      spark.kubernetes.container.image.pullPolicy: IfNotPresent
+      spark.jars: local:///opt/spark/jars/postgresql-42.7.5.jar
+      spark.driver.extraClassPath: /opt/spark/jars/postgresql-42.7.5.jar
+      spark.executor.extraClassPath: /opt/spark/jars/postgresql-42.7.5.jar
+    driver:
+      serviceAccount: spark-analytics
+      cores: 1
+      memory: 1g
+      envFrom:
+        - secretRef:
+            name: banka-analytics-db
+    executor:
+      instances: 2
+      cores: 1
+      memory: 1g
+      envFrom:
+        - secretRef:
+            name: banka-analytics-db
