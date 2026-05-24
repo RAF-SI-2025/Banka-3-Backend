@@ -1,0 +1,19 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: gateway-runtime
+  namespace: banka-platform
+data:
+  HTTP_PORT: "8080"
+  USER_GRPC_ADDR: "host.docker.internal:50051"
+  NOTIFICATION_GRPC_ADDR: "host.docker.internal:50072"
+  BANK_GRPC_ADDR: "host.docker.internal:50053"
+  EXCHANGE_GRPC_ADDR: "host.docker.internal:50054"
+  TRADING_GRPC_ADDR: "host.docker.internal:50053"
+  INTERBANK_ROUTES: ""
+  INTERBANK_API_KEY: "dev-outbound-banka3"
+  BANK_ROUTING_NUMBER: "333"
+  BANK_INTERNAL_HTTP_URL: "http://host.docker.internal:50090"
+  BANK_INTERNAL_API_KEY: "dev-internal-banka3"
+  LOG_LEVEL: "info"
+  LOG_FORMAT: "text"

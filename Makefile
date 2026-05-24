@@ -23,7 +23,7 @@ TARGET_DIR := $(if $(TARGET),$(foreach t,$(TARGET),$(call module_path,$(t))),$(M
 $(NAMES):
 	@:
 
-.PHONY: all up down down-v proto schema seed nuke refresh-partitions verify-replica verify-partitions verify-indexes verify-spark-analytics spark-analytics-image spark-analytics-local lint lint-l build build-l test test-l test-integration test-integration-l fmt fmt-l $(NAMES)
+.PHONY: all up down down-v proto schema seed nuke refresh-partitions verify-replica verify-partitions verify-indexes verify-spark-analytics spark-analytics-image spark-analytics-local k8s-gateway-image k8s-autoscaling-apply k8s-autoscaling-status lint lint-l build build-l test test-l test-integration test-integration-l fmt fmt-l $(NAMES)
 
 all: proto up schema seed
 
@@ -75,6 +75,15 @@ spark-analytics-image:
 
 spark-analytics-local:
 	docker compose run --rm spark_analytics
+
+k8s-gateway-image:
+	docker build -t banka-3-backend-gateway:latest -f docker/Dockerfile --build-arg SERVICE=gateway .
+
+k8s-autoscaling-apply:
+	kubectl apply -k k8s/autoscaling/gateway
+
+k8s-autoscaling-status:
+	kubectl get deploy,svc,hpa,pdb -n banka-platform
 
 lint:
 	@for m in $(TARGET_DIR); do \
