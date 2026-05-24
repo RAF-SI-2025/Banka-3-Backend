@@ -18,6 +18,7 @@ import (
 	"gorm.io/gorm"
 
 	"github.com/RAF-SI-2025/Banka-3-Backend/pkg/logger"
+	"github.com/RAF-SI-2025/Banka-3-Backend/pkg/observability"
 	"github.com/RAF-SI-2025/Banka-3-Backend/pkg/proto/notification"
 	"github.com/RAF-SI-2025/Banka-3-Backend/pkg/proto/user"
 )
@@ -113,6 +114,8 @@ func connect() (*server.Connections, error) {
 
 func main() {
 	logger.Init("user")
+	stopMetrics := observability.StartMetricsServer("user", os.Getenv("METRICS_PORT"))
+	defer stopMetrics()
 
 	port := os.Getenv("GRPC_PORT")
 	if port == "" {
@@ -161,8 +164,14 @@ func main() {
 	go server.StartPGListener(context.Background(), databaseURL, userService)
 
 	srv := grpc.NewServer(
-		grpc.UnaryInterceptor(logger.UnaryServerInterceptor()),
-		grpc.StreamInterceptor(logger.StreamServerInterceptor()),
+		grpc.ChainUnaryInterceptor(
+			logger.UnaryServerInterceptor(),
+			observability.UnaryServerInterceptor("user"),
+		),
+		grpc.ChainStreamInterceptor(
+			logger.StreamServerInterceptor(),
+			observability.StreamServerInterceptor("user"),
+		),
 	)
 	user.RegisterUserServiceServer(srv, userService)
 	user.RegisterTOTPServiceServer(srv, totpService)

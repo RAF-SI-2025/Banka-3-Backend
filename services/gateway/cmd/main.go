@@ -6,14 +6,17 @@ import (
 	"github.com/gin-gonic/gin"
 
 	"github.com/RAF-SI-2025/Banka-3-Backend/pkg/logger"
+	"github.com/RAF-SI-2025/Banka-3-Backend/pkg/observability"
 	"github.com/RAF-SI-2025/Banka-3-Backend/services/gateway/internal/gateway"
 )
 
 func main() {
 	logger.Init("gateway")
+	stopMetrics := observability.StartMetricsServer("gateway", os.Getenv("METRICS_PORT"))
+	defer stopMetrics()
 
 	router := gin.New()
-	router.Use(gin.Recovery(), logger.GinMiddleware())
+	router.Use(gin.Recovery(), logger.GinMiddleware(), observability.GinMiddleware("gateway"))
 
 	server, err := gateway.NewServer()
 	if err != nil {
