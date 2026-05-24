@@ -8,6 +8,7 @@ import (
 	"strings"
 
 	"github.com/RAF-SI-2025/Banka-3-Backend/pkg/logger"
+	"github.com/RAF-SI-2025/Banka-3-Backend/pkg/observability"
 	"github.com/RAF-SI-2025/Banka-3-Backend/pkg/proto/exchange"
 	internalExchange "github.com/RAF-SI-2025/Banka-3-Backend/services/exchange/internal/exchange"
 	_ "github.com/jackc/pgx/v5/stdlib"
@@ -67,6 +68,8 @@ func connectToDB() *sql.DB {
 
 func main() {
 	logger.Init("exchange")
+	stopMetrics := observability.StartMetricsServer("exchange", os.Getenv("METRICS_PORT"))
+	defer stopMetrics()
 
 	port := os.Getenv("GRPC_PORT")
 	if port == "" {
@@ -89,8 +92,14 @@ func main() {
 	exchangeService.ConfigureReadReplica(read_gorm_db)
 
 	srv := grpc.NewServer(
-		grpc.UnaryInterceptor(logger.UnaryServerInterceptor()),
-		grpc.StreamInterceptor(logger.StreamServerInterceptor()),
+		grpc.ChainUnaryInterceptor(
+			logger.UnaryServerInterceptor(),
+			observability.UnaryServerInterceptor("exchange"),
+		),
+		grpc.ChainStreamInterceptor(
+			logger.StreamServerInterceptor(),
+			observability.StreamServerInterceptor("exchange"),
+		),
 	)
 	exchange.RegisterExchangeServiceServer(srv, exchangeService)
 	reflection.Register(srv)

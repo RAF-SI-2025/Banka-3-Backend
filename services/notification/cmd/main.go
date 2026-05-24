@@ -9,12 +9,15 @@ import (
 	"google.golang.org/grpc/reflection"
 
 	"github.com/RAF-SI-2025/Banka-3-Backend/pkg/logger"
+	"github.com/RAF-SI-2025/Banka-3-Backend/pkg/observability"
 	"github.com/RAF-SI-2025/Banka-3-Backend/pkg/proto/notification"
 	internalNotification "github.com/RAF-SI-2025/Banka-3-Backend/services/notification/internal/notification"
 )
 
 func main() {
 	logger.Init("notification")
+	stopMetrics := observability.StartMetricsServer("notification", os.Getenv("METRICS_PORT"))
+	defer stopMetrics()
 
 	port := os.Getenv("GRPC_PORT")
 	if port == "" {
@@ -27,8 +30,14 @@ func main() {
 		os.Exit(1)
 	}
 	grpcServer := grpc.NewServer(
-		grpc.UnaryInterceptor(logger.UnaryServerInterceptor()),
-		grpc.StreamInterceptor(logger.StreamServerInterceptor()),
+		grpc.ChainUnaryInterceptor(
+			logger.UnaryServerInterceptor(),
+			observability.UnaryServerInterceptor("notification"),
+		),
+		grpc.ChainStreamInterceptor(
+			logger.StreamServerInterceptor(),
+			observability.StreamServerInterceptor("notification"),
+		),
 	)
 	backend := os.Getenv("BACKEND")
 

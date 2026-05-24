@@ -9,6 +9,7 @@ import (
 	"strings"
 
 	"github.com/RAF-SI-2025/Banka-3-Backend/pkg/logger"
+	"github.com/RAF-SI-2025/Banka-3-Backend/pkg/observability"
 	"github.com/RAF-SI-2025/Banka-3-Backend/pkg/proto/bank"
 	tradingpb "github.com/RAF-SI-2025/Banka-3-Backend/pkg/proto/trading"
 	internalBank "github.com/RAF-SI-2025/Banka-3-Backend/services/bank/internal/bank"
@@ -147,6 +148,8 @@ func buildForexRatesClient() internalTrading.ForexRatesClient {
 
 func main() {
 	logger.Init("bank")
+	stopMetrics := observability.StartMetricsServer("bank", os.Getenv("METRICS_PORT"))
+	defer stopMetrics()
 
 	port := os.Getenv("GRPC_PORT")
 	if port == "" {
@@ -219,8 +222,14 @@ func main() {
 	defer stopForex()
 
 	srv := grpc.NewServer(
-		grpc.UnaryInterceptor(logger.UnaryServerInterceptor()),
-		grpc.StreamInterceptor(logger.StreamServerInterceptor()),
+		grpc.ChainUnaryInterceptor(
+			logger.UnaryServerInterceptor(),
+			observability.UnaryServerInterceptor("bank"),
+		),
+		grpc.ChainStreamInterceptor(
+			logger.StreamServerInterceptor(),
+			observability.StreamServerInterceptor("bank"),
+		),
 	)
 	bank.RegisterBankServiceServer(srv, bankService)
 	tradingpb.RegisterTradingServiceServer(srv, tradingService)

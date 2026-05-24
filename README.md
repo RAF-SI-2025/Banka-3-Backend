@@ -144,6 +144,51 @@ ili ekvivalent). Ako metrics API nije instaliran, manifesti ce se uredno
 kreirati, ali HPA nece moci da donosi CPU/memory odluke dok se metrics sloj ne
 doda u klaster.
 
+## Monitoring / Logging / Alerting
+
+Dodati su Prometheus/Grafana/Alertmanager fajlovi i Prometheus metrike u
+servise:
+
+- `gateway` izbacuje HTTP request count/status/latency metrike
+- `bank`, `exchange`, `user` i `notification` izbacuju gRPC request
+  count/status/latency metrike
+- svi servisi imaju poseban `/metrics` endpoint na admin portu
+- Alertmanager moze da prosledi alertove na Discord preko lokalnog webhook
+  bridge servisa
+
+Bitni fajlovi:
+
+- `pkg/observability/metrics.go`
+- `monitoring/prometheus/prometheus.yml`
+- `monitoring/prometheus/alerts.yml`
+- `monitoring/alertmanager/alertmanager.yml`
+- `monitoring/grafana/`
+- `monitoring/discord-notifier/server.py`
+
+Lokalno podizanje observability stack-a:
+
+```bash
+make observability-up
+make observability-status
+```
+
+Podrazumevani UI endpoint-i:
+
+- Prometheus: `http://localhost:9090`
+- Grafana: `http://localhost:3001`
+- Alertmanager: `http://localhost:9093`
+
+Podrazumevani metrics endpoint-i:
+
+- `http://localhost:9100/metrics` - gateway
+- `http://localhost:9101/metrics` - user
+- `http://localhost:9102/metrics` - notification
+- `http://localhost:9103/metrics` - bank
+- `http://localhost:9104/metrics` - exchange
+
+Ako zelite Discord alertove, setujte `DISCORD_WEBHOOK_URL` u `.env` pre
+pokretanja `make observability-up`.
+
 ## CI
 
 CI se pokrece automatski na pull request prema `main` grani. Proverava:

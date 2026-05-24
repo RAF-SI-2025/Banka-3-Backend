@@ -103,6 +103,7 @@ services:
     ports:
       - "${BANK_GRPC_PORT:-50053}:50051"
       - "${BANK_DEBUG_HTTP_PORT:-50090}:50090"
+      - "${BANK_METRICS_PORT:-9103}:9103"
     environment:
       DATABASE_URL: "postgres://${POSTGRES_USER}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB}?sslmode=disable"
       DATABASE_READ_URL: "${DATABASE_READ_URL:-postgres://${POSTGRES_USER}:${POSTGRES_PASSWORD}@postgres_replica:5432/${POSTGRES_DB}?sslmode=disable}"
@@ -117,6 +118,7 @@ services:
       # is what cypress hits at localhost:${BANK_DEBUG_HTTP_PORT}.
       BANK_DEBUG_HTTP_PORT: "50090"
       NOTIFICATION_GRPC_ADDR: ${NOTIFICATION_GRPC_ADDR:-notification:50051}
+      METRICS_PORT: "9103"
       LOG_LEVEL: ${LOG_LEVEL:-info}
       LOG_FORMAT: ${LOG_FORMAT:-text}
     depends_on:
@@ -138,11 +140,13 @@ services:
     restart: on-failure
     ports:
       - "${EXCHANGE_GRPC_PORT:-50054}:50051"
+      - "${EXCHANGE_METRICS_PORT:-9104}:9104"
     environment:
       DATABASE_URL: "postgres://${POSTGRES_USER}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB}?sslmode=disable"
       DATABASE_READ_URL: "${DATABASE_READ_URL:-postgres://${POSTGRES_USER}:${POSTGRES_PASSWORD}@postgres_replica:5432/${POSTGRES_DB}?sslmode=disable}"
       GRPC_PORT: "50051"
       EXCHANGE_RATE_API_KEY: ${EXCHANGE_RATE_API_KEY}
+      METRICS_PORT: "9104"
       LOG_LEVEL: ${LOG_LEVEL:-info}
       LOG_FORMAT: ${LOG_FORMAT:-text}
     depends_on:
@@ -162,6 +166,7 @@ services:
     restart: on-failure
     ports:
       - "${USER_GRPC_PORT:-50051}:50051"
+      - "${USER_METRICS_PORT:-9101}:9101"
     environment:
       DATABASE_URL: "postgres://${POSTGRES_USER}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB}?sslmode=disable"
       DATABASE_READ_URL: "${DATABASE_READ_URL:-postgres://${POSTGRES_USER}:${POSTGRES_PASSWORD}@postgres_replica:5432/${POSTGRES_DB}?sslmode=disable}"
@@ -174,6 +179,7 @@ services:
       REDIS_ADDR: "redis:6379"
       REDIS_PASSWORD: ${REDIS_PASSWORD}
       TOTP_DISABLE_BASE_URL: ${TOTP_DISABLE_BASE_URL}
+      METRICS_PORT: "9101"
       LOG_LEVEL: ${LOG_LEVEL:-info}
       LOG_FORMAT: ${LOG_FORMAT:-text}
     depends_on:
@@ -194,6 +200,7 @@ services:
         SERVICE: notification
     ports:
       - "${NOTIFICATION_GRPC_PORT:-50052}:50051"
+      - "${NOTIFICATION_METRICS_PORT:-9102}:9102"
     environment:
       BACKEND: "SMTP"
       GRPC_PORT: "50051"
@@ -202,6 +209,7 @@ services:
       FROM_EMAIL_PASSWORD: "${FROM_EMAIL_PASSWORD}"
       FROM_EMAIL_SMTP: "${FROM_EMAIL_SMTP}"
       SMTP_ADDR: "${SMTP_ADDR}"
+      METRICS_PORT: "9102"
       LOG_LEVEL: ${LOG_LEVEL:-info}
       LOG_FORMAT: ${LOG_FORMAT:-text}
     networks: [banka]
@@ -215,6 +223,7 @@ services:
         SERVICE: gateway
     ports:
       - "${GATEWAY_PORT:-8080}:8080"
+      - "${GATEWAY_METRICS_PORT:-9100}:9100"
     environment:
       HTTP_PORT: "8080"
       USER_GRPC_ADDR: "user:50051"
@@ -227,6 +236,7 @@ services:
       BANK_ROUTING_NUMBER: ${BANK_ROUTING_NUMBER:-333}
       BANK_INTERNAL_HTTP_URL: ${BANK_INTERNAL_HTTP_URL:-http://bank:50090}
       BANK_INTERNAL_API_KEY: ${BANK_INTERNAL_API_KEY:-dev-internal-banka3}
+      METRICS_PORT: "9100"
       LOG_LEVEL: ${LOG_LEVEL:-info}
       LOG_FORMAT: ${LOG_FORMAT:-text}
     depends_on:
@@ -267,6 +277,66 @@ services:
         condition: service_healthy
       postgres_replica:
         condition: service_healthy
+    networks: [banka]
+
+  prometheus:
+    profiles: ["observability"]
+    image: prom/prometheus:v3.7.3
+    ports:
+      - "${PROMETHEUS_PORT:-9090}:9090"
+    volumes:
+      - ./monitoring/prometheus/prometheus.yml:/etc/prometheus/prometheus.yml:ro
+      - ./monitoring/prometheus/alerts.yml:/etc/prometheus/alerts.yml:ro
+    command:
+      - --config.file=/etc/prometheus/prometheus.yml
+      - --storage.tsdb.path=/prometheus
+      - --web.enable-lifecycle
+    depends_on:
+      - gateway
+      - user
+      - notification
+      - bank
+      - exchange
+    networks: [banka]
+
+  grafana:
+    profiles: ["observability"]
+    image: grafana/grafana:12.2.0
+    ports:
+      - "${GRAFANA_PORT:-3001}:3000"
+    environment:
+      GF_SECURITY_ADMIN_USER: ${GRAFANA_ADMIN_USER:-admin}
+      GF_SECURITY_ADMIN_PASSWORD: ${GRAFANA_ADMIN_PASSWORD:-admin}
+    volumes:
+      - ./monitoring/grafana/provisioning/datasources:/etc/grafana/provisioning/datasources:ro
+      - ./monitoring/grafana/provisioning/dashboards:/etc/grafana/provisioning/dashboards:ro
+      - ./monitoring/grafana/dashboards:/var/lib/grafana/dashboards:ro
+    depends_on:
+      - prometheus
+    networks: [banka]
+
+  alertmanager:
+    profiles: ["observability"]
+    image: prom/alertmanager:v0.28.1
+    ports:
+      - "${ALERTMANAGER_PORT:-9093}:9093"
+    volumes:
+      - ./monitoring/alertmanager/alertmanager.yml:/etc/alertmanager/alertmanager.yml:ro
+    command:
+      - --config.file=/etc/alertmanager/alertmanager.yml
+      - --storage.path=/alertmanager
+    depends_on:
+      - discord_notifier
+    networks: [banka]
+
+  discord_notifier:
+    profiles: ["observability"]
+    build:
+      context: .
+      dockerfile: monitoring/discord-notifier/Dockerfile
+    environment:
+      DISCORD_WEBHOOK_URL: ${DISCORD_WEBHOOK_URL:-}
+      PORT: "8080"
     networks: [banka]
 
 volumes:
