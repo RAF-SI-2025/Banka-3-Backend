@@ -23,7 +23,7 @@ TARGET_DIR := $(if $(TARGET),$(foreach t,$(TARGET),$(call module_path,$(t))),$(M
 $(NAMES):
 	@:
 
-.PHONY: all up down down-v proto schema seed nuke refresh-partitions verify-replica verify-partitions verify-indexes verify-spark-analytics spark-analytics-image spark-analytics-local k8s-gateway-image k8s-autoscaling-apply k8s-autoscaling-status lint lint-l build build-l test test-l test-integration test-integration-l fmt fmt-l $(NAMES)
+.PHONY: all up down down-v proto schema seed nuke refresh-partitions verify-replica verify-partitions verify-indexes verify-spark-analytics verify-spark-ml spark-analytics-image spark-analytics-local spark-ml-local k8s-gateway-image k8s-autoscaling-apply k8s-autoscaling-status lint lint-l build build-l test test-l test-integration test-integration-l fmt fmt-l $(NAMES)
 
 all: proto up schema seed
 
@@ -70,11 +70,17 @@ verify-indexes:
 verify-spark-analytics:
 	docker compose exec -T postgres psql -U $(POSTGRES_USER) -d $(POSTGRES_DB) < scripts/db/verify_spark_analytics.sql
 
+verify-spark-ml:
+	docker compose exec -T postgres psql -U $(POSTGRES_USER) -d $(POSTGRES_DB) < scripts/db/verify_spark_ml.sql
+
 spark-analytics-image:
 	docker build -t $(SPARK_ANALYTICS_IMAGE) -f analytics/spark/Dockerfile .
 
 spark-analytics-local:
 	docker compose run --rm spark_analytics
+
+spark-ml-local:
+	docker compose run --rm spark_analytics /opt/spark/bin/spark-submit --master local[2] --jars /opt/spark/jars/postgresql-42.7.5.jar --conf spark.driver.extraClassPath=/opt/spark/jars/postgresql-42.7.5.jar --conf spark.executor.extraClassPath=/opt/spark/jars/postgresql-42.7.5.jar local:///opt/banka-analytics/jobs/account_activity_ml.py
 
 k8s-gateway-image:
 	docker build -t banka-3-backend-gateway:latest -f docker/Dockerfile --build-arg SERVICE=gateway .

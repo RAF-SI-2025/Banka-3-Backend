@@ -862,3 +862,58 @@ CREATE TABLE IF NOT EXISTS analytics_daily_top_listings (
 );
 CREATE INDEX IF NOT EXISTS idx_analytics_daily_top_listings_listing
     ON analytics_daily_top_listings (listing_id, metric_date DESC);
+
+-- Spark ML snapshots. The model clusters account behavior from real project
+-- activity (payments, transfers and trading usage) and writes the resulting
+-- account segments plus cluster-level summaries back to Postgres.
+CREATE TABLE IF NOT EXISTS analytics_account_activity_segments (
+    snapshot_date              DATE             NOT NULL,
+    account_id                 BIGINT           NOT NULL REFERENCES accounts(id) ON UPDATE CASCADE ON DELETE CASCADE,
+    account_number             VARCHAR(20)      NOT NULL REFERENCES accounts(number) ON UPDATE CASCADE ON DELETE CASCADE,
+    owner_id                   BIGINT           NOT NULL REFERENCES clients(id) ON UPDATE CASCADE ON DELETE CASCADE,
+    company_id                 BIGINT           REFERENCES companies(id) ON UPDATE CASCADE ON DELETE CASCADE,
+    owner_type                 VARCHAR(16)      NOT NULL,
+    currency                   VARCHAR(8)       NOT NULL REFERENCES currencies(label) ON UPDATE CASCADE ON DELETE RESTRICT,
+    cluster_id                 SMALLINT         NOT NULL CHECK (cluster_id >= 0),
+    balance                    BIGINT           NOT NULL DEFAULT 0,
+    account_age_days           INTEGER          NOT NULL DEFAULT 0,
+    payments_out_count         BIGINT           NOT NULL DEFAULT 0,
+    payments_out_volume        BIGINT           NOT NULL DEFAULT 0,
+    payments_in_count          BIGINT           NOT NULL DEFAULT 0,
+    payments_in_volume         BIGINT           NOT NULL DEFAULT 0,
+    transfers_out_count        BIGINT           NOT NULL DEFAULT 0,
+    transfers_out_volume       BIGINT           NOT NULL DEFAULT 0,
+    transfers_in_count         BIGINT           NOT NULL DEFAULT 0,
+    transfers_in_volume        BIGINT           NOT NULL DEFAULT 0,
+    orders_created             BIGINT           NOT NULL DEFAULT 0,
+    orders_completed           BIGINT           NOT NULL DEFAULT 0,
+    orders_requested_notional  BIGINT           NOT NULL DEFAULT 0,
+    fills_count                BIGINT           NOT NULL DEFAULT 0,
+    fills_notional             BIGINT           NOT NULL DEFAULT 0,
+    activity_score             DOUBLE PRECISION NOT NULL DEFAULT 0,
+    generated_at               TIMESTAMP        NOT NULL DEFAULT NOW(),
+    PRIMARY KEY (snapshot_date, account_id)
+);
+CREATE INDEX IF NOT EXISTS idx_analytics_account_activity_segments_cluster
+    ON analytics_account_activity_segments (cluster_id, snapshot_date DESC);
+ALTER TABLE analytics_account_activity_segments
+    ALTER COLUMN owner_type TYPE VARCHAR(16) USING owner_type::text;
+
+CREATE TABLE IF NOT EXISTS analytics_account_activity_clusters (
+    snapshot_date                   DATE             NOT NULL,
+    cluster_id                      SMALLINT         NOT NULL CHECK (cluster_id >= 0),
+    account_count                   BIGINT           NOT NULL DEFAULT 0,
+    business_account_count          BIGINT           NOT NULL DEFAULT 0,
+    avg_balance                     DOUBLE PRECISION NOT NULL DEFAULT 0,
+    avg_account_age_days            DOUBLE PRECISION NOT NULL DEFAULT 0,
+    avg_payments_out_volume         DOUBLE PRECISION NOT NULL DEFAULT 0,
+    avg_payments_in_volume          DOUBLE PRECISION NOT NULL DEFAULT 0,
+    avg_transfers_out_volume        DOUBLE PRECISION NOT NULL DEFAULT 0,
+    avg_transfers_in_volume         DOUBLE PRECISION NOT NULL DEFAULT 0,
+    avg_orders_requested_notional   DOUBLE PRECISION NOT NULL DEFAULT 0,
+    avg_fills_notional              DOUBLE PRECISION NOT NULL DEFAULT 0,
+    avg_activity_score              DOUBLE PRECISION NOT NULL DEFAULT 0,
+    silhouette_score                DOUBLE PRECISION NOT NULL DEFAULT 0,
+    generated_at                    TIMESTAMP        NOT NULL DEFAULT NOW(),
+    PRIMARY KEY (snapshot_date, cluster_id)
+);
