@@ -57,6 +57,8 @@ pokretanje (potreban Go na sistemu).
 | `make spark-analytics-image` | Builduj Spark analytics image |
 | `make spark-analytics-local` | Pokreni Spark analytics lokalno preko docker compose profila |
 | `make verify-spark-analytics` | Ispisi poslednje Spark analytics agregate iz Postgresa |
+| `make spark-ml-local` | Pokreni Spark ML segmentaciju racuna nad projektnim podacima |
+| `make verify-spark-ml` | Ispisi poslednje Spark ML klastere i account segmente iz Postgresa |
 | `make k8s-gateway-image` | Builduj lokalni gateway image za Kubernetes autoscaling demo |
 | `make k8s-autoscaling-apply` | Apply gateway autoscaling manifesta na Kubernetes |
 | `make k8s-autoscaling-status` | Ispisi deployment/service/HPA/PDB status |
@@ -99,11 +101,21 @@ PySpark job racuna dnevne operativne metrike za:
 - external OTC contracts
 - top listings po dnevnom prometu
 
+Dodat je i Spark ML job koji radi KMeans segmentaciju racuna na osnovu
+projektnog ponasanja:
+- outgoing / incoming payments
+- outgoing / incoming transfers
+- order activity
+- fill notional
+- balance / age / owner kind
+
 Lokalni dry-run ide preko compose profila:
 
 ```bash
 make spark-analytics-local
 make verify-spark-analytics
+make spark-ml-local
+make verify-spark-ml
 ```
 
 Za Kubernetes deployment dodate su dve putanje:

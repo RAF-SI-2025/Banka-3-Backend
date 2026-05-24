@@ -1,0 +1,46 @@
+apiVersion: batch/v1
+kind: CronJob
+metadata:
+  name: banka-account-activity-ml
+  namespace: banka-analytics
+spec:
+  schedule: "30 2 * * *"
+  concurrencyPolicy: Forbid
+  successfulJobsHistoryLimit: 1
+  failedJobsHistoryLimit: 2
+  jobTemplate:
+    spec:
+      backoffLimit: 0
+      template:
+        metadata:
+          labels:
+            app: banka-account-activity-ml
+        spec:
+          serviceAccountName: spark-analytics
+          restartPolicy: Never
+          containers:
+            - name: spark-ml
+              image: banka-analytics-spark:latest
+              imagePullPolicy: IfNotPresent
+              envFrom:
+                - secretRef:
+                    name: banka-analytics-db
+              command:
+                - /opt/spark/bin/spark-submit
+              args:
+                - --master
+                - local[2]
+                - --jars
+                - /opt/spark/jars/postgresql-42.7.5.jar
+                - --conf
+                - spark.driver.extraClassPath=/opt/spark/jars/postgresql-42.7.5.jar
+                - --conf
+                - spark.executor.extraClassPath=/opt/spark/jars/postgresql-42.7.5.jar
+                - local:///opt/banka-analytics/jobs/account_activity_ml.py
+              resources:
+                requests:
+                  cpu: "500m"
+                  memory: "1Gi"
+                limits:
+                  cpu: "2"
+                  memory: "2Gi"
