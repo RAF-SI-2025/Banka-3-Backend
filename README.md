@@ -11,6 +11,9 @@ Aktuelni stack u `newestbackend` sada ukljucuje:
 - Spark analytics pipeline koji cita sa read replike i pise dnevne agregate nazad u Postgres, sa Kubernetes `ScheduledSparkApplication` manifestima
 - Kubernetes autoscaling bundle za `gateway` sa `Deployment` + `Service` + `HPA` + `PodDisruptionBudget`
 
+Za pripremu fakultetskog klaster deployment-a pogledajte i
+`k8s/faculty/README.md`.
+
 ## API
 
 Api specifikacija se nalazi

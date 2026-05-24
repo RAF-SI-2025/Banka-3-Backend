@@ -1,0 +1,7 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: frontend-runtime
+data:
+  # Ako frontend izlazi kroz isti domen i browser ide na gateway preko path-a.
+  APP_API_BASE_URL: "https://example.raf.rs/gateway/api"
