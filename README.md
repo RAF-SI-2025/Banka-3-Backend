@@ -9,6 +9,7 @@ Aktuelni stack u `newestbackend` sada ukljucuje:
 - dodatni read-heavy indeksi za transaction history, kreditne cron upite i trading/OTC portale
 - InfluxDB za time-series berzanske podatke
 - Spark analytics pipeline koji cita sa read replike i pise dnevne agregate nazad u Postgres, sa Kubernetes `ScheduledSparkApplication` manifestima
+- Kubernetes autoscaling bundle za `gateway` sa `Deployment` + `Service` + `HPA` + `PodDisruptionBudget`
 
 ## API
 
@@ -53,6 +54,9 @@ pokretanje (potreban Go na sistemu).
 | `make spark-analytics-image` | Builduj Spark analytics image |
 | `make spark-analytics-local` | Pokreni Spark analytics lokalno preko docker compose profila |
 | `make verify-spark-analytics` | Ispisi poslednje Spark analytics agregate iz Postgresa |
+| `make k8s-gateway-image` | Builduj lokalni gateway image za Kubernetes autoscaling demo |
+| `make k8s-autoscaling-apply` | Apply gateway autoscaling manifesta na Kubernetes |
+| `make k8s-autoscaling-status` | Ispisi deployment/service/HPA/PDB status |
 | `make nuke`    | Obrisi sve i ucitaj schema i seed            |
 | `make build`   | Builduj sve servise (Docker)                 |
 | `make build-l` | Builduj sve servise (lokalno)                |
@@ -105,6 +109,25 @@ Za Kubernetes deployment dodate su dve putanje:
 
 To omogucava i strogu demonstraciju zahteva "Spark podignut na Kubernetesu"
 i praktican lokalni run na Docker Desktop Kubernetes-u.
+
+## Kubernetes autoscaling
+
+Autoscaling je implementiran nad `gateway` slojem u `k8s/autoscaling/gateway/`,
+jer je to stateless HTTP ulaz u sistem i najprirodniji kandidat za horizontalno
+skaliranje. Bundle ukljucuje:
+- `Deployment` sa readiness/liveness probe-ovima
+- `Service`
+- `HorizontalPodAutoscaler` (`autoscaling/v2`)
+- `PodDisruptionBudget`
+
+Kubernetes deployment koristi lokalni image `banka-3-backend-gateway:latest` i
+za demo se povezuje na vec podignute docker-compose gRPC servise preko
+`host.docker.internal`.
+
+Napomena: stvarno HPA skaliranje zahteva dostupan metrics API (`metrics-server`
+ili ekvivalent). Ako metrics API nije instaliran, manifesti ce se uredno
+kreirati, ali HPA nece moci da donosi CPU/memory odluke dok se metrics sloj ne
+doda u klaster.
 
 ## CI
 

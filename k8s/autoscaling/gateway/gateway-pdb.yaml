@@ -1,0 +1,10 @@
+apiVersion: policy/v1
+kind: PodDisruptionBudget
+metadata:
+  name: gateway
+  namespace: banka-platform
+spec:
+  minAvailable: 1
+  selector:
+    matchLabels:
+      app: gateway
