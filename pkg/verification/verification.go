@@ -70,6 +70,14 @@ const (
 	ActionOTCExercise  ActionKind = "otc_exercise"
 	ActionFundInvest   ActionKind = "fund_invest"
 	ActionFundWithdraw ActionKind = "fund_withdraw"
+
+	// c5 — cross-bank OTC. Separate kinds (vs reusing
+	// ActionOTCAccept / ActionOTCExercise) so a code minted for an
+	// intra-bank operation can't satisfy a cross-bank one and vice
+	// versa; the FE labels the dialog with the right Serbian copy
+	// ("Eksterno prihvatanje", "Eksterno izvršenje").
+	ActionExternalOTCAccept   ActionKind = "external_otc_accept"
+	ActionExternalOTCExercise ActionKind = "external_otc_exercise"
 )
 
 var (

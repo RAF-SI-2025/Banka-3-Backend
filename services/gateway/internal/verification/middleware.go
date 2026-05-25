@@ -56,6 +56,12 @@ func DefaultRules() []Rule {
 		{http.MethodPost, regexp.MustCompile(`^/api/v1/otc/contracts/[^/]+/exercise$`), verification.ActionOTCExercise},
 		{http.MethodPost, regexp.MustCompile(`^/api/v1/funds/[^/]+/invest$`), verification.ActionFundInvest},
 		{http.MethodPost, regexp.MustCompile(`^/api/v1/funds/[^/]+/withdraw$`), verification.ActionFundWithdraw},
+		// c5 — cross-bank money-moving routes mirror the local OTC gate.
+		// Same 6-digit dialog; the FE branches the Serbian copy per
+		// route (External*). Same shape for the URL — partner bank_code
+		// and thread/contract id are path segments.
+		{http.MethodPost, regexp.MustCompile(`^/api/v1/otc/external-offers/[^/]+/[^/]+/accept$`), verification.ActionExternalOTCAccept},
+		{http.MethodPost, regexp.MustCompile(`^/api/v1/otc/external-contracts/[^/]+/[^/]+/exercise$`), verification.ActionExternalOTCExercise},
 	}
 }
 
