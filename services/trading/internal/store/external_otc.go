@@ -251,6 +251,32 @@ func (s *Store) SetExternalOTCThreadRemoteThreadID(
 	return out, nil
 }
 
+// SetExternalOTCThreadRemoteIdentity stamps the partner-assigned thread
+// id, account ref, and display name on an outgoing mirror row. Bank A
+// needs the partner's account number to drive the cross-bank premium
+// 2PC at accept time, so this batches the three "what the partner told
+// us about themselves" fields into one update.
+func (s *Store) SetExternalOTCThreadRemoteIdentity(
+	ctx context.Context, tx pgx.Tx, id, remoteThreadID, remoteAccountRef, remoteDisplayName string,
+) (*domain.ExternalOTCThread, error) {
+	const q = `update "trading".external_otc_threads
+	           set remote_thread_id = case when remote_thread_id = '' then $2 else remote_thread_id end,
+	               remote_account_ref = case when remote_account_ref = '' then $3 else remote_account_ref end,
+	               remote_display_name = case when remote_display_name = '' then $4 else remote_display_name end,
+	               updated_at = now()
+	           where id = $1
+	           returning ` + externalOTCThreadCols
+	row := s.execer(tx).QueryRow(ctx, q, id, remoteThreadID, remoteAccountRef, remoteDisplayName)
+	out, err := scanExternalOTCThread(row)
+	if err != nil {
+		if noRows(err) {
+			return s.GetExternalOTCThread(ctx, id)
+		}
+		return nil, apperr.Internal("set external otc thread remote identity", err)
+	}
+	return out, nil
+}
+
 // =====================================================================
 // External OTC iterations.
 // =====================================================================

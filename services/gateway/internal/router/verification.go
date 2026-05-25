@@ -43,6 +43,10 @@ var allowedKinds = map[string]verification.ActionKind{
 	string(verification.ActionOTCExercise):  verification.ActionOTCExercise,
 	string(verification.ActionFundInvest):   verification.ActionFundInvest,
 	string(verification.ActionFundWithdraw): verification.ActionFundWithdraw,
+	// c5 — cross-bank counterparts. Same dialog, distinct kind so the
+	// receiver-side middleware can validate the right family.
+	string(verification.ActionExternalOTCAccept):   verification.ActionExternalOTCAccept,
+	string(verification.ActionExternalOTCExercise): verification.ActionExternalOTCExercise,
 }
 
 // actionLabels maps an action kind to Serbian copy the mobile app
@@ -52,10 +56,12 @@ var actionLabels = map[verification.ActionKind]string{
 	verification.ActionTransfer:     "Prenos sredstava",
 	verification.ActionLimitChange:  "Promena limita",
 	verification.ActionCardIssue:    "Izdavanje kartice",
-	verification.ActionOTCAccept:    "Prihvatanje OTC ponude",
-	verification.ActionOTCExercise:  "Izvršenje opcije",
-	verification.ActionFundInvest:   "Ulaganje u fond",
-	verification.ActionFundWithdraw: "Povlačenje iz fonda",
+	verification.ActionOTCAccept:           "Prihvatanje OTC ponude",
+	verification.ActionOTCExercise:         "Izvršenje opcije",
+	verification.ActionFundInvest:          "Ulaganje u fond",
+	verification.ActionFundWithdraw:        "Povlačenje iz fonda",
+	verification.ActionExternalOTCAccept:   "Prihvatanje OTC ponude (međubankarska)",
+	verification.ActionExternalOTCExercise: "Izvršenje opcije (međubankarska)",
 }
 
 func actionLabel(k verification.ActionKind) string {

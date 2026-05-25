@@ -236,13 +236,23 @@ func (c *Client) action(ctx context.Context, in service.PartnerActionInput, verb
 }
 
 func (c *Client) actionNative(ctx context.Context, in service.PartnerActionInput, verb string) error {
+	// URL convention: /{sender_bank}/{sender_thread_id}/{verb}. The
+	// partner resolves their local mirror by
+	// (remote_bank=sender_bank, remote_thread_id=sender_thread_id),
+	// which is the key the mirror was minted under at CreateOffer
+	// time. Fall back to RemoteThreadID for the old call sites that
+	// don't populate LocalThreadID yet — they predate this fix.
+	senderThreadID := in.LocalThreadID
+	if senderThreadID == "" {
+		senderThreadID = in.RemoteThreadID
+	}
 	url := fmt.Sprintf("%s/bank/api/v1/otc/external-offers/%s/%s/%s",
-		c.baseURL(in.RemoteBankCode), c.cfg.OwnRoutingNumber, in.RemoteThreadID, verb)
+		c.baseURL(in.RemoteBankCode), c.cfg.OwnRoutingNumber, senderThreadID, verb)
 	var body any
 	if verb == "counter" {
 		body = nativeCounterRequest{
 			SenderBankCode: c.cfg.OwnRoutingNumber,
-			SenderThreadID: in.RemoteThreadID,
+			SenderThreadID: senderThreadID,
 			Quantity:       in.Quantity,
 			PricePerUnit:   in.PricePerUnit,
 			Premium:        in.Premium,
@@ -251,7 +261,7 @@ func (c *Client) actionNative(ctx context.Context, in service.PartnerActionInput
 	} else {
 		body = nativeActionRequest{
 			SenderBankCode: c.cfg.OwnRoutingNumber,
-			SenderThreadID: in.RemoteThreadID,
+			SenderThreadID: senderThreadID,
 		}
 	}
 	status, respBody, err := c.doJSON(ctx, "POST", url, body)

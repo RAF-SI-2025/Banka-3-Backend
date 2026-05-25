@@ -104,9 +104,16 @@ type PartnerCreateOfferOutput struct {
 
 // PartnerActionInput is the outbound side of Counter/Withdraw/Accept.
 // Counter carries the new terms; Withdraw / Accept ignore them.
+//
+// LocalThreadID is the sender-side thread id. The native action URL
+// encodes it as the path's {thread_id} so the partner's receive
+// handler can resolve their local mirror via
+// (remote_bank_code=sender_bank, remote_thread_id=sender_thread_id) —
+// the same key the mirror was minted under at CreateOffer time.
 type PartnerActionInput struct {
 	RemoteBankCode string
 	RemoteThreadID string
+	LocalThreadID  string
 
 	Quantity       int32
 	PricePerUnit   string
@@ -267,9 +274,10 @@ func (s *Service) CreateExternalOTCOffer(ctx context.Context, in CreateExternalO
 		return nil, apperr.FailedPrecondition("partner banka je odbila ponudu: " + err.Error())
 	}
 
-	if out.RemoteThreadID != "" {
+	if out.RemoteThreadID != "" || out.RemoteAccountRef != "" || out.RemoteUserDisplay != "" {
 		if err := s.Store.ExecuteAtomic(ctx, func(tx pgx.Tx) error {
-			t, err := s.Store.SetExternalOTCThreadRemoteThreadID(ctx, tx, live.ID, out.RemoteThreadID)
+			t, err := s.Store.SetExternalOTCThreadRemoteIdentity(
+				ctx, tx, live.ID, out.RemoteThreadID, out.RemoteAccountRef, out.RemoteUserDisplay)
 			if err != nil {
 				return err
 			}
@@ -401,6 +409,7 @@ func (s *Service) CounterExternalOTCOffer(ctx context.Context, in CounterExterna
 	if err := s.PartnerOTC.Counter(ctx, PartnerActionInput{
 		RemoteBankCode: live.RemoteBankCode,
 		RemoteThreadID: live.RemoteThreadID,
+		LocalThreadID:  live.ID,
 		Quantity:       live.Quantity,
 		PricePerUnit:   live.PricePerUnit,
 		Premium:        live.Premium,
@@ -452,6 +461,7 @@ func (s *Service) WithdrawExternalOTCOffer(ctx context.Context, bankCode, thread
 	if err := s.PartnerOTC.Withdraw(ctx, PartnerActionInput{
 		RemoteBankCode: live.RemoteBankCode,
 		RemoteThreadID: live.RemoteThreadID,
+		LocalThreadID:  live.ID,
 	}); err != nil {
 		s.Log.Warn("partner withdraw notification failed",
 			"thread_id", live.ID, "remote_bank_code", live.RemoteBankCode, "err", err.Error())

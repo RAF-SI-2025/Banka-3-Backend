@@ -190,6 +190,7 @@ func registerExternalOTCAcceptSaga(reg *saga.Registry, svc *Service) {
 					return svc.PartnerOTC.Accept(ctx, PartnerActionInput{
 						RemoteBankCode: sc.State.RemoteBankCode,
 						RemoteThreadID: sc.State.RemoteThreadID,
+						LocalThreadID:  sc.State.ThreadID,
 						Quantity:       sc.State.Quantity,
 						PricePerUnit:   sc.State.PricePerUnit,
 						Premium:        sc.State.Premium,
