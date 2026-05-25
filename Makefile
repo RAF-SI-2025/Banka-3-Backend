@@ -100,6 +100,42 @@ nuke: ## Wipe everything and bootstrap (down-v + up + seed)
 	$(MAKE) up
 	$(MAKE) seed
 
+# -----------------------------------------------------------------------
+# Cross-bank dev stack — a second Banka 3 instance (bank code 334) that
+# acts as a real partner over the shared `banka` network. Used by the
+# cypress interbank suite.
+# -----------------------------------------------------------------------
+PARTNER_COMPOSE := docker compose -f docker-compose.partner.yml -p banka-partner
+
+.PHONY: up-partner
+up-partner: ## Bring up the second Banka 3 stack (partner bank, code 334)
+	$(PARTNER_COMPOSE) up -d --build
+
+.PHONY: down-partner
+down-partner: ## Tear down the partner stack (keeps volumes)
+	$(PARTNER_COMPOSE) down
+
+.PHONY: down-partner-v
+down-partner-v: ## Tear down the partner stack + wipe its volumes
+	$(PARTNER_COMPOSE) down -v
+
+.PHONY: seed-partner
+seed-partner: ## Seed the partner stack with the same dev fixtures as the main stack
+	$(PARTNER_COMPOSE) run --rm migrate bash scripts/db/seed.sh
+
+.PHONY: interbank-up
+interbank-up: ## Bring up both stacks in cross-bank wiring mode
+	$(MAKE) up
+	$(MAKE) up-partner
+	$(MAKE) seed
+	$(MAKE) seed-partner
+	$(COMPOSE) restart trading gateway
+
+.PHONY: interbank-down
+interbank-down: ## Tear down both stacks
+	$(MAKE) down-partner
+	$(MAKE) down
+
 # Modules tested individually; each has its own go.mod.
 TEST_MODULES := pkg services/bank services/exchange services/gateway \
                 services/notification services/trading services/user

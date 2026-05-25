@@ -121,8 +121,10 @@ func Run() error {
 	if apiKey := config.String("INTERBANK_API_KEY", ""); apiKey != "" {
 		if cs.ExternalOTC != nil {
 			r.PartnerOTC = &router.PartnerOTC{
-				APIKey:     apiKey,
-				TradingOTC: cs.ExternalOTC,
+				APIKey:            apiKey,
+				TradingOTC:        cs.ExternalOTC,
+				Trading:           cs.Trading,
+				BankRoutingNumber: config.String("BANK_ROUTING_NUMBER", "333"),
 			}
 		}
 		if cs.InterbankProtocol != nil {

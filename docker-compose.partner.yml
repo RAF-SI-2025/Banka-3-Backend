@@ -1,0 +1,209 @@
+# Second Banka 3 instance — acts as a real cross-bank partner so the
+# cypress interbank suite can exercise full bidirectional flows (not
+# just the mock-partner).
+#
+# Run with:
+#   docker compose -f docker-compose.partner.yml -p banka-partner up -d
+#
+# This stack reuses the `banka` external network so the two compose
+# projects can resolve each other's containers by name. From bank 1
+# (the default `banka` project), the partner's gateway is reachable
+# at http://banka-partner-gateway-1:8080. From bank 2, ours is at
+# http://banka-gateway-1:8080.
+#
+# Bank code is 334 (vs the default 333). Postgres + Redis have their
+# own volumes so data is isolated. App images are reused from the
+# main compose — `docker compose build` in the main stack first,
+# then this overlay just pulls them.
+
+name: banka-partner
+
+x-tools-build: &tools-build
+  context: .
+  dockerfile: docker/Dockerfile.tools
+  args:
+    UID: ${HOST_UID:-1000}
+    GID: ${HOST_GID:-1000}
+
+x-service-defaults: &service-defaults
+  build:
+    context: .
+    dockerfile: docker/Dockerfile
+  restart: on-failure
+  environment: &service-env
+    DATABASE_URL: "postgres://banka:banka@postgres:5432/banka?sslmode=disable"
+    REDIS_ADDR: "redis:6379"
+    REDIS_PASSWORD: "${REDIS_PASSWORD:-redis-dev}"
+    LOG_LEVEL: "${LOG_LEVEL:-info}"
+    LOG_FORMAT: "${LOG_FORMAT:-json}"
+    # Bank 2: routing number 334 instead of the default 333.
+    BANK_CODE: "334"
+    BANK_NAME: "Banka 3 (partner)"
+    BANK_ROUTING_NUMBER: "334"
+    BANK_CVV_PEPPER: "${BANK_CVV_PEPPER:-dev-cvv-pepper-change-in-prod}"
+    JWT_SIGNING_KEY: "${JWT_SIGNING_KEY:-dev-jwt-signing-key-change-in-prod}"
+    GRPC_PORT: "50051"
+    PROBE_PORT: "8081"
+    SMTP_HOST: ""
+    SMTP_PORT: "587"
+    CLOCK_DEBUG: "false"
+    # Talks back to bank 1 over the shared banka network. Bank 1's
+    # gateway container name is `banka-gateway-1` (default compose).
+    INTERBANK_API_KEY: "${INTERBANK_API_KEY:-dev-outbound-banka3}"
+    INTERBANK_ROUTES: "333:http://banka-gateway-1:8080"
+
+x-app-deps: &app-deps
+  postgres: { condition: service_healthy }
+  redis:    { condition: service_healthy }
+  migrate:  { condition: service_completed_successfully }
+
+services:
+  postgres:
+    image: postgres:18-alpine
+    environment:
+      POSTGRES_USER: banka
+      POSTGRES_PASSWORD: banka
+      POSTGRES_DB: banka
+    ports: ["${PARTNER_POSTGRES_PORT:-5532}:5432"]
+    volumes:
+      - pgdata:/var/lib/postgresql
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U banka -d banka"]
+      interval: 2s
+      timeout: 5s
+      retries: 10
+    networks: [banka]
+
+  redis:
+    image: redis:7-alpine
+    command: redis-server --requirepass ${REDIS_PASSWORD:-redis-dev} --appendonly no --save ""
+    ports: ["${PARTNER_REDIS_PORT:-6479}:6379"]
+    volumes:
+      - redisdata:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "-a", "${REDIS_PASSWORD:-redis-dev}", "ping"]
+      interval: 2s
+      timeout: 5s
+      retries: 10
+    networks: [banka]
+
+  migrate:
+    image: banka-tools
+    build: *tools-build
+    working_dir: /src
+    volumes:
+      - .:/src
+    environment:
+      DATABASE_URL: "postgres://banka:banka@postgres:5432/banka?sslmode=disable"
+    command: ["bash", "scripts/db/migrate.sh", "up"]
+    depends_on:
+      postgres: { condition: service_healthy }
+    networks: [banka]
+    restart: "no"
+
+  user:
+    <<: *service-defaults
+    build:
+      context: .
+      dockerfile: docker/Dockerfile
+      args:
+        SERVICE: user
+    environment:
+      <<: *service-env
+      NOTIFICATION_GRPC_ADDR: "notification:50051"
+      TRADING_GRPC_ADDR: "trading:50051"
+    ports:
+      - "${PARTNER_USER_PROBE_PORT:-8181}:8081"
+    depends_on: *app-deps
+    networks: [banka]
+
+  notification:
+    <<: *service-defaults
+    build:
+      context: .
+      dockerfile: docker/Dockerfile
+      args:
+        SERVICE: notification
+    environment:
+      <<: *service-env
+    depends_on: *app-deps
+    networks: [banka]
+
+  bank:
+    <<: *service-defaults
+    build:
+      context: .
+      dockerfile: docker/Dockerfile
+      args:
+        SERVICE: bank
+    environment:
+      <<: *service-env
+      EXCHANGE_GRPC_ADDR: "exchange:50051"
+      NOTIFICATION_GRPC_ADDR: "notification:50051"
+      USER_GRPC_ADDR: "user:50051"
+    ports:
+      - "${PARTNER_BANK_PROBE_PORT:-8182}:8081"
+    depends_on: *app-deps
+    networks: [banka]
+
+  exchange:
+    <<: *service-defaults
+    build:
+      context: .
+      dockerfile: docker/Dockerfile
+      args:
+        SERVICE: exchange
+    environment:
+      <<: *service-env
+    ports:
+      - "${PARTNER_EXCHANGE_PROBE_PORT:-8185}:8081"
+    depends_on: *app-deps
+    networks: [banka]
+
+  trading:
+    <<: *service-defaults
+    build:
+      context: .
+      dockerfile: docker/Dockerfile
+      args:
+        SERVICE: trading
+    environment:
+      <<: *service-env
+      BANK_GRPC_ADDR: "bank:50051"
+      EXCHANGE_GRPC_ADDR: "exchange:50051"
+      NOTIFICATION_GRPC_ADDR: "notification:50051"
+      USER_GRPC_ADDR: "user:50051"
+    ports:
+      - "${PARTNER_TRADING_PROBE_PORT:-8183}:8081"
+    depends_on: *app-deps
+    networks: [banka]
+
+  gateway:
+    <<: *service-defaults
+    build:
+      context: .
+      dockerfile: docker/Dockerfile
+      args:
+        SERVICE: gateway
+    environment:
+      <<: *service-env
+      HTTP_PORT: "8080"
+      USER_GRPC_ADDR: "user:50051"
+      BANK_GRPC_ADDR: "bank:50051"
+      TRADING_GRPC_ADDR: "trading:50051"
+      EXCHANGE_GRPC_ADDR: "exchange:50051"
+      NOTIFICATION_GRPC_ADDR: "notification:50051"
+    ports:
+      - "${PARTNER_GATEWAY_HTTP_PORT:-8090}:8080"
+      - "${PARTNER_GATEWAY_PROBE_PORT:-8186}:8081"
+    networks: [banka]
+
+volumes:
+  pgdata:
+  redisdata:
+  tools-go-build:
+
+networks:
+  banka:
+    external: true
+    name: banka

@@ -219,12 +219,14 @@ services:
       OPTIONS_RISK_FREE_RATE: "${OPTIONS_RISK_FREE_RATE:-0.05}"
       OPTIONS_VOLATILITY: "${OPTIONS_VOLATILITY:-0.30}"
       SAGA_DEBUG_FAULT_INJECTION: "${SAGA_DEBUG_FAULT_INJECTION:-false}"
-      # Celina 5 — outbound cross-bank OTC. Defaults to the bundled
-      # mock-partner so `make up` runs a self-contained two-bank dev
-      # stack out of the box; override INTERBANK_ROUTES to talk to a
-      # real partner instead.
+      # Celina 5 — outbound cross-bank OTC. Defaults to BOTH the
+      # bundled mock-partner (bank 999) AND a sibling Banka 3 instance
+      # (bank 334 — only reachable when `make up-partner` has brought
+      # up the partner compose project). Discover() silently logs a
+      # warning if the second route doesn't resolve, so the default
+      # works whether the partner is up or not.
       BANK_ROUTING_NUMBER: "${BANK_ROUTING_NUMBER:-333}"
-      INTERBANK_ROUTES: "${INTERBANK_ROUTES:-999:http://mock-partner:9099}"
+      INTERBANK_ROUTES: "${INTERBANK_ROUTES:-999:http://mock-partner:9099,334:http://banka-partner-gateway-1:8080}"
       INTERBANK_API_KEY: "${INTERBANK_API_KEY:-dev-outbound-banka3}"
     ports:
       - "${TRADING_GRPC_PORT:-50053}:50051"
@@ -257,4 +259,5 @@ volumes:
 
 networks:
   banka:
+    name: banka
     driver: bridge

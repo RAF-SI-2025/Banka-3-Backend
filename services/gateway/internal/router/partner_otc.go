@@ -26,8 +26,16 @@ import (
 // trading ExternalOTC client are both non-empty); when nil the
 // handlers aren't registered.
 type PartnerOTC struct {
-	APIKey       string
-	TradingOTC   tradingpb.ExternalOTCServiceClient
+	APIKey     string
+	TradingOTC tradingpb.ExternalOTCServiceClient
+	// Trading is used by the partner-facing GET /otc/public route which
+	// resolves to TradingService.ListPublicHoldings + native-shape
+	// transform. May be nil — when so, the route is registered but
+	// returns a 503.
+	Trading tradingpb.TradingServiceClient
+	// BankRoutingNumber stamps into the response so the partner knows
+	// which bank each row came from. Default 333.
+	BankRoutingNumber string
 }
 
 // partnerOfferRequest mirrors interbank.nativeOfferRequest. We don't
@@ -78,11 +86,109 @@ func (p *PartnerOTC) MountPartnerOTC(mux *http.ServeMux) {
 	if p == nil || p.TradingOTC == nil || p.APIKey == "" {
 		return
 	}
+	// Discovery — partner banks call this to fetch our advertised
+	// public holdings. Unauthenticated by spec convention (the data
+	// is public-by-definition), so the protocol-detection probe in
+	// trading/internal/external/interbank works without sharing the
+	// API key first.
+	mux.HandleFunc("GET /bank/api/v1/otc/public", p.ListPublic)
 	mux.HandleFunc("POST /bank/api/v1/otc/external-offers", p.guard(p.ReceiveOffer))
 	mux.HandleFunc("POST /bank/api/v1/otc/external-offers/{bank_code}/{thread_id}/counter", p.guard(p.ReceiveCounter))
 	mux.HandleFunc("POST /bank/api/v1/otc/external-offers/{bank_code}/{thread_id}/withdraw", p.guard(p.ReceiveWithdraw))
 	mux.HandleFunc("POST /bank/api/v1/otc/external-offers/{bank_code}/{thread_id}/accept", p.guard(p.ReceiveAccept))
 	mux.HandleFunc("POST /bank/api/v1/otc/external-contracts/{bank_code}/{contract_id}/exercise", p.guard(p.ReceiveExerciseNotice))
+}
+
+// nativePublicHolding is the wire shape that mirrors
+// trading/internal/external/interbank/otc.go's outbound expectation —
+// the partner discovery code on the OTHER side will decode this
+// directly via jsonDecode.
+type nativePublicHolding struct {
+	BankCode          string `json:"bank_code"`
+	SellerUserRef     string `json:"seller_user_ref"`
+	SellerDisplayName string `json:"seller_display_name"`
+	SellerHoldingID   string `json:"seller_holding_id"`
+	SecurityTicker    string `json:"security_ticker"`
+	SecurityType      string `json:"security_type"`
+	Currency          string `json:"currency"`
+	Quantity          int32  `json:"quantity"`
+	AskPrice          string `json:"ask_price"`
+	Premium           string `json:"premium"`
+}
+
+// ListPublic — GET /bank/api/v1/otc/public. Returns rows from
+// TradingService.ListPublicHoldings transformed into the native
+// protocol's flat shape. No JWT; partners reach this as part of
+// protocol detection so it's intentionally unauthenticated.
+func (p *PartnerOTC) ListPublic(w http.ResponseWriter, r *http.Request) {
+	if p.Trading == nil {
+		writeError(w, http.StatusServiceUnavailable, "trading not wired")
+		return
+	}
+	ticker := r.URL.Query().Get("ticker")
+	resp, err := p.Trading.ListPublicHoldings(partnerCtx(r.Context()), &tradingpb.ListPublicHoldingsRequest{
+		Ticker: ticker,
+	})
+	if err != nil {
+		writeGRPCError(w, err)
+		return
+	}
+	bankCode := p.BankRoutingNumber
+	if bankCode == "" {
+		bankCode = "333"
+	}
+	items := make([]nativePublicHolding, 0, len(resp.GetItems()))
+	for _, it := range resp.GetItems() {
+		items = append(items, nativePublicHolding{
+			BankCode:          bankCode,
+			SellerUserRef:     it.GetSellerId(),
+			SellerDisplayName: it.GetSellerDisplayName(),
+			SellerHoldingID:   it.GetHoldingId(),
+			SecurityTicker:    it.GetSecurity().GetTicker(),
+			SecurityType:      securityTypeShortString(it.GetSecurity().GetType()),
+			Currency:          currencyShortString(it.GetSecurity().GetCurrency()),
+			Quantity:          it.GetAvailableCount(),
+			AskPrice:          it.GetCurrentPrice(),
+			Premium:           "",
+		})
+	}
+	writeJSON(w, http.StatusOK, map[string]any{"items": items})
+}
+
+func securityTypeShortString(t tradingpb.SecurityType) string {
+	switch t {
+	case tradingpb.SecurityType_SECURITY_TYPE_STOCK:
+		return "stock"
+	case tradingpb.SecurityType_SECURITY_TYPE_FUTURE:
+		return "future"
+	case tradingpb.SecurityType_SECURITY_TYPE_FOREX:
+		return "forex"
+	case tradingpb.SecurityType_SECURITY_TYPE_OPTION:
+		return "option"
+	}
+	return ""
+}
+
+func currencyShortString(c tradingpb.Currency) string {
+	switch c {
+	case tradingpb.Currency_CURRENCY_RSD:
+		return "RSD"
+	case tradingpb.Currency_CURRENCY_EUR:
+		return "EUR"
+	case tradingpb.Currency_CURRENCY_CHF:
+		return "CHF"
+	case tradingpb.Currency_CURRENCY_USD:
+		return "USD"
+	case tradingpb.Currency_CURRENCY_GBP:
+		return "GBP"
+	case tradingpb.Currency_CURRENCY_JPY:
+		return "JPY"
+	case tradingpb.Currency_CURRENCY_CAD:
+		return "CAD"
+	case tradingpb.Currency_CURRENCY_AUD:
+		return "AUD"
+	}
+	return ""
 }
 
 // guard wraps a partner-facing handler with X-Api-Key auth. Uses a
