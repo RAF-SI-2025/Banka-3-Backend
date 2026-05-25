@@ -14,9 +14,20 @@ import (
 // queries by aggregate (actuaries, exchanges, …).
 type Store struct {
 	Pool *pgxpool.Pool
+	// ReadPool routes SELECTs to a hot standby when set.
+	// BonusReadReplicaRouting / PR #287.
+	ReadPool *pgxpool.Pool
 }
 
 func New(pool *pgxpool.Pool) *Store { return &Store{Pool: pool} }
+
+// reader returns the read pool when configured, primary otherwise.
+func (s *Store) reader() *pgxpool.Pool {
+	if s.ReadPool != nil {
+		return s.ReadPool
+	}
+	return s.Pool
+}
 
 // noRows reports whether err wraps pgx.ErrNoRows.
 func noRows(err error) bool { return errors.Is(err, pgx.ErrNoRows) }

@@ -175,7 +175,7 @@ func (s *Store) ListClients(ctx context.Context, f domain.ClientFilter, page, pa
 	listQ := `select ` + clientColumns + ` from "user".clients` + where +
 		fmt.Sprintf(" order by last_name, first_name limit $%d offset $%d", len(args)+1, len(args)+2)
 
-	rows, err := s.Pool.Query(ctx, listQ, listArgs...)
+	rows, err := s.reader().Query(ctx, listQ, listArgs...)
 	if err != nil {
 		return nil, 0, apperr.Internal("list clients", err)
 	}

@@ -14,10 +14,21 @@ import (
 // query files in this package.
 type Store struct {
 	Pool *pgxpool.Pool
+	// ReadPool routes SELECTs to a hot standby when set; nil means
+	// reads go to the primary. BonusReadReplicaRouting / PR #287.
+	ReadPool *pgxpool.Pool
 }
 
 // New returns a Store using pool.
 func New(pool *pgxpool.Pool) *Store { return &Store{Pool: pool} }
+
+// reader returns the read pool when configured, primary otherwise.
+func (s *Store) reader() *pgxpool.Pool {
+	if s.ReadPool != nil {
+		return s.ReadPool
+	}
+	return s.Pool
+}
 
 // isUniqueViolation reports whether err is a Postgres unique-violation.
 func isUniqueViolation(err error) bool {

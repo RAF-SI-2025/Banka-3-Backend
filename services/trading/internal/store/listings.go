@@ -162,7 +162,7 @@ func (s *Store) ListListings(ctx context.Context, f ListingFilter, page, pageSiz
 		` limit ` + intArg(len(args)+1) + ` offset ` + intArg(len(args)+2)
 	args = append(args, pageSize, (page-1)*pageSize)
 
-	rows, err := s.Pool.Query(ctx, q, args...)
+	rows, err := s.reader().Query(ctx, q, args...)
 	if err != nil {
 		return nil, 0, apperr.Internal("list listings", err)
 	}
@@ -195,7 +195,7 @@ func (s *Store) GetListingDailyHistory(ctx context.Context, listingID string, fr
 		q += " and date <= $" + intArg(len(args))[1:]
 	}
 	q += " order by date asc"
-	rows, err := s.Pool.Query(ctx, q, args...)
+	rows, err := s.reader().Query(ctx, q, args...)
 	if err != nil {
 		return nil, apperr.Internal("listing daily", err)
 	}

@@ -24,6 +24,7 @@ import (
 	"github.com/RAF-SI-2025/Banka-3-Backend/services/bank/internal/server"
 	"github.com/RAF-SI-2025/Banka-3-Backend/services/bank/internal/service"
 	"github.com/RAF-SI-2025/Banka-3-Backend/services/bank/internal/store"
+	"github.com/jackc/pgx/v5/pgxpool"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials/insecure"
 
@@ -44,6 +45,21 @@ func Run() error {
 	}
 	defer pool.Close()
 
+	// BonusReadReplicaRouting (#287) — optional second pool against a
+	// hot standby. When DATABASE_READ_URL is set, SELECTs marked
+	// "safe under streaming-replica lag" (list/get reports, catalog
+	// pages, etc.) route to this pool via Store.reader(); writes and
+	// read-after-write paths stay on the primary.
+	var readPool *pgxpool.Pool
+	if readURL := config.String("DATABASE_READ_URL", ""); readURL != "" {
+		readPool, err = postgres.Open(ctx, readURL)
+		if err != nil {
+			return fmt.Errorf("postgres replica: %w", err)
+		}
+		defer readPool.Close()
+		log.Info("read replica routing enabled", "dsn", readURL)
+	}
+
 	rdb, err := pkgredis.Open(ctx, config.MustString("REDIS_ADDR"), config.String("REDIS_PASSWORD", ""))
 	if err != nil {
 		return fmt.Errorf("redis: %w", err)
@@ -51,6 +67,7 @@ func Run() error {
 	defer rdb.Close()
 
 	st := store.New(pool)
+	st.ReadPool = readPool
 	svc := service.New(st, service.Config{
 		BankCode:     config.String("BANK_CODE", "333"),
 		Branch:       config.String("BANK_BRANCH", "0001"),

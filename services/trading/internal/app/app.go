@@ -19,6 +19,7 @@ import (
 	"github.com/RAF-SI-2025/Banka-3-Backend/pkg/logger"
 	"github.com/RAF-SI-2025/Banka-3-Backend/pkg/observability"
 	"github.com/RAF-SI-2025/Banka-3-Backend/pkg/postgres"
+	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/RAF-SI-2025/Banka-3-Backend/pkg/probes"
 	pkgredis "github.com/RAF-SI-2025/Banka-3-Backend/pkg/redis"
 	"github.com/RAF-SI-2025/Banka-3-Backend/pkg/shutdown"
@@ -49,6 +50,17 @@ func Run() error {
 	}
 	defer pool.Close()
 
+	// BonusReadReplicaRouting (#287) — optional hot-standby pool.
+	var readPool *pgxpool.Pool
+	if readURL := config.String("DATABASE_READ_URL", ""); readURL != "" {
+		readPool, err = postgres.Open(ctx, readURL)
+		if err != nil {
+			return fmt.Errorf("postgres replica: %w", err)
+		}
+		defer readPool.Close()
+		log.Info("read replica routing enabled")
+	}
+
 	rdb, err := pkgredis.Open(ctx, config.MustString("REDIS_ADDR"), config.String("REDIS_PASSWORD", ""))
 	if err != nil {
 		return fmt.Errorf("redis: %w", err)
@@ -62,6 +74,7 @@ func Run() error {
 	}
 
 	st := store.New(pool)
+	st.ReadPool = readPool
 	svc := service.New(st, service.Config{
 		Belgrade:                belgrade,
 		FXCommission:            config.String("FX_COMMISSION", "0.005"),

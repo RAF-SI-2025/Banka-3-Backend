@@ -14,6 +14,10 @@ x-service-defaults: &service-defaults
   restart: on-failure
   environment: &service-env
     DATABASE_URL: "postgres://${POSTGRES_USER}:${POSTGRES_PASSWORD}@banka-postgres-1:5432/${POSTGRES_DB}?sslmode=disable"
+    # BonusReadReplicaRouting (#287). Empty by default → reads stay
+    # on the primary. Set in .env once `make replica` has the standby
+    # streaming.
+    DATABASE_READ_URL: "${DATABASE_READ_URL:-}"
     REDIS_ADDR: "banka-redis-1:6379"
     REDIS_PASSWORD: "${REDIS_PASSWORD}"
     LOG_LEVEL: "${LOG_LEVEL:-info}"

@@ -294,7 +294,7 @@ func (s *Store) ListAccounts(ctx context.Context, f domain.AccountFilter, page, 
 	listQ := `select ` + accountColumns + ` from "bank".accounts` + where +
 		fmt.Sprintf(" order by created_at desc limit $%d offset $%d", len(args)+1, len(args)+2)
 
-	rows, err := s.Pool.Query(ctx, listQ, listArgs...)
+	rows, err := s.reader().Query(ctx, listQ, listArgs...)
 	if err != nil {
 		return nil, 0, apperr.Internal("list accounts", err)
 	}

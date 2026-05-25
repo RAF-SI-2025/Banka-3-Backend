@@ -24,6 +24,8 @@ import (
 	"github.com/RAF-SI-2025/Banka-3-Backend/services/user/internal/service"
 	"github.com/RAF-SI-2025/Banka-3-Backend/services/user/internal/store"
 
+	"github.com/jackc/pgx/v5/pgxpool"
+
 	"golang.org/x/sync/errgroup"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials/insecure"
@@ -42,6 +44,17 @@ func Run() error {
 	}
 	defer pool.Close()
 
+	// BonusReadReplicaRouting (#287) — optional hot-standby pool.
+	var readPool *pgxpool.Pool
+	if readURL := config.String("DATABASE_READ_URL", ""); readURL != "" {
+		readPool, err = postgres.Open(ctx, readURL)
+		if err != nil {
+			return fmt.Errorf("postgres replica: %w", err)
+		}
+		defer readPool.Close()
+		log.Info("read replica routing enabled")
+	}
+
 	rdb, err := pkgredis.Open(ctx, config.MustString("REDIS_ADDR"), config.String("REDIS_PASSWORD", ""))
 	if err != nil {
 		return fmt.Errorf("redis: %w", err)
@@ -49,6 +62,7 @@ func Run() error {
 	defer rdb.Close()
 
 	st := store.New(pool)
+	st.ReadPool = readPool
 	notifier, closeNotif, err := buildNotifier(ctx, log)
 	if err != nil {
 		return err

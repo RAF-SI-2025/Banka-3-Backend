@@ -13,9 +13,19 @@ import (
 
 type Store struct {
 	Pool *pgxpool.Pool
+	// ReadPool routes SELECTs to a hot standby when set.
+	// BonusReadReplicaRouting / PR #287.
+	ReadPool *pgxpool.Pool
 }
 
 func New(pool *pgxpool.Pool) *Store { return &Store{Pool: pool} }
+
+func (s *Store) reader() *pgxpool.Pool {
+	if s.ReadPool != nil {
+		return s.ReadPool
+	}
+	return s.Pool
+}
 
 func noRows(err error) bool { return errors.Is(err, pgx.ErrNoRows) }
 
@@ -71,7 +81,7 @@ func (s *Store) ListRates(ctx context.Context, from domain.Currency) ([]*domain.
 	}
 	q += ` order by "from", "to"`
 
-	rows, err := s.Pool.Query(ctx, q, args...)
+	rows, err := s.reader().Query(ctx, q, args...)
 	if err != nil {
 		return nil, apperr.Internal("list fx rates", err)
 	}
