@@ -755,11 +755,17 @@ func seedTrading(ctx context.Context, pool *pgxpool.Pool, clientID, adminID stri
 		return id, nil
 	}
 
+	// Aktuar's name was "Marko Marković" until the celina1 cypress spec
+	// (admin-deaktivira flow) revealed a row-text collision: the spec
+	// creates a test fixture with the exact same first+last name and
+	// then selects the row via cy.contains('tr', 'Marko Marković'),
+	// which matched this seeded row instead and deactivated the wrong
+	// employee. Renamed to break the tie.
 	aktuarID, err := insertActuary(
 		envOr("SEED_ACTUARY_EMAIL", "aktuar@banka.local"),
 		envOr("SEED_ACTUARY_USERNAME", "aktuar"),
 		envOr("SEED_ACTUARY_PASSWORD", "Aktuar123!"),
-		"Marko", "Marković", "+381112233556", "Aktuar agent", agentPerms,
+		"Andrej", "Andrejević", "+381112233556", "Aktuar agent", agentPerms,
 	)
 	if err != nil {
 		return err
