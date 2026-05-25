@@ -8,9 +8,13 @@ import (
 	"github.com/RAF-SI-2025/Banka-3-Backend/services/trading/internal/service"
 )
 
-// Server is the gRPC implementation of TradingService.
+// Server is the gRPC implementation of TradingService + the celina-5
+// ExternalOTCService. Both surfaces share one *service.Service so
+// cross-aggregate calls (e.g. external OTC reading the local holding
+// catalog) don't need a side channel.
 type Server struct {
 	tradingpb.UnimplementedTradingServiceServer
+	tradingpb.UnimplementedExternalOTCServiceServer
 	Svc *service.Service
 }
 

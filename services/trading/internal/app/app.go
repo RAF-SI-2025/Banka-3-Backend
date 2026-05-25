@@ -22,6 +22,7 @@ import (
 	pkgredis "github.com/RAF-SI-2025/Banka-3-Backend/pkg/redis"
 	"github.com/RAF-SI-2025/Banka-3-Backend/pkg/shutdown"
 	"github.com/RAF-SI-2025/Banka-3-Backend/services/trading/internal/external/alphavantage"
+	"github.com/RAF-SI-2025/Banka-3-Backend/services/trading/internal/external/interbank"
 	"github.com/RAF-SI-2025/Banka-3-Backend/services/trading/internal/saga"
 	"github.com/RAF-SI-2025/Banka-3-Backend/services/trading/internal/server"
 	"github.com/RAF-SI-2025/Banka-3-Backend/services/trading/internal/service"
@@ -149,8 +150,26 @@ func Run() error {
 		svc.MarginChecker = adapter
 		svc.ForexSettler = adapter
 		svc.Reservations = adapter
+		// Celina 5 — same connection, second service.
+		svc.InterbankPayer = &interbankPayerAdapter{c: bankpb.NewInterbankProtocolServiceClient(conn)}
 	} else {
 		log.Warn("BANK_GRPC_ADDR not set; execution worker will refuse to fill")
+	}
+
+	// Celina 5 — outbound cross-bank OTC. Parses INTERBANK_ROUTES; when
+	// empty the field stays nil and the service nil-checks at every
+	// PartnerOTC.* call site (Create/Counter/Withdraw/Accept/Discover
+	// surface a clean FailedPrecondition).
+	if raw := config.String("INTERBANK_ROUTES", ""); raw != "" {
+		routes := interbank.ParseRoutes(raw)
+		if len(routes) > 0 {
+			svc.PartnerOTC = interbank.New(interbank.Config{
+				Routes:           routes,
+				APIKey:           config.String("INTERBANK_API_KEY", ""),
+				OwnRoutingNumber: config.String("BANK_ROUTING_NUMBER", "333"),
+			}, log)
+			log.Info("interbank client configured", "partners", len(routes))
+		}
 	}
 
 	// Alpha Vantage market-data feed (spec p.40, p.42). Optional — when
@@ -206,7 +225,10 @@ func Run() error {
 	})
 	g.Go(func() error {
 		return grpcserver.Run(gctx, log, grpcAddr, func(s *grpc.Server) {
-			tradingpb.RegisterTradingServiceServer(s, server.New(svc))
+			srv := server.New(svc)
+			tradingpb.RegisterTradingServiceServer(s, srv)
+			// Celina 5 — cross-bank OTC RPCs share the same Server.
+			tradingpb.RegisterExternalOTCServiceServer(s, srv)
 		})
 	})
 

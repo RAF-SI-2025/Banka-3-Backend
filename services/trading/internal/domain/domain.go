@@ -425,6 +425,152 @@ type OTCContract struct {
 }
 
 // =====================================================================
+// External OTC (celina 5 — spec p.77+)
+// =====================================================================
+//
+// Mirrors the local OTC types above (OTCOffer / OTCContract) but for
+// threads where one party lives at a remote bank. Reached via the
+// gateway's partner-REST adapter; cross-bank cash legs go through
+// bank's 2PC primitive.
+
+// ExternalOTCDirection encodes who initiated a thread.
+type ExternalOTCDirection string
+
+const (
+	// ExternalOTCOutgoing — local user is the buyer; partner is the seller.
+	ExternalOTCOutgoing ExternalOTCDirection = "outgoing"
+	// ExternalOTCIncoming — partner is the buyer; local user is the seller.
+	ExternalOTCIncoming ExternalOTCDirection = "incoming"
+)
+
+// ExternalOTCSide marks which side of the thread an iteration came from.
+type ExternalOTCSide string
+
+const (
+	ExternalOTCSideLocal  ExternalOTCSide = "local"
+	ExternalOTCSideRemote ExternalOTCSide = "remote"
+)
+
+// ExternalOTCRole captures the local user's role in the thread.
+type ExternalOTCRole string
+
+const (
+	ExternalOTCRoleBuyer  ExternalOTCRole = "buyer"
+	ExternalOTCRoleSeller ExternalOTCRole = "seller"
+)
+
+// ExternalOTCThreadStatus mirrors OTCStatus + adds `rejected` for the
+// case where a partner returns a terminal error during a write.
+type ExternalOTCThreadStatus string
+
+const (
+	ExternalOTCThreadOpen       ExternalOTCThreadStatus = "open"
+	ExternalOTCThreadSuperseded ExternalOTCThreadStatus = "superseded"
+	ExternalOTCThreadAccepted   ExternalOTCThreadStatus = "accepted"
+	ExternalOTCThreadWithdrawn  ExternalOTCThreadStatus = "withdrawn"
+	ExternalOTCThreadExpired    ExternalOTCThreadStatus = "expired"
+	ExternalOTCThreadRejected   ExternalOTCThreadStatus = "rejected"
+)
+
+// ExternalOTCContractStatus mirrors OTCContractStatus.
+type ExternalOTCContractStatus string
+
+const (
+	ExternalOTCContractActive    ExternalOTCContractStatus = "active"
+	ExternalOTCContractExercised ExternalOTCContractStatus = "exercised"
+	ExternalOTCContractExpired   ExternalOTCContractStatus = "expired"
+	ExternalOTCContractSettling  ExternalOTCContractStatus = "settling"
+)
+
+// ExternalOTCThread is the cross-bank counterpart of OTCOffer's
+// thread view: one row per active negotiation. Local-side fields are
+// uuid; partner-side fields stay as text since not every partner
+// uses UUIDs.
+type ExternalOTCThread struct {
+	ID        string
+	Direction ExternalOTCDirection
+
+	RemoteBankCode     string
+	RemoteThreadID     string
+	RemoteUserRef      string
+	RemoteDisplayName  string
+	RemoteAccountRef   string
+
+	LocalUserID        string
+	LocalUserKind      UserKind
+	LocalAccountID     string
+	LocalAccountNumber string
+	LocalRole          ExternalOTCRole
+
+	SecurityID       string // may be empty for outgoing threads not yet mirrored locally
+	SecurityTicker   string
+	SellerHoldingRef string
+
+	Quantity       int32
+	PricePerUnit   string
+	Premium        string
+	Currency       Currency
+	SettlementDate time.Time
+
+	ModifiedBySide ExternalOTCSide
+	Status         ExternalOTCThreadStatus
+
+	CreatedAt time.Time
+	UpdatedAt time.Time
+}
+
+// ExternalOTCIteration is one row of the negotiation audit log.
+type ExternalOTCIteration struct {
+	ID             string
+	ThreadID       string
+	ProposedBySide ExternalOTCSide
+	Quantity       int32
+	PricePerUnit   string
+	Premium        string
+	SettlementDate time.Time
+	CreatedAt      time.Time
+}
+
+// ExternalOTCContract is the option contract minted on accept.
+type ExternalOTCContract struct {
+	ID        string
+	ThreadID  string
+	Direction ExternalOTCDirection
+
+	RemoteBankCode    string
+	RemoteThreadID    string
+	RemoteUserRef     string
+	RemoteDisplayName string
+	RemoteAccountRef  string
+
+	LocalUserID        string
+	LocalUserKind      UserKind
+	LocalAccountID     string
+	LocalAccountNumber string
+	LocalRole          ExternalOTCRole
+
+	SecurityID       string
+	SecurityTicker   string
+	SellerHoldingRef string
+
+	Quantity       int32
+	StrikePrice    string
+	PremiumPaid    string
+	Currency       Currency
+	SettlementDate time.Time
+
+	AcceptedBySide ExternalOTCSide
+	Status         ExternalOTCContractStatus
+
+	PremiumOpID  string
+	ExerciseOpID string
+	ExercisedAt  *time.Time
+
+	CreatedAt time.Time
+	UpdatedAt time.Time
+}
+
+// =====================================================================
 // Investment funds (spec p.71-76)
 // =====================================================================
 

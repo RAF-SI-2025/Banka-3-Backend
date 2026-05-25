@@ -51,6 +51,12 @@ type Config struct {
 	// "Za supervizore" table shows "Banka 1", not a person). Defaults
 	// to "Banka 3".
 	BankName string
+
+	// OwnRoutingNumber identifies this bank in the celina-5 inter-bank
+	// protocol (spec p.77+). Stamped into PreparePayment.sender_routing_number
+	// on outbound cross-bank legs. Defaults to 333 ("Banka 3") via
+	// service.New; production loads it from BANK_ROUTING_NUMBER.
+	OwnRoutingNumber int
 }
 
 // RateProvider returns raw FX bid/ask between two currencies. Used by
@@ -148,6 +154,15 @@ type Service struct {
 	// this instead of the lower-level Settler. May be nil on a dev
 	// stack that doesn't run the bank reservation RPCs.
 	Reservations BankReservations
+	// PartnerOTC is the outbound side of the celina-5 cross-bank OTC
+	// adapter (BE-4). May be nil — the service nil-checks before
+	// dialing so the trading binary boots without partner config.
+	PartnerOTC PartnerOTC
+	// InterbankPayer is the bank-side 2PC primitive (BE-5). SAGA step
+	// handlers in external_otc_*_saga.go dial this to drive cross-bank
+	// cash legs. May be nil on a minimal dev stack — the AcceptExternal/
+	// ExerciseExternal entrypoints nil-check before starting the saga.
+	InterbankPayer InterbankPayer
 	// OTCNotifier sends counterparty-facing emails on OTC events
 	// (counter-offer, withdraw, accept, contract expired). Wired to an
 	// email.Sender — either pkg/email directly or notification-svc,
@@ -228,6 +243,41 @@ type TransferInput struct {
 	Purpose       string
 }
 
+// InterbankPayer is trading's view of bank's celina-5 2PC primitive
+// (BankInterbankProtocolService). SAGA step handlers dial these to
+// drive cross-bank cash legs.
+type InterbankPayer interface {
+	PreparePayment(ctx context.Context, in PrepareInterbankInput) (PrepareInterbankResult, error)
+	CommitPayment(ctx context.Context, senderRouting int, txID string) (CommitInterbankResult, error)
+	RollbackPayment(ctx context.Context, senderRouting int, txID, reason string) error
+}
+
+// PrepareInterbankInput mirrors bank.PreparePaymentRequest for the
+// outbound (we-are-sending) flow.
+type PrepareInterbankInput struct {
+	SenderRoutingNumber int
+	TransactionID       string
+	LocalAccountNumber  string
+	RemoteAccountNumber string
+	Currency            domain.Currency
+	Amount              string
+	Purpose             string
+}
+
+// PrepareInterbankResult is what bank gives back after Prepare.
+type PrepareInterbankResult struct {
+	TransactionID string
+	ReservationID string
+	Status        string
+}
+
+// CommitInterbankResult.
+type CommitInterbankResult struct {
+	TransactionID string
+	OpID          string
+	Status        string
+}
+
 // New constructs a Service with sane defaults. The app layer fills in
 // gRPC clients and other dependencies via direct field assignment.
 func New(st *store.Store, cfg Config, log *slog.Logger) *Service {
@@ -237,6 +287,9 @@ func New(st *store.Store, cfg Config, log *slog.Logger) *Service {
 			loc = time.UTC
 		}
 		cfg.Belgrade = loc
+	}
+	if cfg.OwnRoutingNumber == 0 {
+		cfg.OwnRoutingNumber = 333
 	}
 	if cfg.BankName == "" {
 		cfg.BankName = "Banka 3"

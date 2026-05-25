@@ -26,4 +26,10 @@ func RegisterSagas(reg *saga.Registry, svc *Service) {
 	registerOTCExerciseSaga(reg, svc)
 	registerFundInvestSaga(reg, svc)
 	registerFundWithdrawSaga(reg, svc)
+	// Celina 5 — cross-bank counterparts. Mirror the local sagas but
+	// drive the cash legs through bank's 2PC primitive (PreparePayment /
+	// CommitPayment / RollbackPayment) and notify the partner over the
+	// outbound REST adapter (PartnerOTC).
+	registerExternalOTCAcceptSaga(reg, svc)
+	registerExternalOTCExerciseSaga(reg, svc)
 }
