@@ -519,6 +519,9 @@ func resetSchema(t *testing.T) {
 	t.Helper()
 	_, err := fixPool.Exec(context.Background(), `
         truncate
+            "trading".external_otc_contracts,
+            "trading".external_otc_iterations,
+            "trading".external_otc_threads,
             "trading".fund_performance_snapshots,
             "trading".client_fund_transactions,
             "trading".client_fund_positions,
