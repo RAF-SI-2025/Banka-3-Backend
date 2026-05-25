@@ -23,6 +23,7 @@ import (
 	pkgredis "github.com/RAF-SI-2025/Banka-3-Backend/pkg/redis"
 	"github.com/RAF-SI-2025/Banka-3-Backend/pkg/shutdown"
 	"github.com/RAF-SI-2025/Banka-3-Backend/services/trading/internal/external/alphavantage"
+	"github.com/RAF-SI-2025/Banka-3-Backend/services/trading/internal/external/influxmarket"
 	"github.com/RAF-SI-2025/Banka-3-Backend/services/trading/internal/external/interbank"
 	"github.com/RAF-SI-2025/Banka-3-Backend/services/trading/internal/saga"
 	"github.com/RAF-SI-2025/Banka-3-Backend/services/trading/internal/server"
@@ -176,6 +177,15 @@ func Run() error {
 	// Alpha Vantage market-data feed (spec p.40, p.42). Optional — when
 	// the API key is unset, the refresher field stays nil and the
 	// market-data cron no-ops.
+	// BonusInfluxDB (#285) — optional side-channel that mirrors daily
+	// price writes to InfluxDB. NewFromEnv returns a no-op when the
+	// INFLUX_* env vars aren't set, so this stays a no-cost wire when
+	// the observability/analytics path isn't configured.
+	influxStore := influxmarket.NewFromEnv()
+	influx := &influxMirror{s: influxStore}
+	if influx.Enabled() {
+		log.Info("influx market-data mirror enabled", "url", config.String("INFLUX_URL", ""))
+	}
 	if avKey := config.String("ALPHAVANTAGE_API_KEY", ""); avKey != "" {
 		client := alphavantage.New(avKey)
 		svc.MarketData = &service.MarketData{
@@ -187,6 +197,7 @@ func Run() error {
 			StockSpread: config.Float("STOCK_BIDASK_SPREAD", 0.001),
 			Pause:       config.Duration("MARKET_DATA_PAUSE", 13*time.Second),
 			Belgrade:    belgrade,
+			Influx:      influx,
 		}
 		log.Info("alphavantage market-data refresh enabled")
 	} else {

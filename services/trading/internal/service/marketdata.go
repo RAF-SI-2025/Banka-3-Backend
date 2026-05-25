@@ -95,6 +95,20 @@ type MarketData struct {
 	// Belgrade anchors "today" for the daily history row. Defaults to
 	// Europe/Belgrade.
 	Belgrade *time.Location
+	// Influx, when non-nil, mirrors every successful UpsertListingDaily
+	// to InfluxDB as a side-channel for analytical queries. Bonus
+	// feature ported from main (#285). Postgres remains the canonical
+	// source of truth — Influx errors are logged at warn level but
+	// don't fail the refresh.
+	Influx MarketDataMirror
+}
+
+// MarketDataMirror is the slim Influx surface MarketData uses for its
+// side-channel writes. influxmarket.Store implements it; tests can
+// fake.
+type MarketDataMirror interface {
+	Enabled() bool
+	WriteDaily(ctx context.Context, listingID string, date time.Time, price, ask, bid, changeAmt string, volume int64) error
 }
 
 // MarketDataResult summarises one refresh pass.
@@ -202,6 +216,7 @@ func (m *MarketData) BackfillStockHistory(ctx context.Context) (*StockHistoryBac
 				m.Log.Warn("stock-history persist failed", "symbol", sym, "err", perr.Error())
 				continue
 			}
+			m.mirrorToInflux(ctx, r.Listing.ID, day, b.Close, ask, bid, change, b.Volume)
 			prev = b.Close
 			wrote++
 		}
@@ -334,9 +349,10 @@ func (m *MarketData) persist(ctx context.Context, l *domain.Listing, price, ask,
 	if _, err := m.Store.UpsertListing(ctx, &updated); err != nil {
 		return fmt.Errorf("upsert listing: %w", err)
 	}
+	day := m.today()
 	if err := m.Store.UpsertListingDaily(ctx, &domain.ListingDailyPrice{
 		ListingID: l.ID,
-		Date:      m.today(),
+		Date:      day,
 		Price:     price,
 		Ask:       ask,
 		Bid:       bid,
@@ -345,7 +361,20 @@ func (m *MarketData) persist(ctx context.Context, l *domain.Listing, price, ask,
 	}); err != nil {
 		return fmt.Errorf("upsert listing daily: %w", err)
 	}
+	m.mirrorToInflux(ctx, l.ID, day, price, ask, bid, change, volume)
 	return nil
+}
+
+// mirrorToInflux is a best-effort side-channel write to the Influx
+// store (BonusInfluxDB / PR #285). Errors are logged at warn and
+// swallowed; Postgres is the canonical store.
+func (m *MarketData) mirrorToInflux(ctx context.Context, listingID string, day time.Time, price, ask, bid, change string, volume int64) {
+	if m.Influx == nil || !m.Influx.Enabled() {
+		return
+	}
+	if err := m.Influx.WriteDaily(ctx, listingID, day, price, ask, bid, change, volume); err != nil {
+		m.Log.Warn("influx mirror write failed", "listing_id", listingID, "err", err.Error())
+	}
 }
 
 func (m *MarketData) today() time.Time {

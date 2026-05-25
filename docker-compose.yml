@@ -238,6 +238,29 @@ services:
   # native protocol on /bank/api/v1/otc/... so trading can demo the
   # cross-bank flow without a second real instance. Authenticates with
   # the same INTERBANK_API_KEY as our gateway so both directions agree.
+  # ---------------------------------------------------------------------
+  # InfluxDB — optional time-series side-channel for market data
+  # (BonusInfluxDB / PR #285). Profile-gated so `make up` skips it.
+  # Bring up with `make influxdb` to opt in to the mirror writes; the
+  # trading service reads INFLUX_URL etc on boot and silently no-ops
+  # when those env vars are unset.
+  # ---------------------------------------------------------------------
+  influxdb:
+    profiles: ["influxdb"]
+    image: influxdb:2.7-alpine
+    ports:
+      - "${INFLUX_PORT:-8087}:8086"
+    environment:
+      DOCKER_INFLUXDB_INIT_MODE: setup
+      DOCKER_INFLUXDB_INIT_USERNAME: "${INFLUX_USERNAME:-admin}"
+      DOCKER_INFLUXDB_INIT_PASSWORD: "${INFLUX_PASSWORD:-influxpass}"
+      DOCKER_INFLUXDB_INIT_ORG: "${INFLUX_ORG:-banka}"
+      DOCKER_INFLUXDB_INIT_BUCKET: "${INFLUX_BUCKET:-market-data}"
+      DOCKER_INFLUXDB_INIT_ADMIN_TOKEN: "${INFLUX_TOKEN:-dev-influx-token-change-in-prod}"
+    volumes:
+      - influxdata:/var/lib/influxdb2
+    networks: [banka]
+
   mock-partner:
     <<: *service-defaults
     build:
@@ -317,6 +340,7 @@ volumes:
   redisdata:
   tools-go-mod:
   tools-go-build:
+  influxdata:
 
 networks:
   banka:

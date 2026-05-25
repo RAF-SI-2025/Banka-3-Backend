@@ -131,6 +131,17 @@ interbank-up: ## Bring up both stacks in cross-bank wiring mode
 	$(MAKE) seed-partner
 	$(COMPOSE) restart trading gateway
 
+.PHONY: influxdb
+influxdb: ## Bring up the InfluxDB market-data side-channel (BonusInfluxDB). Trading service mirrors daily prices when INFLUX_* env vars are set.
+	$(COMPOSE) --profile influxdb up -d influxdb
+	@echo ""
+	@echo "  InfluxDB UI:   http://localhost:$${INFLUX_PORT:-8087}"
+	@echo "  Set INFLUX_URL=http://influxdb:8086, INFLUX_TOKEN=…, INFLUX_ORG=banka, INFLUX_BUCKET=market-data on trading to enable the mirror."
+
+.PHONY: influxdb-down
+influxdb-down: ## Stop the InfluxDB service (keeps the volume)
+	$(COMPOSE) --profile influxdb stop influxdb
+
 .PHONY: observability
 observability: ## Bring up the Prometheus + Grafana + Alertmanager observability stack (in addition to whatever services are already running)
 	$(COMPOSE) --profile observability up -d --build prometheus grafana alertmanager discord_notifier
