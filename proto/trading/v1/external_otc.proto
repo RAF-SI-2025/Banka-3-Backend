@@ -1,0 +1,484 @@
+syntax = "proto3";
+
+package banka.trading.v1;
+
+import "google/api/annotations.proto";
+import "google/protobuf/timestamp.proto";
+import "buf/validate/validate.proto";
+import "trading/v1/trading.proto";
+
+// ExternalOTCService owns the celina-5 cross-bank OTC surface.
+// Mirrors the local OTC contracts in trading.proto but every thread
+// has a counterpart at a remote bank reached over the public REST
+// surface exposed by the gateway. The "external" prefix on every
+// message keeps it disjoint from the local OTC types — same domain,
+// different lifecycle.
+//
+// Inbound partner-facing endpoints (NEW_TX/COMMIT_TX/etc. + offer
+// arrival from a remote bank) are not part of this service — they
+// live on the gateway as plain REST and translate to these gRPC
+// methods. Everything here is initiated by a logged-in user of *this*
+// bank.
+service ExternalOTCService {
+  // -----------------------------------------------------------------
+  // Discovery — list public holdings advertised by partner banks.
+  // -----------------------------------------------------------------
+
+  // ListExternalPublicHoldings aggregates partner banks' /otc/public
+  // (or Banka2 /public-stock) responses. Gateway fans out across the
+  // configured partner routes and merges. Filters by bank_code and/or
+  // ticker.
+  rpc ListExternalPublicHoldings(ListExternalPublicHoldingsRequest)
+      returns (ListExternalPublicHoldingsResponse) {
+    option (google.api.http) = {
+      get: "/api/v1/otc/external-discovery"
+    };
+  }
+
+  // -----------------------------------------------------------------
+  // Offers + threads.
+  // -----------------------------------------------------------------
+
+  // CreateExternalOTCOffer opens an outbound negotiation against a
+  // partner-advertised holding. Caller is the buyer; partner is the
+  // seller. The local mirror row is created in 'open' state; the
+  // outbound POST to the partner happens synchronously inside the
+  // call so a 4xx from the partner surfaces immediately.
+  rpc CreateExternalOTCOffer(CreateExternalOTCOfferRequest)
+      returns (CreateExternalOTCOfferResponse) {
+    option (google.api.http) = {
+      post: "/api/v1/otc/external-offers"
+      body: "*"
+    };
+  }
+
+  // ListExternalOTCThreads — drives the "Aktivne ponude (eksterno)"
+  // page. Caller sees threads where they are the local party. Status
+  // filter is optional.
+  rpc ListExternalOTCThreads(ListExternalOTCThreadsRequest)
+      returns (ListExternalOTCThreadsResponse) {
+    option (google.api.http) = {
+      get: "/api/v1/otc/external-offers"
+    };
+  }
+
+  // GetExternalOTCThread returns the thread + every iteration (oldest
+  // first) + the contract if accepted.
+  rpc GetExternalOTCThread(GetExternalOTCThreadRequest)
+      returns (GetExternalOTCThreadResponse) {
+    option (google.api.http) = {
+      get: "/api/v1/otc/external-offers/{thread_id}"
+    };
+  }
+
+  // CounterExternalOTCOffer appends an iteration; gateway forwards to
+  // the partner. Caller must be the side allowed to counter (the side
+  // that did not move last).
+  rpc CounterExternalOTCOffer(CounterExternalOTCOfferRequest)
+      returns (ExternalOTCThread) {
+    option (google.api.http) = {
+      post: "/api/v1/otc/external-offers/{bank_code}/{thread_id}/counter"
+      body: "*"
+    };
+  }
+
+  // WithdrawExternalOTCOffer pulls the thread. Either party can
+  // withdraw a thread in 'open' state.
+  rpc WithdrawExternalOTCOffer(WithdrawExternalOTCOfferRequest)
+      returns (ExternalOTCThread) {
+    option (google.api.http) = {
+      post: "/api/v1/otc/external-offers/{bank_code}/{thread_id}/withdraw"
+      body: "*"
+    };
+  }
+
+  // AcceptExternalOTCOffer accepts the open iteration and mints a
+  // contract via the external_otc_premium SAGA. Premium transfers
+  // cross-bank through the bank-2PC primitive. Gated by spec p.11
+  // verification on the gateway.
+  rpc AcceptExternalOTCOffer(AcceptExternalOTCOfferRequest)
+      returns (AcceptExternalOTCOfferResponse) {
+    option (google.api.http) = {
+      post: "/api/v1/otc/external-offers/{bank_code}/{thread_id}/accept"
+      body: "*"
+    };
+  }
+
+  // -----------------------------------------------------------------
+  // Contracts (exercised options).
+  // -----------------------------------------------------------------
+
+  rpc ListExternalOTCContracts(ListExternalOTCContractsRequest)
+      returns (ListExternalOTCContractsResponse) {
+    option (google.api.http) = {
+      get: "/api/v1/otc/external-contracts"
+    };
+  }
+
+  // ExerciseExternalOTCContract runs the external_otc_exercise SAGA
+  // (reserve strike notional → instruct partner to settle → confirm).
+  // Gated by spec p.11 verification on the gateway.
+  rpc ExerciseExternalOTCContract(ExerciseExternalOTCContractRequest)
+      returns (ExerciseExternalOTCContractResponse) {
+    option (google.api.http) = {
+      post: "/api/v1/otc/external-contracts/{bank_code}/{contract_id}/exercise"
+      body: "*"
+    };
+  }
+
+  // -----------------------------------------------------------------
+  // Inbound — invoked by the gateway when a remote bank reaches us.
+  // No HTTP annotation: these are internal RPCs. The gateway adapts
+  // the partner's wire format (native or Banka2) into these calls.
+  // -----------------------------------------------------------------
+
+  // ReceiveExternalOTCOffer is invoked when a remote bank POSTs an
+  // offer to one of our advertised holdings. Returns the local
+  // mirror row + the remote_thread_id we assigned for our side.
+  rpc ReceiveExternalOTCOffer(ReceiveExternalOTCOfferRequest)
+      returns (ReceiveExternalOTCOfferResponse);
+
+  // ReceiveExternalOTCCounter is invoked when the partner counters
+  // an existing thread.
+  rpc ReceiveExternalOTCCounter(ReceiveExternalOTCCounterRequest)
+      returns (ExternalOTCThread);
+
+  // ReceiveExternalOTCWithdraw / ReceiveExternalOTCAccept mirror the
+  // outbound counterparts.
+  rpc ReceiveExternalOTCWithdraw(ReceiveExternalOTCActionRequest)
+      returns (ExternalOTCThread);
+
+  rpc ReceiveExternalOTCAccept(ReceiveExternalOTCActionRequest)
+      returns (ExternalOTCThread);
+
+  // ReceiveExternalOTCExerciseNotice fires when the partner exercises
+  // an option contract written by our user. We confirm the local
+  // settlement and acknowledge.
+  rpc ReceiveExternalOTCExerciseNotice(ReceiveExternalOTCExerciseNoticeRequest)
+      returns (ReceiveExternalOTCExerciseNoticeResponse);
+}
+
+// -------------------------------------------------------------------
+// Enums.
+// -------------------------------------------------------------------
+
+// ExternalOTCDirection encodes who initiated the thread.
+enum ExternalOTCDirection {
+  EXTERNAL_OTC_DIRECTION_UNSPECIFIED = 0;
+  // OUTGOING — initiated by a user of this bank against a partner
+  // holding.
+  EXTERNAL_OTC_DIRECTION_OUTGOING    = 1;
+  // INCOMING — partner-initiated against a holding we advertise.
+  EXTERNAL_OTC_DIRECTION_INCOMING    = 2;
+}
+
+// ExternalOTCSide identifies which side a thread iteration came
+// from, scoped to this bank.
+enum ExternalOTCSide {
+  EXTERNAL_OTC_SIDE_UNSPECIFIED = 0;
+  EXTERNAL_OTC_SIDE_LOCAL       = 1;
+  EXTERNAL_OTC_SIDE_REMOTE      = 2;
+}
+
+// ExternalOTCRole says whether the local party is buyer or seller.
+enum ExternalOTCRole {
+  EXTERNAL_OTC_ROLE_UNSPECIFIED = 0;
+  EXTERNAL_OTC_ROLE_BUYER       = 1;
+  EXTERNAL_OTC_ROLE_SELLER      = 2;
+}
+
+// ExternalOTCThreadStatus mirrors the local OTCStatus enum but kept
+// separate so the two domains can evolve independently.
+enum ExternalOTCThreadStatus {
+  EXTERNAL_OTC_THREAD_STATUS_UNSPECIFIED = 0;
+  EXTERNAL_OTC_THREAD_STATUS_OPEN        = 1;
+  EXTERNAL_OTC_THREAD_STATUS_SUPERSEDED  = 2;
+  EXTERNAL_OTC_THREAD_STATUS_ACCEPTED    = 3;
+  EXTERNAL_OTC_THREAD_STATUS_WITHDRAWN   = 4;
+  EXTERNAL_OTC_THREAD_STATUS_EXPIRED     = 5;
+  // REJECTED — partner returned a terminal error during a write;
+  // we mark the thread terminal so the user sees a final state.
+  EXTERNAL_OTC_THREAD_STATUS_REJECTED    = 6;
+}
+
+enum ExternalOTCContractStatus {
+  EXTERNAL_OTC_CONTRACT_STATUS_UNSPECIFIED = 0;
+  EXTERNAL_OTC_CONTRACT_STATUS_ACTIVE      = 1;
+  EXTERNAL_OTC_CONTRACT_STATUS_EXERCISED   = 2;
+  EXTERNAL_OTC_CONTRACT_STATUS_EXPIRED     = 3;
+  EXTERNAL_OTC_CONTRACT_STATUS_SETTLING    = 4;
+}
+
+// -------------------------------------------------------------------
+// Domain messages.
+// -------------------------------------------------------------------
+
+// ExternalPublicHolding is one row in the discovery aggregation —
+// flattened across partner banks.
+message ExternalPublicHolding {
+  string                bank_code         = 1;
+  string                seller_user_ref   = 2;
+  string                seller_display    = 3;
+  string                seller_holding_id = 4;
+  string                security_ticker   = 5;
+  SecurityType          security_type     = 6;
+  Currency              currency          = 7;
+  int32                 quantity          = 8;
+  string                ask_price         = 9;
+  string                premium           = 10;
+}
+
+message ExternalOTCThread {
+  string                    id                   = 1;
+  ExternalOTCDirection      direction            = 2;
+
+  string                    remote_bank_code     = 10;
+  string                    remote_thread_id     = 11;
+  string                    remote_user_ref      = 12;
+  string                    remote_display_name  = 13;
+  string                    remote_account_ref   = 14;
+
+  string                    local_user_id        = 20;
+  UserKind                  local_user_kind      = 21;
+  string                    local_account_id     = 22;
+  string                    local_account_number = 23;
+  ExternalOTCRole           local_role           = 24;
+
+  string                    security_id          = 30;
+  string                    security_ticker      = 31;
+  string                    seller_holding_id    = 32;
+
+  int32                     quantity             = 40;
+  string                    price_per_unit       = 41;
+  string                    premium              = 42;
+  Currency                  currency             = 43;
+  google.protobuf.Timestamp settlement_date      = 44;
+
+  ExternalOTCSide           modified_by_side     = 50;
+  ExternalOTCThreadStatus   status               = 51;
+
+  google.protobuf.Timestamp created_at           = 90;
+  google.protobuf.Timestamp updated_at           = 91;
+}
+
+message ExternalOTCIteration {
+  string                    id               = 1;
+  string                    thread_id        = 2;
+  ExternalOTCSide           proposed_by_side = 3;
+  int32                     quantity         = 4;
+  string                    price_per_unit   = 5;
+  string                    premium          = 6;
+  google.protobuf.Timestamp settlement_date  = 7;
+  google.protobuf.Timestamp created_at       = 8;
+}
+
+message ExternalOTCContract {
+  string                    id                   = 1;
+  string                    thread_id            = 2;
+  ExternalOTCDirection      direction            = 3;
+
+  string                    remote_bank_code     = 10;
+  string                    remote_thread_id     = 11;
+  string                    remote_user_ref      = 12;
+  string                    remote_display_name  = 13;
+  string                    remote_account_ref   = 14;
+
+  string                    local_user_id        = 20;
+  UserKind                  local_user_kind      = 21;
+  string                    local_account_id     = 22;
+  string                    local_account_number = 23;
+  ExternalOTCRole           local_role           = 24;
+
+  string                    security_id          = 30;
+  string                    security_ticker      = 31;
+  string                    seller_holding_id    = 32;
+
+  int32                     quantity             = 40;
+  string                    strike_price         = 41;
+  string                    premium_paid         = 42;
+  Currency                  currency             = 43;
+  google.protobuf.Timestamp settlement_date      = 44;
+
+  ExternalOTCSide           accepted_by_side     = 50;
+  ExternalOTCContractStatus status               = 51;
+
+  string                    premium_op_id        = 60;
+  string                    exercise_op_id       = 61;
+  google.protobuf.Timestamp exercised_at         = 62;
+
+  google.protobuf.Timestamp created_at           = 90;
+  google.protobuf.Timestamp updated_at           = 91;
+}
+
+// -------------------------------------------------------------------
+// Request / Response — outbound (user-facing) RPCs.
+// -------------------------------------------------------------------
+
+message ListExternalPublicHoldingsRequest {
+  // Optional filter on partner bank code (e.g. "444"). Empty = all
+  // configured partners.
+  string bank_code = 1;
+  // Optional ticker prefix filter.
+  string ticker    = 2;
+}
+
+message ListExternalPublicHoldingsResponse {
+  repeated ExternalPublicHolding items = 1;
+}
+
+message CreateExternalOTCOfferRequest {
+  string                    remote_bank_code    = 1
+      [(buf.validate.field).string.min_len = 1];
+  string                    remote_user_ref     = 2
+      [(buf.validate.field).string.min_len = 1];
+  string                    remote_display_name = 3;
+  string                    buyer_account_id    = 4
+      [(buf.validate.field).string.uuid = true];
+  string                    seller_holding_id   = 5
+      [(buf.validate.field).string.min_len = 1];
+  string                    security_ticker     = 6
+      [(buf.validate.field).string.min_len = 1];
+  SecurityType              security_type       = 7
+      [(buf.validate.field).enum = {defined_only: true, not_in: [0]}];
+  Currency                  currency            = 8
+      [(buf.validate.field).enum = {defined_only: true, not_in: [0]}];
+  int32                     quantity            = 9
+      [(buf.validate.field).int32.gt = 0];
+  string                    price_per_unit      = 10
+      [(buf.validate.field).string.min_len = 1];
+  string                    premium             = 11
+      [(buf.validate.field).string.min_len = 1];
+  google.protobuf.Timestamp settlement_date     = 12;
+}
+
+message CreateExternalOTCOfferResponse {
+  ExternalOTCThread local_mirror = 1;
+}
+
+message ListExternalOTCThreadsRequest {
+  // Optional status filter; UNSPECIFIED = all.
+  ExternalOTCThreadStatus status = 1;
+}
+
+message ListExternalOTCThreadsResponse {
+  repeated ExternalOTCThread threads = 1;
+}
+
+message GetExternalOTCThreadRequest {
+  string thread_id = 1 [(buf.validate.field).string.min_len = 1];
+}
+
+message GetExternalOTCThreadResponse {
+  ExternalOTCThread             thread     = 1;
+  repeated ExternalOTCIteration iterations = 2;
+  ExternalOTCContract           contract   = 3;
+}
+
+message CounterExternalOTCOfferRequest {
+  string                    bank_code       = 1
+      [(buf.validate.field).string.min_len = 1];
+  string                    thread_id       = 2
+      [(buf.validate.field).string.min_len = 1];
+  int32                     quantity        = 3
+      [(buf.validate.field).int32.gt = 0];
+  string                    price_per_unit  = 4
+      [(buf.validate.field).string.min_len = 1];
+  string                    premium         = 5
+      [(buf.validate.field).string.min_len = 1];
+  google.protobuf.Timestamp settlement_date = 6;
+}
+
+message WithdrawExternalOTCOfferRequest {
+  string bank_code = 1 [(buf.validate.field).string.min_len = 1];
+  string thread_id = 2 [(buf.validate.field).string.min_len = 1];
+}
+
+message AcceptExternalOTCOfferRequest {
+  string bank_code = 1 [(buf.validate.field).string.min_len = 1];
+  string thread_id = 2 [(buf.validate.field).string.min_len = 1];
+}
+
+message AcceptExternalOTCOfferResponse {
+  ExternalOTCThread   thread   = 1;
+  ExternalOTCContract contract = 2;
+}
+
+message ListExternalOTCContractsRequest {
+  ExternalOTCContractStatus status = 1;
+}
+
+message ListExternalOTCContractsResponse {
+  repeated ExternalOTCContract contracts = 1;
+}
+
+message ExerciseExternalOTCContractRequest {
+  string bank_code      = 1 [(buf.validate.field).string.min_len = 1];
+  string contract_id    = 2 [(buf.validate.field).string.min_len = 1];
+  // Optional client-supplied idempotency key for the cross-bank
+  // exercise. Gateway forwards into the saga's transaction_id.
+  string exercise_op_id = 3;
+}
+
+message ExerciseExternalOTCContractResponse {
+  ExternalOTCContract contract = 1;
+}
+
+// -------------------------------------------------------------------
+// Request / Response — inbound (gateway → trading) RPCs. No grpc-
+// gateway annotations; not exposed publicly.
+// -------------------------------------------------------------------
+
+message ReceiveExternalOTCOfferRequest {
+  string                    sender_bank_code     = 1
+      [(buf.validate.field).string.min_len = 1];
+  string                    sender_user_ref      = 2
+      [(buf.validate.field).string.min_len = 1];
+  string                    sender_display_name  = 3;
+  string                    sender_thread_id     = 4
+      [(buf.validate.field).string.min_len = 1];
+  string                    seller_holding_id    = 5
+      [(buf.validate.field).string.min_len = 1];
+  int32                     quantity             = 6
+      [(buf.validate.field).int32.gt = 0];
+  string                    price_per_unit       = 7
+      [(buf.validate.field).string.min_len = 1];
+  string                    premium              = 8
+      [(buf.validate.field).string.min_len = 1];
+  google.protobuf.Timestamp settlement_date      = 9;
+}
+
+message ReceiveExternalOTCOfferResponse {
+  ExternalOTCThread local_mirror = 1;
+}
+
+message ReceiveExternalOTCCounterRequest {
+  string                    sender_bank_code = 1
+      [(buf.validate.field).string.min_len = 1];
+  string                    sender_thread_id = 2
+      [(buf.validate.field).string.min_len = 1];
+  int32                     quantity         = 3
+      [(buf.validate.field).int32.gt = 0];
+  string                    price_per_unit   = 4
+      [(buf.validate.field).string.min_len = 1];
+  string                    premium          = 5
+      [(buf.validate.field).string.min_len = 1];
+  google.protobuf.Timestamp settlement_date  = 6;
+}
+
+message ReceiveExternalOTCActionRequest {
+  string sender_bank_code = 1 [(buf.validate.field).string.min_len = 1];
+  string sender_thread_id = 2 [(buf.validate.field).string.min_len = 1];
+}
+
+message ReceiveExternalOTCExerciseNoticeRequest {
+  string sender_bank_code  = 1 [(buf.validate.field).string.min_len = 1];
+  string sender_contract_id = 2 [(buf.validate.field).string.min_len = 1];
+  // exercise_op_id is the partner's idempotency key for this exercise
+  // attempt. We map it onto the local SAGA transaction_id so a
+  // re-delivery returns the existing settlement, not a fresh one.
+  string exercise_op_id    = 3 [(buf.validate.field).string.min_len = 1];
+}
+
+message ReceiveExternalOTCExerciseNoticeResponse {
+  ExternalOTCContract contract = 1;
+}

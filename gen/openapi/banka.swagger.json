@@ -9,6 +9,9 @@
       "name": "BankService"
     },
     {
+      "name": "InterbankProtocolService"
+    },
+    {
       "name": "ExchangeService"
     },
     {
@@ -16,6 +19,9 @@
     },
     {
       "name": "TradingService"
+    },
+    {
+      "name": "ExternalOTCService"
     },
     {
       "name": "UserService"
@@ -2988,6 +2994,367 @@
         ]
       }
     },
+    "/api/v1/otc/external-contracts": {
+      "get": {
+        "operationId": "ExternalOTCService_ListExternalOTCContracts",
+        "responses": {
+          "200": {
+            "description": "A successful response.",
+            "schema": {
+              "$ref": "#/definitions/v1ListExternalOTCContractsResponse"
+            }
+          },
+          "default": {
+            "description": "An unexpected error response.",
+            "schema": {
+              "$ref": "#/definitions/rpcStatus"
+            }
+          }
+        },
+        "parameters": [
+          {
+            "name": "status",
+            "in": "query",
+            "required": false,
+            "type": "string",
+            "enum": [
+              "EXTERNAL_OTC_CONTRACT_STATUS_UNSPECIFIED",
+              "EXTERNAL_OTC_CONTRACT_STATUS_ACTIVE",
+              "EXTERNAL_OTC_CONTRACT_STATUS_EXERCISED",
+              "EXTERNAL_OTC_CONTRACT_STATUS_EXPIRED",
+              "EXTERNAL_OTC_CONTRACT_STATUS_SETTLING"
+            ],
+            "default": "EXTERNAL_OTC_CONTRACT_STATUS_UNSPECIFIED"
+          }
+        ],
+        "tags": [
+          "ExternalOTCService"
+        ]
+      }
+    },
+    "/api/v1/otc/external-contracts/{bankCode}/{contractId}/exercise": {
+      "post": {
+        "summary": "ExerciseExternalOTCContract runs the external_otc_exercise SAGA\n(reserve strike notional → instruct partner to settle → confirm).\nGated by spec p.11 verification on the gateway.",
+        "operationId": "ExternalOTCService_ExerciseExternalOTCContract",
+        "responses": {
+          "200": {
+            "description": "A successful response.",
+            "schema": {
+              "$ref": "#/definitions/v1ExerciseExternalOTCContractResponse"
+            }
+          },
+          "default": {
+            "description": "An unexpected error response.",
+            "schema": {
+              "$ref": "#/definitions/rpcStatus"
+            }
+          }
+        },
+        "parameters": [
+          {
+            "name": "bankCode",
+            "in": "path",
+            "required": true,
+            "type": "string"
+          },
+          {
+            "name": "contractId",
+            "in": "path",
+            "required": true,
+            "type": "string"
+          },
+          {
+            "name": "body",
+            "in": "body",
+            "required": true,
+            "schema": {
+              "$ref": "#/definitions/ExternalOTCServiceExerciseExternalOTCContractBody"
+            }
+          }
+        ],
+        "tags": [
+          "ExternalOTCService"
+        ]
+      }
+    },
+    "/api/v1/otc/external-discovery": {
+      "get": {
+        "summary": "ListExternalPublicHoldings aggregates partner banks' /otc/public\n(or Banka2 /public-stock) responses. Gateway fans out across the\nconfigured partner routes and merges. Filters by bank_code and/or\nticker.",
+        "operationId": "ExternalOTCService_ListExternalPublicHoldings",
+        "responses": {
+          "200": {
+            "description": "A successful response.",
+            "schema": {
+              "$ref": "#/definitions/v1ListExternalPublicHoldingsResponse"
+            }
+          },
+          "default": {
+            "description": "An unexpected error response.",
+            "schema": {
+              "$ref": "#/definitions/rpcStatus"
+            }
+          }
+        },
+        "parameters": [
+          {
+            "name": "bankCode",
+            "description": "Optional filter on partner bank code (e.g. \"444\"). Empty = all\nconfigured partners.",
+            "in": "query",
+            "required": false,
+            "type": "string"
+          },
+          {
+            "name": "ticker",
+            "description": "Optional ticker prefix filter.",
+            "in": "query",
+            "required": false,
+            "type": "string"
+          }
+        ],
+        "tags": [
+          "ExternalOTCService"
+        ]
+      }
+    },
+    "/api/v1/otc/external-offers": {
+      "get": {
+        "summary": "ListExternalOTCThreads — drives the \"Aktivne ponude (eksterno)\"\npage. Caller sees threads where they are the local party. Status\nfilter is optional.",
+        "operationId": "ExternalOTCService_ListExternalOTCThreads",
+        "responses": {
+          "200": {
+            "description": "A successful response.",
+            "schema": {
+              "$ref": "#/definitions/v1ListExternalOTCThreadsResponse"
+            }
+          },
+          "default": {
+            "description": "An unexpected error response.",
+            "schema": {
+              "$ref": "#/definitions/rpcStatus"
+            }
+          }
+        },
+        "parameters": [
+          {
+            "name": "status",
+            "description": "Optional status filter; UNSPECIFIED = all.\n\n - EXTERNAL_OTC_THREAD_STATUS_REJECTED: REJECTED — partner returned a terminal error during a write;\nwe mark the thread terminal so the user sees a final state.",
+            "in": "query",
+            "required": false,
+            "type": "string",
+            "enum": [
+              "EXTERNAL_OTC_THREAD_STATUS_UNSPECIFIED",
+              "EXTERNAL_OTC_THREAD_STATUS_OPEN",
+              "EXTERNAL_OTC_THREAD_STATUS_SUPERSEDED",
+              "EXTERNAL_OTC_THREAD_STATUS_ACCEPTED",
+              "EXTERNAL_OTC_THREAD_STATUS_WITHDRAWN",
+              "EXTERNAL_OTC_THREAD_STATUS_EXPIRED",
+              "EXTERNAL_OTC_THREAD_STATUS_REJECTED"
+            ],
+            "default": "EXTERNAL_OTC_THREAD_STATUS_UNSPECIFIED"
+          }
+        ],
+        "tags": [
+          "ExternalOTCService"
+        ]
+      },
+      "post": {
+        "summary": "CreateExternalOTCOffer opens an outbound negotiation against a\npartner-advertised holding. Caller is the buyer; partner is the\nseller. The local mirror row is created in 'open' state; the\noutbound POST to the partner happens synchronously inside the\ncall so a 4xx from the partner surfaces immediately.",
+        "operationId": "ExternalOTCService_CreateExternalOTCOffer",
+        "responses": {
+          "200": {
+            "description": "A successful response.",
+            "schema": {
+              "$ref": "#/definitions/v1CreateExternalOTCOfferResponse"
+            }
+          },
+          "default": {
+            "description": "An unexpected error response.",
+            "schema": {
+              "$ref": "#/definitions/rpcStatus"
+            }
+          }
+        },
+        "parameters": [
+          {
+            "name": "body",
+            "in": "body",
+            "required": true,
+            "schema": {
+              "$ref": "#/definitions/v1CreateExternalOTCOfferRequest"
+            }
+          }
+        ],
+        "tags": [
+          "ExternalOTCService"
+        ]
+      }
+    },
+    "/api/v1/otc/external-offers/{bankCode}/{threadId}/accept": {
+      "post": {
+        "summary": "AcceptExternalOTCOffer accepts the open iteration and mints a\ncontract via the external_otc_premium SAGA. Premium transfers\ncross-bank through the bank-2PC primitive. Gated by spec p.11\nverification on the gateway.",
+        "operationId": "ExternalOTCService_AcceptExternalOTCOffer",
+        "responses": {
+          "200": {
+            "description": "A successful response.",
+            "schema": {
+              "$ref": "#/definitions/v1AcceptExternalOTCOfferResponse"
+            }
+          },
+          "default": {
+            "description": "An unexpected error response.",
+            "schema": {
+              "$ref": "#/definitions/rpcStatus"
+            }
+          }
+        },
+        "parameters": [
+          {
+            "name": "bankCode",
+            "in": "path",
+            "required": true,
+            "type": "string"
+          },
+          {
+            "name": "threadId",
+            "in": "path",
+            "required": true,
+            "type": "string"
+          },
+          {
+            "name": "body",
+            "in": "body",
+            "required": true,
+            "schema": {
+              "$ref": "#/definitions/ExternalOTCServiceAcceptExternalOTCOfferBody"
+            }
+          }
+        ],
+        "tags": [
+          "ExternalOTCService"
+        ]
+      }
+    },
+    "/api/v1/otc/external-offers/{bankCode}/{threadId}/counter": {
+      "post": {
+        "summary": "CounterExternalOTCOffer appends an iteration; gateway forwards to\nthe partner. Caller must be the side allowed to counter (the side\nthat did not move last).",
+        "operationId": "ExternalOTCService_CounterExternalOTCOffer",
+        "responses": {
+          "200": {
+            "description": "A successful response.",
+            "schema": {
+              "$ref": "#/definitions/v1ExternalOTCThread"
+            }
+          },
+          "default": {
+            "description": "An unexpected error response.",
+            "schema": {
+              "$ref": "#/definitions/rpcStatus"
+            }
+          }
+        },
+        "parameters": [
+          {
+            "name": "bankCode",
+            "in": "path",
+            "required": true,
+            "type": "string"
+          },
+          {
+            "name": "threadId",
+            "in": "path",
+            "required": true,
+            "type": "string"
+          },
+          {
+            "name": "body",
+            "in": "body",
+            "required": true,
+            "schema": {
+              "$ref": "#/definitions/ExternalOTCServiceCounterExternalOTCOfferBody"
+            }
+          }
+        ],
+        "tags": [
+          "ExternalOTCService"
+        ]
+      }
+    },
+    "/api/v1/otc/external-offers/{bankCode}/{threadId}/withdraw": {
+      "post": {
+        "summary": "WithdrawExternalOTCOffer pulls the thread. Either party can\nwithdraw a thread in 'open' state.",
+        "operationId": "ExternalOTCService_WithdrawExternalOTCOffer",
+        "responses": {
+          "200": {
+            "description": "A successful response.",
+            "schema": {
+              "$ref": "#/definitions/v1ExternalOTCThread"
+            }
+          },
+          "default": {
+            "description": "An unexpected error response.",
+            "schema": {
+              "$ref": "#/definitions/rpcStatus"
+            }
+          }
+        },
+        "parameters": [
+          {
+            "name": "bankCode",
+            "in": "path",
+            "required": true,
+            "type": "string"
+          },
+          {
+            "name": "threadId",
+            "in": "path",
+            "required": true,
+            "type": "string"
+          },
+          {
+            "name": "body",
+            "in": "body",
+            "required": true,
+            "schema": {
+              "$ref": "#/definitions/ExternalOTCServiceWithdrawExternalOTCOfferBody"
+            }
+          }
+        ],
+        "tags": [
+          "ExternalOTCService"
+        ]
+      }
+    },
+    "/api/v1/otc/external-offers/{threadId}": {
+      "get": {
+        "summary": "GetExternalOTCThread returns the thread + every iteration (oldest\nfirst) + the contract if accepted.",
+        "operationId": "ExternalOTCService_GetExternalOTCThread",
+        "responses": {
+          "200": {
+            "description": "A successful response.",
+            "schema": {
+              "$ref": "#/definitions/v1GetExternalOTCThreadResponse"
+            }
+          },
+          "default": {
+            "description": "An unexpected error response.",
+            "schema": {
+              "$ref": "#/definitions/rpcStatus"
+            }
+          }
+        },
+        "parameters": [
+          {
+            "name": "threadId",
+            "in": "path",
+            "required": true,
+            "type": "string"
+          }
+        ],
+        "tags": [
+          "ExternalOTCService"
+        ]
+      }
+    },
     "/api/v1/otc/offers": {
       "get": {
         "summary": "ListOTCThreads drives the \"Aktivne ponude\" page (spec p.69) — every\nthread the caller participates in (as buyer or seller), most-recent\niteration per thread.",
@@ -4185,6 +4552,40 @@
         }
       }
     },
+    "ExternalOTCServiceAcceptExternalOTCOfferBody": {
+      "type": "object"
+    },
+    "ExternalOTCServiceCounterExternalOTCOfferBody": {
+      "type": "object",
+      "properties": {
+        "quantity": {
+          "type": "integer",
+          "format": "int32"
+        },
+        "pricePerUnit": {
+          "type": "string"
+        },
+        "premium": {
+          "type": "string"
+        },
+        "settlementDate": {
+          "type": "string",
+          "format": "date-time"
+        }
+      }
+    },
+    "ExternalOTCServiceExerciseExternalOTCContractBody": {
+      "type": "object",
+      "properties": {
+        "exerciseOpId": {
+          "type": "string",
+          "description": "Optional client-supplied idempotency key for the cross-bank\nexercise. Gateway forwards into the saga's transaction_id."
+        }
+      }
+    },
+    "ExternalOTCServiceWithdrawExternalOTCOfferBody": {
+      "type": "object"
+    },
     "TradingServiceAcceptOTCOfferBody": {
       "type": "object"
     },
@@ -4549,6 +4950,17 @@
             "type": "object",
             "$ref": "#/definitions/protobufAny"
           }
+        }
+      }
+    },
+    "v1AcceptExternalOTCOfferResponse": {
+      "type": "object",
+      "properties": {
+        "thread": {
+          "$ref": "#/definitions/v1ExternalOTCThread"
+        },
+        "contract": {
+          "$ref": "#/definitions/v1ExternalOTCContract"
         }
       }
     },
@@ -5183,6 +5595,57 @@
         }
       }
     },
+    "v1CreateExternalOTCOfferRequest": {
+      "type": "object",
+      "properties": {
+        "remoteBankCode": {
+          "type": "string"
+        },
+        "remoteUserRef": {
+          "type": "string"
+        },
+        "remoteDisplayName": {
+          "type": "string"
+        },
+        "buyerAccountId": {
+          "type": "string"
+        },
+        "sellerHoldingId": {
+          "type": "string"
+        },
+        "securityTicker": {
+          "type": "string"
+        },
+        "securityType": {
+          "$ref": "#/definitions/v1SecurityType"
+        },
+        "currency": {
+          "$ref": "#/definitions/bankaTradingV1Currency"
+        },
+        "quantity": {
+          "type": "integer",
+          "format": "int32"
+        },
+        "pricePerUnit": {
+          "type": "string"
+        },
+        "premium": {
+          "type": "string"
+        },
+        "settlementDate": {
+          "type": "string",
+          "format": "date-time"
+        }
+      }
+    },
+    "v1CreateExternalOTCOfferResponse": {
+      "type": "object",
+      "properties": {
+        "localMirror": {
+          "$ref": "#/definitions/v1ExternalOTCThread"
+        }
+      }
+    },
     "v1CreateFundRequest": {
       "type": "object",
       "properties": {
@@ -5467,6 +5930,14 @@
         }
       }
     },
+    "v1ExerciseExternalOTCContractResponse": {
+      "type": "object",
+      "properties": {
+        "contract": {
+          "$ref": "#/definitions/v1ExternalOTCContract"
+        }
+      }
+    },
     "v1ExerciseOTCContractResponse": {
       "type": "object",
       "properties": {
@@ -5512,6 +5983,305 @@
           "$ref": "#/definitions/bankaTradingV1Currency"
         }
       }
+    },
+    "v1ExternalOTCContract": {
+      "type": "object",
+      "properties": {
+        "id": {
+          "type": "string"
+        },
+        "threadId": {
+          "type": "string"
+        },
+        "direction": {
+          "$ref": "#/definitions/v1ExternalOTCDirection"
+        },
+        "remoteBankCode": {
+          "type": "string"
+        },
+        "remoteThreadId": {
+          "type": "string"
+        },
+        "remoteUserRef": {
+          "type": "string"
+        },
+        "remoteDisplayName": {
+          "type": "string"
+        },
+        "remoteAccountRef": {
+          "type": "string"
+        },
+        "localUserId": {
+          "type": "string"
+        },
+        "localUserKind": {
+          "$ref": "#/definitions/bankaTradingV1UserKind"
+        },
+        "localAccountId": {
+          "type": "string"
+        },
+        "localAccountNumber": {
+          "type": "string"
+        },
+        "localRole": {
+          "$ref": "#/definitions/v1ExternalOTCRole"
+        },
+        "securityId": {
+          "type": "string"
+        },
+        "securityTicker": {
+          "type": "string"
+        },
+        "sellerHoldingId": {
+          "type": "string"
+        },
+        "quantity": {
+          "type": "integer",
+          "format": "int32"
+        },
+        "strikePrice": {
+          "type": "string"
+        },
+        "premiumPaid": {
+          "type": "string"
+        },
+        "currency": {
+          "$ref": "#/definitions/bankaTradingV1Currency"
+        },
+        "settlementDate": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "acceptedBySide": {
+          "$ref": "#/definitions/v1ExternalOTCSide"
+        },
+        "status": {
+          "$ref": "#/definitions/v1ExternalOTCContractStatus"
+        },
+        "premiumOpId": {
+          "type": "string"
+        },
+        "exerciseOpId": {
+          "type": "string"
+        },
+        "exercisedAt": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "createdAt": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "updatedAt": {
+          "type": "string",
+          "format": "date-time"
+        }
+      }
+    },
+    "v1ExternalOTCContractStatus": {
+      "type": "string",
+      "enum": [
+        "EXTERNAL_OTC_CONTRACT_STATUS_UNSPECIFIED",
+        "EXTERNAL_OTC_CONTRACT_STATUS_ACTIVE",
+        "EXTERNAL_OTC_CONTRACT_STATUS_EXERCISED",
+        "EXTERNAL_OTC_CONTRACT_STATUS_EXPIRED",
+        "EXTERNAL_OTC_CONTRACT_STATUS_SETTLING"
+      ],
+      "default": "EXTERNAL_OTC_CONTRACT_STATUS_UNSPECIFIED"
+    },
+    "v1ExternalOTCDirection": {
+      "type": "string",
+      "enum": [
+        "EXTERNAL_OTC_DIRECTION_UNSPECIFIED",
+        "EXTERNAL_OTC_DIRECTION_OUTGOING",
+        "EXTERNAL_OTC_DIRECTION_INCOMING"
+      ],
+      "default": "EXTERNAL_OTC_DIRECTION_UNSPECIFIED",
+      "description": "ExternalOTCDirection encodes who initiated the thread.\n\n - EXTERNAL_OTC_DIRECTION_OUTGOING: OUTGOING — initiated by a user of this bank against a partner\nholding.\n - EXTERNAL_OTC_DIRECTION_INCOMING: INCOMING — partner-initiated against a holding we advertise."
+    },
+    "v1ExternalOTCIteration": {
+      "type": "object",
+      "properties": {
+        "id": {
+          "type": "string"
+        },
+        "threadId": {
+          "type": "string"
+        },
+        "proposedBySide": {
+          "$ref": "#/definitions/v1ExternalOTCSide"
+        },
+        "quantity": {
+          "type": "integer",
+          "format": "int32"
+        },
+        "pricePerUnit": {
+          "type": "string"
+        },
+        "premium": {
+          "type": "string"
+        },
+        "settlementDate": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "createdAt": {
+          "type": "string",
+          "format": "date-time"
+        }
+      }
+    },
+    "v1ExternalOTCRole": {
+      "type": "string",
+      "enum": [
+        "EXTERNAL_OTC_ROLE_UNSPECIFIED",
+        "EXTERNAL_OTC_ROLE_BUYER",
+        "EXTERNAL_OTC_ROLE_SELLER"
+      ],
+      "default": "EXTERNAL_OTC_ROLE_UNSPECIFIED",
+      "description": "ExternalOTCRole says whether the local party is buyer or seller."
+    },
+    "v1ExternalOTCSide": {
+      "type": "string",
+      "enum": [
+        "EXTERNAL_OTC_SIDE_UNSPECIFIED",
+        "EXTERNAL_OTC_SIDE_LOCAL",
+        "EXTERNAL_OTC_SIDE_REMOTE"
+      ],
+      "default": "EXTERNAL_OTC_SIDE_UNSPECIFIED",
+      "description": "ExternalOTCSide identifies which side a thread iteration came\nfrom, scoped to this bank."
+    },
+    "v1ExternalOTCThread": {
+      "type": "object",
+      "properties": {
+        "id": {
+          "type": "string"
+        },
+        "direction": {
+          "$ref": "#/definitions/v1ExternalOTCDirection"
+        },
+        "remoteBankCode": {
+          "type": "string"
+        },
+        "remoteThreadId": {
+          "type": "string"
+        },
+        "remoteUserRef": {
+          "type": "string"
+        },
+        "remoteDisplayName": {
+          "type": "string"
+        },
+        "remoteAccountRef": {
+          "type": "string"
+        },
+        "localUserId": {
+          "type": "string"
+        },
+        "localUserKind": {
+          "$ref": "#/definitions/bankaTradingV1UserKind"
+        },
+        "localAccountId": {
+          "type": "string"
+        },
+        "localAccountNumber": {
+          "type": "string"
+        },
+        "localRole": {
+          "$ref": "#/definitions/v1ExternalOTCRole"
+        },
+        "securityId": {
+          "type": "string"
+        },
+        "securityTicker": {
+          "type": "string"
+        },
+        "sellerHoldingId": {
+          "type": "string"
+        },
+        "quantity": {
+          "type": "integer",
+          "format": "int32"
+        },
+        "pricePerUnit": {
+          "type": "string"
+        },
+        "premium": {
+          "type": "string"
+        },
+        "currency": {
+          "$ref": "#/definitions/bankaTradingV1Currency"
+        },
+        "settlementDate": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "modifiedBySide": {
+          "$ref": "#/definitions/v1ExternalOTCSide"
+        },
+        "status": {
+          "$ref": "#/definitions/v1ExternalOTCThreadStatus"
+        },
+        "createdAt": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "updatedAt": {
+          "type": "string",
+          "format": "date-time"
+        }
+      }
+    },
+    "v1ExternalOTCThreadStatus": {
+      "type": "string",
+      "enum": [
+        "EXTERNAL_OTC_THREAD_STATUS_UNSPECIFIED",
+        "EXTERNAL_OTC_THREAD_STATUS_OPEN",
+        "EXTERNAL_OTC_THREAD_STATUS_SUPERSEDED",
+        "EXTERNAL_OTC_THREAD_STATUS_ACCEPTED",
+        "EXTERNAL_OTC_THREAD_STATUS_WITHDRAWN",
+        "EXTERNAL_OTC_THREAD_STATUS_EXPIRED",
+        "EXTERNAL_OTC_THREAD_STATUS_REJECTED"
+      ],
+      "default": "EXTERNAL_OTC_THREAD_STATUS_UNSPECIFIED",
+      "description": "ExternalOTCThreadStatus mirrors the local OTCStatus enum but kept\nseparate so the two domains can evolve independently.\n\n - EXTERNAL_OTC_THREAD_STATUS_REJECTED: REJECTED — partner returned a terminal error during a write;\nwe mark the thread terminal so the user sees a final state."
+    },
+    "v1ExternalPublicHolding": {
+      "type": "object",
+      "properties": {
+        "bankCode": {
+          "type": "string"
+        },
+        "sellerUserRef": {
+          "type": "string"
+        },
+        "sellerDisplay": {
+          "type": "string"
+        },
+        "sellerHoldingId": {
+          "type": "string"
+        },
+        "securityTicker": {
+          "type": "string"
+        },
+        "securityType": {
+          "$ref": "#/definitions/v1SecurityType"
+        },
+        "currency": {
+          "$ref": "#/definitions/bankaTradingV1Currency"
+        },
+        "quantity": {
+          "type": "integer",
+          "format": "int32"
+        },
+        "askPrice": {
+          "type": "string"
+        },
+        "premium": {
+          "type": "string"
+        }
+      },
+      "description": "ExternalPublicHolding is one row in the discovery aggregation —\nflattened across partner banks."
     },
     "v1Fund": {
       "type": "object",
@@ -5784,6 +6554,24 @@
         "totalRsd": {
           "type": "string",
           "description": "Σ profit_rsd across every returned bucket (the last bucket's\ncumulative_rsd, or \"0\" when the window is empty)."
+        }
+      }
+    },
+    "v1GetExternalOTCThreadResponse": {
+      "type": "object",
+      "properties": {
+        "thread": {
+          "$ref": "#/definitions/v1ExternalOTCThread"
+        },
+        "iterations": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "$ref": "#/definitions/v1ExternalOTCIteration"
+          }
+        },
+        "contract": {
+          "$ref": "#/definitions/v1ExternalOTCContract"
         }
       }
     },
@@ -6108,6 +6896,42 @@
           "items": {
             "type": "object",
             "$ref": "#/definitions/v1Exchange"
+          }
+        }
+      }
+    },
+    "v1ListExternalOTCContractsResponse": {
+      "type": "object",
+      "properties": {
+        "contracts": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "$ref": "#/definitions/v1ExternalOTCContract"
+          }
+        }
+      }
+    },
+    "v1ListExternalOTCThreadsResponse": {
+      "type": "object",
+      "properties": {
+        "threads": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "$ref": "#/definitions/v1ExternalOTCThread"
+          }
+        }
+      }
+    },
+    "v1ListExternalPublicHoldingsResponse": {
+      "type": "object",
+      "properties": {
+        "items": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "$ref": "#/definitions/v1ExternalPublicHolding"
           }
         }
       }
