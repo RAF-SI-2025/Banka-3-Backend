@@ -24,6 +24,9 @@ type Set struct {
 	// ExternalOTC shares TradingConn — same binary, second service
 	// (celina 5).
 	ExternalOTC tradingpb.ExternalOTCServiceClient
+	// InterbankProtocol shares BankConn — same binary, second service
+	// (celina 5 2PC primitive).
+	InterbankProtocol bankpb.InterbankProtocolServiceClient
 
 	UserConn     *grpc.ClientConn
 	BankConn     *grpc.ClientConn
@@ -53,6 +56,7 @@ func Dial(addrs Addrs) (*Set, error) {
 		}
 		s.BankConn = c
 		s.Bank = bankpb.NewBankServiceClient(c)
+		s.InterbankProtocol = bankpb.NewInterbankProtocolServiceClient(c)
 		s.conns = append(s.conns, c)
 	}
 

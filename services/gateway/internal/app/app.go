@@ -118,10 +118,18 @@ func Run() error {
 	// Celina 5 — wire the partner-facing inbound surface when an API key
 	// is set + the trading service is reachable. Both must be set;
 	// otherwise the /bank/api/v1/otc/... routes simply aren't registered.
-	if apiKey := config.String("INTERBANK_API_KEY", ""); apiKey != "" && cs.ExternalOTC != nil {
-		r.PartnerOTC = &router.PartnerOTC{
-			APIKey:     apiKey,
-			TradingOTC: cs.ExternalOTC,
+	if apiKey := config.String("INTERBANK_API_KEY", ""); apiKey != "" {
+		if cs.ExternalOTC != nil {
+			r.PartnerOTC = &router.PartnerOTC{
+				APIKey:     apiKey,
+				TradingOTC: cs.ExternalOTC,
+			}
+		}
+		if cs.InterbankProtocol != nil {
+			r.PartnerPayments = &router.PartnerPayments{
+				APIKey:    apiKey,
+				Interbank: cs.InterbankProtocol,
+			}
 		}
 	}
 

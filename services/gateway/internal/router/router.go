@@ -32,6 +32,9 @@ type Router struct {
 	// /bank/api/v1/otc/... Nil when INTERBANK_API_KEY isn't configured;
 	// the routes simply aren't registered.
 	PartnerOTC *PartnerOTC
+	// PartnerPayments enables the celina-5 inbound 2PC surface at
+	// /bank/api/v1/interbank/transactions/... Same nil-skip behaviour.
+	PartnerPayments *PartnerPayments
 }
 
 // Mount returns the gateway's top-level handler. Public auth endpoints
@@ -91,6 +94,7 @@ func (r *Router) Mount(ctx context.Context, gwMux *runtime.ServeMux, registerGW 
 	// Celina 5 — partner-facing inbound REST. Lives under /bank/, not
 	// /api/, and is auth'd by X-Api-Key inside the handlers (no JWT).
 	r.PartnerOTC.MountPartnerOTC(mux)
+	r.PartnerPayments.MountPartnerPayments(mux)
 
 	// QA-only clock-offset endpoint (spec edge: S7 23:59 daily reset,
 	// monthly tax, loan installments — all driven by cron schedules
