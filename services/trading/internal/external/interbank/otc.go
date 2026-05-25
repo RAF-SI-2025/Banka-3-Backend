@@ -113,9 +113,7 @@ func (c *Client) discoverOne(ctx context.Context, bankCode, tickerFilter string)
 	case ProtocolNative:
 		return c.discoverNative(ctx, bankCode, tickerFilter)
 	case ProtocolBanka2:
-		// Banka2 discovery is well-defined (main implemented it). Wiring
-		// it through here is BE-4c; for now we skip with a logged warning.
-		return nil, &errUnsupportedProtocol{bankCode: bankCode, protocol: ProtocolBanka2}
+		return c.discoverBanka2(ctx, bankCode, tickerFilter)
 	default:
 		return nil, &errUnsupportedProtocol{bankCode: bankCode, protocol: ProtocolUnknown}
 	}
@@ -165,7 +163,7 @@ func (c *Client) CreateOffer(ctx context.Context, in service.PartnerCreateOfferI
 	case ProtocolNative:
 		return c.createOfferNative(ctx, in)
 	case ProtocolBanka2:
-		return nil, &errUnsupportedProtocol{bankCode: in.RemoteBankCode, protocol: ProtocolBanka2}
+		return c.createOfferBanka2(ctx, in)
 	default:
 		if c.baseURL(in.RemoteBankCode) == "" {
 			return nil, &errUnknownBank{bankCode: in.RemoteBankCode}
@@ -228,7 +226,7 @@ func (c *Client) action(ctx context.Context, in service.PartnerActionInput, verb
 	case ProtocolNative:
 		return c.actionNative(ctx, in, verb)
 	case ProtocolBanka2:
-		return &errUnsupportedProtocol{bankCode: in.RemoteBankCode, protocol: ProtocolBanka2}
+		return c.actionBanka2(ctx, in, verb)
 	default:
 		if c.baseURL(in.RemoteBankCode) == "" {
 			return &errUnknownBank{bankCode: in.RemoteBankCode}
