@@ -16,6 +16,7 @@ import (
 	"github.com/RAF-SI-2025/Banka-3-Backend/pkg/config"
 	pkgidem "github.com/RAF-SI-2025/Banka-3-Backend/pkg/idempotency"
 	"github.com/RAF-SI-2025/Banka-3-Backend/pkg/logger"
+	"github.com/RAF-SI-2025/Banka-3-Backend/pkg/observability"
 	"github.com/RAF-SI-2025/Banka-3-Backend/pkg/probes"
 	pkgredis "github.com/RAF-SI-2025/Banka-3-Backend/pkg/redis"
 	"github.com/RAF-SI-2025/Banka-3-Backend/pkg/sessionversion"
@@ -207,6 +208,7 @@ func Run() error {
 
 	probeSrv := probes.New(fmt.Sprintf(":%d", config.Int("PROBE_PORT", 8081)))
 	probeSrv.Register("redis", func(ctx context.Context) error { return pkgredis.Ping(ctx, rdb) })
+	probeSrv.MountMetrics(observability.New("gateway").MetricsHandler())
 
 	httpAddr := fmt.Sprintf(":%d", config.Int("HTTP_PORT", 8080))
 	httpSrv := &http.Server{

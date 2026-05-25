@@ -1,0 +1,46 @@
+global:
+  scrape_interval: 15s
+  evaluation_interval: 15s
+
+rule_files:
+  - /etc/prometheus/alerts.yml
+
+alerting:
+  alertmanagers:
+    - static_configs:
+        - targets:
+            - alertmanager:9093
+
+scrape_configs:
+  # Each service exposes /metrics on its in-cluster probe HTTP port
+  # (8081). Container-prefixed names match the rewrite's c5 dev-stack
+  # naming (banka-* default, banka-partner-* for the partner overlay).
+  - job_name: gateway
+    metrics_path: /metrics
+    static_configs:
+      - targets: ["banka-gateway-1:8081"]
+
+  - job_name: user
+    metrics_path: /metrics
+    static_configs:
+      - targets: ["banka-user-1:8081"]
+
+  - job_name: notification
+    metrics_path: /metrics
+    static_configs:
+      - targets: ["banka-notification-1:8081"]
+
+  - job_name: bank
+    metrics_path: /metrics
+    static_configs:
+      - targets: ["banka-bank-1:8081"]
+
+  - job_name: exchange
+    metrics_path: /metrics
+    static_configs:
+      - targets: ["banka-exchange-1:8081"]
+
+  - job_name: trading
+    metrics_path: /metrics
+    static_configs:
+      - targets: ["banka-trading-1:8081"]

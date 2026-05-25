@@ -9,7 +9,15 @@ require (
 	google.golang.org/grpc v1.80.0
 )
 
-require github.com/grpc-ecosystem/grpc-gateway/v2 v2.29.0 // indirect
+require (
+	github.com/beorn7/perks v1.0.1 // indirect
+	github.com/grpc-ecosystem/grpc-gateway/v2 v2.29.0 // indirect
+	github.com/klauspost/compress v1.17.9 // indirect
+	github.com/munnerz/goautoneg v0.0.0-20191010083416-a7dc8b61c822 // indirect
+	github.com/prometheus/client_model v0.6.1 // indirect
+	github.com/prometheus/common v0.55.0 // indirect
+	github.com/prometheus/procfs v0.15.1 // indirect
+)
 
 require (
 	buf.build/gen/go/bufbuild/protovalidate/protocolbuffers/go v1.36.11-20260415201107-50325440f8f2.1 // indirect
@@ -25,6 +33,7 @@ require (
 	github.com/jackc/pgservicefile v0.0.0-20240606120523-5a60cdf6a761 // indirect
 	github.com/jackc/pgx/v5 v5.7.1
 	github.com/jackc/puddle/v2 v2.2.2 // indirect
+	github.com/prometheus/client_golang v1.20.5 // indirect
 	github.com/redis/go-redis/v9 v9.7.0 // indirect
 	golang.org/x/crypto v0.47.0 // indirect
 	golang.org/x/exp v0.0.0-20250813145105-42675adae3e6 // indirect

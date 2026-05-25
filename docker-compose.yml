@@ -251,6 +251,67 @@ services:
       - "${MOCK_PARTNER_PORT:-9099}:9099"
     networks: [banka]
 
+  # ---------------------------------------------------------------------
+  # Observability — Prometheus + Grafana + Alertmanager + Discord
+  # notifier. Profile-gated so `make up` skips them; bring up with
+  # `make observability` (or `docker compose --profile observability up`).
+  # Ported from main branch's BonusMLAObservability (PR #292) and
+  # adapted to the rewrite's container naming.
+  # ---------------------------------------------------------------------
+  prometheus:
+    profiles: ["observability"]
+    image: prom/prometheus:v3.7.3
+    ports:
+      - "${PROMETHEUS_PORT:-9090}:9090"
+    volumes:
+      - ./monitoring/prometheus/prometheus.yml:/etc/prometheus/prometheus.yml:ro
+      - ./monitoring/prometheus/alerts.yml:/etc/prometheus/alerts.yml:ro
+    command:
+      - --config.file=/etc/prometheus/prometheus.yml
+      - --storage.tsdb.path=/prometheus
+      - --web.enable-lifecycle
+    networks: [banka]
+
+  grafana:
+    profiles: ["observability"]
+    image: grafana/grafana:12.2.0
+    ports:
+      - "${GRAFANA_PORT:-3001}:3000"
+    environment:
+      GF_SECURITY_ADMIN_USER: "${GRAFANA_ADMIN_USER:-admin}"
+      GF_SECURITY_ADMIN_PASSWORD: "${GRAFANA_ADMIN_PASSWORD:-admin}"
+    volumes:
+      - ./monitoring/grafana/provisioning/datasources:/etc/grafana/provisioning/datasources:ro
+      - ./monitoring/grafana/provisioning/dashboards:/etc/grafana/provisioning/dashboards:ro
+      - ./monitoring/grafana/dashboards:/var/lib/grafana/dashboards:ro
+    depends_on:
+      - prometheus
+    networks: [banka]
+
+  alertmanager:
+    profiles: ["observability"]
+    image: prom/alertmanager:v0.28.1
+    ports:
+      - "${ALERTMANAGER_PORT:-9093}:9093"
+    volumes:
+      - ./monitoring/alertmanager/alertmanager.yml:/etc/alertmanager/alertmanager.yml:ro
+    command:
+      - --config.file=/etc/alertmanager/alertmanager.yml
+      - --storage.path=/alertmanager
+    depends_on:
+      - discord_notifier
+    networks: [banka]
+
+  discord_notifier:
+    profiles: ["observability"]
+    build:
+      context: .
+      dockerfile: monitoring/discord-notifier/Dockerfile
+    environment:
+      DISCORD_WEBHOOK_URL: "${DISCORD_WEBHOOK_URL:-}"
+      PORT: "8080"
+    networks: [banka]
+
 volumes:
   pgdata:
   redisdata:

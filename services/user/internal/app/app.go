@@ -11,6 +11,7 @@ import (
 	"github.com/RAF-SI-2025/Banka-3-Backend/pkg/email"
 	"github.com/RAF-SI-2025/Banka-3-Backend/pkg/grpcserver"
 	"github.com/RAF-SI-2025/Banka-3-Backend/pkg/logger"
+	"github.com/RAF-SI-2025/Banka-3-Backend/pkg/observability"
 	"github.com/RAF-SI-2025/Banka-3-Backend/pkg/postgres"
 	"github.com/RAF-SI-2025/Banka-3-Backend/pkg/probes"
 	pkgredis "github.com/RAF-SI-2025/Banka-3-Backend/pkg/redis"
@@ -81,6 +82,7 @@ func Run() error {
 	probeSrv := probes.New(fmt.Sprintf(":%d", config.Int("PROBE_PORT", 8081)))
 	probeSrv.Register("postgres", func(ctx context.Context) error { return postgres.Ping(ctx, pool) })
 	probeSrv.Register("redis", func(ctx context.Context) error { return pkgredis.Ping(ctx, rdb) })
+	probeSrv.MountMetrics(observability.New("user").MetricsHandler())
 
 	grpcAddr := fmt.Sprintf(":%d", config.Int("GRPC_PORT", 50051))
 
