@@ -219,15 +219,34 @@ services:
       OPTIONS_RISK_FREE_RATE: "${OPTIONS_RISK_FREE_RATE:-0.05}"
       OPTIONS_VOLATILITY: "${OPTIONS_VOLATILITY:-0.30}"
       SAGA_DEBUG_FAULT_INJECTION: "${SAGA_DEBUG_FAULT_INJECTION:-false}"
-      # Celina 5 — outbound cross-bank OTC. Empty INTERBANK_ROUTES
-      # leaves the PartnerOTC client unconfigured (service nil-checks).
+      # Celina 5 — outbound cross-bank OTC. Defaults to the bundled
+      # mock-partner so `make up` runs a self-contained two-bank dev
+      # stack out of the box; override INTERBANK_ROUTES to talk to a
+      # real partner instead.
       BANK_ROUTING_NUMBER: "${BANK_ROUTING_NUMBER:-333}"
-      INTERBANK_ROUTES: "${INTERBANK_ROUTES:-}"
+      INTERBANK_ROUTES: "${INTERBANK_ROUTES:-999:http://mock-partner:9099}"
       INTERBANK_API_KEY: "${INTERBANK_API_KEY:-dev-outbound-banka3}"
     ports:
       - "${TRADING_GRPC_PORT:-50053}:50051"
       - "${TRADING_PROBE_PORT:-8083}:8081"
     depends_on: *app-deps
+    networks: [banka]
+
+  # Celina 5 — bundled mock partner bank for the dev stack. Serves the
+  # native protocol on /bank/api/v1/otc/... so trading can demo the
+  # cross-bank flow without a second real instance. Authenticates with
+  # the same INTERBANK_API_KEY as our gateway so both directions agree.
+  mock-partner:
+    <<: *service-defaults
+    build:
+      context: .
+      dockerfile: tools/mock-partner/Dockerfile
+    environment:
+      PORT: "9099"
+      BANK_ROUTING_NUMBER: "999"
+      INTERBANK_API_KEY: "${INTERBANK_API_KEY:-dev-outbound-banka3}"
+    ports:
+      - "${MOCK_PARTNER_PORT:-9099}:9099"
     networks: [banka]
 
 volumes:
