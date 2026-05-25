@@ -46,14 +46,68 @@ services:
       POSTGRES_USER: ${POSTGRES_USER}
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
       POSTGRES_DB: ${POSTGRES_DB}
+      POSTGRES_REPLICATION_USER: "${POSTGRES_REPLICATION_USER:-replicator}"
+      POSTGRES_REPLICATION_PASSWORD: "${POSTGRES_REPLICATION_PASSWORD:-replicator_pass}"
+      POSTGRES_REPLICATION_SLOT: "${POSTGRES_REPLICATION_SLOT:-banka_replica_slot}"
     ports: ["${POSTGRES_PORT:-5432}:5432"]
     volumes:
       - pgdata:/var/lib/postgresql
+      # Replication setup script — registers the replicator role +
+      # physical replication slot when /docker-entrypoint-initdb.d
+      # fires on first boot. Idempotent; the bootstrap script on the
+      # replica side reruns it via the primary connection if needed.
+      # BonusPartitionReplication / PR #286.
+      - ./docker/postgres/init:/docker-entrypoint-initdb.d:ro
+    command:
+      - "postgres"
+      - "-c"
+      - "wal_level=replica"
+      - "-c"
+      - "max_wal_senders=5"
+      - "-c"
+      - "max_replication_slots=5"
+      - "-c"
+      - "hot_standby=on"
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER} -d ${POSTGRES_DB}"]
       interval: 2s
       timeout: 5s
       retries: 10
+    networks: [banka]
+
+  # postgres_replica is profile-gated — `make replica` brings it up
+  # and bootstraps it from the primary. Apps continue to talk to the
+  # primary (DATABASE_URL) by default; routing reads to the replica
+  # is handled by the read-replica-router bonus (#287).
+  postgres_replica:
+    profiles: ["replica"]
+    image: postgres:18-alpine
+    environment:
+      PGUSER: "${POSTGRES_USER}"
+      PGDATA: /var/lib/postgresql/18/docker
+      PRIMARY_HOST: banka-postgres-1
+      PRIMARY_PORT: "5432"
+      PRIMARY_DB: "${POSTGRES_DB}"
+      PRIMARY_USER: "${POSTGRES_USER}"
+      PRIMARY_PASSWORD: "${POSTGRES_PASSWORD}"
+      REPLICATION_USER: "${POSTGRES_REPLICATION_USER:-replicator}"
+      REPLICATION_PASSWORD: "${POSTGRES_REPLICATION_PASSWORD:-replicator_pass}"
+      REPLICATION_SLOT: "${POSTGRES_REPLICATION_SLOT:-banka_replica_slot}"
+    ports:
+      - "${POSTGRES_REPLICA_PORT:-5433}:5432"
+    volumes:
+      - pgreplicadata:/var/lib/postgresql
+      - ./docker/postgres/replica/bootstrap-replica.sh:/usr/local/bin/bootstrap-replica.sh:ro
+    entrypoint: ["sh", "/usr/local/bin/bootstrap-replica.sh"]
+    depends_on:
+      postgres:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER} -d ${POSTGRES_DB} && psql -U ${POSTGRES_USER} -d ${POSTGRES_DB} -tAc 'SELECT pg_is_in_recovery()' | grep -q 't'"]
+      interval: 5s
+      timeout: 5s
+      retries: 20
+      start_period: 30s
     networks: [banka]
 
   redis:
@@ -337,6 +391,7 @@ services:
 
 volumes:
   pgdata:
+  pgreplicadata:
   redisdata:
   tools-go-mod:
   tools-go-build:

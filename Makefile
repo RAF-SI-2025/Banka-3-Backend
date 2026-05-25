@@ -131,6 +131,18 @@ interbank-up: ## Bring up both stacks in cross-bank wiring mode
 	$(MAKE) seed-partner
 	$(COMPOSE) restart trading gateway
 
+.PHONY: replica
+replica: ## Bring up the Postgres read replica (BonusPartitionReplication). Bootstraps from the primary on first run.
+	$(COMPOSE) --profile replica up -d postgres_replica
+	@echo ""
+	@echo "  Replica host:  banka-postgres_replica-1:5432 (inside Docker)"
+	@echo "  Replica port:  $${POSTGRES_REPLICA_PORT:-5433} (on the host)"
+	@echo "  Validate:      docker exec banka-postgres_replica-1 psql -U $${POSTGRES_USER:-banka} -d $${POSTGRES_DB:-banka} -c 'SELECT pg_is_in_recovery();'"
+
+.PHONY: replica-down
+replica-down: ## Stop the read replica (keeps the volume)
+	$(COMPOSE) --profile replica stop postgres_replica
+
 .PHONY: influxdb
 influxdb: ## Bring up the InfluxDB market-data side-channel (BonusInfluxDB). Trading service mirrors daily prices when INFLUX_* env vars are set.
 	$(COMPOSE) --profile influxdb up -d influxdb
