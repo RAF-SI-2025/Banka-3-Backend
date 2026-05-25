@@ -13,8 +13,8 @@ x-service-defaults: &service-defaults
     dockerfile: docker/Dockerfile
   restart: on-failure
   environment: &service-env
-    DATABASE_URL: "postgres://${POSTGRES_USER}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB}?sslmode=disable"
-    REDIS_ADDR: "redis:6379"
+    DATABASE_URL: "postgres://${POSTGRES_USER}:${POSTGRES_PASSWORD}@banka-postgres-1:5432/${POSTGRES_DB}?sslmode=disable"
+    REDIS_ADDR: "banka-redis-1:6379"
     REDIS_PASSWORD: "${REDIS_PASSWORD}"
     LOG_LEVEL: "${LOG_LEVEL:-info}"
     LOG_FORMAT: "${LOG_FORMAT:-json}"
@@ -80,7 +80,7 @@ services:
     volumes:
       - .:/src
     environment:
-      DATABASE_URL: "postgres://${POSTGRES_USER}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB}?sslmode=disable"
+      DATABASE_URL: "postgres://${POSTGRES_USER}:${POSTGRES_PASSWORD}@banka-postgres-1:5432/${POSTGRES_DB}?sslmode=disable"
     depends_on:
       postgres: { condition: service_healthy }
     networks: [banka]
@@ -119,12 +119,12 @@ services:
     environment:
       <<: *service-env
       JWT_SIGNING_KEY: "${JWT_SIGNING_KEY}"
-      NOTIFICATION_GRPC_ADDR: "${NOTIFICATION_GRPC_ADDR:-notification:50051}"
+      NOTIFICATION_GRPC_ADDR: "${NOTIFICATION_GRPC_ADDR:-banka-notification-1:50051}"
       # c4-PR4 supervisor-demotion fund cascade: when a supervisor loses
       # funds.manage.supervisor, user-svc calls trading-svc to reassign
       # their active funds to the acting admin. Without this env the
       # cascade is silently disabled and S46 fails.
-      TRADING_GRPC_ADDR: "${TRADING_GRPC_ADDR:-trading:50051}"
+      TRADING_GRPC_ADDR: "${TRADING_GRPC_ADDR:-banka-trading-1:50051}"
     ports:
       - "${USER_GRPC_PORT:-50051}:50051"
       - "${USER_PROBE_PORT:-8081}:8081"
@@ -142,11 +142,11 @@ services:
       <<: *service-env
       HTTP_PORT: "8080"
       JWT_SIGNING_KEY: "${JWT_SIGNING_KEY}"
-      USER_GRPC_ADDR: "${USER_GRPC_ADDR:-user:50051}"
-      BANK_GRPC_ADDR: "${BANK_GRPC_ADDR:-bank:50051}"
-      TRADING_GRPC_ADDR: "${TRADING_GRPC_ADDR:-trading:50051}"
-      EXCHANGE_GRPC_ADDR: "${EXCHANGE_GRPC_ADDR:-exchange:50051}"
-      NOTIFICATION_GRPC_ADDR: "${NOTIFICATION_GRPC_ADDR:-notification:50051}"
+      USER_GRPC_ADDR: "${USER_GRPC_ADDR:-banka-user-1:50051}"
+      BANK_GRPC_ADDR: "${BANK_GRPC_ADDR:-banka-bank-1:50051}"
+      TRADING_GRPC_ADDR: "${TRADING_GRPC_ADDR:-banka-trading-1:50051}"
+      EXCHANGE_GRPC_ADDR: "${EXCHANGE_GRPC_ADDR:-banka-exchange-1:50051}"
+      NOTIFICATION_GRPC_ADDR: "${NOTIFICATION_GRPC_ADDR:-banka-notification-1:50051}"
       # Celina 5 — inbound partner REST routes are gated by this key.
       INTERBANK_API_KEY: "${INTERBANK_API_KEY:-dev-outbound-banka3}"
     ports:
@@ -163,9 +163,9 @@ services:
         SERVICE: bank
     environment:
       <<: *service-env
-      EXCHANGE_GRPC_ADDR: "${EXCHANGE_GRPC_ADDR:-exchange:50051}"
-      NOTIFICATION_GRPC_ADDR: "${NOTIFICATION_GRPC_ADDR:-notification:50051}"
-      USER_GRPC_ADDR: "${USER_GRPC_ADDR:-user:50051}"
+      EXCHANGE_GRPC_ADDR: "${EXCHANGE_GRPC_ADDR:-banka-exchange-1:50051}"
+      NOTIFICATION_GRPC_ADDR: "${NOTIFICATION_GRPC_ADDR:-banka-notification-1:50051}"
+      USER_GRPC_ADDR: "${USER_GRPC_ADDR:-banka-user-1:50051}"
     ports:
       - "${BANK_GRPC_PORT:-50052}:50051"
       - "${BANK_PROBE_PORT:-8082}:8081"
@@ -207,10 +207,10 @@ services:
         SERVICE: trading
     environment:
       <<: *service-env
-      BANK_GRPC_ADDR: "${BANK_GRPC_ADDR:-bank:50051}"
-      EXCHANGE_GRPC_ADDR: "${EXCHANGE_GRPC_ADDR:-exchange:50051}"
-      NOTIFICATION_GRPC_ADDR: "${NOTIFICATION_GRPC_ADDR:-notification:50051}"
-      USER_GRPC_ADDR: "${USER_GRPC_ADDR:-user:50051}"
+      BANK_GRPC_ADDR: "${BANK_GRPC_ADDR:-banka-bank-1:50051}"
+      EXCHANGE_GRPC_ADDR: "${EXCHANGE_GRPC_ADDR:-banka-exchange-1:50051}"
+      NOTIFICATION_GRPC_ADDR: "${NOTIFICATION_GRPC_ADDR:-banka-notification-1:50051}"
+      USER_GRPC_ADDR: "${USER_GRPC_ADDR:-banka-user-1:50051}"
       ALPHAVANTAGE_API_KEY: "${ALPHAVANTAGE_API_KEY:-}"
       MARKET_DATA_REFRESH_INTERVAL: "${MARKET_DATA_REFRESH_INTERVAL:-6h}"
       MARKET_DATA_PAUSE: "${MARKET_DATA_PAUSE:-13s}"

@@ -31,8 +31,8 @@ x-service-defaults: &service-defaults
     dockerfile: docker/Dockerfile
   restart: on-failure
   environment: &service-env
-    DATABASE_URL: "postgres://banka:banka@postgres:5432/banka?sslmode=disable"
-    REDIS_ADDR: "redis:6379"
+    DATABASE_URL: "postgres://banka:banka@banka-partner-postgres-1:5432/banka?sslmode=disable"
+    REDIS_ADDR: "banka-partner-redis-1:6379"
     REDIS_PASSWORD: "${REDIS_PASSWORD:-redis-dev}"
     LOG_LEVEL: "${LOG_LEVEL:-info}"
     LOG_FORMAT: "${LOG_FORMAT:-json}"
@@ -94,7 +94,7 @@ services:
     volumes:
       - .:/src
     environment:
-      DATABASE_URL: "postgres://banka:banka@postgres:5432/banka?sslmode=disable"
+      DATABASE_URL: "postgres://banka:banka@banka-partner-postgres-1:5432/banka?sslmode=disable"
     command: ["bash", "scripts/db/migrate.sh", "up"]
     depends_on:
       postgres: { condition: service_healthy }
@@ -110,8 +110,8 @@ services:
         SERVICE: user
     environment:
       <<: *service-env
-      NOTIFICATION_GRPC_ADDR: "notification:50051"
-      TRADING_GRPC_ADDR: "trading:50051"
+      NOTIFICATION_GRPC_ADDR: "banka-partner-notification-1:50051"
+      TRADING_GRPC_ADDR: "banka-partner-trading-1:50051"
     ports:
       - "${PARTNER_USER_PROBE_PORT:-8181}:8081"
     depends_on: *app-deps
@@ -138,9 +138,9 @@ services:
         SERVICE: bank
     environment:
       <<: *service-env
-      EXCHANGE_GRPC_ADDR: "exchange:50051"
-      NOTIFICATION_GRPC_ADDR: "notification:50051"
-      USER_GRPC_ADDR: "user:50051"
+      EXCHANGE_GRPC_ADDR: "banka-partner-exchange-1:50051"
+      NOTIFICATION_GRPC_ADDR: "banka-partner-notification-1:50051"
+      USER_GRPC_ADDR: "banka-partner-user-1:50051"
     ports:
       - "${PARTNER_BANK_PROBE_PORT:-8182}:8081"
     depends_on: *app-deps
@@ -169,10 +169,10 @@ services:
         SERVICE: trading
     environment:
       <<: *service-env
-      BANK_GRPC_ADDR: "bank:50051"
-      EXCHANGE_GRPC_ADDR: "exchange:50051"
-      NOTIFICATION_GRPC_ADDR: "notification:50051"
-      USER_GRPC_ADDR: "user:50051"
+      BANK_GRPC_ADDR: "banka-partner-bank-1:50051"
+      EXCHANGE_GRPC_ADDR: "banka-partner-exchange-1:50051"
+      NOTIFICATION_GRPC_ADDR: "banka-partner-notification-1:50051"
+      USER_GRPC_ADDR: "banka-partner-user-1:50051"
     ports:
       - "${PARTNER_TRADING_PROBE_PORT:-8183}:8081"
     depends_on: *app-deps
@@ -188,11 +188,11 @@ services:
     environment:
       <<: *service-env
       HTTP_PORT: "8080"
-      USER_GRPC_ADDR: "user:50051"
-      BANK_GRPC_ADDR: "bank:50051"
-      TRADING_GRPC_ADDR: "trading:50051"
-      EXCHANGE_GRPC_ADDR: "exchange:50051"
-      NOTIFICATION_GRPC_ADDR: "notification:50051"
+      USER_GRPC_ADDR: "banka-partner-user-1:50051"
+      BANK_GRPC_ADDR: "banka-partner-bank-1:50051"
+      TRADING_GRPC_ADDR: "banka-partner-trading-1:50051"
+      EXCHANGE_GRPC_ADDR: "banka-partner-exchange-1:50051"
+      NOTIFICATION_GRPC_ADDR: "banka-partner-notification-1:50051"
     ports:
       - "${PARTNER_GATEWAY_HTTP_PORT:-8090}:8080"
       - "${PARTNER_GATEWAY_PROBE_PORT:-8186}:8081"
