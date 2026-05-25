@@ -326,7 +326,7 @@ const externalOTCContractCols = `
     security_ticker, seller_holding_ref,
     quantity, strike_price::text, premium_paid::text, currency, settlement_date,
     accepted_by_side, status,
-    premium_op_id::text,
+    coalesce(premium_op_id::text, ''),
     coalesce(exercise_op_id::text, ''),
     exercised_at, created_at, updated_at`
 
@@ -382,7 +382,7 @@ func (s *Store) InsertExternalOTCContract(ctx context.Context, tx pgx.Tx, c *dom
             $11, $12,
             nullif($13, '')::uuid, $14, $15,
             $16, $17::numeric, $18::numeric, $19, $20,
-            $21, $22, $23
+            $21, $22, nullif($23, '')::uuid
         )
         on conflict (thread_id) do update
             set updated_at = "trading".external_otc_contracts.updated_at

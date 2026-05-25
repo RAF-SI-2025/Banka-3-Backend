@@ -27,6 +27,7 @@ import (
 	"github.com/RAF-SI-2025/Banka-3-Backend/pkg/money"
 	"github.com/RAF-SI-2025/Banka-3-Backend/services/trading/internal/domain"
 	"github.com/RAF-SI-2025/Banka-3-Backend/services/trading/internal/store"
+	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5"
 )
 
@@ -676,14 +677,73 @@ func (s *Service) ReceiveExternalOTCWithdraw(ctx context.Context, in ReceiveExte
 	return s.setRemoteThreadStatus(ctx, in.SenderBankCode, in.SenderThreadID, domain.ExternalOTCThreadWithdrawn)
 }
 
-// ReceiveExternalOTCAccept marks the local mirror as accepted and
-// kicks off the local-side premium leg (BE-5 — until then, just
-// records the status flip).
+// ReceiveExternalOTCAccept handles a partner-initiated accept on an
+// incoming thread (we are the seller). Flips the thread to 'accepted'
+// AND mints the local contract row so "Sklopljeni eksterni ugovori"
+// renders immediately. premium_op_id is left NULL — the partner
+// separately drives the cross-bank premium 2PC against our bank, and
+// the eventual op_id can be stamped later via SetExternalOTCContractPremiumOp
+// (BE-7c). Idempotent: replays return the existing contract.
 func (s *Service) ReceiveExternalOTCAccept(ctx context.Context, in ReceiveExternalOTCAction) (*domain.ExternalOTCThread, error) {
-	// Contract minting + premium leg arrive in BE-5/BE-7. For now we
-	// flip the thread state so the FE can render the partner-accept
-	// without errors.
-	return s.setRemoteThreadStatus(ctx, in.SenderBankCode, in.SenderThreadID, domain.ExternalOTCThreadAccepted)
+	var live *domain.ExternalOTCThread
+	if err := s.Store.ExecuteAtomic(ctx, func(tx pgx.Tx) error {
+		t, err := s.Store.GetExternalOTCThreadByRemote(ctx, tx, in.SenderBankCode, in.SenderThreadID)
+		if err != nil {
+			return err
+		}
+		// Only an incoming thread can be partner-accepted. (If they're
+		// accepting a thread we initiated, the partner_otc.go inbound
+		// route should never have routed it here.)
+		if t.Direction != domain.ExternalOTCIncoming {
+			return apperr.FailedPrecondition("partner može prihvatiti samo dolaznu nit")
+		}
+		if t.Status == domain.ExternalOTCThreadAccepted {
+			// Idempotent — refetch + return.
+			live = t
+			return nil
+		}
+		if t.Status != domain.ExternalOTCThreadOpen {
+			return apperr.FailedPrecondition("nit nije otvorena")
+		}
+		updated, err := s.Store.SetExternalOTCThreadStatus(ctx, tx, t.ID, domain.ExternalOTCThreadAccepted)
+		if err != nil {
+			return err
+		}
+		// Mint the contract row mirroring the thread's terms. Strike =
+		// price_per_unit at accept time (spec p.67.b).
+		if _, err := s.Store.InsertExternalOTCContract(ctx, tx, &domain.ExternalOTCContract{
+			ThreadID:           updated.ID,
+			Direction:          domain.ExternalOTCIncoming,
+			RemoteBankCode:     updated.RemoteBankCode,
+			RemoteThreadID:     updated.RemoteThreadID,
+			RemoteUserRef:      updated.RemoteUserRef,
+			RemoteDisplayName:  updated.RemoteDisplayName,
+			RemoteAccountRef:   updated.RemoteAccountRef,
+			LocalUserID:        updated.LocalUserID,
+			LocalUserKind:      updated.LocalUserKind,
+			LocalAccountID:     updated.LocalAccountID,
+			LocalAccountNumber: updated.LocalAccountNumber,
+			LocalRole:          updated.LocalRole,
+			SecurityID:         updated.SecurityID,
+			SecurityTicker:     updated.SecurityTicker,
+			SellerHoldingRef:   updated.SellerHoldingRef,
+			Quantity:           updated.Quantity,
+			StrikePrice:        updated.PricePerUnit,
+			PremiumPaid:        updated.Premium,
+			Currency:           updated.Currency,
+			SettlementDate:     updated.SettlementDate,
+			AcceptedBySide:     domain.ExternalOTCSideRemote,
+			Status:             domain.ExternalOTCContractActive,
+			// PremiumOpID intentionally empty — stamped post-commit.
+		}); err != nil {
+			return err
+		}
+		live = updated
+		return nil
+	}); err != nil {
+		return nil, err
+	}
+	return live, nil
 }
 
 // ReceiveExternalOTCExerciseNoticeInput.
@@ -693,12 +753,64 @@ type ReceiveExternalOTCExerciseNoticeInput struct {
 	ExerciseOpID      string
 }
 
-// ReceiveExternalOTCExerciseNotice — stub until BE-5 wires the
-// strike-leg through bank 2PC. Returns FailedPrecondition so the
-// gateway can surface a 503 to the partner; partner retries with the
-// same exercise_op_id (idempotent by design).
+// ReceiveExternalOTCExerciseNotice handles a partner-initiated
+// exercise on a contract we hold the seller side of. Flips the local
+// contract to 'exercised' and stamps the partner's exercise_op_id.
+// Cross-bank strike payment arrives via the partner's 2PC against
+// bank.InterbankProtocolService (separate request); this method only
+// updates the trading-side audit row.
+//
+// The partner's exercise_op_id is a free-form string; we derive a
+// stable UUID via uuid.NewSHA1 so the local uuid column accepts it.
+// Idempotent: replays with the same exercise_op_id no-op (the store's
+// SetExternalOTCContractExercised guards on it).
 func (s *Service) ReceiveExternalOTCExerciseNotice(ctx context.Context, in ReceiveExternalOTCExerciseNoticeInput) (*domain.ExternalOTCContract, error) {
-	return nil, apperr.FailedPrecondition("inbound exercise zahteva 2PC primitiv (BE-5)")
+	if in.SenderContractID == "" || in.ExerciseOpID == "" {
+		return nil, apperr.Validation("sender_contract_id and exercise_op_id are required")
+	}
+	derivedOpID := deriveExternalExerciseOpID(in.SenderBankCode, in.ExerciseOpID)
+	// Map partner's contract id to ours via the thread's remote_thread_id
+	// — convention: partner's contract_id == their remote_thread_id (the
+	// thread they minted from their accept). Look up by (sender_bank_code,
+	// that id).
+	var live *domain.ExternalOTCContract
+	if err := s.Store.ExecuteAtomic(ctx, func(tx pgx.Tx) error {
+		thread, err := s.Store.GetExternalOTCThreadByRemote(ctx, tx, in.SenderBankCode, in.SenderContractID)
+		if err != nil {
+			return err
+		}
+		contract, err := s.Store.GetExternalOTCContractByThread(ctx, thread.ID)
+		if err != nil {
+			return err
+		}
+		if contract.Status == domain.ExternalOTCContractExercised {
+			// Idempotent — already exercised.
+			live = contract
+			return nil
+		}
+		if contract.Status != domain.ExternalOTCContractActive {
+			return apperr.FailedPrecondition("ugovor nije aktivan")
+		}
+		updated, err := s.Store.SetExternalOTCContractExercised(ctx, tx, contract.ID, derivedOpID, s.now())
+		if err != nil {
+			return err
+		}
+		live = updated
+		return nil
+	}); err != nil {
+		return nil, err
+	}
+	return live, nil
+}
+
+// externalExerciseOpIDNS — namespace for deriving inbound-exercise
+// op_ids from (partner_bank_code, partner_exercise_op_id). Disjoint
+// from externalCommitOpIDNS so a partner-supplied identifier can't
+// collide with our outbound-leg op_ids.
+var externalExerciseOpIDNS = uuid.MustParse("c5e1ae00-7e62-4f00-9c1d-1f24f2d8a403")
+
+func deriveExternalExerciseOpID(bankCode, partnerOpID string) string {
+	return uuid.NewSHA1(externalExerciseOpIDNS, []byte(bankCode+":"+partnerOpID)).String()
 }
 
 // =====================================================================
