@@ -144,7 +144,10 @@ func Run() error {
 	})
 	g.Go(func() error {
 		return grpcserver.Run(gctx, log, grpcAddr, func(s *grpc.Server) {
-			bankpb.RegisterBankServiceServer(s, server.New(svc))
+			srv := server.New(svc)
+			bankpb.RegisterBankServiceServer(s, srv)
+			// Celina 5 — inter-bank 2PC primitive shares the same Server.
+			bankpb.RegisterInterbankProtocolServiceServer(s, srv)
 		})
 	})
 

@@ -147,6 +147,8 @@ services:
       TRADING_GRPC_ADDR: "${TRADING_GRPC_ADDR:-trading:50051}"
       EXCHANGE_GRPC_ADDR: "${EXCHANGE_GRPC_ADDR:-exchange:50051}"
       NOTIFICATION_GRPC_ADDR: "${NOTIFICATION_GRPC_ADDR:-notification:50051}"
+      # Celina 5 — inbound partner REST routes are gated by this key.
+      INTERBANK_API_KEY: "${INTERBANK_API_KEY:-dev-outbound-banka3}"
     ports:
       - "${GATEWAY_HTTP_PORT:-8080}:8080"
       - "${GATEWAY_PROBE_PORT:-8086}:8081"
@@ -217,6 +219,11 @@ services:
       OPTIONS_RISK_FREE_RATE: "${OPTIONS_RISK_FREE_RATE:-0.05}"
       OPTIONS_VOLATILITY: "${OPTIONS_VOLATILITY:-0.30}"
       SAGA_DEBUG_FAULT_INJECTION: "${SAGA_DEBUG_FAULT_INJECTION:-false}"
+      # Celina 5 — outbound cross-bank OTC. Empty INTERBANK_ROUTES
+      # leaves the PartnerOTC client unconfigured (service nil-checks).
+      BANK_ROUTING_NUMBER: "${BANK_ROUTING_NUMBER:-333}"
+      INTERBANK_ROUTES: "${INTERBANK_ROUTES:-}"
+      INTERBANK_API_KEY: "${INTERBANK_API_KEY:-dev-outbound-banka3}"
     ports:
       - "${TRADING_GRPC_PORT:-50053}:50051"
       - "${TRADING_PROBE_PORT:-8083}:8081"

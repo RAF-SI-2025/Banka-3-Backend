@@ -27,6 +27,12 @@ const (
 
 	TxKindLoanDisbursement TransactionKind = "loan_disbursement"
 	TxKindLoanInstallment  TransactionKind = "loan_installment"
+
+	// c5 — cross-bank 2PC payment leg (spec p.77+). Outbound legs debit
+	// the user and credit the bank's per-currency system house account;
+	// inbound legs do the opposite. The interbank_protocol_transactions
+	// row carries the partner's transaction_id and the leg's op_id.
+	TxKindInterbankPayment TransactionKind = "interbank_payment"
 )
 
 // ReservationState pins the bank.reservations row lifecycle (c4).

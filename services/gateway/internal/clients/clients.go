@@ -17,10 +17,13 @@ import (
 // Set bundles every upstream client. Address-less services stay nil
 // so a single-celina dev stack doesn't need every backend running.
 type Set struct {
-	User     userpb.UserServiceClient
-	Bank     bankpb.BankServiceClient
-	Exchange exchangepb.ExchangeServiceClient
-	Trading  tradingpb.TradingServiceClient
+	User        userpb.UserServiceClient
+	Bank        bankpb.BankServiceClient
+	Exchange    exchangepb.ExchangeServiceClient
+	Trading     tradingpb.TradingServiceClient
+	// ExternalOTC shares TradingConn — same binary, second service
+	// (celina 5).
+	ExternalOTC tradingpb.ExternalOTCServiceClient
 
 	UserConn     *grpc.ClientConn
 	BankConn     *grpc.ClientConn
@@ -70,6 +73,7 @@ func Dial(addrs Addrs) (*Set, error) {
 		}
 		s.TradingConn = c
 		s.Trading = tradingpb.NewTradingServiceClient(c)
+		s.ExternalOTC = tradingpb.NewExternalOTCServiceClient(c)
 		s.conns = append(s.conns, c)
 	}
 

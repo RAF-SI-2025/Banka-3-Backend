@@ -13,6 +13,8 @@ import (
 
 type Server struct {
 	bankpb.UnimplementedBankServiceServer
+	// Celina 5 — same binary, second service. Both share *Service.
+	bankpb.UnimplementedInterbankProtocolServiceServer
 	Svc *service.Service
 }
 

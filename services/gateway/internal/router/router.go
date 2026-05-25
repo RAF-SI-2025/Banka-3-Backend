@@ -28,6 +28,10 @@ type Router struct {
 	// Wired only when CLOCK_DEBUG=true; the endpoint isn't registered
 	// otherwise so production traffic can't accidentally reach it.
 	Clock *clock.Adjustable
+	// PartnerOTC enables the celina-5 inbound REST surface at
+	// /bank/api/v1/otc/... Nil when INTERBANK_API_KEY isn't configured;
+	// the routes simply aren't registered.
+	PartnerOTC *PartnerOTC
 }
 
 // Mount returns the gateway's top-level handler. Public auth endpoints
@@ -83,6 +87,10 @@ func (r *Router) Mount(ctx context.Context, gwMux *runtime.ServeMux, registerGW 
 	mux.HandleFunc("GET /api/v1/ping", func(w http.ResponseWriter, _ *http.Request) {
 		writeJSON(w, http.StatusOK, map[string]string{"status": "ok"})
 	})
+
+	// Celina 5 — partner-facing inbound REST. Lives under /bank/, not
+	// /api/, and is auth'd by X-Api-Key inside the handlers (no JWT).
+	r.PartnerOTC.MountPartnerOTC(mux)
 
 	// QA-only clock-offset endpoint (spec edge: S7 23:59 daily reset,
 	// monthly tax, loan installments — all driven by cron schedules
@@ -183,6 +191,9 @@ func PublicPrefixes() []string {
 		"/api/v1/auth/activate",
 		"/api/v1/auth/password-reset",
 		"/api/v1/ping",
+		// Celina 5 — partner-facing REST. JWT does not apply; the
+		// handlers run X-Api-Key inside.
+		"/bank/",
 	}
 }
 

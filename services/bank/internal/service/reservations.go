@@ -33,10 +33,11 @@ import (
 // added by migration 0012; any other tag is rejected at validation
 // time so a typo can't insert a row with an unsupported kind.
 var allowedReservationOpKinds = map[string]domain.TransactionKind{
-	string(domain.TxKindOTCPremium):   domain.TxKindOTCPremium,
-	string(domain.TxKindOTCExercise):  domain.TxKindOTCExercise,
-	string(domain.TxKindFundInvest):   domain.TxKindFundInvest,
-	string(domain.TxKindFundWithdraw): domain.TxKindFundWithdraw,
+	string(domain.TxKindOTCPremium):       domain.TxKindOTCPremium,
+	string(domain.TxKindOTCExercise):      domain.TxKindOTCExercise,
+	string(domain.TxKindFundInvest):       domain.TxKindFundInvest,
+	string(domain.TxKindFundWithdraw):     domain.TxKindFundWithdraw,
+	string(domain.TxKindInterbankPayment): domain.TxKindInterbankPayment,
 }
 
 // ReserveFundsInput is the validated payload of an RPC call.

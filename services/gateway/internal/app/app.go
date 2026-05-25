@@ -115,6 +115,16 @@ func Run() error {
 		Clock:          gwClock,
 	}
 
+	// Celina 5 — wire the partner-facing inbound surface when an API key
+	// is set + the trading service is reachable. Both must be set;
+	// otherwise the /bank/api/v1/otc/... routes simply aren't registered.
+	if apiKey := config.String("INTERBANK_API_KEY", ""); apiKey != "" && cs.ExternalOTC != nil {
+		r.PartnerOTC = &router.PartnerOTC{
+			APIKey:     apiKey,
+			TradingOTC: cs.ExternalOTC,
+		}
+	}
+
 	// Annotator forwards the authenticated principal (set on the request
 	// context by the auth middleware) to gRPC services as outgoing
 	// metadata. Without this, grpc-gateway's runtime builds metadata only
@@ -171,6 +181,10 @@ func Run() error {
 		}
 		if cs.TradingConn != nil {
 			if err := tradingpb.RegisterTradingServiceHandler(ctx, mux, cs.TradingConn); err != nil {
+				return err
+			}
+			// Celina 5 — external OTC REST routes ride the same trading conn.
+			if err := tradingpb.RegisterExternalOTCServiceHandler(ctx, mux, cs.TradingConn); err != nil {
 				return err
 			}
 		}
