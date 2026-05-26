@@ -62,6 +62,11 @@ func DefaultRules() []Rule {
 		// and thread/contract id are path segments.
 		{http.MethodPost, regexp.MustCompile(`^/api/v1/otc/external-offers/[^/]+/[^/]+/accept$`), verification.ActionExternalOTCAccept},
 		{http.MethodPost, regexp.MustCompile(`^/api/v1/otc/external-contracts/[^/]+/[^/]+/exercise$`), verification.ActionExternalOTCExercise},
+		// User-initiated cross-bank cash payment. Distinct action kind
+		// from ActionPayment so an intra-bank code can't satisfy this
+		// gate (and vice versa); same 6-digit UX, FE labels the dialog
+		// "Međubankarsko plaćanje".
+		{http.MethodPost, regexp.MustCompile(`^/api/v1/payments/interbank$`), verification.ActionInterbankPayment},
 	}
 }
 

@@ -163,6 +163,11 @@ type Service struct {
 	// cash legs. May be nil on a minimal dev stack — the AcceptExternal/
 	// ExerciseExternal entrypoints nil-check before starting the saga.
 	InterbankPayer InterbankPayer
+	// PartnerPayer is the outbound HTTP 2PC client — calls the remote
+	// partner bank's /interbank surface in either dialect. Implemented
+	// by the same interbank.Client that powers PartnerOTC; one
+	// connection-pooled object handles both. Nil-safe.
+	PartnerPayer PartnerPayer
 	// OTCNotifier sends counterparty-facing emails on OTC events
 	// (counter-offer, withdraw, accept, contract expired). Wired to an
 	// email.Sender — either pkg/email directly or notification-svc,
@@ -241,6 +246,33 @@ type TransferInput struct {
 	OpKind        string
 	IsActuary     bool
 	Purpose       string
+}
+
+// PartnerPayer is the outbound HTTP side of the celina-5 2PC primitive
+// — calls the remote partner bank to coordinate prepare/commit/rollback.
+// Implemented by the trading-service interbank.Client. Nil-safe.
+type PartnerPayer interface {
+	PreparePayment(ctx context.Context, in PartnerPaymentInput) (*PartnerPaymentResult, error)
+	CommitPayment(ctx context.Context, remoteBankCode, txID string) error
+	RollbackPayment(ctx context.Context, remoteBankCode, txID, reason string) error
+}
+
+// PartnerPaymentInput is the outbound 2PC NEW_TX payload.
+type PartnerPaymentInput struct {
+	RemoteBankCode      string
+	TransactionID       string
+	LocalAccountNumber  string
+	RemoteAccountNumber string
+	Currency            string
+	Amount              string
+	Purpose             string
+}
+
+// PartnerPaymentResult — Accepted false on partner refusal (4xx or NO
+// vote). NoReasons is populated only when the partner speaks Banka-2.
+type PartnerPaymentResult struct {
+	Accepted  bool
+	NoReasons []string
 }
 
 // InterbankPayer is trading's view of bank's celina-5 2PC primitive

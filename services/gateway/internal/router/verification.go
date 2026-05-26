@@ -47,6 +47,7 @@ var allowedKinds = map[string]verification.ActionKind{
 	// receiver-side middleware can validate the right family.
 	string(verification.ActionExternalOTCAccept):   verification.ActionExternalOTCAccept,
 	string(verification.ActionExternalOTCExercise): verification.ActionExternalOTCExercise,
+	string(verification.ActionInterbankPayment):    verification.ActionInterbankPayment,
 }
 
 // actionLabels maps an action kind to Serbian copy the mobile app
@@ -62,6 +63,7 @@ var actionLabels = map[verification.ActionKind]string{
 	verification.ActionFundWithdraw:        "Povlačenje iz fonda",
 	verification.ActionExternalOTCAccept:   "Prihvatanje OTC ponude (međubankarska)",
 	verification.ActionExternalOTCExercise: "Izvršenje opcije (međubankarska)",
+	verification.ActionInterbankPayment:    "Međubankarsko plaćanje",
 }
 
 func actionLabel(k verification.ActionKind) string {

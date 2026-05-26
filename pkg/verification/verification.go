@@ -78,6 +78,13 @@ const (
 	// ("Eksterno prihvatanje", "Eksterno izvršenje").
 	ActionExternalOTCAccept   ActionKind = "external_otc_accept"
 	ActionExternalOTCExercise ActionKind = "external_otc_exercise"
+
+	// c5 — user-initiated cross-bank cash payment. Distinct from
+	// ActionPayment (intra-bank) so an intercepted code from the
+	// in-bank payment dialog can't be replayed against the cross-bank
+	// route. Same 6-digit dialog UX; different Serbian label
+	// ("Međubankarsko plaćanje").
+	ActionInterbankPayment ActionKind = "interbank_payment"
 )
 
 var (

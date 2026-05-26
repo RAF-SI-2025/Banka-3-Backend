@@ -32,4 +32,7 @@ func RegisterSagas(reg *saga.Registry, svc *Service) {
 	// outbound REST adapter (PartnerOTC).
 	registerExternalOTCAcceptSaga(reg, svc)
 	registerExternalOTCExerciseSaga(reg, svc)
+	// Pure cross-bank cash payment — user-initiated, drives both sides
+	// of the 2PC over the outbound HTTP envelope (PartnerPayer).
+	registerCrossBankPaymentSaga(reg, svc)
 }

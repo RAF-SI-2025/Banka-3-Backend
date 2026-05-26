@@ -21,6 +21,9 @@
       "name": "TradingService"
     },
     {
+      "name": "CrossBankPaymentService"
+    },
+    {
       "name": "ExternalOTCService"
     },
     {
@@ -3738,6 +3741,71 @@
         ]
       }
     },
+    "/api/v1/payments/interbank": {
+      "post": {
+        "summary": "SubmitCrossBankPayment kicks off the 2PC saga. Synchronous to\nsaga completion (or parking on a transient bank-side error) — the\nuser gets the final state back in the response, or `running` if\nthe saga was parked for retry.",
+        "description": "Idempotency: client-supplied idempotency_key combined with\n(user_id, source_account_id) produces a deterministic\ntransaction_id; retries with the same key replay the existing\nsaga row instead of double-charging.",
+        "operationId": "CrossBankPaymentService_SubmitCrossBankPayment",
+        "responses": {
+          "200": {
+            "description": "A successful response.",
+            "schema": {
+              "$ref": "#/definitions/v1SubmitCrossBankPaymentResponse"
+            }
+          },
+          "default": {
+            "description": "An unexpected error response.",
+            "schema": {
+              "$ref": "#/definitions/rpcStatus"
+            }
+          }
+        },
+        "parameters": [
+          {
+            "name": "body",
+            "in": "body",
+            "required": true,
+            "schema": {
+              "$ref": "#/definitions/v1SubmitCrossBankPaymentRequest"
+            }
+          }
+        ],
+        "tags": [
+          "CrossBankPaymentService"
+        ]
+      }
+    },
+    "/api/v1/payments/interbank/{transactionId}": {
+      "get": {
+        "summary": "GetCrossBankPayment fetches a saga row by transaction_id.\nAuth: only the originator (or admin) sees their payment.",
+        "operationId": "CrossBankPaymentService_GetCrossBankPayment",
+        "responses": {
+          "200": {
+            "description": "A successful response.",
+            "schema": {
+              "$ref": "#/definitions/v1CrossBankPayment"
+            }
+          },
+          "default": {
+            "description": "An unexpected error response.",
+            "schema": {
+              "$ref": "#/definitions/rpcStatus"
+            }
+          }
+        },
+        "parameters": [
+          {
+            "name": "transactionId",
+            "in": "path",
+            "required": true,
+            "type": "string"
+          }
+        ],
+        "tags": [
+          "CrossBankPaymentService"
+        ]
+      }
+    },
     "/api/v1/portfolio": {
       "get": {
         "operationId": "TradingService_ListHoldings",
@@ -5794,6 +5862,56 @@
         },
         "toAccountId": {
           "type": "string"
+        },
+        "amount": {
+          "type": "string"
+        },
+        "purpose": {
+          "type": "string"
+        }
+      }
+    },
+    "v1CrossBankPayment": {
+      "type": "object",
+      "properties": {
+        "transactionId": {
+          "type": "string"
+        },
+        "status": {
+          "type": "string"
+        },
+        "currentStep": {
+          "type": "string"
+        },
+        "attempts": {
+          "type": "integer",
+          "format": "int32"
+        },
+        "lastError": {
+          "type": "string"
+        },
+        "createdAt": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "updatedAt": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "sourceAccountId": {
+          "type": "string"
+        },
+        "sourceAccountNumber": {
+          "type": "string"
+        },
+        "remoteBankCode": {
+          "type": "string"
+        },
+        "remoteAccountNumber": {
+          "type": "string"
+        },
+        "currency": {
+          "$ref": "#/definitions/bankaTradingV1Currency"
         },
         "amount": {
           "type": "string"
@@ -8363,6 +8481,50 @@
         }
       },
       "description": "SecurityWithListing collapses (security, listing) for the catalog\nportal so the FE doesn't need to round-trip per row."
+    },
+    "v1SubmitCrossBankPaymentRequest": {
+      "type": "object",
+      "properties": {
+        "idempotencyKey": {
+          "type": "string",
+          "description": "Stable across retries; combined with (user_id, source_account_id)\nto derive the saga transaction_id. Required."
+        },
+        "sourceAccountId": {
+          "type": "string"
+        },
+        "remoteBankCode": {
+          "type": "string"
+        },
+        "remoteAccountNumber": {
+          "type": "string",
+          "description": "18-digit partner-bank account number; checksum (sum%11==0) is\nre-validated server-side."
+        },
+        "currency": {
+          "$ref": "#/definitions/bankaTradingV1Currency"
+        },
+        "amount": {
+          "type": "string",
+          "description": "Positive decimal string, native currency."
+        },
+        "purpose": {
+          "type": "string"
+        }
+      }
+    },
+    "v1SubmitCrossBankPaymentResponse": {
+      "type": "object",
+      "properties": {
+        "transactionId": {
+          "type": "string"
+        },
+        "status": {
+          "type": "string",
+          "title": "running | completed | failed | compensating"
+        },
+        "lastError": {
+          "type": "string"
+        }
+      }
     },
     "v1SubmitLoanRequestRequest": {
       "type": "object",

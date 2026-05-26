@@ -178,11 +178,13 @@ func Run() error {
 	if raw := config.String("INTERBANK_ROUTES", ""); raw != "" {
 		routes := interbank.ParseRoutes(raw)
 		if len(routes) > 0 {
-			svc.PartnerOTC = interbank.New(interbank.Config{
+			client := interbank.New(interbank.Config{
 				Routes:           routes,
 				APIKey:           config.String("INTERBANK_API_KEY", ""),
 				OwnRoutingNumber: config.String("BANK_ROUTING_NUMBER", "333"),
 			}, log)
+			svc.PartnerOTC = client
+			svc.PartnerPayer = client
 			log.Info("interbank client configured", "partners", len(routes))
 		}
 	}
@@ -255,6 +257,8 @@ func Run() error {
 			tradingpb.RegisterTradingServiceServer(s, srv)
 			// Celina 5 — cross-bank OTC RPCs share the same Server.
 			tradingpb.RegisterExternalOTCServiceServer(s, srv)
+			// Celina 5 — user-initiated cross-bank cash payments.
+			tradingpb.RegisterCrossBankPaymentServiceServer(s, srv)
 		})
 	})
 

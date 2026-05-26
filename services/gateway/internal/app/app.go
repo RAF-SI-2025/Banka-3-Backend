@@ -210,6 +210,10 @@ func Run() error {
 			if err := tradingpb.RegisterExternalOTCServiceHandler(ctx, mux, cs.TradingConn); err != nil {
 				return err
 			}
+			// Celina 5 — user-initiated cross-bank cash payment routes.
+			if err := tradingpb.RegisterCrossBankPaymentServiceHandler(ctx, mux, cs.TradingConn); err != nil {
+				return err
+			}
 		}
 		return nil
 	}
