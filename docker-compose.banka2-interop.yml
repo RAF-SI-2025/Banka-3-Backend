@@ -1,0 +1,48 @@
+# Banka-2 interop overlay — runs alongside the main stack so our
+# trading + gateway services can reach Banka-2's Spring Boot stack
+# over the shared `banka` network. Pair with the symmetric file at
+# /home/user/si/banka2-interop/docker-compose.banka2-overlay.yml on
+# the Banka-2 side (left out of the Banka-2 repo deliberately so it
+# never gets committed/pushed to their remote).
+#
+# Bring up:
+#
+#   # 1. Banka-3 with the interop overlay
+#   docker compose -f docker-compose.yml -f docker-compose.banka2-interop.yml up -d
+#
+#   # 2. Banka-2 with the overlay file in this same `si` dir
+#   docker compose -p banka-2-backend \
+#     -f /home/user/si/Banka-2-Backend/docker-compose.yml \
+#     -f /home/user/si/banka2-interop/docker-compose.banka2-overlay.yml \
+#     up -d
+#
+# Bank routing numbers: we are 333, they are 222.
+#
+# The bundled mock-partner (bank 999) and the optional banka-3
+# partner stack (bank 334) stay configured — Discover() walks
+# INTERBANK_ROUTES and skips unreachable entries with a warning, so
+# adding 222 doesn't break the other partners.
+
+name: banka
+
+services:
+  trading:
+    environment:
+      # Append the Banka-2 route. The other two routes are kept so the
+      # mock-partner + sibling banka-3 partner stacks (when up) stay
+      # reachable.
+      INTERBANK_ROUTES: "${INTERBANK_ROUTES:-999:http://mock-partner:9099,334:http://banka-partner-gateway-1:8080,222:http://banka2_backend:8080}"
+      INTERBANK_API_KEY: "${INTERBANK_API_KEY:-dev-outbound-banka3}"
+      BANK_ROUTING_NUMBER: "${BANK_ROUTING_NUMBER:-333}"
+
+  gateway:
+    environment:
+      # Same shared secret for inbound — the X-Api-Key Banka-2 sends us
+      # has to match what they expect to see from us. Configure both
+      # sides with the same pair: BANKA2_INBOUND (what they send to us)
+      # and BANKA2_OUTBOUND (what we send to them). For dev we collapse
+      # both onto INTERBANK_API_KEY since trust is mutual + the protocol
+      # checks routingNumber for partner identity.
+      INTERBANK_API_KEY: "${INTERBANK_API_KEY:-dev-outbound-banka3}"
+      BANK_ROUTING_NUMBER: "${BANK_ROUTING_NUMBER:-333}"
+      BANK_DISPLAY_NAME: "${BANK_DISPLAY_NAME:-Banka 3}"

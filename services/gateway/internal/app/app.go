@@ -134,6 +134,18 @@ func Run() error {
 				Interbank: cs.InterbankProtocol,
 			}
 		}
+		// Banka-2 dialect inbound shim — re-uses the same shared API
+		// key. Mounted only when its dependencies are reachable; otherwise
+		// each handler self-checks and the surface is partially populated.
+		r.PartnerBanka2 = &router.PartnerBanka2{
+			APIKey:            apiKey,
+			BankRoutingNumber: config.String("BANK_ROUTING_NUMBER", "333"),
+			BankDisplayName:   config.String("BANK_DISPLAY_NAME", "Banka 3"),
+			Users:             cs.User,
+			Trading:           cs.Trading,
+			TradingOTC:        cs.ExternalOTC,
+			Interbank:         cs.InterbankProtocol,
+		}
 	}
 
 	// Annotator forwards the authenticated principal (set on the request

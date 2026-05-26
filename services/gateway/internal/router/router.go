@@ -35,6 +35,11 @@ type Router struct {
 	// PartnerPayments enables the celina-5 inbound 2PC surface at
 	// /bank/api/v1/interbank/transactions/... Same nil-skip behaviour.
 	PartnerPayments *PartnerPayments
+	// PartnerBanka2 enables the Banka-2 dialect inbound shim — root-
+	// mounted /interbank + /negotiations + /public-stock paths plus the
+	// /bank/api/v1/interbank/user/{rn}/{id} friendly-name lookup. Same
+	// nil-skip behaviour.
+	PartnerBanka2 *PartnerBanka2
 }
 
 // Mount returns the gateway's top-level handler. Public auth endpoints
@@ -95,6 +100,7 @@ func (r *Router) Mount(ctx context.Context, gwMux *runtime.ServeMux, registerGW 
 	// /api/, and is auth'd by X-Api-Key inside the handlers (no JWT).
 	r.PartnerOTC.MountPartnerOTC(mux)
 	r.PartnerPayments.MountPartnerPayments(mux)
+	r.PartnerBanka2.MountPartnerBanka2(mux)
 
 	// QA-only clock-offset endpoint (spec edge: S7 23:59 daily reset,
 	// monthly tax, loan installments — all driven by cron schedules
