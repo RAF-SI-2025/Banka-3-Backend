@@ -8,9 +8,6 @@ Pipeline:
 - upisuje kurirane rezultate nazad na primary u:
   - `analytics_daily_platform_metrics`
   - `analytics_daily_top_listings`
-- sadrzi i poseban ML job za KMeans segmentaciju racuna:
-  - `analytics_account_activity_segments`
-  - `analytics_account_activity_clusters`
 
 ## Lokalni dry-run
 
@@ -19,13 +16,10 @@ Dok je docker-compose stack podignut:
 ```bash
 make spark-analytics-local
 make verify-spark-analytics
-make spark-ml-local
-make verify-spark-ml
 ```
 
 `spark_analytics` koristi isti PySpark job kao Kubernetes deployment, ali ga
 pokrece u `local[2]` modu da bi pipeline mogao da se proveri bez klastera.
-Isti image koristi se i za ML job, samo sa drugim PySpark entry script-om.
 
 ## Kubernetes
 
@@ -63,10 +57,6 @@ kubectl get jobs -n banka-analytics
 kubectl logs -n banka-analytics job/banka-trading-analytics-once
 ```
 
-Za ML segmentaciju istim pristupom postoje:
-- `analytics/spark/k8s/vanilla/ml-job-once.yaml`
-- `analytics/spark/k8s/vanilla/ml-cronjob.yaml`
-
 ### Spark Operator putanja
 
 Ako u klasteru vec postoji `spark-operator`, moze i jaca varijanta:
@@ -74,6 +64,3 @@ Ako u klasteru vec postoji `spark-operator`, moze i jaca varijanta:
 ```bash
 kubectl apply -k analytics/spark/k8s
 ```
-
-Za operator varijantu ML posao je opisan u:
-- `analytics/spark/k8s/ml-scheduled-sparkapplication.yaml`

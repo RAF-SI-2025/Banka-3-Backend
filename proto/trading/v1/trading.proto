@@ -1,0 +1,1639 @@
+syntax = "proto3";
+
+package banka.trading.v1;
+
+import "google/api/annotations.proto";
+import "google/protobuf/empty.proto";
+import "google/protobuf/timestamp.proto";
+import "buf/validate/validate.proto";
+
+// TradingService owns celina 3-5: actuary management, exchange &
+// security catalogs, listings, orders + executions, portfolio, OTC
+// (c4), capital-gains tax, investment funds (c4), inter-bank trade
+// (c5), and the SAGA orchestrator.
+//
+// Every RPC with a google.api.http annotation is exposed via the
+// gateway at /api/v1/trading/...; unannotated RPCs are reachable only
+// inside the cluster (background workers, bank → trading callbacks,
+// etc.).
+service TradingService {
+  // -----------------------------------------------------------------
+  // Actuary management — supervisor-only.
+  // -----------------------------------------------------------------
+
+  rpc GetActuaryInfo(GetActuaryInfoRequest) returns (ActuaryInfo) {
+    option (google.api.http) = {
+      get: "/api/v1/actuaries/{employee_id}"
+    };
+  }
+
+  rpc ListActuaries(ListActuariesRequest) returns (ListActuariesResponse) {
+    option (google.api.http) = {
+      get: "/api/v1/actuaries"
+    };
+  }
+
+  rpc UpsertActuaryInfo(UpsertActuaryInfoRequest) returns (ActuaryInfo) {
+    option (google.api.http) = {
+      put: "/api/v1/actuaries/{employee_id}"
+      body: "*"
+    };
+  }
+
+  rpc UpdateActuaryLimit(UpdateActuaryLimitRequest) returns (ActuaryInfo) {
+    option (google.api.http) = {
+      patch: "/api/v1/actuaries/{employee_id}/limit"
+      body: "*"
+    };
+  }
+
+  rpc ResetActuaryUsedLimit(ResetActuaryUsedLimitRequest) returns (ActuaryInfo) {
+    option (google.api.http) = {
+      post: "/api/v1/actuaries/{employee_id}/used-limit/reset"
+      body: "*"
+    };
+  }
+
+  rpc SetActuaryNeedApproval(SetActuaryNeedApprovalRequest) returns (ActuaryInfo) {
+    option (google.api.http) = {
+      patch: "/api/v1/actuaries/{employee_id}/need-approval"
+      body: "*"
+    };
+  }
+
+  // RunDailyResetActuaries is exposed for manual triggers; the same
+  // codepath runs nightly at 23:59 (Belgrade) via the trading cron.
+  rpc RunDailyResetActuaries(google.protobuf.Empty) returns (RunDailyResetActuariesResponse) {
+    option (google.api.http) = {
+      post: "/api/v1/actuaries/reset-job"
+      body: "*"
+    };
+  }
+
+  // -----------------------------------------------------------------
+  // Exchanges (catalog + override toggle).
+  // -----------------------------------------------------------------
+
+  rpc ListExchanges(ListExchangesRequest) returns (ListExchangesResponse) {
+    option (google.api.http) = {
+      get: "/api/v1/exchanges"
+    };
+  }
+
+  rpc UpsertExchange(UpsertExchangeRequest) returns (Exchange) {
+    option (google.api.http) = {
+      put: "/api/v1/exchanges/{mic}"
+      body: "*"
+    };
+  }
+
+  rpc SetExchangeOverride(SetExchangeOverrideRequest) returns (Exchange) {
+    option (google.api.http) = {
+      patch: "/api/v1/exchanges/{mic}/override"
+      body: "*"
+    };
+  }
+
+  // -----------------------------------------------------------------
+  // Securities + listings catalog.
+  // -----------------------------------------------------------------
+
+  rpc UpsertSecurity(UpsertSecurityRequest) returns (Security) {
+    option (google.api.http) = {
+      put: "/api/v1/securities"
+      body: "*"
+    };
+  }
+
+  rpc ListSecurities(ListSecuritiesRequest) returns (ListSecuritiesResponse) {
+    option (google.api.http) = {
+      get: "/api/v1/securities"
+    };
+  }
+
+  rpc GetSecurity(GetSecurityRequest) returns (SecurityWithListing) {
+    option (google.api.http) = {
+      get: "/api/v1/securities/{id}"
+    };
+  }
+
+  rpc UpsertListing(UpsertListingRequest) returns (Listing) {
+    option (google.api.http) = {
+      put: "/api/v1/listings"
+      body: "*"
+    };
+  }
+
+  rpc ListListings(ListListingsRequest) returns (ListListingsResponse) {
+    option (google.api.http) = {
+      get: "/api/v1/listings"
+    };
+  }
+
+  rpc GetListing(GetListingRequest) returns (Listing) {
+    option (google.api.http) = {
+      get: "/api/v1/listings/{id}"
+    };
+  }
+
+  // GetOptionChain returns the option chain for a stock — call/put
+  // pairs grouped by strike, filtered to the N rows nearest the
+  // shared (current) price per spec p.59.
+  rpc GetOptionChain(GetOptionChainRequest) returns (GetOptionChainResponse) {
+    option (google.api.http) = {
+      get: "/api/v1/securities/{stock_id}/option-chain"
+    };
+  }
+
+  rpc GetListingDailyHistory(GetListingDailyHistoryRequest) returns (GetListingDailyHistoryResponse) {
+    option (google.api.http) = {
+      get: "/api/v1/listings/{listing_id}/history"
+    };
+  }
+
+  // -----------------------------------------------------------------
+  // Orders.
+  // -----------------------------------------------------------------
+
+  rpc CreateOrder(CreateOrderRequest) returns (CreateOrderResponse) {
+    option (google.api.http) = {
+      post: "/api/v1/orders"
+      body: "*"
+    };
+  }
+
+  rpc ListOrders(ListOrdersRequest) returns (ListOrdersResponse) {
+    option (google.api.http) = {
+      get: "/api/v1/orders"
+    };
+  }
+
+  rpc GetOrder(GetOrderRequest) returns (Order) {
+    option (google.api.http) = {
+      get: "/api/v1/orders/{id}"
+    };
+  }
+
+  rpc ApproveOrder(ApproveOrderRequest) returns (Order) {
+    option (google.api.http) = {
+      post: "/api/v1/orders/{id}/approve"
+      body: "*"
+    };
+  }
+
+  rpc DeclineOrder(DeclineOrderRequest) returns (Order) {
+    option (google.api.http) = {
+      post: "/api/v1/orders/{id}/decline"
+      body: "*"
+    };
+  }
+
+  rpc CancelOrder(CancelOrderRequest) returns (Order) {
+    option (google.api.http) = {
+      post: "/api/v1/orders/{id}/cancel"
+      body: "*"
+    };
+  }
+
+  // -----------------------------------------------------------------
+  // Portfolio + capital-gains tax.
+  // -----------------------------------------------------------------
+
+  rpc ListHoldings(ListHoldingsRequest) returns (ListHoldingsResponse) {
+    option (google.api.http) = {
+      get: "/api/v1/portfolio"
+    };
+  }
+
+  rpc SetPublicCount(SetPublicCountRequest) returns (Holding) {
+    option (google.api.http) = {
+      patch: "/api/v1/portfolio/{id}/public-count"
+      body: "*"
+    };
+  }
+
+  // ExerciseOption is spec p.61.d — actuaries may exercise an in-the-
+  // money option before settlementDate. Result tells the FE the
+  // remaining option position + the underlying-side effect.
+  rpc ExerciseOption(ExerciseOptionRequest) returns (ExerciseOptionResponse) {
+    option (google.api.http) = {
+      post: "/api/v1/portfolio/{holding_id}/exercise"
+      body: "*"
+    };
+  }
+
+  rpc ListTaxPositions(ListTaxPositionsRequest) returns (ListTaxPositionsResponse) {
+    option (google.api.http) = {
+      get: "/api/v1/tax/positions"
+    };
+  }
+
+  rpc RunTax(RunTaxRequest) returns (RunTaxResponse) {
+    option (google.api.http) = {
+      post: "/api/v1/tax/run"
+      body: "*"
+    };
+  }
+
+  rpc ListRealizedPnL(ListRealizedPnLRequest) returns (ListRealizedPnLResponse) {
+    option (google.api.http) = {
+      get: "/api/v1/tax/realized"
+    };
+  }
+
+  // -----------------------------------------------------------------
+  // OTC trading (c4 — spec p.64-69, 79).
+  //
+  // Two parties (clients ↔ clients OR supervisors ↔ supervisors —
+  // spec p.79 forbids the mixed case) negotiate iterations on a single
+  // seller-holding row; accepting the open iteration mints an option
+  // contract that is exercisable until settlement_date.
+  // -----------------------------------------------------------------
+
+  // ListPublicHoldings drives the OTC discovery board (spec p.67):
+  // holdings owned by other users that have public_count > reserved_count
+  // are visible. Filterable by ticker.
+  rpc ListPublicHoldings(ListPublicHoldingsRequest) returns (ListPublicHoldingsResponse) {
+    option (google.api.http) = {
+      get: "/api/v1/otc/discovery"
+    };
+  }
+
+  // CreateOTCOffer opens a new negotiation thread. The buyer initiates;
+  // the seller_holding_id resolves the seller (its owner). Increments
+  // reserved_count on the seller's holding by quantity.
+  rpc CreateOTCOffer(CreateOTCOfferRequest) returns (OTCOffer) {
+    option (google.api.http) = {
+      post: "/api/v1/otc/offers"
+      body: "*"
+    };
+  }
+
+  // CounterOfferOTC appends a new iteration to an existing thread. The
+  // prior open row flips to `superseded`; reservation is adjusted if
+  // quantity changed. modified_by tracks which party last touched the
+  // thread (drives the FE unread badge).
+  rpc CounterOfferOTC(CounterOfferOTCRequest) returns (OTCOffer) {
+    option (google.api.http) = {
+      post: "/api/v1/otc/offers/{thread_id}/counter"
+      body: "*"
+    };
+  }
+
+  // WithdrawOTCOffer pulls a thread out of negotiation. Either party
+  // may call; the open row flips to `withdrawn` and the seller's
+  // reservation is released.
+  rpc WithdrawOTCOffer(WithdrawOTCOfferRequest) returns (OTCOffer) {
+    option (google.api.http) = {
+      post: "/api/v1/otc/offers/{thread_id}/withdraw"
+      body: "*"
+    };
+  }
+
+  // ListOTCThreads drives the "Aktivne ponude" page (spec p.69) — every
+  // thread the caller participates in (as buyer or seller), most-recent
+  // iteration per thread.
+  rpc ListOTCThreads(ListOTCThreadsRequest) returns (ListOTCThreadsResponse) {
+    option (google.api.http) = {
+      get: "/api/v1/otc/offers"
+    };
+  }
+
+  // GetOTCThread returns every iteration in a thread (oldest first).
+  // Drives the thread-detail modal on spec p.69.
+  rpc GetOTCThread(GetOTCThreadRequest) returns (GetOTCThreadResponse) {
+    option (google.api.http) = {
+      get: "/api/v1/otc/offers/{thread_id}"
+    };
+  }
+
+  // AcceptOTCOffer accepts the open iteration in a thread and mints
+  // an active contract via the otc_premium SAGA (premium transfers
+  // from buyer to seller; contract row is created; seller's holding
+  // reservation rolls over from offer to contract).
+  rpc AcceptOTCOffer(AcceptOTCOfferRequest) returns (AcceptOTCOfferResponse) {
+    option (google.api.http) = {
+      post: "/api/v1/otc/offers/{thread_id}/accept"
+      body: "*"
+    };
+  }
+
+  // ListOTCContracts drives the "Sklopljeni ugovori" page (spec p.69)
+  // for the caller. Supervisors/admin may filter by user_id.
+  rpc ListOTCContracts(ListOTCContractsRequest) returns (ListOTCContractsResponse) {
+    option (google.api.http) = {
+      get: "/api/v1/otc/contracts"
+    };
+  }
+
+  // GetOTCContract returns one contract (caller must be a party or
+  // supervisor/admin).
+  rpc GetOTCContract(GetOTCContractRequest) returns (OTCContract) {
+    option (google.api.http) = {
+      get: "/api/v1/otc/contracts/{id}"
+    };
+  }
+
+  // ExerciseOTCContract runs the otc_exercise SAGA on an active
+  // contract (spec p.80 intra-bank): buyer pays qty * strike to seller,
+  // shares transfer, contract flips to `exercised`. Buyer's cost basis
+  // on the received shares is `strike_price`; seller writes a
+  // realized_gains row.
+  rpc ExerciseOTCContract(ExerciseOTCContractRequest) returns (ExerciseOTCContractResponse) {
+    option (google.api.http) = {
+      post: "/api/v1/otc/contracts/{id}/exercise"
+      body: "*"
+    };
+  }
+
+  // -----------------------------------------------------------------
+  // Investment funds (c4 PR3 — spec p.71-76).
+  //
+  // A fund is a pre-tax pooled vehicle with a manager (supervisor),
+  // a bank account in RSD for liquidity, and a basket of holdings
+  // recorded in portfolio_holdings with user_kind='fund'. Clients
+  // (and the bank itself via the BankAsClient sentinel) buy units
+  // at the current unit price (total_value_rsd / total_units, with
+  // first investment minting amount_rsd units at price 1.0).
+  // -----------------------------------------------------------------
+
+  // ListFunds returns the fund discovery list (spec p.71). Supervisors
+  // and clients with funds.read.* can browse; rows include total_value,
+  // profit, and minimum_contribution for sorting/filtering.
+  rpc ListFunds(ListFundsRequest) returns (ListFundsResponse) {
+    option (google.api.http) = {
+      get: "/api/v1/funds"
+    };
+  }
+
+  // GetFund returns the fund detail including its holdings list and the
+  // caller's position when one exists. Spec p.74.
+  rpc GetFund(GetFundRequest) returns (GetFundResponse) {
+    option (google.api.http) = {
+      get: "/api/v1/funds/{id}"
+    };
+  }
+
+  // CreateFund mints a new fund (supervisor only — spec p.74). Bank
+  // service is called internally to open the fund's RSD account; the
+  // creator becomes the default manager.
+  rpc CreateFund(CreateFundRequest) returns (Fund) {
+    option (google.api.http) = {
+      post: "/api/v1/funds"
+      body: "*"
+    };
+  }
+
+  // InvestInFund runs the fund_invest SAGA: reserves the source
+  // account, transfers to the fund's bank account (FX hop if needed),
+  // upserts the client_fund_positions row (units math) and writes a
+  // client_fund_transactions row. Verification-gated (FOUND-9).
+  rpc InvestInFund(InvestInFundRequest) returns (FundTransactionResponse) {
+    option (google.api.http) = {
+      post: "/api/v1/funds/{id}/invest"
+      body: "*"
+    };
+  }
+
+  // WithdrawFromFund runs the fund_withdraw SAGA. Liquid path (fund
+  // has enough RSD on its bank account) reserves and transfers
+  // directly; illiquid path stays in `pending` while auto-liquidation
+  // orders settle the gap. Verification-gated.
+  rpc WithdrawFromFund(WithdrawFromFundRequest) returns (FundTransactionResponse) {
+    option (google.api.http) = {
+      post: "/api/v1/funds/{id}/withdraw"
+      body: "*"
+    };
+  }
+
+  // ListFundPositions returns the caller's positions across all funds
+  // (clients) or a specified user's (supervisors/admin). Supervisors
+  // may pass the BankAsClient sentinel UUID to see the bank's stakes
+  // (FE-FUND-6, Profit Banke "Bank fund positions").
+  rpc ListFundPositions(ListFundPositionsRequest) returns (ListFundPositionsResponse) {
+    option (google.api.http) = {
+      get: "/api/v1/funds/positions"
+    };
+  }
+
+  // GetFundPerformance returns the daily liquid_rsd + holdings_value_rsd
+  // time series for a fund. FE-FUND-2 chart.
+  rpc GetFundPerformance(GetFundPerformanceRequest) returns (GetFundPerformanceResponse) {
+    option (google.api.http) = {
+      get: "/api/v1/funds/{id}/performance"
+    };
+  }
+
+  // ListFundTransactions returns the audit log of invest/withdraw rows
+  // for a fund. Supervisors see everything; clients see only their own.
+  rpc ListFundTransactions(ListFundTransactionsRequest) returns (ListFundTransactionsResponse) {
+    option (google.api.http) = {
+      get: "/api/v1/funds/{id}/transactions"
+    };
+  }
+
+  // -----------------------------------------------------------------
+  // Profit Banke (c4 PR4 — spec p.76).
+  //
+  // Two supervisor-facing dashboards:
+  //   • ListActuaryPerformances — every actuary's lifetime profit in
+  //     RSD (sum of positive gain_rsd on realized_gains rows owned by
+  //     the employee acting as a bank actuary; supervisors with
+  //     account_kind=fund are intentionally excluded — funds book
+  //     their own pre-tax basis at the client boundary, EDGE-3).
+  //     Lists the full spisak svih aktuara (spec p.76): an actuary
+  //     who never closed a position, or only at a loss, still appears
+  //     with profit_rsd "0" so the agent-vs-supervisor comparison is
+  //     complete.
+  //   • ListBankFundPositions — every position the bank itself holds
+  //     in an investment fund (client_id = BankAsClient sentinel),
+  //     decorated with fund name + manager.
+  //
+  // Both gated by `bank.profit.read`.
+  // -----------------------------------------------------------------
+
+  rpc ListActuaryPerformances(ListActuaryPerformancesRequest) returns (ListActuaryPerformancesResponse) {
+    option (google.api.http) = {
+      get: "/api/v1/profit/actuaries"
+    };
+  }
+
+  rpc ListBankFundPositions(ListBankFundPositionsRequest) returns (ListBankFundPositionsResponse) {
+    option (google.api.http) = {
+      get: "/api/v1/profit/funds"
+    };
+  }
+
+  // GetBankProfitTimeseries buckets realized bank profit over a time
+  // window. Same per-row loss clamp as ListActuaryPerformances, so
+  // Σ buckets over the whole history reconciles with
+  // Σ ListActuaryPerformances.profit_rsd. Gated by `bank.profit.read`.
+  rpc GetBankProfitTimeseries(GetBankProfitTimeseriesRequest) returns (GetBankProfitTimeseriesResponse) {
+    option (google.api.http) = {
+      get: "/api/v1/profit/timeseries"
+    };
+  }
+
+  // ReassignSupervisorAssets reassigns every fund managed by `from_user_id`
+  // to `to_user_id`. Internal-only (no http annotation) — called by
+  // user-svc inside SetEmployeePermissions when the funds.manage.supervisor
+  // permission is being revoked, so the demoted supervisor can't orphan
+  // their managed funds. Idempotent: a fund already managed by
+  // `to_user_id` is a no-op.
+  rpc ReassignSupervisorAssets(ReassignSupervisorAssetsRequest) returns (ReassignSupervisorAssetsResponse);
+}
+
+// =====================================================================
+// Enums
+// =====================================================================
+
+enum Currency {
+  CURRENCY_UNSPECIFIED = 0;
+  CURRENCY_RSD         = 1;
+  CURRENCY_EUR         = 2;
+  CURRENCY_CHF         = 3;
+  CURRENCY_USD         = 4;
+  CURRENCY_GBP         = 5;
+  CURRENCY_JPY         = 6;
+  CURRENCY_CAD         = 7;
+  CURRENCY_AUD         = 8;
+}
+
+enum SecurityType {
+  SECURITY_TYPE_UNSPECIFIED = 0;
+  SECURITY_TYPE_STOCK       = 1;
+  SECURITY_TYPE_FUTURE      = 2;
+  SECURITY_TYPE_FOREX       = 3;
+  SECURITY_TYPE_OPTION      = 4;
+}
+
+enum ActuaryType {
+  ACTUARY_TYPE_UNSPECIFIED = 0;
+  ACTUARY_TYPE_SUPERVISOR  = 1;
+  ACTUARY_TYPE_AGENT       = 2;
+}
+
+enum OrderType {
+  ORDER_TYPE_UNSPECIFIED = 0;
+  ORDER_TYPE_MARKET      = 1;
+  ORDER_TYPE_LIMIT       = 2;
+  ORDER_TYPE_STOP        = 3;
+  ORDER_TYPE_STOP_LIMIT  = 4;
+}
+
+enum Direction {
+  DIRECTION_UNSPECIFIED = 0;
+  DIRECTION_BUY         = 1;
+  DIRECTION_SELL        = 2;
+}
+
+enum OrderStatus {
+  ORDER_STATUS_UNSPECIFIED = 0;
+  ORDER_STATUS_PENDING     = 1;
+  ORDER_STATUS_APPROVED    = 2;
+  ORDER_STATUS_DECLINED    = 3;
+}
+
+enum OptionType {
+  OPTION_TYPE_UNSPECIFIED = 0;
+  OPTION_TYPE_CALL        = 1;
+  OPTION_TYPE_PUT         = 2;
+}
+
+enum UserKind {
+  USER_KIND_UNSPECIFIED = 0;
+  USER_KIND_CLIENT      = 1;
+  USER_KIND_EMPLOYEE    = 2;
+  // USER_KIND_FUND identifies investment-fund-as-actor rows (c4 PR3,
+  // spec p.74-75). A fund-actor order's user_id is the fund's id; its
+  // settlement account is the fund's bank account. Fund-actor sells do
+  // not write realized_gains rows — funds are pre-tax vehicles; tax
+  // attaches to the client at withdrawal time (EDGE-3).
+  USER_KIND_FUND        = 3;
+}
+
+// =====================================================================
+// Actuary
+// =====================================================================
+
+message ActuaryInfo {
+  string                       employee_id    = 1;
+  ActuaryType                  type           = 2;
+  string                       daily_limit    = 3;  // RSD, decimal
+  string                       used_limit     = 4;  // RSD, decimal
+  bool                         need_approval  = 5;
+  google.protobuf.Timestamp    created_at     = 6;
+  google.protobuf.Timestamp    updated_at     = 7;
+}
+
+message GetActuaryInfoRequest {
+  string employee_id = 1 [(buf.validate.field).string.uuid = true];
+}
+
+message ListActuariesRequest {
+  string      email_query = 1;
+  string      name_query  = 2;
+  ActuaryType type        = 3;
+  int32       page        = 10;
+  int32       page_size   = 11;
+}
+
+message ListActuariesResponse {
+  repeated ActuaryInfo actuaries = 1;
+  int32                page      = 2;
+  int32                page_size = 3;
+  int64                total     = 4;
+}
+
+message UpsertActuaryInfoRequest {
+  string      employee_id   = 1 [(buf.validate.field).string.uuid = true];
+  ActuaryType type          = 2 [(buf.validate.field).enum = {defined_only: true, not_in: [0]}];
+  string      daily_limit   = 3;
+  bool        need_approval = 4;
+}
+
+message UpdateActuaryLimitRequest {
+  string employee_id = 1 [(buf.validate.field).string.uuid = true];
+  string daily_limit = 2;
+}
+
+message ResetActuaryUsedLimitRequest {
+  string employee_id = 1 [(buf.validate.field).string.uuid = true];
+}
+
+message SetActuaryNeedApprovalRequest {
+  string employee_id   = 1 [(buf.validate.field).string.uuid = true];
+  bool   need_approval = 2;
+}
+
+message RunDailyResetActuariesResponse {
+  int32 affected = 1;
+}
+
+// =====================================================================
+// Exchanges
+// =====================================================================
+
+message Exchange {
+  string                    mic            = 1;
+  string                    name           = 2;
+  string                    acronym        = 3;
+  string                    polity         = 4;
+  Currency                  currency       = 5;
+  string                    timezone       = 6;     // IANA tz id
+  string                    open_local     = 7;     // "HH:MM"
+  string                    close_local    = 8;     // "HH:MM"
+  // is_open is the resolved state at the time of read: applies the
+  // override if set, otherwise computes from local hours + timezone.
+  bool                      is_open        = 9;
+  // is_after_hours is true within 4h of close per spec p.56.
+  bool                      is_after_hours = 10;
+  // override_state carries the admin toggle. Empty string means "no
+  // override, follow schedule"; otherwise one of "open" / "closed" /
+  // "after_hours". The "after_hours" mode forces is_open=false and
+  // is_after_hours=true at any wall-clock so admins can drive the
+  // spec p.56 cadence path during testing.
+  string                    override_state = 11;
+  google.protobuf.Timestamp updated_at     = 12;
+}
+
+message ListExchangesRequest {}
+
+message ListExchangesResponse {
+  repeated Exchange exchanges = 1;
+}
+
+message UpsertExchangeRequest {
+  string   mic         = 1  [(buf.validate.field).string = {min_len: 1, max_len: 10}];
+  string   name        = 2  [(buf.validate.field).string.min_len = 1];
+  string   acronym     = 3  [(buf.validate.field).string.min_len = 1];
+  string   polity      = 4  [(buf.validate.field).string.min_len = 1];
+  Currency currency    = 5  [(buf.validate.field).enum = {defined_only: true, not_in: [0]}];
+  string   timezone    = 6;
+  string   open_local  = 7;
+  string   close_local = 8;
+}
+
+message SetExchangeOverrideRequest {
+  string mic = 1 [(buf.validate.field).string.min_len = 1];
+  // state is one of "open" / "closed" / "after_hours". An empty
+  // string clears the override and falls back to the schedule.
+  string state = 2;
+}
+
+// =====================================================================
+// Securities
+// =====================================================================
+
+// Security carries the union of every type's attribute bag. Per-type
+// fields are populated only when relevant; consumers pick by `type`.
+message Security {
+  string                    id                     = 1;
+  string                    ticker                 = 2;
+  string                    name                   = 3;
+  SecurityType              type                   = 4;
+  string                    exchange_mic           = 5;
+  Currency                  currency               = 6;
+
+  // Stock fields.
+  int64                     outstanding_shares     = 10;
+  string                    dividend_yield         = 11;  // decimal e.g. "0.052"
+  string                    market_cap             = 12;  // outstanding_shares * price (computed)
+
+  // Future fields (also reused for forex contract size).
+  string                    contract_size          = 20;
+  string                    contract_unit          = 21;
+  google.protobuf.Timestamp settlement_date        = 22;
+
+  // Forex fields.
+  Currency                  base_currency          = 30;
+  Currency                  quote_currency         = 31;
+  string                    liquidity              = 32;  // "high"/"medium"/"low"
+
+  // Option fields.
+  string                    underlying_security_id = 40;
+  OptionType                option_type            = 41;
+  string                    strike_price           = 42;
+  string                    implied_volatility     = 43;
+  string                    premium                = 44;
+  int64                     open_interest          = 45;
+
+  google.protobuf.Timestamp created_at             = 90;
+  google.protobuf.Timestamp updated_at             = 91;
+}
+
+message UpsertSecurityRequest {
+  // For new securities, leave id empty; for updates, supply it.
+  string                    id                     = 1;
+  string                    ticker                 = 2  [(buf.validate.field).string.min_len = 1];
+  string                    name                   = 3  [(buf.validate.field).string.min_len = 1];
+  SecurityType              type                   = 4  [(buf.validate.field).enum = {defined_only: true, not_in: [0]}];
+  string                    exchange_mic           = 5;
+  Currency                  currency               = 6  [(buf.validate.field).enum = {defined_only: true, not_in: [0]}];
+
+  int64                     outstanding_shares     = 10;
+  string                    dividend_yield         = 11;
+  string                    contract_size          = 20;
+  string                    contract_unit          = 21;
+  google.protobuf.Timestamp settlement_date        = 22;
+  Currency                  base_currency          = 30;
+  Currency                  quote_currency         = 31;
+  string                    liquidity              = 32;
+  string                    underlying_security_id = 40;
+  OptionType                option_type            = 41;
+  string                    strike_price           = 42;
+  string                    implied_volatility     = 43;
+  string                    premium                = 44;
+  int64                     open_interest          = 45;
+}
+
+message ListSecuritiesRequest {
+  SecurityType type           = 1;
+  string       search         = 2;          // ticker/name substring
+  string       exchange_mic   = 3;
+  // Optional range filters; empty strings mean unbounded.
+  string       min_price      = 10;
+  string       max_price      = 11;
+  string       min_ask        = 12;
+  string       max_ask        = 13;
+  string       min_bid        = 14;
+  string       max_bid        = 15;
+  string       min_volume     = 16;
+  string       max_volume     = 17;
+  // For futures/options: settlement-date range. Plain YYYY-MM-DD
+  // strings (the FE binds these straight from <input type="date">);
+  // a google.protobuf.Timestamp here can't be bound from a bare date
+  // query param through grpc-gateway, which silently dropped the
+  // filter. Empty string means unbounded.
+  string min_settlement = 20;
+  string max_settlement = 21;
+  // Sort by "price", "volume", "maintenance_margin".
+  string       sort_by        = 30;
+  bool         sort_desc      = 31;
+  int32        page           = 40;
+  int32        page_size      = 41;
+}
+
+message ListSecuritiesResponse {
+  repeated SecurityWithListing items = 1;
+  int32 page      = 2;
+  int32 page_size = 3;
+  int64 total     = 4;
+}
+
+// SecurityWithListing collapses (security, listing) for the catalog
+// portal so the FE doesn't need to round-trip per row.
+message SecurityWithListing {
+  Security security = 1;
+  Listing  listing  = 2;
+  // Computed; spec p.46 derived data.
+  string   maintenance_margin   = 3;
+  string   initial_margin_cost  = 4;
+}
+
+message GetSecurityRequest {
+  string id = 1 [(buf.validate.field).string.uuid = true];
+}
+
+// =====================================================================
+// Listings
+// =====================================================================
+
+message Listing {
+  string                    id            = 1;
+  string                    security_id   = 2;
+  string                    exchange_mic  = 3;
+  string                    price         = 4;
+  string                    ask           = 5;
+  string                    bid           = 6;
+  int64                     volume        = 7;
+  string                    change_amt    = 8;
+  string                    contract_size = 9;
+  google.protobuf.Timestamp last_refresh  = 10;
+  google.protobuf.Timestamp created_at    = 11;
+}
+
+message UpsertListingRequest {
+  string security_id   = 1 [(buf.validate.field).string.uuid = true];
+  string exchange_mic  = 2;
+  string price         = 3;
+  string ask           = 4;
+  string bid           = 5;
+  int64  volume        = 6;
+  string change_amt    = 7;
+  string contract_size = 8;
+}
+
+message ListListingsRequest {
+  SecurityType type         = 1;
+  string       exchange_mic = 2;
+  string       search       = 3;
+  string       sort_by      = 4;   // "price" / "volume" / "maintenance_margin"
+  bool         sort_desc    = 5;
+  int32        page         = 10;
+  int32        page_size    = 11;
+}
+
+message ListListingsResponse {
+  repeated SecurityWithListing items = 1;
+  int32 page      = 2;
+  int32 page_size = 3;
+  int64 total     = 4;
+}
+
+message GetListingRequest {
+  string id = 1 [(buf.validate.field).string.uuid = true];
+}
+
+message GetListingDailyHistoryRequest {
+  string listing_id = 1 [(buf.validate.field).string.uuid = true];
+  // Plain YYYY-MM-DD strings (the FE binds these from its date range
+  // picker / isoNDaysAgo). A google.protobuf.Timestamp here cannot be
+  // bound from a bare date query param through grpc-gateway — the
+  // whole request 400s ("cannot parse … as RFC3339") so the price
+  // history chart never received data. Empty means unbounded.
+  string from = 2;
+  string to   = 3;
+}
+
+message ListingDailyPrice {
+  google.protobuf.Timestamp date       = 1;
+  string                    price      = 2;
+  string                    ask        = 3;
+  string                    bid        = 4;
+  string                    change_amt = 5;
+  int64                     volume     = 6;
+}
+
+message GetListingDailyHistoryResponse {
+  repeated ListingDailyPrice rows = 1;
+}
+
+message GetOptionChainRequest {
+  string stock_id     = 1 [(buf.validate.field).string.uuid = true];
+  // Settlement date filter; if unset, returns all chains.
+  google.protobuf.Timestamp settlement_date = 2;
+  // strikes_window: number of strike rows above and below the at-the-
+  // money strike to return (spec p.59 "filter po broju strike-ova").
+  int32  strikes_window = 3;
+}
+
+message OptionChainRow {
+  string strike_price = 1;
+  Security call       = 2;
+  Security put        = 3;
+}
+
+message OptionChainGroup {
+  google.protobuf.Timestamp settlement_date = 1;
+  string                    shared_price    = 2;
+  repeated OptionChainRow   rows            = 3;
+}
+
+message GetOptionChainResponse {
+  repeated OptionChainGroup groups = 1;
+}
+
+// =====================================================================
+// Orders
+// =====================================================================
+
+message Order {
+  string                    id                  = 1;
+  string                    user_id             = 2;
+  UserKind                  user_kind           = 3;
+  string                    security_id         = 4;
+  OrderType                 order_type          = 5;
+  Direction                 direction           = 6;
+  int32                     quantity            = 7;
+  string                    contract_size       = 8;
+  string                    price_per_unit      = 9;
+  string                    limit_price         = 10;
+  string                    stop_price          = 11;
+  bool                      all_or_none         = 12;
+  bool                      margin              = 13;
+  string                    account_id          = 14;
+  OrderStatus               status              = 15;
+  string                    approved_by         = 16;
+  bool                      approval_required   = 17;
+  google.protobuf.Timestamp approved_at         = 18;
+  bool                      is_done             = 19;
+  bool                      cancelled           = 20;
+  bool                      triggered           = 21;
+  bool                      after_hours         = 22;
+  int32                     remaining_quantity  = 23;
+  google.protobuf.Timestamp last_modification   = 24;
+  google.protobuf.Timestamp created_at          = 25;
+
+  // c4 PR3 — actor_kind discriminates whether this order was placed on
+  // behalf of the user themselves or for an investment fund they
+  // manage. on_behalf_of_fund_id is non-empty when actor_kind == FUND.
+  // For backward compat, default actor_kind is whatever user_kind
+  // resolved to at create time (client or employee).
+  UserKind                  actor_kind           = 26;
+  string                    on_behalf_of_fund_id = 27;
+}
+
+message CreateOrderRequest {
+  string    security_id   = 1  [(buf.validate.field).string.uuid = true];
+  OrderType order_type    = 2  [(buf.validate.field).enum = {defined_only: true, not_in: [0]}];
+  Direction direction     = 3  [(buf.validate.field).enum = {defined_only: true, not_in: [0]}];
+  int32     quantity      = 4  [(buf.validate.field).int32.gt = 0];
+  string    limit_price   = 5;     // optional for LIMIT/STOP_LIMIT
+  string    stop_price    = 6;     // optional for STOP/STOP_LIMIT
+  bool      all_or_none   = 7;
+  bool      margin        = 8;
+  string    account_id    = 9  [(buf.validate.field).string.uuid = true];
+
+  // c4 PR3 fund-actor (spec p.74-75). When set, the caller is acting on
+  // behalf of an investment fund they manage; the order's owner/account
+  // are the fund's. Validated against the fund row (caller is manager,
+  // account is fund.bank_account_id). Empty for normal client/employee
+  // orders.
+  string    on_behalf_of_fund_id = 10 [(buf.validate.field).string.uuid = true, (buf.validate.field).ignore = IGNORE_IF_ZERO_VALUE];
+}
+
+// CreateOrderResponse wraps the created Order plus advisory flags. Spec
+// p.57 — *"Obavestiti korisnika ako je berza zatvorena"*: the order
+// still gets placed, but the FE renders a notice when the security's
+// exchange is currently closed (not open and not in the after-hours
+// window). For exchanges without a calendar (forex, options) the flag
+// is always false.
+message CreateOrderResponse {
+  Order order            = 1;
+  bool  exchange_closed  = 2;
+}
+
+message ListOrdersRequest {
+  // status: "all", "pending", "approved", "declined", "done".
+  string      status      = 1;
+  UserKind    user_kind   = 2;       // employee/client filter (supervisor view)
+  string      user_id     = 3;       // narrow to a single trader
+  string      security_id = 4;
+  int32       page        = 10;
+  int32       page_size   = 11;
+}
+
+message ListOrdersResponse {
+  repeated Order orders   = 1;
+  int32 page      = 2;
+  int32 page_size = 3;
+  int64 total     = 4;
+}
+
+message GetOrderRequest {
+  string id = 1 [(buf.validate.field).string.uuid = true];
+}
+
+message ApproveOrderRequest {
+  string id = 1 [(buf.validate.field).string.uuid = true];
+}
+
+message DeclineOrderRequest {
+  string id     = 1 [(buf.validate.field).string.uuid = true];
+  string reason = 2;
+}
+
+message CancelOrderRequest {
+  string id = 1 [(buf.validate.field).string.uuid = true];
+  // Optional partial-cancel quantity (spec p.57 "otkazivanje celog ili
+  // dela Order-a"). When 0 or >= remaining_quantity, the whole order
+  // is cancelled. When 0 < quantity < remaining_quantity, the order's
+  // target quantity + remaining_quantity drop by this much; already-
+  // executed fills are honoured per spec ("sve ono što je već
+  // izvršeno i naplaćeno mora poštovati").
+  int32 quantity = 2 [(buf.validate.field).int32 = {gte: 0}];
+}
+
+// =====================================================================
+// Portfolio
+// =====================================================================
+
+message Holding {
+  string                    id                 = 1;
+  string                    user_id            = 2;
+  UserKind                  user_kind          = 3;
+  Security                  security           = 4;
+  string                    account_id         = 5;
+  int32                     quantity           = 6;
+  string                    weighted_avg_price = 7;
+  int32                     public_count       = 8;
+  // Computed market metrics.
+  string                    current_price      = 9;
+  string                    market_value       = 10;
+  string                    profit             = 11;
+  google.protobuf.Timestamp acquired_at        = 12;
+  google.protobuf.Timestamp updated_at         = 13;
+  // c4 (spec p.68) — count of shares committed against outstanding OTC
+  // offers + active OTC contracts. public_count and reserved_count are
+  // orthogonal; the FE renders public_count − reserved_count as the
+  // "available on the OTC board" number.
+  int32                     reserved_count     = 14;
+}
+
+message ListHoldingsRequest {
+  // For supervisor view; clients/agents see only their own.
+  string       user_id   = 1;
+  UserKind     user_kind = 2;
+  SecurityType type      = 3;
+}
+
+message ListHoldingsResponse {
+  repeated Holding holdings        = 1;
+  string           total_profit    = 2;     // user-currency-mixed; FE renders separately
+}
+
+message SetPublicCountRequest {
+  string id           = 1 [(buf.validate.field).string.uuid = true];
+  int32  public_count = 2 [(buf.validate.field).int32.gte = 0];
+}
+
+message ExerciseOptionRequest {
+  string holding_id = 1 [(buf.validate.field).string.uuid = true];
+  // Number of option contracts to exercise. Must be ≥ 1 and
+  // ≤ holding.quantity.
+  int32  quantity   = 2 [(buf.validate.field).int32.gt = 0];
+}
+
+message ExerciseOptionResponse {
+  // Updated option holding after the exercise. Quantity may be 0;
+  // the row is left in place for audit (FE filters quantity > 0).
+  Holding option_holding = 1;
+  // Updated underlying holding after the exercise — increased on a
+  // CALL, decreased on a PUT.
+  Holding underlying_holding = 2;
+  // Bank-side op_id of the cash leg, for ops correlation.
+  string  bank_op_id = 3;
+  // PUT only — realized gain on the underlying shares sold at strike.
+  // Both fields are zero for a CALL exercise (cost-basis update via
+  // weighted-avg, no realisation event).
+  string   realized_gain_native = 4;
+  string   realized_gain_rsd    = 5;
+  Currency realized_gain_currency = 6;
+}
+
+// =====================================================================
+// Capital-gains tax
+// =====================================================================
+
+message TaxPosition {
+  string user_id            = 1;
+  UserKind user_kind        = 2;
+  string display_name       = 3;
+  string unpaid_tax_rsd     = 4;     // tax owed for the current month (15% of pending gains)
+  string paid_tax_ytd_rsd   = 5;
+}
+
+message ListTaxPositionsRequest {
+  UserKind user_kind  = 1;
+  string   name_query = 2;
+}
+
+message ListTaxPositionsResponse {
+  repeated TaxPosition positions = 1;
+}
+
+message RunTaxRequest {
+  // user_id empty = run for everyone with a non-zero unpaid tax.
+  string user_id   = 1;
+  UserKind user_kind = 2;
+}
+
+message RunTaxResponse {
+  int32 users_taxed = 1;
+  string total_collected_rsd = 2;
+}
+
+// RealizedPnLRow is one closing-sell row, decorated with the security
+// ticker for display. tax_amount_rsd is 15% of max(profit_rsd, 0) per
+// spec p.62 (losses don't generate tax under the simple model).
+message RealizedPnLRow {
+  string id                          = 1;
+  google.protobuf.Timestamp sale_at  = 2;
+  string security_id                 = 3;
+  string ticker                      = 4;
+  int32  quantity                    = 5;
+  string cost_basis_amt              = 6;     // native currency
+  string proceeds_amt                = 7;     // native currency
+  Currency currency                  = 8;     // native currency
+  string profit_native               = 9;     // proceeds - cost_basis (native)
+  string profit_rsd                  = 10;    // RSD-equivalent (no commission, spec p.62)
+  string tax_amount_rsd              = 11;    // 15% of max(profit_rsd, 0)
+  bool   taxed                       = 12;
+  google.protobuf.Timestamp taxed_at = 13;
+  string tax_op_id                   = 14;
+  string account_id                  = 15;
+}
+
+// ListRealizedPnLRequest scopes the realised-gain ledger view.
+//   user_id  is required.
+//   user_kind narrows when both kinds happen to share an ID (shouldn't,
+//             but kept for symmetry with tax board filters).
+//   from / to clip by realised_at; either may be omitted.
+message ListRealizedPnLRequest {
+  string user_id                = 1;
+  UserKind user_kind            = 2;
+  google.protobuf.Timestamp from = 3;
+  google.protobuf.Timestamp to   = 4;
+}
+
+message ListRealizedPnLResponse {
+  repeated RealizedPnLRow rows = 1;
+}
+
+// =====================================================================
+// OTC (c4 — spec p.64-69, 79)
+// =====================================================================
+
+enum OTCStatus {
+  OTC_STATUS_UNSPECIFIED = 0;
+  OTC_STATUS_OPEN        = 1;
+  OTC_STATUS_SUPERSEDED  = 2;
+  OTC_STATUS_ACCEPTED    = 3;
+  OTC_STATUS_WITHDRAWN   = 4;
+  OTC_STATUS_EXPIRED     = 5;
+}
+
+enum OTCContractStatus {
+  OTC_CONTRACT_STATUS_UNSPECIFIED = 0;
+  OTC_CONTRACT_STATUS_ACTIVE      = 1;
+  OTC_CONTRACT_STATUS_EXERCISED   = 2;
+  OTC_CONTRACT_STATUS_EXPIRED     = 3;
+  OTC_CONTRACT_STATUS_SETTLING    = 4;
+}
+
+// PublicHoldingItem is one row on the OTC discovery board. The
+// "available_count" field is the share count visible to negotiations —
+// public_count minus reserved_count, clamped to zero.
+message PublicHoldingItem {
+  string                    holding_id      = 1;
+  string                    seller_id       = 2;
+  UserKind                  seller_kind     = 3;
+  string                    seller_account_id = 4;
+  string                    seller_display_name = 5;
+  Security                  security        = 6;
+  int32                     available_count = 7;
+  int32                     public_count    = 8;
+  int32                     reserved_count  = 9;
+  string                    current_price   = 10;
+  Currency                  currency        = 11;
+  // last_updated is the holding's updated_at — spec p.67 OTC portal
+  // "Last updated" column.
+  google.protobuf.Timestamp last_updated    = 12;
+}
+
+message ListPublicHoldingsRequest {
+  string ticker = 1;
+}
+
+message ListPublicHoldingsResponse {
+  repeated PublicHoldingItem items = 1;
+}
+
+message OTCOffer {
+  string                    id                = 1;
+  string                    thread_id         = 2;
+  string                    security_id       = 3;
+  string                    security_ticker   = 4;
+  string                    seller_holding_id = 5;
+
+  string                    buyer_id          = 10;
+  UserKind                  buyer_kind        = 11;
+  string                    buyer_account_id  = 12;
+
+  string                    seller_id         = 20;
+  UserKind                  seller_kind       = 21;
+  string                    seller_account_id = 22;
+
+  int32                     quantity          = 30;
+  string                    price_per_unit    = 31;
+  string                    premium           = 32;
+  Currency                  currency          = 33;
+  google.protobuf.Timestamp settlement_date   = 34;
+
+  string                    modified_by       = 40;
+  OTCStatus                 status            = 41;
+
+  google.protobuf.Timestamp created_at        = 90;
+  google.protobuf.Timestamp updated_at        = 91;
+}
+
+message CreateOTCOfferRequest {
+  string                    seller_holding_id = 1 [(buf.validate.field).string.uuid = true];
+  string                    buyer_account_id  = 2 [(buf.validate.field).string.uuid = true];
+  string                    seller_account_id = 3 [(buf.validate.field).string.uuid = true];
+  int32                     quantity          = 4 [(buf.validate.field).int32.gt = 0];
+  string                    price_per_unit    = 5 [(buf.validate.field).string.min_len = 1];
+  string                    premium           = 6 [(buf.validate.field).string.min_len = 1];
+  google.protobuf.Timestamp settlement_date   = 7;
+}
+
+message CounterOfferOTCRequest {
+  string                    thread_id         = 1 [(buf.validate.field).string.uuid = true];
+  int32                     quantity          = 2 [(buf.validate.field).int32.gt = 0];
+  string                    price_per_unit    = 3 [(buf.validate.field).string.min_len = 1];
+  string                    premium           = 4 [(buf.validate.field).string.min_len = 1];
+  google.protobuf.Timestamp settlement_date   = 5;
+}
+
+message WithdrawOTCOfferRequest {
+  string thread_id = 1 [(buf.validate.field).string.uuid = true];
+}
+
+message ListOTCThreadsRequest {
+  // For supervisor/admin views — narrow to a single party. Empty for
+  // self.
+  string party_user_id = 1;
+  UserKind party_user_kind = 2;
+  // "open" / "any" / "" (default "open").
+  string status = 3;
+}
+
+message ListOTCThreadsResponse {
+  // Latest iteration per thread. Sorted newest-first by updated_at.
+  repeated OTCOffer threads = 1;
+}
+
+message GetOTCThreadRequest {
+  string thread_id = 1 [(buf.validate.field).string.uuid = true];
+}
+
+message GetOTCThreadResponse {
+  // Every iteration in the thread, oldest first.
+  repeated OTCOffer iterations = 1;
+  // The signed contract if accept already ran.
+  OTCContract contract = 2;
+}
+
+message AcceptOTCOfferRequest {
+  string thread_id = 1 [(buf.validate.field).string.uuid = true];
+}
+
+message AcceptOTCOfferResponse {
+  OTCContract contract = 1;
+  // Bank op_id of the premium leg, for ops correlation.
+  string premium_op_id = 2;
+}
+
+message OTCContract {
+  string                    id                = 1;
+  string                    thread_id         = 2;
+  string                    security_id       = 3;
+  string                    security_ticker   = 4;
+  string                    seller_holding_id = 5;
+
+  string                    buyer_id          = 10;
+  UserKind                  buyer_kind        = 11;
+  string                    buyer_account_id  = 12;
+
+  string                    seller_id         = 20;
+  UserKind                  seller_kind       = 21;
+  string                    seller_account_id = 22;
+  // Resolved display name for the seller (mirrors
+  // PublicHoldingItem.seller_display_name). The FE renders this on
+  // "Sklopljeni ugovori"; it fell back to the raw UUID before this.
+  string                    seller_display_name = 23;
+
+  int32                     quantity          = 30;
+  string                    strike_price      = 31;
+  string                    premium_paid      = 32;
+  Currency                  currency          = 33;
+  google.protobuf.Timestamp settlement_date   = 34;
+
+  string                    premium_op_id     = 40;
+  OTCContractStatus         status            = 41;
+  string                    exercised_op_id   = 42;
+  string                    exercise_saga_id  = 43;
+  google.protobuf.Timestamp exercised_at      = 44;
+
+  google.protobuf.Timestamp created_at        = 90;
+  google.protobuf.Timestamp updated_at        = 91;
+}
+
+message ListOTCContractsRequest {
+  // Supervisor/admin: empty user_id returns all; non-empty narrows.
+  string party_user_id = 1;
+  UserKind party_user_kind = 2;
+  // "active"/"any"/"" (default "active").
+  string status = 3;
+}
+
+message ListOTCContractsResponse {
+  repeated OTCContract contracts = 1;
+}
+
+message GetOTCContractRequest {
+  string id = 1 [(buf.validate.field).string.uuid = true];
+}
+
+message ExerciseOTCContractRequest {
+  string id = 1 [(buf.validate.field).string.uuid = true];
+}
+
+message ExerciseOTCContractResponse {
+  OTCContract contract = 1;
+  // Bank op_id of the strike-leg cash transfer.
+  string strike_op_id = 2;
+  // Realized-gain row written for the seller (RSD, native).
+  string seller_realized_gain_native = 3;
+  string seller_realized_gain_rsd    = 4;
+}
+
+// =====================================================================
+// Investment funds (c4 PR3 — spec p.71-76)
+// =====================================================================
+
+enum FundStatus {
+  FUND_STATUS_UNSPECIFIED = 0;
+  FUND_STATUS_ACTIVE      = 1;
+  FUND_STATUS_CLOSED      = 2;
+}
+
+enum FundTransactionStatus {
+  FUND_TX_STATUS_UNSPECIFIED = 0;
+  FUND_TX_STATUS_PENDING     = 1;
+  FUND_TX_STATUS_COMPLETED   = 2;
+  FUND_TX_STATUS_FAILED      = 3;
+}
+
+// Fund is one investment-fund row. total_value_rsd + profit_rsd are
+// computed at read time (liquid_rsd + holdings_value_rsd; profit =
+// total_value − Σ total_invested_rsd across positions).
+message Fund {
+  string                    id                    = 1;
+  string                    name                  = 2;
+  string                    description           = 3;
+  string                    manager_user_id       = 4;
+  string                    manager_display_name  = 5;
+  string                    bank_account_id       = 6;
+  string                    bank_account_number   = 7;
+  string                    minimum_contribution  = 8;
+  string                    total_units           = 9;
+  // Computed at read time. RSD.
+  string                    liquid_rsd            = 10;
+  string                    holdings_value_rsd    = 11;
+  string                    total_value_rsd       = 12;
+  // profit_rsd = total_value_rsd − Σ total_invested_rsd across all
+  // positions. Negative when the fund is below contributed capital.
+  string                    profit_rsd            = 13;
+  string                    unit_price_rsd        = 14;
+  FundStatus                status                = 15;
+  google.protobuf.Timestamp created_at            = 16;
+  google.protobuf.Timestamp updated_at            = 17;
+}
+
+message FundHolding {
+  string                    holding_id           = 1;
+  Security                  security             = 2;
+  int32                     quantity             = 3;
+  string                    weighted_avg_price   = 4;
+  string                    current_price        = 5;
+  string                    market_value         = 6;
+  string                    profit_native        = 7;
+  Currency                  currency             = 8;
+  google.protobuf.Timestamp acquired_at          = 9;
+  google.protobuf.Timestamp updated_at           = 10;
+  // Spec p.74 fund-detail holdings columns: daily change, traded
+  // volume, and the security's initial margin cost (1.1 ×
+  // maintenance margin), in the holding's currency.
+  string                    change_amt           = 11;
+  int64                     volume               = 12;
+  string                    initial_margin_cost  = 13;
+}
+
+message FundPosition {
+  string                    id                      = 1;
+  string                    fund_id                 = 2;
+  string                    fund_name               = 3;
+  string                    client_id               = 4;
+  string                    units                   = 5;
+  string                    total_invested_rsd      = 6;
+  string                    current_value_rsd       = 7;
+  // profit_rsd = current_value_rsd − total_invested_rsd. Negative when
+  // the fund has lost value since the client invested.
+  string                    profit_rsd              = 8;
+  string                    share_pct               = 9; // 0..100
+  google.protobuf.Timestamp created_at              = 10;
+  google.protobuf.Timestamp updated_at              = 11;
+  // Fund-level context for the client "Moji fondovi" row (spec p.75:
+  // "Naziv i opis fonda, Vrednost fonda, …"). Computed at read time.
+  string                    fund_description        = 12;
+  string                    fund_total_value_rsd    = 13;
+}
+
+message FundTransaction {
+  string                    id                          = 1;
+  string                    fund_id                     = 2;
+  string                    client_id                   = 3;
+  string                    initiator_employee_id       = 4;
+  string                    amount_rsd                  = 5;
+  string                    units_delta                 = 6;
+  string                    source_or_dest_account_id   = 7;
+  bool                      is_inflow                   = 8;
+  FundTransactionStatus     status                      = 9;
+  string                    saga_id                     = 10;
+  string                    failure_reason              = 11;
+  google.protobuf.Timestamp created_at                  = 12;
+  google.protobuf.Timestamp updated_at                  = 13;
+}
+
+message FundPerformanceSnapshot {
+  google.protobuf.Timestamp snapshot_at          = 1;
+  string                    liquid_rsd           = 2;
+  string                    holdings_value_rsd   = 3;
+  string                    total_value_rsd      = 4;
+}
+
+message ListFundsRequest {
+  // status: "active" (default), "any".
+  string status                    = 1;
+  // Filter by manager (supervisor view).
+  string manager_user_id           = 2;
+  // Filter by minimum_contribution range (RSD, decimal strings).
+  // Empty disables the bound.
+  string min_contribution_at_least = 3;
+  string min_contribution_at_most  = 4;
+  // Sort: "name" (default), "total_value", "profit", "minimum_contribution".
+  string sort                      = 10;
+  // "asc" (default) or "desc".
+  string order                     = 11;
+}
+
+message ListFundsResponse {
+  repeated Fund funds = 1;
+}
+
+message GetFundRequest {
+  string id = 1 [(buf.validate.field).string.uuid = true];
+}
+
+message GetFundResponse {
+  Fund                  fund     = 1;
+  repeated FundHolding  holdings = 2;
+  // The caller's position in this fund, when one exists. For supervisors
+  // viewing the bank-as-client slice, pass `client_id` query param.
+  FundPosition          position = 3;
+}
+
+message CreateFundRequest {
+  string name                  = 1 [(buf.validate.field).string = {min_len: 1, max_len: 120}];
+  string description           = 2 [(buf.validate.field).string.max_len = 1000];
+  string minimum_contribution  = 3 [(buf.validate.field).string.pattern = "^[0-9]+(\\.[0-9]{1,4})?$"];
+  // Optional manager override (defaults to caller). Admin only.
+  string manager_user_id       = 4;
+}
+
+message InvestInFundRequest {
+  string id                = 1 [(buf.validate.field).string.uuid = true];
+  // Investment amount in RSD — the fund's accounting unit (spec p.71
+  // ClientFundTransaction.Iznos = "iznos investicije ... u RSD", and
+  // minimumContribution is RSD). The server converts RSD → the source
+  // account's currency for the debit (commission added on top for
+  // clients, none for the bank/actuary). Mirrors WithdrawFromFundRequest.
+  string amount_rsd        = 2 [(buf.validate.field).string.pattern = "^[0-9]+(\\.[0-9]{1,4})?$"];
+  // Source account. Client's own RSD/FX account, or — when supervisor
+  // is investing on behalf of the bank — a bank-side RSD/FX account.
+  string source_account_id = 3 [(buf.validate.field).string.uuid = true];
+  // When non-empty AND caller is supervisor, the supervisor is
+  // investing in the name of the bank (spec p.75 Napomena 2 — client_id
+  // = BankAsClient sentinel). UUID equality with the sentinel is
+  // enforced server-side.
+  string on_behalf_client_id = 4;
+}
+
+message WithdrawFromFundRequest {
+  string id              = 1 [(buf.validate.field).string.uuid = true];
+  // Empty when `withdraw_all` is set — the server then ignores this and
+  // redeems the full position. IGNORE_IF_ZERO_VALUE so an unset amount
+  // skips the pattern; a present-but-malformed amount is still caught,
+  // and an empty amount without withdraw_all is rejected by the handler.
+  string amount_rsd      = 2 [(buf.validate.field).string.pattern = "^[0-9]+(\\.[0-9]{1,4})?$", (buf.validate.field).ignore = IGNORE_IF_ZERO_VALUE];
+  // Destination account. Same rules as InvestInFundRequest.
+  string dest_account_id = 3 [(buf.validate.field).string.uuid = true];
+  string on_behalf_client_id = 4;
+  // Optional convenience: when true, server ignores `amount_rsd` and
+  // withdraws the full current value of the caller's position.
+  bool   withdraw_all    = 5;
+}
+
+message FundTransactionResponse {
+  FundTransaction transaction = 1;
+  // saga_id of the invest/withdraw saga so the FE can poll progress on
+  // illiquid withdraws (PR8 tests rely on this).
+  string          saga_id     = 2;
+  // When true, the withdraw landed on the illiquid path (auto-liquidation
+  // in progress); the transaction stays in pending until orders settle.
+  bool            pending     = 3;
+}
+
+message ListFundPositionsRequest {
+  // Empty client_id = caller's own positions. Supervisors/admin may
+  // narrow to a specific client (or to the BankAsClient sentinel for
+  // Profit Banke).
+  string client_id = 1;
+  // status: "active" (default, units > 0), "any".
+  string status    = 2;
+}
+
+message ListFundPositionsResponse {
+  repeated FundPosition positions = 1;
+}
+
+message GetFundPerformanceRequest {
+  string id     = 1 [(buf.validate.field).string.uuid = true];
+  // Sliding window: defaults to 30d when zero.
+  int32  days   = 2 [(buf.validate.field).int32 = {gte: 0, lte: 3650}];
+}
+
+message GetFundPerformanceResponse {
+  repeated FundPerformanceSnapshot snapshots = 1;
+}
+
+message ListFundTransactionsRequest {
+  string id        = 1 [(buf.validate.field).string.uuid = true];
+  string client_id = 2;          // narrow when caller is supervisor
+  string status    = 3;          // "" / "pending" / "completed" / "failed"
+  int32  page      = 10 [(buf.validate.field).int32 = {gte: 0}];
+  int32  page_size = 11 [(buf.validate.field).int32 = {gte: 0, lte: 200}];
+}
+
+message ListFundTransactionsResponse {
+  repeated FundTransaction transactions = 1;
+  int32 page                            = 2;
+  int32 page_size                       = 3;
+  int64 total                           = 4;
+}
+
+// =====================================================================
+// Profit Banke (c4 PR4 — spec p.76)
+// =====================================================================
+
+// ActuaryPerformance is one row on the supervisor-facing actuary
+// leaderboard. profit_rsd is the sum of *positive* gain_rsd on
+// realized_gains rows attributed to this actuary; losses are clamped
+// to zero per row, matching the capital-gains tax cron's reading.
+message ActuaryPerformance {
+  string      user_id           = 1;
+  string      display_name      = 2;
+  ActuaryType type              = 3;
+  // profit_rsd is decimal-string RSD. Always positive (negative
+  // contributions are clamped to zero per row before summing).
+  string      profit_rsd        = 4;
+  // realized_count is the row count behind profit_rsd — useful for
+  // sanity checks in the FE and the soak suite invariants.
+  int64       realized_count    = 5;
+}
+
+message ListActuaryPerformancesRequest {
+  // "agent" / "supervisor" / "" (default both). Mirrors actuary_info.type.
+  string type       = 1;
+  string name_query = 2;
+}
+
+message ListActuaryPerformancesResponse {
+  repeated ActuaryPerformance rows = 1;
+}
+
+// BankFundPosition is one row on the "bank's positions in funds"
+// dashboard (spec p.76 — "Pozicije banke u fondovima"). Wraps the
+// underlying FundPosition with the fund's display columns so the FE
+// doesn't need a second round-trip per row.
+message BankFundPosition {
+  FundPosition position             = 1;
+  string       fund_name            = 2;
+  string       manager_user_id      = 3;
+  string       manager_display_name = 4;
+}
+
+message ListBankFundPositionsRequest {}
+
+message ListBankFundPositionsResponse {
+  repeated BankFundPosition rows = 1;
+}
+
+// GetBankProfitTimeseriesRequest buckets realized bank profit over a
+// calendar window. `bucket` is the granularity; `from`/`to` clip
+// realized_at inclusively. Both bounds are optional — when `from` is
+// unset the server returns a trailing default window ending at `to`
+// (or now() when `to` is unset too).
+message GetBankProfitTimeseriesRequest {
+  // "day" (default) / "week" / "month".
+  string                    bucket = 1;
+  google.protobuf.Timestamp from   = 2;
+  google.protobuf.Timestamp to     = 3;
+}
+
+// BankProfitBucket is one calendar period. profit_rsd uses the same
+// per-row loss clamp as the actuary leaderboard (Σ greatest(gain_rsd,
+// 0) on realized_gains where user_kind='employee'), so Σ profit_rsd
+// across every bucket of the full history reconciles with
+// Σ ListActuaryPerformances.profit_rsd. trading_rsd + fund_rsd
+// partition profit_rsd by source (realized_gains.security_id set vs
+// fund_id set). cumulative_rsd is the running total from the first
+// bucket in the response.
+message BankProfitBucket {
+  google.protobuf.Timestamp period_start   = 1;
+  string                    profit_rsd     = 2;
+  string                    trading_rsd    = 3;
+  string                    fund_rsd       = 4;
+  string                    cumulative_rsd = 5;
+  int64                     realized_count = 6;
+}
+
+message GetBankProfitTimeseriesResponse {
+  repeated BankProfitBucket buckets   = 1;
+  // Σ profit_rsd across every returned bucket (the last bucket's
+  // cumulative_rsd, or "0" when the window is empty).
+  string                    total_rsd = 2;
+}
+
+message ReassignSupervisorAssetsRequest {
+  string from_user_id = 1 [(buf.validate.field).string.uuid = true];
+  string to_user_id   = 2 [(buf.validate.field).string.uuid = true];
+}
+
+message ReassignSupervisorAssetsResponse {
+  // funds_reassigned counts active fund rows whose manager_user_id was
+  // flipped. Funds already managed by `to_user_id` are not counted.
+  int32 funds_reassigned = 1;
+}

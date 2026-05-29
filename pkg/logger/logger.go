@@ -1,3 +1,8 @@
+// Package logger configures the application's structured logger.
+//
+// Output is JSON on stdout by default (k8s-friendly), with the level taken
+// from LOG_LEVEL and the format from LOG_FORMAT (json|text). The logger is
+// an [*slog.Logger]; pass it through context with [Inject] / [From].
 package logger
 
 import (
@@ -5,81 +10,46 @@ import (
 	"log/slog"
 	"os"
 	"strings"
-	"sync"
-	"time"
-
-	"github.com/lmittmann/tint"
-)
-
-var (
-	levelVar   = new(slog.LevelVar)
-	initOnce   sync.Once
-	rootLogger *slog.Logger
 )
 
 type ctxKey struct{}
 
-// Init sets up the global logger. Call once from main.
-func Init(service string) *slog.Logger {
-	initOnce.Do(func() {
-		levelVar.Set(parseLevel(os.Getenv("LOG_LEVEL")))
-
-		opts := &slog.HandlerOptions{
-			Level:     levelVar,
-			AddSource: true,
-		}
-
-		var h slog.Handler
-		if strings.EqualFold(os.Getenv("LOG_FORMAT"), "text") {
-			h = tint.NewHandler(os.Stdout, &tint.Options{
-				Level:      levelVar,
-				AddSource:  true,
-				TimeFormat: time.Kitchen,
-			})
-		} else {
-			h = slog.NewJSONHandler(os.Stdout, opts)
-		}
-
-		rootLogger = slog.New(h).With("service", service)
-		slog.SetDefault(rootLogger)
-	})
-	return rootLogger
-}
-
-func SetLevel(lvl string) {
-	levelVar.Set(parseLevel(lvl))
-}
-
-func L() *slog.Logger {
-	if rootLogger == nil {
-		return slog.Default()
-	}
-	return rootLogger
-}
-
-func FromContext(ctx context.Context) *slog.Logger {
-	if ctx == nil {
-		return L()
-	}
-	if l, ok := ctx.Value(ctxKey{}).(*slog.Logger); ok {
-		return l
-	}
-	return L()
-}
-
-func WithContext(ctx context.Context, l *slog.Logger) context.Context {
-	return context.WithValue(ctx, ctxKey{}, l)
-}
-
-func parseLevel(s string) slog.Level {
-	switch strings.ToLower(strings.TrimSpace(s)) {
+// New returns an [*slog.Logger] honoring LOG_LEVEL and LOG_FORMAT env vars.
+// Service is added as a default attribute on every record.
+func New(service string) *slog.Logger {
+	var level slog.Level
+	switch strings.ToLower(os.Getenv("LOG_LEVEL")) {
 	case "debug":
-		return slog.LevelDebug
-	case "warn", "warning":
-		return slog.LevelWarn
-	case "error", "err":
-		return slog.LevelError
+		level = slog.LevelDebug
+	case "warn":
+		level = slog.LevelWarn
+	case "error":
+		level = slog.LevelError
 	default:
-		return slog.LevelInfo
+		level = slog.LevelInfo
 	}
+
+	opts := &slog.HandlerOptions{Level: level, AddSource: false}
+
+	var handler slog.Handler
+	if strings.ToLower(os.Getenv("LOG_FORMAT")) == "text" {
+		handler = slog.NewTextHandler(os.Stdout, opts)
+	} else {
+		handler = slog.NewJSONHandler(os.Stdout, opts)
+	}
+
+	return slog.New(handler).With("service", service)
+}
+
+// Inject stores logger in ctx for downstream retrieval.
+func Inject(ctx context.Context, log *slog.Logger) context.Context {
+	return context.WithValue(ctx, ctxKey{}, log)
+}
+
+// From returns the logger from ctx, or the default if none is present.
+func From(ctx context.Context) *slog.Logger {
+	if log, ok := ctx.Value(ctxKey{}).(*slog.Logger); ok {
+		return log
+	}
+	return slog.Default()
 }

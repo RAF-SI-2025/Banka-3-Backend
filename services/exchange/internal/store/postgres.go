@@ -1,0 +1,110 @@
+// Package store is the exchange service's persistence layer.
+package store
+
+import (
+	"context"
+	"errors"
+
+	"github.com/RAF-SI-2025/Banka-3-Backend/pkg/apperr"
+	"github.com/RAF-SI-2025/Banka-3-Backend/services/exchange/internal/domain"
+	"github.com/jackc/pgx/v5"
+	"github.com/jackc/pgx/v5/pgxpool"
+)
+
+type Store struct {
+	Pool *pgxpool.Pool
+	// ReadPool routes SELECTs to a hot standby when set.
+	// BonusReadReplicaRouting / PR #287.
+	ReadPool *pgxpool.Pool
+}
+
+func New(pool *pgxpool.Pool) *Store { return &Store{Pool: pool} }
+
+func (s *Store) reader() *pgxpool.Pool {
+	if s.ReadPool != nil {
+		return s.ReadPool
+	}
+	return s.Pool
+}
+
+func noRows(err error) bool { return errors.Is(err, pgx.ErrNoRows) }
+
+// UpsertRate inserts or updates a single (from, to) row. Stamping
+// updated_at via the SET clause keeps the column actively meaningful
+// even on no-change updates.
+func (s *Store) UpsertRate(ctx context.Context, r *domain.Rate) (*domain.Rate, error) {
+	const q = `
+        insert into "exchange".fx_rates ("from", "to", bid, ask, updated_at)
+        values ($1,$2,$3,$4, now())
+        on conflict ("from","to") do update
+          set bid = excluded.bid, ask = excluded.ask, updated_at = now()
+        returning "from", "to", bid::text, ask::text, updated_at`
+
+	out, err := scanRate(s.Pool.QueryRow(ctx, q, string(r.From), string(r.To), r.Bid, r.Ask))
+	if err != nil {
+		// numeric check-violation is the most likely failure here
+		// (negative bid, ask < bid). Surface as Validation so the gateway
+		// returns 400.
+		var pe interface{ SQLState() string }
+		if errors.As(err, &pe) && pe.SQLState() == "23514" {
+			return nil, apperr.Validation("fx rate violates a check constraint (positive amounts and ask ≥ bid)")
+		}
+		return nil, apperr.Internal("upsert fx rate", err)
+	}
+	return out, nil
+}
+
+// GetRate returns one row or NotFound.
+func (s *Store) GetRate(ctx context.Context, from, to domain.Currency) (*domain.Rate, error) {
+	const q = `
+        select "from", "to", bid::text, ask::text, updated_at
+        from "exchange".fx_rates
+        where "from" = $1 and "to" = $2`
+	out, err := scanRate(s.Pool.QueryRow(ctx, q, string(from), string(to)))
+	if err != nil {
+		if noRows(err) {
+			return nil, apperr.NotFound("fx rate not found")
+		}
+		return nil, apperr.Internal("get fx rate", err)
+	}
+	return out, nil
+}
+
+// ListRates returns all rows, optionally filtered to a single base
+// currency.
+func (s *Store) ListRates(ctx context.Context, from domain.Currency) ([]*domain.Rate, error) {
+	args := []any{}
+	q := `select "from", "to", bid::text, ask::text, updated_at from "exchange".fx_rates`
+	if from != "" {
+		q += ` where "from" = $1`
+		args = append(args, string(from))
+	}
+	q += ` order by "from", "to"`
+
+	rows, err := s.reader().Query(ctx, q, args...)
+	if err != nil {
+		return nil, apperr.Internal("list fx rates", err)
+	}
+	defer rows.Close()
+
+	var out []*domain.Rate
+	for rows.Next() {
+		r, err := scanRate(rows)
+		if err != nil {
+			return nil, apperr.Internal("scan fx rate", err)
+		}
+		out = append(out, r)
+	}
+	return out, rows.Err()
+}
+
+func scanRate(row interface{ Scan(...any) error }) (*domain.Rate, error) {
+	var r domain.Rate
+	var from, to string
+	if err := row.Scan(&from, &to, &r.Bid, &r.Ask, &r.UpdatedAt); err != nil {
+		return nil, err
+	}
+	r.From = domain.Currency(from)
+	r.To = domain.Currency(to)
+	return &r, nil
+}

@@ -1,225 +1,54 @@
-# banka-raf
+# Banka-3-Backend
 
-Projekat iz predmeta na RAF-u. Go/gRPC mikroservisi + Postgres.
+Go monorepo. Six services (`user`, `bank`, `trading`, `exchange`,
+`notification`, `gateway`) talking gRPC, Postgres + Redis, deployed on
+Kubernetes.
 
-Aktuelni stack u `newestbackend` sada ukljucuje:
-- PostgreSQL primary + physical read replica (`postgres` + `postgres_replica`)
-- mesecno particionisanu `listing_daily_price_info` tabelu sa sopstvenom maintenance funkcijom `ensure_listing_daily_price_partitions(...)`
-- hash-particionisane Celina 5 interbank audit tabele po `sender_routing_number`
-- dodatni read-heavy indeksi za transaction history, kreditne cron upite i trading/OTC portale
-- InfluxDB za time-series berzanske podatke
-- Spark analytics pipeline koji cita sa read replike i pise dnevne agregate nazad u Postgres, sa Kubernetes `ScheduledSparkApplication` manifestima
-- Kubernetes autoscaling bundle za `gateway` sa `Deployment` + `Service` + `HPA` + `PodDisruptionBudget`
-
-Za pripremu fakultetskog klaster deployment-a pogledajte i
-`k8s/faculty/README.md`.
-
-## API
-
-Api specifikacija se nalazi
-[ovde](https://ivan-klikovac.github.io/raf-banka3-api/)
-
-## Potrebno
-
-- [Docker](https://docs.docker.com/get-docker/)
-- [Make](https://www.gnu.org/software/make/) (`brew install make` - macos /
-  `choco install make` - windows)
-- [Go](https://go.dev/dl/) — samo ako koristite `-l` komande za lokalno
-  pokretanje
-
-## Pokretanje
-
-Koristimo docker-compose, sa make-om. (Potrebno je da prvo napravite '.env' file
-ili kopirate example.)
+See `CLAUDE.md` for architecture, conventions, and roadmap. Quick start:
 
 ```bash
 cp .env.example .env
+make up      # builds the tools image, runs migrations, brings up every service
+make seed    # plants the bootstrap admin + demo dataset
 ```
 
-## Komande
+The only host requirement is Docker (with the Compose plugin) and GNU
+Make. `buf`, `golang-migrate`, `gofumpt`, `golangci-lint`, and `go`
+itself all live inside the `banka-tools` image — see
+`docker/Dockerfile.tools`. `make help` shows every target.
 
-Sve komande koriste Docker po defaultu. Dodajte `-l` suffix za lokalno
-pokretanje (potreban Go na sistemu).
+For local-toolchain iteration (faster than spinning a container per
+command), install the host bins (the `flake.nix` covers Nix users) and
+prefix any target with `HOST=1`, e.g. `make HOST=1 test`.
 
-| Komanda        | Opis                                         |
-| -------------- | -------------------------------------------- |
-| `make all`     | Pokreni sve (proto, up, schema, seed)        |
-| `make up`      | Pokreni servise/containere                   |
-| `make down`    | Ugasi servise/containere                     |
-| `make down-v`  | Ugasi i obrisi volume (cist start)           |
-| `make proto`   | Regenerisi .pb.go fajlove u /gen             |
-| `make schema`  | Load db schema                               |
-| `make seed`    | Ucitaj test podatke                          |
-| `make refresh-partitions` | Otvori naredne mesece za range particije |
-| `make verify-replica` | Proveri da li je replica u recovery/read-only modu |
-| `make verify-partitions` | Ispisi aktivne particije za bonus tabele |
-| `make verify-indexes` | Ispisi dodatne read-heavy indekse za DB tuning |
-| `make spark-analytics-image` | Builduj Spark analytics image |
-| `make spark-analytics-local` | Pokreni Spark analytics lokalno preko docker compose profila |
-| `make verify-spark-analytics` | Ispisi poslednje Spark analytics agregate iz Postgresa |
-| `make spark-ml-local` | Pokreni Spark ML segmentaciju racuna nad projektnim podacima |
-| `make verify-spark-ml` | Ispisi poslednje Spark ML klastere i account segmente iz Postgresa |
-| `make k8s-gateway-image` | Builduj lokalni gateway image za Kubernetes autoscaling demo |
-| `make k8s-autoscaling-apply` | Apply gateway autoscaling manifesta na Kubernetes |
-| `make k8s-autoscaling-status` | Ispisi deployment/service/HPA/PDB status |
-| `make nuke`    | Obrisi sve i ucitaj schema i seed            |
-| `make build`   | Builduj sve servise (Docker)                 |
-| `make build-l` | Builduj sve servise (lokalno)                |
-| `make test`    | Pokreni testove sa race detektorom (Docker)  |
-| `make test-l`  | Pokreni testove sa race detektorom (lokalno) |
-| `make fmt`     | Formatiraj kod sa gofmt (Docker)             |
-| `make fmt-l`   | Formatiraj kod sa gofmt (lokalno)            |
-| `make lint`    | Pokreni linter (Docker)                      |
-| `make lint-l`  | Pokreni linter (lokalno)                     |
+## Seeded credentials
 
-Replica je dostupna na host portu `${POSTGRES_REPLICA_PORT}` (default `5433`)
-i sluzi za read-only repliku primarne baze. Schema/seed i dalje idu iskljucivo
-na primary preko `make schema` i `make seed`.
+`make seed` is idempotent and unconditionally plants the bootstrap
+admin, the demo client, and (when the bank schema is migrated) a
+small c2 dataset hung off the client: one company, three accounts
+(RSD personal / EUR personal / RSD business), an active card, and an
+approved cash loan with one paid + one upcoming installment. On a
+c1-only stack the c2 layer is skipped silently.
 
-Particionisanje nije uradjeno kao jednokratni SQL rename/migrate korak, nego
-kao deo startne seme baze: parent tabela `listing_daily_price_info` se odmah
-kreira kao range-partitioned, a maintenance funkcija unapred otvara archive +
-tekuci i naredne mesece. To daje jednostavniji bootstrap i predvidljiviji
-lokalni razvoj.
+| Kind                | Email                     | Password         |
+|---------------------|---------------------------|------------------|
+| Admin               | `admin@banka.local`       | `Admin123!`      |
+| Banking employee    | `zaposleni@banka.local`   | `Zaposleni123!`  |
+| Actuary agent       | `aktuar@banka.local`      | `Aktuar123!`     |
+| Actuary supervisor  | `supervizor@banka.local`  | `Supervizor123!` |
+| Client              | `klijent@banka.local`     | `Klijent123!`    |
+| Second client       | `klijent2@banka.local`    | `Klijent123!`    |
 
-Dodatni tuning je fokusiran na query obrasce koji vec postoje u kodu:
-- `payments` / `transfers`: istorija po nalogu i sortiranje po vremenu
-- `loans` / `loan_request`: cron i pregled zahteva po statusu i datumu
-- `orders`: execution queue + portal listing po statusu / placeru
-- `external_otc_*`: korisnicki thread/contract listing sa status filterom
+Override via `SEED_<ROLE>_EMAIL` / `SEED_<ROLE>_PASSWORD`
+(`ADMIN`, `EMPLOYEE`, `ACTUARY`, `SUPERVISOR`, `CLIENT`, `CLIENT2`).
+Passwords must satisfy the spec p.10 policy (≥8/≤32 chars, ≥2 digits,
+≥1 upper, ≥1 lower).
 
-## Spark analytics
+Roles in brief: `zaposleni` is the c2 banking agent (no trading
+permissions); `aktuar` carries `actuary` + `actuary.agent` and a
+trading `actuary_info` row with a 200 000 RSD daily limit;
+`supervizor` carries `actuary` + `actuary.supervisor` + `trading.margin`
+and approves agent-side orders.
 
-Analytics sloj je izdvojen u `analytics/spark/` i koristi isti read/write split
-kao aplikacioni servisi:
-- raw podaci se citaju sa `postgres_replica`
-- kurirani agregati se upisuju na `postgres`
-
-PySpark job racuna dnevne operativne metrike za:
-- payments / transfers
-- orders / order fills
-- external OTC contracts
-- top listings po dnevnom prometu
-
-Dodat je i Spark ML job koji radi KMeans segmentaciju racuna na osnovu
-projektnog ponasanja:
-- outgoing / incoming payments
-- outgoing / incoming transfers
-- order activity
-- fill notional
-- balance / age / owner kind
-
-Lokalni dry-run ide preko compose profila:
-
-```bash
-make spark-analytics-local
-make verify-spark-analytics
-make spark-ml-local
-make verify-spark-ml
-```
-
-Za Kubernetes deployment dodate su dve putanje:
-- `analytics/spark/k8s/`: `ScheduledSparkApplication` za klastere sa Spark operatorom
-- `analytics/spark/k8s/vanilla/`: obican Kubernetes `CronJob` / `Job` koji vrti Spark pod bez dodatnog operatora
-
-To omogucava i strogu demonstraciju zahteva "Spark podignut na Kubernetesu"
-i praktican lokalni run na Docker Desktop Kubernetes-u.
-
-## Kubernetes autoscaling
-
-Autoscaling je implementiran nad `gateway` slojem u `k8s/autoscaling/gateway/`,
-jer je to stateless HTTP ulaz u sistem i najprirodniji kandidat za horizontalno
-skaliranje. Bundle ukljucuje:
-- `Deployment` sa readiness/liveness probe-ovima
-- `Service`
-- `HorizontalPodAutoscaler` (`autoscaling/v2`)
-- `PodDisruptionBudget`
-
-Kubernetes deployment koristi lokalni image `banka-3-backend-gateway:latest` i
-za demo se povezuje na vec podignute docker-compose gRPC servise preko
-`host.docker.internal`.
-
-Napomena: stvarno HPA skaliranje zahteva dostupan metrics API (`metrics-server`
-ili ekvivalent). Ako metrics API nije instaliran, manifesti ce se uredno
-kreirati, ali HPA nece moci da donosi CPU/memory odluke dok se metrics sloj ne
-doda u klaster.
-
-## Monitoring / Logging / Alerting
-
-Dodati su Prometheus/Grafana/Alertmanager fajlovi i Prometheus metrike u
-servise:
-
-- `gateway` izbacuje HTTP request count/status/latency metrike
-- `bank`, `exchange`, `user` i `notification` izbacuju gRPC request
-  count/status/latency metrike
-- svi servisi imaju poseban `/metrics` endpoint na admin portu
-- Alertmanager moze da prosledi alertove na Discord preko lokalnog webhook
-  bridge servisa
-
-Bitni fajlovi:
-
-- `pkg/observability/metrics.go`
-- `monitoring/prometheus/prometheus.yml`
-- `monitoring/prometheus/alerts.yml`
-- `monitoring/alertmanager/alertmanager.yml`
-- `monitoring/grafana/`
-- `monitoring/discord-notifier/server.py`
-
-Lokalno podizanje observability stack-a:
-
-```bash
-make observability-up
-make observability-status
-```
-
-Podrazumevani UI endpoint-i:
-
-- Prometheus: `http://localhost:9090`
-- Grafana: `http://localhost:3001`
-- Alertmanager: `http://localhost:9093`
-
-Podrazumevani metrics endpoint-i:
-
-- `http://localhost:9100/metrics` - gateway
-- `http://localhost:9101/metrics` - user
-- `http://localhost:9102/metrics` - notification
-- `http://localhost:9103/metrics` - bank
-- `http://localhost:9104/metrics` - exchange
-
-Ako zelite Discord alertove, setujte `DISCORD_WEBHOOK_URL` u `.env` pre
-pokretanja `make observability-up`.
-
-## CI
-
-CI se pokrece automatski na pull request prema `main` grani. Proverava:
-
-- **Format** — `gofmt` provera
-- **Lint** — golangci-lint
-- **Build** — kompajlira sve servise
-- **Test** — testovi sa race detektorom
-- **Proto staleness** — proverava da li su generisani proto fajlovi azurni
-- **Schema check** — validira schema i seed na pravom Postgresu
-
-## Nix (opciono)
-
-Ako hocete jos kontrole za cli - skinite nix kao jedini dependency i runnujte
-`nix develop` (skida nixpkgs za sve sto bi moglo da vam treba za local
-development).
-
-Alternativno, mozete samo da skinete ove packages iz `flake.nix` sa svog package
-managera.
-
-## Secrets
-
-U repozitorijum je dodat .env.example.gpg. Ovo je fajl sa simetricnom
-enkripcijom ciju sifru mozete na discordu u vidu pinnovane poruke. Sadrzaj ovog
-fajla ce takodje biti dostupan na discordu tako da korisnik nije primoran da
-koristi gpg.
-
-Za one koji imaju gpg (verovatno svi koji koriste linux, potreban je za package
-management) dovoljno je izvrsiti sledecu komandu kako bi dekriptovali fajl:
-`gpg --decrypt -o .env .env.example.gpg` nakon cega ce gpg promptovati za sifru
-preko GUI-a ili TUI-a u zavisnosti od podesavanja.
-
-Emacs korisnici takodje mogu koristiti (epa) EasyPG Assistant, za automatsko
-enkriptovanje i dekriptovanje fajlova kao i dired integracije.
+The gateway listens on `GATEWAY_HTTP_PORT` (default `8080`); each service
+exposes its gRPC port plus an HTTP probe port (`/healthz`, `/readyz`).

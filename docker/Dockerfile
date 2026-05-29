@@ -1,30 +1,31 @@
 # syntax=docker/dockerfile:1.7
-FROM golang:1.25-alpine AS builder
 
 ARG SERVICE
+ARG GO_VERSION=1.25
 
+FROM golang:${GO_VERSION}-alpine AS build
+ARG SERVICE
 WORKDIR /src
 
-COPY go.work go.work.sum ./
-COPY pkg/go.mod pkg/go.sum ./pkg/
-COPY services/bank/go.mod services/bank/go.sum ./services/bank/
-COPY services/exchange/go.mod services/exchange/go.sum ./services/exchange/
-COPY services/gateway/go.mod services/gateway/go.sum ./services/gateway/
-COPY services/notification/go.mod services/notification/go.sum ./services/notification/
-COPY services/user/go.mod services/user/go.sum ./services/user/
+RUN apk add --no-cache git
 
-WORKDIR /src/services/${SERVICE}
-RUN --mount=type=cache,target=/go/pkg/mod go mod download
-
-WORKDIR /src
 COPY pkg ./pkg
+COPY gen ./gen
 COPY services/${SERVICE} ./services/${SERVICE}
 
-WORKDIR /src/services/${SERVICE}
-RUN --mount=type=cache,target=/go/pkg/mod \
-    --mount=type=cache,target=/root/.cache/go-build \
-    CGO_ENABLED=0 GOOS=linux go build -o /out/service ./cmd
+# go.work is intentionally NOT copied: per-service go.mod files have
+# `replace` directives that point at ../../pkg and ../../gen, so each
+# service compiles standalone. GOWORK=off ensures any workspace file
+# left over in a higher dir is ignored.
+ENV GOWORK=off
 
-FROM alpine:3.19
-COPY --from=builder /out/service /service
-ENTRYPOINT ["/service"]
+RUN --mount=type=cache,target=/root/.cache/go-build \
+    --mount=type=cache,target=/go/pkg/mod \
+    cd services/${SERVICE} && \
+    CGO_ENABLED=0 go build -trimpath -buildvcs=false -ldflags='-s -w' \
+      -o /out/app ./cmd/${SERVICE}
+
+FROM gcr.io/distroless/static-debian12:nonroot
+COPY --from=build /out/app /app
+USER nonroot:nonroot
+ENTRYPOINT ["/app"]

@@ -1,0 +1,114 @@
+// Package store is the trading service's persistence layer.
+package store
+
+import (
+	"context"
+	"errors"
+
+	"github.com/RAF-SI-2025/Banka-3-Backend/pkg/apperr"
+	"github.com/jackc/pgx/v5"
+	"github.com/jackc/pgx/v5/pgxpool"
+)
+
+// Store wraps the pgx pool. Each *.go file in this package groups
+// queries by aggregate (actuaries, exchanges, …).
+type Store struct {
+	Pool *pgxpool.Pool
+	// ReadPool routes SELECTs to a hot standby when set.
+	// BonusReadReplicaRouting / PR #287.
+	ReadPool *pgxpool.Pool
+}
+
+func New(pool *pgxpool.Pool) *Store { return &Store{Pool: pool} }
+
+// reader returns the read pool when configured, primary otherwise.
+func (s *Store) reader() *pgxpool.Pool {
+	if s.ReadPool != nil {
+		return s.ReadPool
+	}
+	return s.Pool
+}
+
+// noRows reports whether err wraps pgx.ErrNoRows.
+func noRows(err error) bool { return errors.Is(err, pgx.ErrNoRows) }
+
+// isCheckViolation reports whether err is a Postgres check-constraint
+// violation (SQLSTATE 23514). Used by the OTC reservation helpers so a
+// `reserved_count > quantity` attempt surfaces as FailedPrecondition
+// instead of a generic Internal.
+func isCheckViolation(err error) bool {
+	type pgErr interface {
+		SQLState() string
+	}
+	var pe pgErr
+	return errors.As(err, &pe) && pe.SQLState() == "23514"
+}
+
+// isUniqueViolation reports whether err is a Postgres unique-constraint
+// violation (SQLSTATE 23505). Used by SAGA persistence so a duplicate
+// transaction_id surfaces cleanly to the orchestrator.
+func isUniqueViolation(err error) bool {
+	type pgErr interface {
+		SQLState() string
+	}
+	var pe pgErr
+	return errors.As(err, &pe) && pe.SQLState() == "23505"
+}
+
+// intArg returns "$N" for placeholder building in dynamic queries.
+// The store keeps queries with up to ~16 placeholders; if a query
+// needs more, prefer pgx.Identifier or static SQL.
+func intArg(n int) string {
+	switch n {
+	case 1:
+		return "$1"
+	case 2:
+		return "$2"
+	case 3:
+		return "$3"
+	case 4:
+		return "$4"
+	case 5:
+		return "$5"
+	case 6:
+		return "$6"
+	case 7:
+		return "$7"
+	case 8:
+		return "$8"
+	case 9:
+		return "$9"
+	case 10:
+		return "$10"
+	case 11:
+		return "$11"
+	case 12:
+		return "$12"
+	case 13:
+		return "$13"
+	case 14:
+		return "$14"
+	case 15:
+		return "$15"
+	case 16:
+		return "$16"
+	}
+	panic("intArg out of range")
+}
+
+// ExecuteAtomic runs fn inside a single pgx transaction; commits on
+// nil return, rolls back on error.
+func (s *Store) ExecuteAtomic(ctx context.Context, fn func(pgx.Tx) error) error {
+	tx, err := s.Pool.BeginTx(ctx, pgx.TxOptions{})
+	if err != nil {
+		return apperr.Internal("begin tx", err)
+	}
+	if err := fn(tx); err != nil {
+		_ = tx.Rollback(ctx)
+		return err
+	}
+	if err := tx.Commit(ctx); err != nil {
+		return apperr.Internal("commit tx", err)
+	}
+	return nil
+}

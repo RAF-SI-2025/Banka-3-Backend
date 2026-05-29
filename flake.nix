@@ -1,49 +1,34 @@
 {
-  description = "banka-raf dev shell";
+  description = "Banka-3-Backend dev shell";
 
-  inputs.nixpkgs.url = "https://flakehub.com/f/NixOS/nixpkgs/0.1";
+  inputs.nixpkgs.url = "github:NixOS/nixpkgs/nixos-unstable";
+  inputs.flake-utils.url = "github:numtide/flake-utils";
 
-  outputs = {self, ...} @ inputs: let
-    goVersion = 25;
-
-    supportedSystems = [
-      "x86_64-linux"
-      "aarch64-linux"
-      "x86_64-darwin"
-      "aarch64-darwin"
-    ];
-    forEachSupportedSystem = f:
-      inputs.nixpkgs.lib.genAttrs supportedSystems (
-        system:
-          f {
-            pkgs = import inputs.nixpkgs {
-              inherit system;
-              overlays = [inputs.self.overlays.default];
-            };
-          }
-      );
-  in {
-    overlays.default = final: prev: {
-      go = final."go_1_${toString goVersion}";
-    };
-
-    devShells = forEachSupportedSystem (
-      {pkgs}: {
-        default = pkgs.mkShell {
+  outputs = { self, nixpkgs, flake-utils }:
+    flake-utils.lib.eachDefaultSystem (system:
+      let pkgs = nixpkgs.legacyPackages.${system};
+      in {
+        devShells.default = pkgs.mkShell {
           packages = with pkgs; [
-            go
-            gotools
+            go_1_25
+            gopls
+            gofumpt
             golangci-lint
-            gnumake
+            buf
             protobuf
             protoc-gen-go
             protoc-gen-go-grpc
+            go-migrate
             postgresql
-
-            grpcurl
+            redis
+            sqlc
+            gnumake
+            docker-compose
           ];
+          shellHook = ''
+            export GOPATH="$PWD/.go"
+            export PATH="$GOPATH/bin:$PATH"
+          '';
         };
-      }
-    );
-  };
+      });
 }

@@ -1,10 +1,12 @@
 go 1.25.0
 
 use (
+	./gen
 	./pkg
 	./services/bank
 	./services/exchange
 	./services/gateway
 	./services/notification
+	./services/trading
 	./services/user
 )

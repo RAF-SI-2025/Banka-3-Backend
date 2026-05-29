@@ -1,3 +1,48 @@
+name: banka
+
+x-tools-build: &tools-build
+  context: .
+  dockerfile: docker/Dockerfile.tools
+  args:
+    UID: ${HOST_UID:-1000}
+    GID: ${HOST_GID:-1000}
+
+x-service-defaults: &service-defaults
+  build:
+    context: .
+    dockerfile: docker/Dockerfile
+  restart: on-failure
+  environment: &service-env
+    DATABASE_URL: "postgres://${POSTGRES_USER}:${POSTGRES_PASSWORD}@banka-postgres-1:5432/${POSTGRES_DB}?sslmode=disable"
+    # BonusReadReplicaRouting (#287). Empty by default → reads stay
+    # on the primary. Set in .env once `make replica` has the standby
+    # streaming.
+    DATABASE_READ_URL: "${DATABASE_READ_URL:-}"
+    REDIS_ADDR: "banka-redis-1:6379"
+    REDIS_PASSWORD: "${REDIS_PASSWORD}"
+    LOG_LEVEL: "${LOG_LEVEL:-info}"
+    LOG_FORMAT: "${LOG_FORMAT:-json}"
+    BANK_CODE: "${BANK_CODE:-333}"
+    BANK_CVV_PEPPER: "${BANK_CVV_PEPPER:-dev-cvv-pepper-change-in-prod}"
+    GRPC_PORT: "50051"
+    PROBE_PORT: "8081"
+    SMTP_HOST: "${SMTP_HOST:-}"
+    SMTP_PORT: "${SMTP_PORT:-587}"
+    SMTP_USERNAME: "${SMTP_USERNAME:-}"
+    SMTP_PASSWORD: "${SMTP_PASSWORD:-}"
+    SMTP_FROM: "${SMTP_FROM:-no-reply@banka.local}"
+    SMTP_TLS: "${SMTP_TLS:-false}"
+    CLOCK_DEBUG: "${CLOCK_DEBUG:-false}"
+
+# App services share this depends-on block so they all wait for the
+# migrate one-shot to finish before booting. Without it they'd race
+# the migrations and crash on missing tables until the migrate run
+# completed.
+x-app-deps: &app-deps
+  postgres: { condition: service_healthy }
+  redis:    { condition: service_healthy }
+  migrate:  { condition: service_completed_successfully }
+
 services:
   postgres:
     image: postgres:18-alpine
@@ -5,15 +50,17 @@ services:
       POSTGRES_USER: ${POSTGRES_USER}
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
       POSTGRES_DB: ${POSTGRES_DB}
-    ports:
-      - "${POSTGRES_PORT:-5432}:5432"
-    # Postgres 18+ stores data under /var/lib/postgresql/<major>/<cluster>
-    # to support pg_ctlcluster-style upgrades. Mounting /var/lib/postgresql
-    # (parent dir) instead of /var/lib/postgresql/data lets the image manage
-    # the version subdirectory itself; mounting /data triggers a hard fail
-    # at boot. See docker-library/postgres#1259.
+      POSTGRES_REPLICATION_USER: "${POSTGRES_REPLICATION_USER:-replicator}"
+      POSTGRES_REPLICATION_PASSWORD: "${POSTGRES_REPLICATION_PASSWORD:-replicator_pass}"
+      POSTGRES_REPLICATION_SLOT: "${POSTGRES_REPLICATION_SLOT:-banka_replica_slot}"
+    ports: ["${POSTGRES_PORT:-5432}:5432"]
     volumes:
       - pgdata:/var/lib/postgresql
+      # Replication setup script — registers the replicator role +
+      # physical replication slot when /docker-entrypoint-initdb.d
+      # fires on first boot. Idempotent; the bootstrap script on the
+      # replica side reruns it via the primary connection if needed.
+      # BonusPartitionReplication / PR #286.
       - ./docker/postgres/init:/docker-entrypoint-initdb.d:ro
     command:
       - "postgres"
@@ -25,7 +72,6 @@ services:
       - "max_replication_slots=5"
       - "-c"
       - "hot_standby=on"
-
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER} -d ${POSTGRES_DB}"]
       interval: 2s
@@ -33,19 +79,24 @@ services:
       retries: 10
     networks: [banka]
 
+  # postgres_replica is profile-gated — `make replica` brings it up
+  # and bootstraps it from the primary. Apps continue to talk to the
+  # primary (DATABASE_URL) by default; routing reads to the replica
+  # is handled by the read-replica-router bonus (#287).
   postgres_replica:
+    profiles: ["replica"]
     image: postgres:18-alpine
     environment:
-      PGUSER: ${POSTGRES_USER}
+      PGUSER: "${POSTGRES_USER}"
       PGDATA: /var/lib/postgresql/18/docker
-      PRIMARY_HOST: postgres
+      PRIMARY_HOST: banka-postgres-1
       PRIMARY_PORT: "5432"
-      PRIMARY_DB: ${POSTGRES_DB}
-      PRIMARY_USER: ${POSTGRES_USER}
-      PRIMARY_PASSWORD: ${POSTGRES_PASSWORD}
-      REPLICATION_USER: ${POSTGRES_REPLICATION_USER:-replicator}
-      REPLICATION_PASSWORD: ${POSTGRES_REPLICATION_PASSWORD:-replicator_pass}
-      REPLICATION_SLOT: ${POSTGRES_REPLICATION_SLOT:-banka_replica_slot}
+      PRIMARY_DB: "${POSTGRES_DB}"
+      PRIMARY_USER: "${POSTGRES_USER}"
+      PRIMARY_PASSWORD: "${POSTGRES_PASSWORD}"
+      REPLICATION_USER: "${POSTGRES_REPLICATION_USER:-replicator}"
+      REPLICATION_PASSWORD: "${POSTGRES_REPLICATION_PASSWORD:-replicator_pass}"
+      REPLICATION_SLOT: "${POSTGRES_REPLICATION_SLOT:-banka_replica_slot}"
     ports:
       - "${POSTGRES_REPLICA_PORT:-5433}:5432"
     volumes:
@@ -66,8 +117,7 @@ services:
   redis:
     image: redis:7-alpine
     command: redis-server --requirepass ${REDIS_PASSWORD} --appendonly no --save ""
-    ports:
-      - "${REDIS_PORT:-6379}:6379"
+    ports: ["${REDIS_PORT:-6379}:6379"]
     volumes:
       - redisdata:/data
     healthcheck:
@@ -77,208 +127,218 @@ services:
       retries: 10
     networks: [banka]
 
-  influxdb:
-    image: influxdb:2.7-alpine
-    ports:
-      - "${INFLUXDB_PORT:-8086}:8086"
-    environment:
-      DOCKER_INFLUXDB_INIT_MODE: setup
-      DOCKER_INFLUXDB_INIT_USERNAME: ${INFLUX_USERNAME:-banka}
-      DOCKER_INFLUXDB_INIT_PASSWORD: ${INFLUX_PASSWORD:-banka_secret}
-      DOCKER_INFLUXDB_INIT_ORG: ${INFLUX_ORG:-banka}
-      DOCKER_INFLUXDB_INIT_BUCKET: ${INFLUX_BUCKET:-market-data}
-      DOCKER_INFLUXDB_INIT_ADMIN_TOKEN: ${INFLUX_TOKEN:-banka-influx-token}
+  # Apply golang-migrate `up` across every service before app services
+  # boot. Idempotent (golang-migrate is a no-op on already-applied
+  # migrations) so re-running `docker compose up -d` costs ~1-2s and
+  # is safe.
+  migrate:
+    image: banka-tools
+    build: *tools-build
+    working_dir: /src
     volumes:
-      - influxdata:/var/lib/influxdb2
+      - .:/src
+    environment:
+      DATABASE_URL: "postgres://${POSTGRES_USER}:${POSTGRES_PASSWORD}@banka-postgres-1:5432/${POSTGRES_DB}?sslmode=disable"
+    depends_on:
+      postgres: { condition: service_healthy }
     networks: [banka]
+    restart: "no"
+    command: ["bash", "scripts/db/migrate.sh", "up"]
 
-  bank:
-    container_name: bank
-    build:
-      context: .
-      dockerfile: docker/Dockerfile
-      args:
-        SERVICE: bank
-    restart: on-failure
-    ports:
-      - "${BANK_GRPC_PORT:-50053}:50051"
-      - "${BANK_DEBUG_HTTP_PORT:-50090}:50090"
-      - "${BANK_METRICS_PORT:-9103}:9103"
+  # Long-lived nothing — provides the toolchain image for
+  # `docker compose run --rm tools <cmd>`. Profile-gated so it
+  # doesn't spin up on `docker compose up`.
+  tools:
+    image: banka-tools
+    build: *tools-build
+    working_dir: /src
+    volumes:
+      - .:/src
+      - tools-go-mod:/home/app/go/pkg/mod
+      - tools-go-build:/home/app/.cache/go-build
     environment:
       DATABASE_URL: "postgres://${POSTGRES_USER}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB}?sslmode=disable"
-      DATABASE_READ_URL: "${DATABASE_READ_URL:-postgres://${POSTGRES_USER}:${POSTGRES_PASSWORD}@postgres_replica:5432/${POSTGRES_DB}?sslmode=disable}"
-      GRPC_PORT: "50051"
-      BANK_INTERNAL_API_KEY: ${BANK_INTERNAL_API_KEY:-dev-internal-banka3}
-      INFLUX_URL: ${INFLUX_URL:-http://influxdb:8086}
-      INFLUX_ORG: ${INFLUX_ORG:-banka}
-      INFLUX_BUCKET: ${INFLUX_BUCKET:-market-data}
-      INFLUX_TOKEN: ${INFLUX_TOKEN:-banka-influx-token}
-      # Cypress on-demand cron trigger (cron_debug.go). Set to empty to
-      # disable. Bound only on the docker-internal port; the host mapping
-      # is what cypress hits at localhost:${BANK_DEBUG_HTTP_PORT}.
-      BANK_DEBUG_HTTP_PORT: "50090"
-      NOTIFICATION_GRPC_ADDR: ${NOTIFICATION_GRPC_ADDR:-notification:50051}
-      METRICS_PORT: "9103"
-      LOG_LEVEL: ${LOG_LEVEL:-info}
-      LOG_FORMAT: ${LOG_FORMAT:-text}
-    depends_on:
-      postgres:
-        condition: service_healthy
-      postgres_replica:
-        condition: service_healthy
-      influxdb:
-        condition: service_started
+      INTEGRATION_DATABASE_URL: "postgres://${POSTGRES_USER}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB}?sslmode=disable"
+      INTEGRATION_REDIS_ADDR: "redis:6379"
+      INTEGRATION_REDIS_PASSWORD: "${REDIS_PASSWORD}"
+      POSTGRES_USER: ${POSTGRES_USER}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+      POSTGRES_DB: ${POSTGRES_DB}
     networks: [banka]
-
-  exchange:
-    container_name: exchange
-    build:
-      context: .
-      dockerfile: docker/Dockerfile
-      args:
-        SERVICE: exchange
-    restart: on-failure
-    ports:
-      - "${EXCHANGE_GRPC_PORT:-50054}:50051"
-      - "${EXCHANGE_METRICS_PORT:-9104}:9104"
-    environment:
-      DATABASE_URL: "postgres://${POSTGRES_USER}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB}?sslmode=disable"
-      DATABASE_READ_URL: "${DATABASE_READ_URL:-postgres://${POSTGRES_USER}:${POSTGRES_PASSWORD}@postgres_replica:5432/${POSTGRES_DB}?sslmode=disable}"
-      GRPC_PORT: "50051"
-      EXCHANGE_RATE_API_KEY: ${EXCHANGE_RATE_API_KEY}
-      METRICS_PORT: "9104"
-      LOG_LEVEL: ${LOG_LEVEL:-info}
-      LOG_FORMAT: ${LOG_FORMAT:-text}
-    depends_on:
-      postgres:
-        condition: service_healthy
-      postgres_replica:
-        condition: service_healthy
-    networks: [banka]
+    profiles: ["tools"]
 
   user:
-    container_name: user
+    <<: *service-defaults
     build:
       context: .
       dockerfile: docker/Dockerfile
       args:
         SERVICE: user
-    restart: on-failure
+    environment:
+      <<: *service-env
+      JWT_SIGNING_KEY: "${JWT_SIGNING_KEY}"
+      NOTIFICATION_GRPC_ADDR: "${NOTIFICATION_GRPC_ADDR:-banka-notification-1:50051}"
+      # c4-PR4 supervisor-demotion fund cascade: when a supervisor loses
+      # funds.manage.supervisor, user-svc calls trading-svc to reassign
+      # their active funds to the acting admin. Without this env the
+      # cascade is silently disabled and S46 fails.
+      TRADING_GRPC_ADDR: "${TRADING_GRPC_ADDR:-banka-trading-1:50051}"
     ports:
       - "${USER_GRPC_PORT:-50051}:50051"
-      - "${USER_METRICS_PORT:-9101}:9101"
+      - "${USER_PROBE_PORT:-8081}:8081"
+    depends_on: *app-deps
+    networks: [banka]
+
+  gateway:
+    <<: *service-defaults
+    build:
+      context: .
+      dockerfile: docker/Dockerfile
+      args:
+        SERVICE: gateway
     environment:
-      DATABASE_URL: "postgres://${POSTGRES_USER}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB}?sslmode=disable"
-      DATABASE_READ_URL: "${DATABASE_READ_URL:-postgres://${POSTGRES_USER}:${POSTGRES_PASSWORD}@postgres_replica:5432/${POSTGRES_DB}?sslmode=disable}"
-      GRPC_PORT: "50051"
-      ACCESS_JWT_SECRET: ${ACCESS_JWT_SECRET}
-      REFRESH_JWT_SECRET: ${REFRESH_JWT_SECRET}
-      NOTIFICATION_GRPC_ADDR: ${NOTIFICATION_GRPC_ADDR:-notification:50051}
-      PASSWORD_RESET_BASE_URL: ${PASSWORD_RESET_BASE_URL}
-      PASSWORD_SET_BASE_URL: ${PASSWORD_SET_BASE_URL}
-      REDIS_ADDR: "redis:6379"
-      REDIS_PASSWORD: ${REDIS_PASSWORD}
-      TOTP_DISABLE_BASE_URL: ${TOTP_DISABLE_BASE_URL}
-      METRICS_PORT: "9101"
-      LOG_LEVEL: ${LOG_LEVEL:-info}
-      LOG_FORMAT: ${LOG_FORMAT:-text}
-    depends_on:
-      postgres:
-        condition: service_healthy
-      postgres_replica:
-        condition: service_healthy
-      redis:
-        condition: service_healthy
+      <<: *service-env
+      HTTP_PORT: "8080"
+      JWT_SIGNING_KEY: "${JWT_SIGNING_KEY}"
+      USER_GRPC_ADDR: "${USER_GRPC_ADDR:-banka-user-1:50051}"
+      BANK_GRPC_ADDR: "${BANK_GRPC_ADDR:-banka-bank-1:50051}"
+      TRADING_GRPC_ADDR: "${TRADING_GRPC_ADDR:-banka-trading-1:50051}"
+      EXCHANGE_GRPC_ADDR: "${EXCHANGE_GRPC_ADDR:-banka-exchange-1:50051}"
+      NOTIFICATION_GRPC_ADDR: "${NOTIFICATION_GRPC_ADDR:-banka-notification-1:50051}"
+      # Celina 5 — inbound partner REST routes are gated by this key.
+      INTERBANK_API_KEY: "${INTERBANK_API_KEY:-dev-outbound-banka3}"
+    ports:
+      - "${GATEWAY_HTTP_PORT:-8080}:8080"
+      - "${GATEWAY_PROBE_PORT:-8086}:8081"
+    networks: [banka]
+
+  bank:
+    <<: *service-defaults
+    build:
+      context: .
+      dockerfile: docker/Dockerfile
+      args:
+        SERVICE: bank
+    environment:
+      <<: *service-env
+      EXCHANGE_GRPC_ADDR: "${EXCHANGE_GRPC_ADDR:-banka-exchange-1:50051}"
+      NOTIFICATION_GRPC_ADDR: "${NOTIFICATION_GRPC_ADDR:-banka-notification-1:50051}"
+      USER_GRPC_ADDR: "${USER_GRPC_ADDR:-banka-user-1:50051}"
+    ports:
+      - "${BANK_GRPC_PORT:-50052}:50051"
+      - "${BANK_PROBE_PORT:-8082}:8081"
+    depends_on: *app-deps
+    networks: [banka]
+
+  exchange:
+    <<: *service-defaults
+    build:
+      context: .
+      dockerfile: docker/Dockerfile
+      args:
+        SERVICE: exchange
+    ports:
+      - "${EXCHANGE_GRPC_PORT:-50054}:50051"
+      - "${EXCHANGE_PROBE_PORT:-8084}:8081"
+    depends_on: *app-deps
     networks: [banka]
 
   notification:
-    container_name: notification
+    <<: *service-defaults
     build:
       context: .
       dockerfile: docker/Dockerfile
       args:
         SERVICE: notification
     ports:
-      - "${NOTIFICATION_GRPC_PORT:-50052}:50051"
-      - "${NOTIFICATION_METRICS_PORT:-9102}:9102"
-    environment:
-      BACKEND: "SMTP"
-      GRPC_PORT: "50051"
-      FROM_EMAIL: "${FROM_EMAIL}"
-      FROM_EMAIL_AUTH: "${FROM_EMAIL_AUTH}"
-      FROM_EMAIL_PASSWORD: "${FROM_EMAIL_PASSWORD}"
-      FROM_EMAIL_SMTP: "${FROM_EMAIL_SMTP}"
-      SMTP_ADDR: "${SMTP_ADDR}"
-      METRICS_PORT: "9102"
-      LOG_LEVEL: ${LOG_LEVEL:-info}
-      LOG_FORMAT: ${LOG_FORMAT:-text}
+      - "${NOTIFICATION_GRPC_PORT:-50055}:50051"
+      - "${NOTIFICATION_PROBE_PORT:-8085}:8081"
+    depends_on: *app-deps
     networks: [banka]
 
-  gateway:
-    container_name: gateway
+  trading:
+    <<: *service-defaults
     build:
       context: .
       dockerfile: docker/Dockerfile
       args:
-        SERVICE: gateway
-    ports:
-      - "${GATEWAY_PORT:-8080}:8080"
-      - "${GATEWAY_METRICS_PORT:-9100}:9100"
+        SERVICE: trading
     environment:
-      HTTP_PORT: "8080"
-      USER_GRPC_ADDR: "user:50051"
-      NOTIFICATION_GRPC_ADDR: "notification:50051"
-      BANK_GRPC_ADDR: "bank:50051"
-      EXCHANGE_GRPC_ADDR: "exchange:50051"
-      TRADING_GRPC_ADDR: "bank:50051"
-      INTERBANK_ROUTES: ${INTERBANK_ROUTES:-}
-      INTERBANK_API_KEY: ${INTERBANK_API_KEY:-dev-outbound-banka3}
-      BANK_ROUTING_NUMBER: ${BANK_ROUTING_NUMBER:-333}
-      BANK_INTERNAL_HTTP_URL: ${BANK_INTERNAL_HTTP_URL:-http://bank:50090}
-      BANK_INTERNAL_API_KEY: ${BANK_INTERNAL_API_KEY:-dev-internal-banka3}
-      METRICS_PORT: "9100"
-      LOG_LEVEL: ${LOG_LEVEL:-info}
-      LOG_FORMAT: ${LOG_FORMAT:-text}
-    depends_on:
-      - user
-      - notification
-      - bank
-      - exchange
+      <<: *service-env
+      BANK_GRPC_ADDR: "${BANK_GRPC_ADDR:-banka-bank-1:50051}"
+      EXCHANGE_GRPC_ADDR: "${EXCHANGE_GRPC_ADDR:-banka-exchange-1:50051}"
+      NOTIFICATION_GRPC_ADDR: "${NOTIFICATION_GRPC_ADDR:-banka-notification-1:50051}"
+      USER_GRPC_ADDR: "${USER_GRPC_ADDR:-banka-user-1:50051}"
+      ALPHAVANTAGE_API_KEY: "${ALPHAVANTAGE_API_KEY:-}"
+      MARKET_DATA_REFRESH_INTERVAL: "${MARKET_DATA_REFRESH_INTERVAL:-6h}"
+      MARKET_DATA_PAUSE: "${MARKET_DATA_PAUSE:-13s}"
+      STOCK_BIDASK_SPREAD: "${STOCK_BIDASK_SPREAD:-0.001}"
+      OPTIONS_REFRESH_INTERVAL: "${OPTIONS_REFRESH_INTERVAL:-24h}"
+      OPTIONS_RISK_FREE_RATE: "${OPTIONS_RISK_FREE_RATE:-0.05}"
+      OPTIONS_VOLATILITY: "${OPTIONS_VOLATILITY:-0.30}"
+      SAGA_DEBUG_FAULT_INJECTION: "${SAGA_DEBUG_FAULT_INJECTION:-false}"
+      # Celina 5 — outbound cross-bank OTC. Defaults to BOTH the
+      # bundled mock-partner (bank 999) AND a sibling Banka 3 instance
+      # (bank 334 — only reachable when `make up-partner` has brought
+      # up the partner compose project). Discover() silently logs a
+      # warning if the second route doesn't resolve, so the default
+      # works whether the partner is up or not.
+      BANK_ROUTING_NUMBER: "${BANK_ROUTING_NUMBER:-333}"
+      INTERBANK_ROUTES: "${INTERBANK_ROUTES:-999:http://mock-partner:9099,334:http://banka-partner-gateway-1:8080}"
+      INTERBANK_API_KEY: "${INTERBANK_API_KEY:-dev-outbound-banka3}"
+    ports:
+      - "${TRADING_GRPC_PORT:-50053}:50051"
+      - "${TRADING_PROBE_PORT:-8083}:8081"
+    depends_on: *app-deps
     networks: [banka]
 
-  spark_analytics:
-    profiles: ["analytics"]
+  # Celina 5 — bundled mock partner bank for the dev stack. Serves the
+  # native protocol on /bank/api/v1/otc/... so trading can demo the
+  # cross-bank flow without a second real instance. Authenticates with
+  # the same INTERBANK_API_KEY as our gateway so both directions agree.
+  # ---------------------------------------------------------------------
+  # InfluxDB — optional time-series side-channel for market data
+  # (BonusInfluxDB / PR #285). Profile-gated so `make up` skips it.
+  # Bring up with `make influxdb` to opt in to the mirror writes; the
+  # trading service reads INFLUX_URL etc on boot and silently no-ops
+  # when those env vars are unset.
+  # ---------------------------------------------------------------------
+  influxdb:
+    profiles: ["influxdb"]
+    image: influxdb:2.7-alpine
+    ports:
+      - "${INFLUX_PORT:-8087}:8086"
+    environment:
+      DOCKER_INFLUXDB_INIT_MODE: setup
+      DOCKER_INFLUXDB_INIT_USERNAME: "${INFLUX_USERNAME:-admin}"
+      DOCKER_INFLUXDB_INIT_PASSWORD: "${INFLUX_PASSWORD:-influxpass}"
+      DOCKER_INFLUXDB_INIT_ORG: "${INFLUX_ORG:-banka}"
+      DOCKER_INFLUXDB_INIT_BUCKET: "${INFLUX_BUCKET:-market-data}"
+      DOCKER_INFLUXDB_INIT_ADMIN_TOKEN: "${INFLUX_TOKEN:-dev-influx-token-change-in-prod}"
+    volumes:
+      - influxdata:/var/lib/influxdb2
+    networks: [banka]
+
+  mock-partner:
+    <<: *service-defaults
     build:
       context: .
-      dockerfile: analytics/spark/Dockerfile
+      dockerfile: tools/mock-partner/Dockerfile
     environment:
-      ANALYTICS_DB_READ_URL: "jdbc:postgresql://postgres_replica:5432/${POSTGRES_DB}"
-      ANALYTICS_DB_WRITE_URL: "jdbc:postgresql://postgres:5432/${POSTGRES_DB}"
-      ANALYTICS_DB_USER: ${POSTGRES_USER}
-      ANALYTICS_DB_PASSWORD: ${POSTGRES_PASSWORD}
-      ANALYTICS_LOOKBACK_DAYS: ${ANALYTICS_LOOKBACK_DAYS:-90}
-      ANALYTICS_TOP_N: ${ANALYTICS_TOP_N:-5}
-      ML_SEGMENT_K: ${ML_SEGMENT_K:-3}
-      SPARK_DRIVER_MEMORY: 1g
-      SPARK_EXECUTOR_MEMORY: 1g
-    command:
-      - /opt/spark/bin/spark-submit
-      - --master
-      - local[2]
-      - --jars
-      - /opt/spark/jars/postgresql-42.7.5.jar
-      - --conf
-      - spark.driver.extraClassPath=/opt/spark/jars/postgresql-42.7.5.jar
-      - --conf
-      - spark.executor.extraClassPath=/opt/spark/jars/postgresql-42.7.5.jar
-      - local:///opt/banka-analytics/jobs/trading_analytics.py
-    depends_on:
-      postgres:
-        condition: service_healthy
-      postgres_replica:
-        condition: service_healthy
+      PORT: "9099"
+      BANK_ROUTING_NUMBER: "999"
+      INTERBANK_API_KEY: "${INTERBANK_API_KEY:-dev-outbound-banka3}"
+    ports:
+      - "${MOCK_PARTNER_PORT:-9099}:9099"
     networks: [banka]
 
+  # ---------------------------------------------------------------------
+  # Observability — Prometheus + Grafana + Alertmanager + Discord
+  # notifier. Profile-gated so `make up` skips them; bring up with
+  # `make observability` (or `docker compose --profile observability up`).
+  # Ported from main branch's BonusMLAObservability (PR #292) and
+  # adapted to the rewrite's container naming.
+  # ---------------------------------------------------------------------
   prometheus:
     profiles: ["observability"]
     image: prom/prometheus:v3.7.3
@@ -291,12 +351,6 @@ services:
       - --config.file=/etc/prometheus/prometheus.yml
       - --storage.tsdb.path=/prometheus
       - --web.enable-lifecycle
-    depends_on:
-      - gateway
-      - user
-      - notification
-      - bank
-      - exchange
     networks: [banka]
 
   grafana:
@@ -305,8 +359,8 @@ services:
     ports:
       - "${GRAFANA_PORT:-3001}:3000"
     environment:
-      GF_SECURITY_ADMIN_USER: ${GRAFANA_ADMIN_USER:-admin}
-      GF_SECURITY_ADMIN_PASSWORD: ${GRAFANA_ADMIN_PASSWORD:-admin}
+      GF_SECURITY_ADMIN_USER: "${GRAFANA_ADMIN_USER:-admin}"
+      GF_SECURITY_ADMIN_PASSWORD: "${GRAFANA_ADMIN_PASSWORD:-admin}"
     volumes:
       - ./monitoring/grafana/provisioning/datasources:/etc/grafana/provisioning/datasources:ro
       - ./monitoring/grafana/provisioning/dashboards:/etc/grafana/provisioning/dashboards:ro
@@ -335,7 +389,7 @@ services:
       context: .
       dockerfile: monitoring/discord-notifier/Dockerfile
     environment:
-      DISCORD_WEBHOOK_URL: ${DISCORD_WEBHOOK_URL:-}
+      DISCORD_WEBHOOK_URL: "${DISCORD_WEBHOOK_URL:-}"
       PORT: "8080"
     networks: [banka]
 
@@ -343,8 +397,11 @@ volumes:
   pgdata:
   pgreplicadata:
   redisdata:
+  tools-go-mod:
+  tools-go-build:
   influxdata:
 
 networks:
   banka:
-    name: banka-net
+    name: banka
+    driver: bridge

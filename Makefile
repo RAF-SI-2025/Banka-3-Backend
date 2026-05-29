@@ -1,143 +1,205 @@
--include .env
-export
+# Banka-3-Backend build / run / test targets.
+#
+# Run `make help` for the list. The only host requirement is Docker;
+# every toolchain command (buf, migrate, gofumpt, golangci-lint, go,
+# the seed binary, the integration suites) runs inside the
+# `banka-tools` image declared in docker/Dockerfile.tools, brought up
+# as the `tools` service in docker-compose.yml. `make HOST=1 <target>`
+# bypasses the container and invokes the host toolchain instead — for
+# devs who already have go/buf/migrate installed locally and want
+# faster iteration.
 
-GO_IMAGE := golang:1.25
-GO_RUN   := docker run --rm -v $(PWD):/app -w /app $(GO_IMAGE)
-SPARK_ANALYTICS_IMAGE ?= banka-analytics-spark:latest
+SHELL          := /bin/bash
+.SHELLFLAGS    := -eu -o pipefail -c
+.DEFAULT_GOAL  := help
 
-ADMIN_EMAIL  ?= admin@banka.raf
-CLIENT_EMAIL ?= petar@primer.raf
+SERVICES            := bank exchange gateway notification trading user
+COMPOSE             := docker compose
 
-SERVICES := bank exchange gateway notification user
-PACKAGES := pkg
-NAMES    := $(SERVICES) $(PACKAGES)
+# Match the host UID/GID into the tools image so any file the
+# container writes into the bind-mounted repo (gen/, go.sum, bin/)
+# is owned by the developer, not root.
+export HOST_UID := $(shell id -u)
+export HOST_GID := $(shell id -g)
 
-MODULES := pkg services/bank services/exchange services/gateway services/notification services/user
+# By default, run toolchain commands inside the `tools` container.
+# `make HOST=1 <target>` flips this off and uses the host PATH.
+ifdef HOST
+TOOLS    :=
+TOOLS_SH := bash -c
+else
+TOOLS    := $(COMPOSE) run --rm tools
+TOOLS_SH := $(TOOLS) bash -c
+endif
 
-module_path = $(if $(filter $(1),$(SERVICES)),services/$(1),$(1))
+.PHONY: help
+help: ## List available targets
+	@awk 'BEGIN {FS = ":.*##"; printf "Available targets:\n"} \
+		/^[a-zA-Z0-9_.-]+:.*##/ { printf "  \033[36m%-20s\033[0m %s\n", $$1, $$2 }' \
+		$(MAKEFILE_LIST)
 
-TARGET     := $(filter $(NAMES),$(MAKECMDGOALS))
-TARGET_DIR := $(if $(TARGET),$(foreach t,$(TARGET),$(call module_path,$(t))),$(MODULES))
+.PHONY: tools-image
+tools-image: ## Build the toolchain image (auto-built on first compose use)
+	$(COMPOSE) build tools
 
-# No-op targets so e.g. `make lint bank` doesn't try to build `bank`.
-$(NAMES):
-	@:
+.PHONY: proto
+proto: ## Regenerate proto stubs into gen/
+	$(TOOLS) buf generate
 
-.PHONY: all up down down-v proto schema seed nuke refresh-partitions verify-replica verify-partitions verify-indexes verify-spark-analytics verify-spark-ml spark-analytics-image spark-analytics-local spark-ml-local observability-up observability-down observability-status k8s-gateway-image k8s-autoscaling-apply k8s-autoscaling-status lint lint-l build build-l test test-l test-integration test-integration-l fmt fmt-l $(NAMES)
+.PHONY: build
+build: ## Build all service binaries into bin/
+	@$(TOOLS_SH) 'for svc in $(SERVICES); do echo "==> building $$svc"; (cd services/$$svc && go build -trimpath -o ../../bin/$$svc ./cmd/$$svc); done'
 
-all: proto up schema seed
+.PHONY: up
+up: proto ## Bring up the full stack (infra + migrate + every service)
+	$(COMPOSE) up -d --build
 
-up:
-	docker compose up -d --build
+.PHONY: down
+down: ## Tear down the local stack
+	$(COMPOSE) down
 
-down:
-	docker compose down
+.PHONY: down-v
+down-v: ## Tear down and wipe volumes (destructive)
+	$(COMPOSE) down -v
 
-down-v:
-	docker compose down -v
+.PHONY: restart
+restart: down up ## down then up
 
-proto:
-	docker build -t banka-proto -f scripts/proto/Dockerfile .
-	docker run --rm -v $(PWD):/workspace -u $$(id -u):$$(id -g) banka-proto \
-		--proto_path=/workspace/proto \
-		--go_out=/workspace/pkg/proto --go_opt=paths=source_relative \
-		--go-grpc_out=/workspace/pkg/proto --go-grpc_opt=paths=source_relative \
-		$$(cd proto && find . -name '*.proto' | sed 's|^\./||')
+.PHONY: logs
+logs: ## Tail compose logs
+	$(COMPOSE) logs -f
 
-schema:
-	docker compose exec -T postgres psql -U $(POSTGRES_USER) -d $(POSTGRES_DB) < scripts/db/schema.sql
+.PHONY: ps
+ps: ## List running containers
+	$(COMPOSE) ps
 
-seed:
-	docker compose exec -T postgres psql -U $(POSTGRES_USER) -d $(POSTGRES_DB) \
-		-v admin_email=$(ADMIN_EMAIL) -v client_email=$(CLIENT_EMAIL) \
-		< scripts/db/seed.sql
+.PHONY: migrate
+migrate: ## Apply migrations across all services
+	$(TOOLS) bash scripts/db/migrate.sh up
 
-nuke:
-	docker compose exec -T postgres psql -U $(POSTGRES_USER) -d $(POSTGRES_DB) -c "DROP SCHEMA public CASCADE; CREATE SCHEMA public;"
+.PHONY: migrate-down
+migrate-down: N ?= 1
+migrate-down: ## Roll back N migrations across all services (N=1 default)
+	$(TOOLS) bash scripts/db/migrate.sh down $(N)
 
-refresh-partitions:
-	docker compose exec -T postgres psql -U $(POSTGRES_USER) -d $(POSTGRES_DB) < scripts/db/refresh_partitions.sql
+.PHONY: migrate-create
+migrate-create: ## Create a new migration pair (SVC=… NAME=…)
+	@if [ -z "$(SVC)" ] || [ -z "$(NAME)" ]; then \
+		echo "usage: make migrate-create SVC=<service> NAME=<migration-name>" >&2; \
+		exit 2; \
+	fi
+	$(TOOLS) bash scripts/db/migrate.sh create $(SVC) $(NAME)
 
-verify-replica:
-	docker compose exec -T postgres_replica psql -U $(POSTGRES_USER) -d $(POSTGRES_DB) < scripts/db/verify_replica.sql
+.PHONY: seed
+seed: ## Load development fixtures
+	$(TOOLS) bash scripts/db/seed.sh
 
-verify-partitions:
-	docker compose exec -T postgres psql -U $(POSTGRES_USER) -d $(POSTGRES_DB) < scripts/db/verify_partitions.sql
+.PHONY: nuke
+nuke: ## Wipe everything and bootstrap (down-v + up + seed)
+	$(MAKE) down-v
+	$(MAKE) up
+	$(MAKE) seed
 
-verify-indexes:
-	docker compose exec -T postgres psql -U $(POSTGRES_USER) -d $(POSTGRES_DB) < scripts/db/verify_indexes.sql
+# -----------------------------------------------------------------------
+# Cross-bank dev stack — a second Banka 3 instance (bank code 334) that
+# acts as a real partner over the shared `banka` network. Used by the
+# cypress interbank suite.
+# -----------------------------------------------------------------------
+PARTNER_COMPOSE := docker compose -f docker-compose.partner.yml -p banka-partner
 
-verify-spark-analytics:
-	docker compose exec -T postgres psql -U $(POSTGRES_USER) -d $(POSTGRES_DB) < scripts/db/verify_spark_analytics.sql
+.PHONY: up-partner
+up-partner: ## Bring up the second Banka 3 stack (partner bank, code 334)
+	$(PARTNER_COMPOSE) up -d --build
 
-verify-spark-ml:
-	docker compose exec -T postgres psql -U $(POSTGRES_USER) -d $(POSTGRES_DB) < scripts/db/verify_spark_ml.sql
+.PHONY: down-partner
+down-partner: ## Tear down the partner stack (keeps volumes)
+	$(PARTNER_COMPOSE) down
 
-spark-analytics-image:
-	docker build -t $(SPARK_ANALYTICS_IMAGE) -f analytics/spark/Dockerfile .
+.PHONY: down-partner-v
+down-partner-v: ## Tear down the partner stack + wipe its volumes
+	$(PARTNER_COMPOSE) down -v
 
-spark-analytics-local:
-	docker compose run --rm spark_analytics
+.PHONY: seed-partner
+seed-partner: ## Seed the partner stack with the same dev fixtures as the main stack
+	$(PARTNER_COMPOSE) run --rm migrate bash scripts/db/seed.sh
 
-spark-ml-local:
-	docker compose run --rm spark_analytics /opt/spark/bin/spark-submit --master local[2] --jars /opt/spark/jars/postgresql-42.7.5.jar --conf spark.driver.extraClassPath=/opt/spark/jars/postgresql-42.7.5.jar --conf spark.executor.extraClassPath=/opt/spark/jars/postgresql-42.7.5.jar local:///opt/banka-analytics/jobs/account_activity_ml.py
+.PHONY: interbank-up
+interbank-up: ## Bring up both stacks in cross-bank wiring mode
+	$(MAKE) up
+	$(MAKE) up-partner
+	$(MAKE) seed
+	$(MAKE) seed-partner
+	$(COMPOSE) restart trading gateway
 
-observability-up:
-	docker compose --profile observability up -d prometheus grafana alertmanager discord_notifier
+.PHONY: replica
+replica: ## Bring up the Postgres read replica (BonusPartitionReplication). Bootstraps from the primary on first run.
+	$(COMPOSE) --profile replica up -d postgres_replica
+	@echo ""
+	@echo "  Replica host:  banka-postgres_replica-1:5432 (inside Docker)"
+	@echo "  Replica port:  $${POSTGRES_REPLICA_PORT:-5433} (on the host)"
+	@echo "  Validate:      docker exec banka-postgres_replica-1 psql -U $${POSTGRES_USER:-banka} -d $${POSTGRES_DB:-banka} -c 'SELECT pg_is_in_recovery();'"
 
-observability-down:
-	docker compose --profile observability stop prometheus grafana alertmanager discord_notifier
+.PHONY: replica-down
+replica-down: ## Stop the read replica (keeps the volume)
+	$(COMPOSE) --profile replica stop postgres_replica
 
-observability-status:
-	docker compose --profile observability ps prometheus grafana alertmanager discord_notifier
+.PHONY: influxdb
+influxdb: ## Bring up the InfluxDB market-data side-channel (BonusInfluxDB). Trading service mirrors daily prices when INFLUX_* env vars are set.
+	$(COMPOSE) --profile influxdb up -d influxdb
+	@echo ""
+	@echo "  InfluxDB UI:   http://localhost:$${INFLUX_PORT:-8087}"
+	@echo "  Set INFLUX_URL=http://influxdb:8086, INFLUX_TOKEN=…, INFLUX_ORG=banka, INFLUX_BUCKET=market-data on trading to enable the mirror."
 
-k8s-gateway-image:
-	docker build -t banka-3-backend-gateway:latest -f docker/Dockerfile --build-arg SERVICE=gateway .
+.PHONY: influxdb-down
+influxdb-down: ## Stop the InfluxDB service (keeps the volume)
+	$(COMPOSE) --profile influxdb stop influxdb
 
-k8s-autoscaling-apply:
-	kubectl apply -k k8s/autoscaling/gateway
+.PHONY: observability
+observability: ## Bring up the Prometheus + Grafana + Alertmanager observability stack (in addition to whatever services are already running)
+	$(COMPOSE) --profile observability up -d --build prometheus grafana alertmanager discord_notifier
+	@echo ""
+	@echo "  Grafana:       http://localhost:$${GRAFANA_PORT:-3001} (admin/admin)"
+	@echo "  Prometheus:    http://localhost:$${PROMETHEUS_PORT:-9090}"
+	@echo "  Alertmanager:  http://localhost:$${ALERTMANAGER_PORT:-9093}"
 
-k8s-autoscaling-status:
-	kubectl get deploy,svc,hpa,pdb -n banka-platform
+.PHONY: observability-down
+observability-down: ## Tear down the observability stack (keeps app services running)
+	$(COMPOSE) --profile observability stop prometheus grafana alertmanager discord_notifier
+	$(COMPOSE) --profile observability rm -f prometheus grafana alertmanager discord_notifier
 
-lint:
-	@for m in $(TARGET_DIR); do \
-		echo ">>> lint $$m"; \
-		docker run --rm -v $(PWD):/app -w /app/$$m golangci/golangci-lint:v2.4 golangci-lint run ./... || exit 1; \
-	done
+.PHONY: interbank-down
+interbank-down: ## Tear down both stacks
+	$(MAKE) down-partner
+	$(MAKE) down
 
-lint-l:
-	@for m in $(TARGET_DIR); do \
-		echo ">>> lint $$m"; \
-		(cd $$m && golangci-lint run ./...) || exit 1; \
-	done
+# Modules tested individually; each has its own go.mod.
+TEST_MODULES := pkg services/bank services/exchange services/gateway \
+                services/notification services/trading services/user
 
-build:
-	@for m in $(TARGET_DIR); do \
-		echo ">>> build $$m"; \
-		$(GO_RUN) sh -c "cd $$m && go build ./..." || exit 1; \
-	done
+.PHONY: test
+test: ## Unit tests across every module (race detector on)
+	@$(TOOLS_SH) 'for mod in $(TEST_MODULES); do echo "==> test $$mod"; (cd $$mod && go test -race ./...); done'
 
-build-l:
-	@for m in $(TARGET_DIR); do \
-		echo ">>> build $$m"; \
-		(cd $$m && go build ./...) || exit 1; \
-	done
+.PHONY: test-integration
+test-integration: ## Integration tests (assumes `make up` running)
+	@$(TOOLS_SH) 'for mod in services/user services/bank services/trading; do echo "==> integration $$mod"; (cd $$mod && go test -race -tags=integration ./...); done'
 
-test:
-	@for m in $(TARGET_DIR); do \
-		echo ">>> test $$m"; \
-		$(GO_RUN) sh -c "cd $$m && go test -race -count=1 -tags=integration ./..." || exit 1; \
-	done
+.PHONY: lint
+lint: ## golangci-lint
+	$(TOOLS) golangci-lint run
 
-test-l:
-	@for m in $(TARGET_DIR); do \
-		echo ">>> test $$m"; \
-		(cd $$m && go test -race -count=1 -tags=integration ./...) || exit 1; \
-	done
+.PHONY: fmt
+fmt: ## Format Go source
+	$(TOOLS) gofumpt -w .
 
-fmt:
-	$(GO_RUN) gofmt -l -w services/ pkg/
+.PHONY: fmt-check
+fmt-check: ## Fail if any file would be reformatted
+	@$(TOOLS_SH) 'out=$$(gofumpt -l .); if [ -n "$$out" ]; then gofumpt -d .; exit 1; fi'
 
-fmt-l:
-	gofmt -l -w services/ pkg/
+.PHONY: tidy
+tidy: ## go mod tidy across every module
+	@$(TOOLS_SH) 'for mod in $(TEST_MODULES); do echo "==> tidy $$mod"; (cd $$mod && go mod tidy); done'
+
+.PHONY: clean
+clean: ## Remove build outputs and generated stubs
+	rm -rf bin gen
