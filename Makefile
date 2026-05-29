@@ -9,7 +9,7 @@
 # devs who already have go/buf/migrate installed locally and want
 # faster iteration.
 
-SHELL          := /bin/bash
+SHELL          := bash
 .SHELLFLAGS    := -eu -o pipefail -c
 .DEFAULT_GOAL  := help
 
