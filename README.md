@@ -52,3 +52,22 @@ and approves agent-side orders.
 
 The gateway listens on `GATEWAY_HTTP_PORT` (default `8080`); each service
 exposes its gRPC port plus an HTTP probe port (`/healthz`, `/readyz`).
+
+## Cluster deployment
+
+This repo only builds images. The Kubernetes manifests live in
+[Banka-3-Infrastructure]. The deploy flow:
+
+1. `.github/workflows/build.yml` builds the 6 service images + the
+   migrate image on push to `main` / `rewrite` and on `v*` tags, pushing
+   to `registry.urosevicvuk.dev/raf-banka3/<image>:<tag>`.
+2. Argo CD watches Banka-3-Infrastructure; its manifests pin those
+   images and sync into the `raf-banka` namespace on the firelink
+   cluster.
+
+See the infra repo's README for the full deploy walkthrough (Vault keys,
+Harbor robot accounts, manual bootstrap push when needed). For local
+development this repo is self-contained — `make up` brings the full
+stack via docker-compose with no cluster dependency.
+
+[Banka-3-Infrastructure]: https://github.com/RAF-SI-2025/Banka-3-Infrastructure
