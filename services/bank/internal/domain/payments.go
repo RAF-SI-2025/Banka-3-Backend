@@ -47,15 +47,15 @@ const (
 // Reservation is one row in bank.reservations — a held debit against
 // available_balance pending the SAGA commit/release decision.
 type Reservation struct {
-	ID         string
-	AccountID  string
-	OpID       string
-	Amount     string
-	Currency   Currency
-	State      ReservationState
-	OpKind     string
-	HeldAt     time.Time
-	SettledAt  *time.Time
+	ID        string
+	AccountID string
+	OpID      string
+	Amount    string
+	Currency  Currency
+	State     ReservationState
+	OpKind    string
+	HeldAt    time.Time
+	SettledAt *time.Time
 }
 
 type TransactionStatus string

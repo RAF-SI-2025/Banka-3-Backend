@@ -4,8 +4,8 @@ import (
 	"context"
 	"time"
 
-	"github.com/RAF-SI-2025/Banka-3-Backend/pkg/apperr"
 	tradingpb "github.com/RAF-SI-2025/Banka-3-Backend/gen/proto/trading/v1"
+	"github.com/RAF-SI-2025/Banka-3-Backend/pkg/apperr"
 	"github.com/RAF-SI-2025/Banka-3-Backend/services/trading/internal/domain"
 	"github.com/RAF-SI-2025/Banka-3-Backend/services/trading/internal/service"
 	"google.golang.org/protobuf/types/known/timestamppb"
@@ -187,9 +187,9 @@ func securityWithListingToProto(r *service.SecurityWithListing) *tradingpb.Secur
 		return nil
 	}
 	out := &tradingpb.SecurityWithListing{
-		Security:           securityToProto(r.Security),
-		MaintenanceMargin:  r.MaintenanceMargin,
-		InitialMarginCost:  r.InitialMarginCost,
+		Security:          securityToProto(r.Security),
+		MaintenanceMargin: r.MaintenanceMargin,
+		InitialMarginCost: r.InitialMarginCost,
 	}
 	// market_cap lives on the proto Security message but is derived
 	// per-listing in the service layer, so we stamp it onto the
@@ -250,4 +250,3 @@ func optionTypeFromProto(t tradingpb.OptionType) domain.OptionType {
 	}
 	return ""
 }
-

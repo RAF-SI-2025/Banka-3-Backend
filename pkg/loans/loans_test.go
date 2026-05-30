@@ -12,8 +12,8 @@ func TestBaseRate(t *testing.T) {
 		want   string
 	}{
 		{"100000", "6.25"},
-		{"500000", "6.25"},     // boundary belongs to first bracket
-		{"500001", "6.00"},     // first cent into next bracket
+		{"500000", "6.25"}, // boundary belongs to first bracket
+		{"500001", "6.00"}, // first cent into next bracket
 		{"1000000", "6.00"},
 		{"1000001", "5.75"},
 		{"5000001", "5.25"},
@@ -169,9 +169,10 @@ func TestPomerajRange(t *testing.T) {
 }
 
 // TestAnnuity_Housing30Y: 5,000,000 @ 7% over 360 months ≈ 33,265.79.
-//   r = 7/1200 = 0.0058333…
-//   pow ≈ 8.11649
-//   A = 5e6 × 0.0058333 × 8.11649 / 7.11649 ≈ 33265.12
+//
+//	r = 7/1200 = 0.0058333…
+//	pow ≈ 8.11649
+//	A = 5e6 × 0.0058333 × 8.11649 / 7.11649 ≈ 33265.12
 //
 // Allow ±0.50 wiggle since the spec doesn't pin a particular rounding
 // step beyond "use formula"; we go with exact bigrat. This pins the

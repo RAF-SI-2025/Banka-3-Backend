@@ -4,8 +4,8 @@ import (
 	"context"
 	"time"
 
-	"github.com/RAF-SI-2025/Banka-3-Backend/pkg/apperr"
 	bankpb "github.com/RAF-SI-2025/Banka-3-Backend/gen/proto/bank/v1"
+	"github.com/RAF-SI-2025/Banka-3-Backend/pkg/apperr"
 	"github.com/RAF-SI-2025/Banka-3-Backend/services/bank/internal/domain"
 	"github.com/RAF-SI-2025/Banka-3-Backend/services/bank/internal/service"
 	"google.golang.org/protobuf/types/known/emptypb"

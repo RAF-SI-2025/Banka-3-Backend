@@ -33,14 +33,14 @@ func adminInboundCtx() context.Context {
 // TestIntegration_ExternalOTC_InboundAcceptThenExercise walks the
 // partner-driven flow against a seeded local seller-holding:
 //
-//   1. Partner sends an offer (Receive*Offer) — thread minted.
-//   2. Partner accepts (Receive*Accept) — thread → accepted +
-//      external_otc_contracts row appears with premium_op_id NULL.
-//   3. Replay of accept is a no-op (idempotent).
-//   4. Partner sends an exercise notice (Receive*ExerciseNotice) —
-//      contract → exercised, exercise_op_id stamped from derived
-//      partner identifier.
-//   5. Replay of exercise is a no-op.
+//  1. Partner sends an offer (Receive*Offer) — thread minted.
+//  2. Partner accepts (Receive*Accept) — thread → accepted +
+//     external_otc_contracts row appears with premium_op_id NULL.
+//  3. Replay of accept is a no-op (idempotent).
+//  4. Partner sends an exercise notice (Receive*ExerciseNotice) —
+//     contract → exercised, exercise_op_id stamped from derived
+//     partner identifier.
+//  5. Replay of exercise is a no-op.
 func TestIntegration_ExternalOTC_InboundAcceptThenExercise(t *testing.T) {
 	svc := setup(t)
 	ctx := adminInboundCtx()

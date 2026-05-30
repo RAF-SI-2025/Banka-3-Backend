@@ -152,12 +152,12 @@ type Exchange struct {
 // Security is the polymorphic instrument type (stock / future / forex
 // / option). Per-type fields are populated only when relevant.
 type Security struct {
-	ID                   string
-	Ticker               string
-	Name                 string
-	Type                 SecurityType
-	ExchangeMIC          string
-	Currency             Currency
+	ID          string
+	Ticker      string
+	Name        string
+	Type        SecurityType
+	ExchangeMIC string
+	Currency    Currency
 
 	// Stock
 	OutstandingShares int64
@@ -219,32 +219,32 @@ type ListingDailyPrice struct {
 // "trading.client + employee" combo doesn't misroute through the FX
 // commission-zero path on settle (spec p.26 / p.55-56).
 type Order struct {
-	ID                 string
-	UserID             string
-	UserKind           UserKind
-	SecurityID         string
-	OrderType          OrderType
-	Direction          Direction
-	Quantity           int32
-	ContractSize       string
-	PricePerUnit       string
-	LimitPrice         string
-	StopPrice          string
-	AllOrNone          bool
-	Margin             bool
-	IsActuary          bool
-	AccountID          string
-	Status             OrderStatus
-	ApprovedBy         string
-	ApprovalRequired   bool
-	ApprovedAt         *time.Time
-	IsDone             bool
-	Cancelled          bool
-	Triggered          bool
-	AfterHours         bool
-	RemainingQuantity  int32
-	LastModification   time.Time
-	CreatedAt          time.Time
+	ID                string
+	UserID            string
+	UserKind          UserKind
+	SecurityID        string
+	OrderType         OrderType
+	Direction         Direction
+	Quantity          int32
+	ContractSize      string
+	PricePerUnit      string
+	LimitPrice        string
+	StopPrice         string
+	AllOrNone         bool
+	Margin            bool
+	IsActuary         bool
+	AccountID         string
+	Status            OrderStatus
+	ApprovedBy        string
+	ApprovalRequired  bool
+	ApprovedAt        *time.Time
+	IsDone            bool
+	Cancelled         bool
+	Triggered         bool
+	AfterHours        bool
+	RemainingQuantity int32
+	LastModification  time.Time
+	CreatedAt         time.Time
 
 	// Fund-actor (spec p.74-75). ActorKind discriminates whether the
 	// order was placed by a client/employee themselves or on behalf of
@@ -490,11 +490,11 @@ type ExternalOTCThread struct {
 	ID        string
 	Direction ExternalOTCDirection
 
-	RemoteBankCode     string
-	RemoteThreadID     string
-	RemoteUserRef      string
-	RemoteDisplayName  string
-	RemoteAccountRef   string
+	RemoteBankCode    string
+	RemoteThreadID    string
+	RemoteUserRef     string
+	RemoteDisplayName string
+	RemoteAccountRef  string
 
 	LocalUserID        string
 	LocalUserKind      UserKind
@@ -617,30 +617,30 @@ type Fund struct {
 // mutual-fund unit count; total_invested_rsd is the cash that bought
 // those units (cost basis for the tax row at withdrawal time).
 type FundPosition struct {
-	ID                 string
-	FundID             string
-	ClientID           string
-	Units              string
-	TotalInvestedRSD   string
-	CreatedAt          time.Time
-	UpdatedAt          time.Time
+	ID               string
+	FundID           string
+	ClientID         string
+	Units            string
+	TotalInvestedRSD string
+	CreatedAt        time.Time
+	UpdatedAt        time.Time
 }
 
 // FundTransaction is one audit-log row for an invest/withdraw.
 type FundTransaction struct {
-	ID                       string
-	FundID                   string
-	ClientID                 string
-	InitiatorEmployeeID      string
-	AmountRSD                string
-	UnitsDelta               string // positive on invest, negative on withdraw
-	SourceOrDestAccountID    string
-	IsInflow                 bool
-	Status                   FundTransactionStatus
-	SagaID                   string
-	FailureReason            string
-	CreatedAt                time.Time
-	UpdatedAt                time.Time
+	ID                    string
+	FundID                string
+	ClientID              string
+	InitiatorEmployeeID   string
+	AmountRSD             string
+	UnitsDelta            string // positive on invest, negative on withdraw
+	SourceOrDestAccountID string
+	IsInflow              bool
+	Status                FundTransactionStatus
+	SagaID                string
+	FailureReason         string
+	CreatedAt             time.Time
+	UpdatedAt             time.Time
 }
 
 // FundPerformanceSnapshot is one daily snapshot for the chart.
@@ -657,20 +657,20 @@ type FundPerformanceSnapshot struct {
 // agnostic — it groups by (user_id, account_id) and doesn't read
 // security_id.
 type RealizedGain struct {
-	ID            string
-	UserID        string
-	UserKind      UserKind
-	SecurityID    string
-	FundID        string
-	AccountID     string
-	Quantity      int32
-	CostBasisAmt  string
-	ProceedsAmt   string
-	Currency      Currency
-	GainNative    string
-	GainRSD       string
-	RealizedAt    time.Time
-	Taxed         bool
-	TaxedAt       *time.Time
-	TaxOpID       string
+	ID           string
+	UserID       string
+	UserKind     UserKind
+	SecurityID   string
+	FundID       string
+	AccountID    string
+	Quantity     int32
+	CostBasisAmt string
+	ProceedsAmt  string
+	Currency     Currency
+	GainNative   string
+	GainRSD      string
+	RealizedAt   time.Time
+	Taxed        bool
+	TaxedAt      *time.Time
+	TaxOpID      string
 }

@@ -137,9 +137,9 @@ func (s *Store) RefundUsedLimit(ctx context.Context, tx pgx.Tx, employeeID, delt
 
 // ActuaryFilter narrows ListActuaries.
 type ActuaryFilter struct {
-	Type        domain.ActuaryType
-	EmailQuery  string
-	NameQuery   string
+	Type       domain.ActuaryType
+	EmailQuery string
+	NameQuery  string
 }
 
 // ListActuaries returns matching rows. Email/name filtering happens in
@@ -158,7 +158,7 @@ func (s *Store) ListActuaries(ctx context.Context, t domain.ActuaryType, page, p
 	}
 
 	var (
-		args      []any
+		args       []any
 		whereParts []string
 	)
 	if t != "" {
@@ -209,4 +209,3 @@ func scanActuary(row pgx.Row) (*domain.ActuaryInfo, error) {
 	a.Type = domain.ActuaryType(t)
 	return &a, nil
 }
-

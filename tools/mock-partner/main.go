@@ -80,16 +80,16 @@ type actionRequest struct {
 // ---------------------------------------------------------------------
 
 type thread struct {
-	ID             string
-	SenderBankCode string
-	SenderThreadID string
+	ID              string
+	SenderBankCode  string
+	SenderThreadID  string
 	SellerHoldingID string
-	Quantity       int32
-	PricePerUnit   string
-	Premium        string
-	SettlementDate string
-	Status         string // "open" | "withdrawn" | "accepted"
-	UpdatedAt      time.Time
+	Quantity        int32
+	PricePerUnit    string
+	Premium         string
+	SettlementDate  string
+	Status          string // "open" | "withdrawn" | "accepted"
+	UpdatedAt       time.Time
 }
 
 type state struct {

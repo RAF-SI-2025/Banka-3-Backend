@@ -16,12 +16,12 @@ import (
 	"github.com/RAF-SI-2025/Banka-3-Backend/pkg/probes"
 	pkgredis "github.com/RAF-SI-2025/Banka-3-Backend/pkg/redis"
 
-	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/RAF-SI-2025/Banka-3-Backend/pkg/shutdown"
 	"github.com/RAF-SI-2025/Banka-3-Backend/services/exchange/internal/feed"
 	"github.com/RAF-SI-2025/Banka-3-Backend/services/exchange/internal/server"
 	"github.com/RAF-SI-2025/Banka-3-Backend/services/exchange/internal/service"
 	"github.com/RAF-SI-2025/Banka-3-Backend/services/exchange/internal/store"
+	"github.com/jackc/pgx/v5/pgxpool"
 	"google.golang.org/grpc"
 
 	"golang.org/x/sync/errgroup"

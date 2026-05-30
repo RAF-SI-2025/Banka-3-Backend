@@ -337,21 +337,21 @@ var _ taxStoreShim = (*store.Store)(nil)
 // proto message but stays in domain-string form so the service layer
 // is free of timestamppb/Currency-proto coupling.
 type RealizedPnLRow struct {
-	ID            string
-	SaleAt        time.Time
-	SecurityID    string
-	Ticker        string
-	AccountID     string
-	Quantity      int32
-	CostBasisAmt  string
-	ProceedsAmt   string
-	Currency      domain.Currency
-	ProfitNative  string
-	ProfitRSD     string
-	TaxAmountRSD  string
-	Taxed         bool
-	TaxedAt       *time.Time
-	TaxOpID       string
+	ID           string
+	SaleAt       time.Time
+	SecurityID   string
+	Ticker       string
+	AccountID    string
+	Quantity     int32
+	CostBasisAmt string
+	ProceedsAmt  string
+	Currency     domain.Currency
+	ProfitNative string
+	ProfitRSD    string
+	TaxAmountRSD string
+	Taxed        bool
+	TaxedAt      *time.Time
+	TaxOpID      string
 }
 
 // ListRealizedPnLInput drives the supervisor "Realizovani gubici/dobici"

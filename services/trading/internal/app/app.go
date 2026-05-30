@@ -9,8 +9,8 @@ import (
 
 	bankpb "github.com/RAF-SI-2025/Banka-3-Backend/gen/proto/bank/v1"
 	exchangepb "github.com/RAF-SI-2025/Banka-3-Backend/gen/proto/exchange/v1"
-	tradingpb "github.com/RAF-SI-2025/Banka-3-Backend/gen/proto/trading/v1"
 	notifpb "github.com/RAF-SI-2025/Banka-3-Backend/gen/proto/notification/v1"
+	tradingpb "github.com/RAF-SI-2025/Banka-3-Backend/gen/proto/trading/v1"
 	userpb "github.com/RAF-SI-2025/Banka-3-Backend/gen/proto/user/v1"
 	"github.com/RAF-SI-2025/Banka-3-Backend/pkg/clock"
 	"github.com/RAF-SI-2025/Banka-3-Backend/pkg/config"
@@ -19,7 +19,6 @@ import (
 	"github.com/RAF-SI-2025/Banka-3-Backend/pkg/logger"
 	"github.com/RAF-SI-2025/Banka-3-Backend/pkg/observability"
 	"github.com/RAF-SI-2025/Banka-3-Backend/pkg/postgres"
-	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/RAF-SI-2025/Banka-3-Backend/pkg/probes"
 	pkgredis "github.com/RAF-SI-2025/Banka-3-Backend/pkg/redis"
 	"github.com/RAF-SI-2025/Banka-3-Backend/pkg/shutdown"
@@ -30,6 +29,7 @@ import (
 	"github.com/RAF-SI-2025/Banka-3-Backend/services/trading/internal/server"
 	"github.com/RAF-SI-2025/Banka-3-Backend/services/trading/internal/service"
 	"github.com/RAF-SI-2025/Banka-3-Backend/services/trading/internal/store"
+	"github.com/jackc/pgx/v5/pgxpool"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials/insecure"
 

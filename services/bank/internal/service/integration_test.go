@@ -1061,10 +1061,10 @@ func TestIntegration_Card_BusinessLimit(t *testing.T) {
 // TestIntegration_LoanFlow_RequestApproveInstallment is the full spec
 // p.30-34 happy path:
 //
-//   1. client submits a request (cash, fixed, 60 months, 1M RSD)
-//   2. employee approves → loan is minted + disbursed (1M RSD into client account)
-//   3. installment cron pays 1 installment → balance debited, remaining
-//      principal reduced by the principal portion (interest stays with bank)
+//  1. client submits a request (cash, fixed, 60 months, 1M RSD)
+//  2. employee approves → loan is minted + disbursed (1M RSD into client account)
+//  3. installment cron pays 1 installment → balance debited, remaining
+//     principal reduced by the principal portion (interest stays with bank)
 //
 // The exact numbers are pinned because the rate brackets + annuity
 // formula are spec-locked: 6.00% base + 1.75% margin = 7.75%, A ≈ 20156.96.
@@ -2087,4 +2087,3 @@ func approveCashLoan(t *testing.T, svc *Service, clientID, accID, amount string,
 	}
 	return loans[0]
 }
-

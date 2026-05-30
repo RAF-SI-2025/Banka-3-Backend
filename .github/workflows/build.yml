@@ -1,0 +1,142 @@
+name: build-and-push
+
+on:
+  push:
+    branches: [main]
+    tags: ['v*']
+  workflow_dispatch:
+    inputs:
+      all:
+        description: "Rebuild every service (ignore path filter)"
+        type: boolean
+        default: false
+
+env:
+  REGISTRY: registry.urosevicvuk.dev
+  PROJECT: raf-banka3
+
+jobs:
+  # Same change-detection idea as ci.yml. On a release tag (refs/tags/v*)
+  # or manual `all=true`, we force-rebuild every service so a tag produces
+  # a complete image set even if the previous push only touched one svc.
+  changes:
+    runs-on: ubuntu-latest
+    outputs:
+      modules: ${{ steps.compute.outputs.modules }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dorny/paths-filter@v3
+        id: filter
+        if: ${{ !startsWith(github.ref, 'refs/tags/') && !inputs.all }}
+        with:
+          filters: |
+            user:         'services/user/**'
+            bank:         'services/bank/**'
+            trading:      'services/trading/**'
+            exchange:     'services/exchange/**'
+            notification: 'services/notification/**'
+            gateway:      'services/gateway/**'
+            migrate:
+              - 'docker/Dockerfile.migrate'
+              - 'docker/run-migrations.sh'
+              - 'services/*/migrations/**'
+            shared:
+              - 'pkg/**'
+              - 'proto/**'
+              - 'buf.yaml'
+              - 'buf.gen.yaml'
+              - 'Makefile'
+              - 'go.work'
+              - 'docker/Dockerfile'
+              - '.github/workflows/build.yml'
+      - id: compute
+        run: |
+          all='["user","bank","trading","exchange","notification","gateway","migrate"]'
+          if [[ '${{ startsWith(github.ref, 'refs/tags/') }}' == 'true' || '${{ inputs.all }}' == 'true' ]]; then
+            echo "modules=$all" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          mods='${{ steps.filter.outputs.changes }}'
+          if jq -e 'index("shared")' <<<"$mods" >/dev/null; then
+            echo "modules=$all" >> "$GITHUB_OUTPUT"
+          else
+            # drop the 'migrate' marker into the list iff that filter tripped;
+            # otherwise keep only per-service names.
+            services=$(jq -c '[.[] | select(. != "shared")]' <<<"$mods")
+            echo "modules=$services" >> "$GITHUB_OUTPUT"
+          fi
+
+  services:
+    needs: changes
+    if: ${{ needs.changes.outputs.modules != '[]' && needs.changes.outputs.modules != '' }}
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        service: ${{ fromJSON(needs.changes.outputs.modules) }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: docker/setup-buildx-action@v3
+
+      - name: Login to Harbor
+        uses: docker/login-action@v3
+        with:
+          registry: ${{ env.REGISTRY }}
+          username: ${{ secrets.HARBOR_USERNAME }}
+          password: ${{ secrets.HARBOR_PASSWORD }}
+
+      - name: Generate proto stubs (services only)
+        if: matrix.service != 'migrate'
+        run: |
+          docker run --rm -v "$PWD":/src -w /src \
+            bufbuild/buf:1.45.0 generate
+
+      - name: Compute image tags
+        id: tags
+        run: |
+          base="${{ env.REGISTRY }}/${{ env.PROJECT }}/${{ matrix.service }}"
+          tags="$base:${{ github.sha }}"
+          if [[ "${{ github.ref }}" == "refs/heads/main" ]]; then
+            tags="$tags"$'\n'"$base:main"
+          fi
+          if [[ "${{ github.ref }}" == "refs/heads/rewrite" ]]; then
+            tags="$tags"$'\n'"$base:rewrite"
+          fi
+          if [[ "${{ github.ref }}" == refs/tags/v* ]]; then
+            tags="$tags"$'\n'"$base:${GITHUB_REF#refs/tags/}"
+            tags="$tags"$'\n'"$base:latest"
+          fi
+          {
+            echo "tags<<EOF"
+            echo "$tags"
+            echo "EOF"
+          } >> "$GITHUB_OUTPUT"
+
+      - name: Build + push ${{ matrix.service }}
+        id: build
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: ${{ matrix.service == 'migrate' && 'docker/Dockerfile.migrate' || 'docker/Dockerfile' }}
+          build-args: |
+            ${{ matrix.service != 'migrate' && format('SERVICE={0}', matrix.service) || '' }}
+          push: true
+          tags: ${{ steps.tags.outputs.tags }}
+          cache-from: type=gha,scope=${{ matrix.service }}
+          cache-to:   type=gha,scope=${{ matrix.service }},mode=max
+
+      - name: Install cosign
+        uses: sigstore/cosign-installer@v3
+
+      - name: Sign image with cosign
+        # Signs the digest produced by buildx — that digest backs every tag
+        # we just pushed (:main, :<sha>, :<tag>), so one sign call covers all.
+        # --tlog-upload=false keeps the signature out of the public Rekor
+        # log; verification policy must mirror this.
+        env:
+          COSIGN_PRIVATE_KEY: ${{ secrets.COSIGN_PRIVATE_KEY }}
+          COSIGN_PASSWORD: ${{ secrets.COSIGN_PASSWORD }}
+        run: |
+          cosign sign --key env://COSIGN_PRIVATE_KEY --tlog-upload=false --yes \
+            "${{ env.REGISTRY }}/${{ env.PROJECT }}/${{ matrix.service }}@${{ steps.build.outputs.digest }}"

@@ -94,7 +94,7 @@ func (s *Service) CreateCard(ctx context.Context, in CreateCardInput) (*domain.C
 
 	c, err := s.Store.CreateCard(ctx, &domain.Card{
 		Number:             number,
-		CVVHash:             cvvHash,
+		CVVHash:            cvvHash,
 		Brand:              brand,
 		Name:               name,
 		AccountID:          a.ID,

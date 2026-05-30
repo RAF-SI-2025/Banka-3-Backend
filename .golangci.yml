@@ -1,0 +1,32 @@
+version: "2"
+
+linters:
+  default: standard
+  settings:
+    errcheck:
+      exclude-functions:
+        - (io.Closer).Close
+        - io.Closer.Close
+        - github.com/redis/go-redis/v9.Client.Close
+        - (*github.com/redis/go-redis/v9.Client).Close
+        - (*github.com/redis/go-redis/v9.baseClient).Close
+        - (*google.golang.org/grpc.ClientConn).Close
+        - (*net/http.Response.Body).Close
+        - (*github.com/jackc/pgx/v5/pgxpool.Pool).Close
+        - (*crypto/tls.Conn).Close
+        - (*net/smtp.Client).Quit
+        - (*net/smtp.Client).Close
+    staticcheck:
+      checks:
+        - all
+        - -QF1001
+        - -S1016
+        - -ST1000
+        - -ST1020
+        - -ST1021
+        - -ST1022
+  exclusions:
+    rules:
+      - linters:
+          - unused
+        path: _test\.go

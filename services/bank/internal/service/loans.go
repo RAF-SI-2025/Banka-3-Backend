@@ -458,7 +458,7 @@ func (s *Service) collectOneInstallment(ctx context.Context, inst *domain.LoanIn
 
 		nextStatus := domain.LoanApproved
 		var nextDate *time.Time
-		nextAmount := loan.NextInstallmentAmount
+		var nextAmount string
 		if newRemaining.Sign() == 0 || inst.SequenceNumber >= loan.InstallmentsTotal {
 			nextStatus = domain.LoanPaidOff
 			nextAmount = ""

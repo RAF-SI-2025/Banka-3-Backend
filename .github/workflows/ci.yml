@@ -1,0 +1,194 @@
+name: ci
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+jobs:
+  # Figure out which services need checking. dorny/paths-filter outputs a
+  # JSON array of matched filter names (e.g. ["user","bank","shared"]);
+  # downstream jobs read it and gate per-matrix-entry steps.
+  changes:
+    runs-on: ubuntu-latest
+    outputs:
+      modules: ${{ steps.filter.outputs.changes }}
+      proto:   ${{ steps.filter.outputs.proto }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dorny/paths-filter@v3
+        id: filter
+        with:
+          filters: |
+            user:         'services/user/**'
+            bank:         'services/bank/**'
+            trading:      'services/trading/**'
+            exchange:     'services/exchange/**'
+            notification: 'services/notification/**'
+            gateway:      'services/gateway/**'
+            proto:
+              - 'proto/**'
+              - 'buf.yaml'
+              - 'buf.gen.yaml'
+            # shared = anything every service depends on. Trips the
+            # 'run-all-services' gate downstream.
+            shared:
+              - 'pkg/**'
+              - 'proto/**'
+              - 'buf.yaml'
+              - 'buf.gen.yaml'
+              - 'Makefile'
+              - 'go.work'
+              - 'go.work.sum'
+              - 'docker/**'
+              - '.github/workflows/ci.yml'
+
+  proto:
+    needs: changes
+    if: contains(fromJSON(needs.changes.outputs.modules), 'proto')
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: bufbuild/buf-setup-action@v1
+        with:
+          github_token: ${{ secrets.GITHUB_TOKEN }}
+      - name: buf lint
+        run: buf lint
+      - name: buf format check
+        run: buf format --diff --exit-code
+
+  services:
+    needs: changes
+    if: needs.changes.outputs.modules != '[]'
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        service: [user, bank, trading, exchange, notification, gateway]
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Decide whether to run
+        # Run if this service changed, OR if anything shared (pkg, proto,
+        # Dockerfile, Makefile, workflow) changed — that ripples to all.
+        id: gate
+        run: |
+          mods='${{ needs.changes.outputs.modules }}'
+          svc='${{ matrix.service }}'
+          if jq -e --arg svc "$svc" 'index($svc) // index("shared")' <<<"$mods" >/dev/null; then
+            echo "run=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "run=false" >> "$GITHUB_OUTPUT"
+            echo "::notice::skipping $svc — no relevant changes"
+          fi
+
+      - uses: actions/setup-go@v5
+        if: steps.gate.outputs.run == 'true'
+        with:
+          go-version: '1.25'
+          cache-dependency-path: services/${{ matrix.service }}/go.sum
+
+      - uses: bufbuild/buf-setup-action@v1
+        if: steps.gate.outputs.run == 'true'
+        with:
+          github_token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Generate proto stubs
+        if: steps.gate.outputs.run == 'true'
+        run: buf generate
+
+      - name: gofmt
+        if: steps.gate.outputs.run == 'true'
+        working-directory: services/${{ matrix.service }}
+        run: |
+          diff=$(gofmt -l .)
+          if [[ -n "$diff" ]]; then
+            echo "::error::gofmt drift in services/${{ matrix.service }}:"
+            echo "$diff"
+            exit 1
+          fi
+
+      - name: go vet
+        if: steps.gate.outputs.run == 'true'
+        working-directory: services/${{ matrix.service }}
+        run: go vet ./...
+
+      - name: go mod tidy check
+        if: steps.gate.outputs.run == 'true'
+        working-directory: services/${{ matrix.service }}
+        run: |
+          go mod tidy
+          if ! git diff --exit-code -- go.mod go.sum; then
+            echo "::error::go.mod / go.sum out of date in services/${{ matrix.service }} — run 'go mod tidy'"
+            exit 1
+          fi
+
+      - name: golangci-lint
+        if: steps.gate.outputs.run == 'true'
+        uses: golangci/golangci-lint-action@v8
+        with:
+          version: v2.12
+          working-directory: services/${{ matrix.service }}
+
+      - name: go test
+        if: steps.gate.outputs.run == 'true'
+        working-directory: services/${{ matrix.service }}
+        run: go test -race -timeout 5m ./...
+
+      - name: go build
+        if: steps.gate.outputs.run == 'true'
+        working-directory: services/${{ matrix.service }}
+        run: go build ./...
+
+      # Catches Dockerfile drift (broken COPY paths, missing build args,
+      # base-image issues) before the post-merge build.yml tries to push.
+      # No push, no sign — purely a "would the image build" gate.
+      - uses: docker/setup-buildx-action@v3
+        if: steps.gate.outputs.run == 'true'
+
+      - name: Docker build (no push)
+        if: steps.gate.outputs.run == 'true'
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: docker/Dockerfile
+          build-args: |
+            SERVICE=${{ matrix.service }}
+          push: false
+          cache-from: type=gha,scope=${{ matrix.service }}
+          cache-to:   type=gha,scope=${{ matrix.service }},mode=max
+
+  # pkg is consumed by every service via `replace`, so changes there
+  # already trigger the per-service matrix above. We still run pkg's
+  # own checks (lint/test) when pkg itself changes.
+  pkg:
+    needs: changes
+    if: contains(fromJSON(needs.changes.outputs.modules), 'shared')
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version: '1.25'
+          cache-dependency-path: pkg/go.sum
+      - name: gofmt
+        working-directory: pkg
+        run: |
+          diff=$(gofmt -l .)
+          if [[ -n "$diff" ]]; then echo "$diff"; exit 1; fi
+      - name: go vet
+        working-directory: pkg
+        run: go vet ./...
+      - name: go mod tidy check
+        working-directory: pkg
+        run: |
+          go mod tidy
+          git diff --exit-code -- go.mod go.sum
+      - uses: golangci/golangci-lint-action@v8
+        with:
+          version: v2.12
+          working-directory: pkg
+      - name: go test
+        working-directory: pkg
+        run: go test -race -timeout 5m ./...

@@ -58,10 +58,10 @@ type PartnerBanka2 struct {
 	BankRoutingNumber string // ours, e.g. "333"
 	BankDisplayName   string // ours, e.g. "Banka 3"
 
-	Users     userpb.UserServiceClient
-	Trading   tradingpb.TradingServiceClient
+	Users      userpb.UserServiceClient
+	Trading    tradingpb.TradingServiceClient
 	TradingOTC tradingpb.ExternalOTCServiceClient
-	Interbank bankpb.InterbankProtocolServiceClient
+	Interbank  bankpb.InterbankProtocolServiceClient
 }
 
 // MountPartnerBanka2 registers the routes. No-op when under-configured.
@@ -187,14 +187,14 @@ type b2TransactionVote struct {
 }
 
 type b2OtcOffer struct {
-	Stock          b2Stock      `json:"stock"`
-	SettlementDate string       `json:"settlementDate"` // RFC3339
-	PricePerUnit   b2Monetary   `json:"pricePerUnit"`
-	Premium        b2Monetary   `json:"premium"`
-	BuyerID        b2ForeignID  `json:"buyerId"`
-	SellerID       b2ForeignID  `json:"sellerId"`
-	Amount         json.Number  `json:"amount"`
-	LastModifiedBy b2ForeignID  `json:"lastModifiedBy"`
+	Stock          b2Stock     `json:"stock"`
+	SettlementDate string      `json:"settlementDate"` // RFC3339
+	PricePerUnit   b2Monetary  `json:"pricePerUnit"`
+	Premium        b2Monetary  `json:"premium"`
+	BuyerID        b2ForeignID `json:"buyerId"`
+	SellerID       b2ForeignID `json:"sellerId"`
+	Amount         json.Number `json:"amount"`
+	LastModifiedBy b2ForeignID `json:"lastModifiedBy"`
 }
 
 type b2OtcNegotiation struct {
