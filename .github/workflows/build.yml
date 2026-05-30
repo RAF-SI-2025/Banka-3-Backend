@@ -114,6 +114,7 @@ jobs:
           } >> "$GITHUB_OUTPUT"
 
       - name: Build + push ${{ matrix.service }}
+        id: build
         uses: docker/build-push-action@v6
         with:
           context: .
@@ -124,3 +125,18 @@ jobs:
           tags: ${{ steps.tags.outputs.tags }}
           cache-from: type=gha,scope=${{ matrix.service }}
           cache-to:   type=gha,scope=${{ matrix.service }},mode=max
+
+      - name: Install cosign
+        uses: sigstore/cosign-installer@v3
+
+      - name: Sign image with cosign
+        # Signs the digest produced by buildx — that digest backs every tag
+        # we just pushed (:main, :<sha>, :<tag>), so one sign call covers all.
+        # --tlog-upload=false keeps the signature out of the public Rekor
+        # log; verification policy must mirror this.
+        env:
+          COSIGN_PRIVATE_KEY: ${{ secrets.COSIGN_PRIVATE_KEY }}
+          COSIGN_PASSWORD: ${{ secrets.COSIGN_PASSWORD }}
+        run: |
+          cosign sign --key env://COSIGN_PRIVATE_KEY --tlog-upload=false --yes \
+            "${{ env.REGISTRY }}/${{ env.PROJECT }}/${{ matrix.service }}@${{ steps.build.outputs.digest }}"
