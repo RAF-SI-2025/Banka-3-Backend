@@ -2,9 +2,7 @@ name: build-and-push
 
 on:
   push:
-    # TODO: drop `deploy` before merging — temporary so the workflow fires
-    # from the feature branch for end-to-end CI validation.
-    branches: [main, rewrite, deploy]
+    branches: [main]
     tags: ['v*']
   workflow_dispatch:
     inputs:
