@@ -141,6 +141,24 @@ jobs:
         working-directory: services/${{ matrix.service }}
         run: go build ./...
 
+      # Catches Dockerfile drift (broken COPY paths, missing build args,
+      # base-image issues) before the post-merge build.yml tries to push.
+      # No push, no sign — purely a "would the image build" gate.
+      - uses: docker/setup-buildx-action@v3
+        if: steps.gate.outputs.run == 'true'
+
+      - name: Docker build (no push)
+        if: steps.gate.outputs.run == 'true'
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: docker/Dockerfile
+          build-args: |
+            SERVICE=${{ matrix.service }}
+          push: false
+          cache-from: type=gha,scope=${{ matrix.service }}
+          cache-to:   type=gha,scope=${{ matrix.service }},mode=max
+
   # pkg is consumed by every service via `replace`, so changes there
   # already trigger the per-service matrix above. We still run pkg's
   # own checks (lint/test) when pkg itself changes.
