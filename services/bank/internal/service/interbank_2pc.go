@@ -452,6 +452,6 @@ func interbankPurpose(row *domain.InterbankProtocolTransaction) string {
 	return fmt.Sprintf("interbank %s %d:%s", row.Direction, row.SenderRoutingNumber, row.TransactionID)
 }
 
-// errInterbankUnsupported is wired here so unit tests can match on the
+// ErrInterbankUnsupported is wired here so unit tests can match on the
 // stable sentinel value rather than the message string.
-var errInterbankUnsupported = errors.New("interbank: unsupported")
+var ErrInterbankUnsupported = errors.New("interbank: unsupported")
