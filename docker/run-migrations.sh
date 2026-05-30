@@ -7,6 +7,14 @@ set -euo pipefail
 
 : "${DATABASE_URL:?DATABASE_URL must be set}"
 
+# CNPG's banka-pg-app.uri is `postgresql://user:pass@host:port/db` with no
+# query string, so the migrate-table option needs `?`. If someone wires
+# DATABASE_URL with sslmode= or similar already, use `&`.
+case "$DATABASE_URL" in
+  *\?*) sep='&' ;;
+  *)    sep='?' ;;
+esac
+
 services=(user exchange bank notification trading)
 
 for svc in "${services[@]}"; do
@@ -15,7 +23,7 @@ for svc in "${services[@]}"; do
   # schema's migrations table (e.g. user.schema_migrations).
   migrate \
     -path "/migrations/$svc" \
-    -database "${DATABASE_URL}&x-migrations-table=${svc}.schema_migrations" \
+    -database "${DATABASE_URL}${sep}x-migrations-table=${svc}.schema_migrations" \
     up
 done
 
