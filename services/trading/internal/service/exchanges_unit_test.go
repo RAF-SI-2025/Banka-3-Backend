@@ -47,9 +47,9 @@ func TestResolveMarketState(t *testing.T) {
 		// (weekend at would-be open in this case).
 		{"override after-hours weekend", mkExchange("09:30", "16:00", &overrideAfterHours), at("2026-05-09 12:00"), false, true},
 		{"override after-hours middle of session", mkExchange("09:30", "16:00", &overrideAfterHours), at("2026-05-11 12:00"), false, true},
-		{"weekday before open", mkExchange("09:30", "16:00", nil), at("2026-05-11 09:00"), false, false},  // Mon 09:00
+		{"weekday before open", mkExchange("09:30", "16:00", nil), at("2026-05-11 09:00"), false, false}, // Mon 09:00
 		{"weekday during", mkExchange("09:30", "16:00", nil), at("2026-05-11 12:00"), true, false},
-		{"weekday just after close", mkExchange("09:30", "16:00", nil), at("2026-05-11 17:00"), false, true}, // 1h after close
+		{"weekday just after close", mkExchange("09:30", "16:00", nil), at("2026-05-11 17:00"), false, true},  // 1h after close
 		{"weekday well after close", mkExchange("09:30", "16:00", nil), at("2026-05-11 21:00"), false, false}, // >4h after close
 		{"saturday during would-be hours", mkExchange("09:30", "16:00", nil), at("2026-05-09 12:00"), false, false},
 	}
@@ -68,7 +68,7 @@ func TestResolveMarketState(t *testing.T) {
 
 func TestParseHHMM(t *testing.T) {
 	cases := []struct {
-		in   string
+		in     string
 		okWant bool
 	}{
 		{"09:30", true},

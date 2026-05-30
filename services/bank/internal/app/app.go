@@ -174,16 +174,24 @@ func Run() error {
 	// rate refresh. Both are bypassed (interval == 0) by default in
 	// tests; configure via INSTALLMENT_JOB_INTERVAL / VARIABLE_RATE_JOB_INTERVAL.
 	if installmentInterval > 0 {
-		g.Go(func() error { return runJobLoop(gctx, log, "installments", installmentInterval, svc.RunInstallmentJobAuto) })
+		g.Go(func() error {
+			return runJobLoop(gctx, log, "installments", installmentInterval, svc.RunInstallmentJobAuto)
+		})
 	}
 	if variableRateInterval > 0 {
-		g.Go(func() error { return runJobLoop(gctx, log, "variable-rate", variableRateInterval, svc.RunVariableRateJobAuto) })
+		g.Go(func() error {
+			return runJobLoop(gctx, log, "variable-rate", variableRateInterval, svc.RunVariableRateJobAuto)
+		})
 	}
 	if maintenanceFeeInterval > 0 {
-		g.Go(func() error { return runJobLoop(gctx, log, "maintenance-fee", maintenanceFeeInterval, svc.RunMaintenanceFeeJobAuto) })
+		g.Go(func() error {
+			return runJobLoop(gctx, log, "maintenance-fee", maintenanceFeeInterval, svc.RunMaintenanceFeeJobAuto)
+		})
 	}
 	if spentResetInterval > 0 {
-		g.Go(func() error { return runJobLoop(gctx, log, "spent-reset", spentResetInterval, svc.RunSpentResetJobAuto) })
+		g.Go(func() error {
+			return runJobLoop(gctx, log, "spent-reset", spentResetInterval, svc.RunSpentResetJobAuto)
+		})
 	}
 
 	probeSrv.MarkReady()

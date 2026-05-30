@@ -28,12 +28,12 @@ func TestDetectBrand(t *testing.T) {
 		want Brand
 	}{
 		{"4111111111111111", BrandVisa},
-		{"5500000000000004", BrandMastercard},     // legacy 51-55
-		{"2221000000000009", BrandMastercard},     // newer 2221-2720 range
+		{"5500000000000004", BrandMastercard}, // legacy 51-55
+		{"2221000000000009", BrandMastercard}, // newer 2221-2720 range
 		{"9891000000000001", BrandDinacard},
 		{"340000000000009", BrandAmex},
 		{"371000000000000", BrandAmex},
-		{"6011000000000004", ""},                  // Discover, not supported
+		{"6011000000000004", ""}, // Discover, not supported
 		{"", ""},
 	}
 	for _, tc := range cases {

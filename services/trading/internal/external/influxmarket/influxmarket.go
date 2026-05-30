@@ -51,10 +51,12 @@ type Store interface {
 
 type noop struct{}
 
-func (noop) Enabled() bool                                                    { return false }
-func (noop) WriteDaily(context.Context, Row) error                            { return nil }
-func (noop) LatestDaily(context.Context, []string) (map[string]Row, error)    { return map[string]Row{}, nil }
-func (noop) History(context.Context, string, time.Time) ([]Row, error)        { return nil, nil }
+func (noop) Enabled() bool                         { return false }
+func (noop) WriteDaily(context.Context, Row) error { return nil }
+func (noop) LatestDaily(context.Context, []string) (map[string]Row, error) {
+	return map[string]Row{}, nil
+}
+func (noop) History(context.Context, string, time.Time) ([]Row, error) { return nil, nil }
 
 // NewFromEnv reads INFLUX_URL / INFLUX_TOKEN / INFLUX_ORG /
 // INFLUX_BUCKET. When any are unset the returned store is a no-op.

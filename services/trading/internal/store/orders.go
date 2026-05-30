@@ -318,4 +318,3 @@ func scanOrder(row pgx.Row) (*domain.Order, error) {
 	o.ApprovedAt = approvedAt
 	return &o, nil
 }
-

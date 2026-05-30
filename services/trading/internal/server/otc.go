@@ -119,8 +119,8 @@ func (s *Server) AcceptOTCOffer(ctx context.Context, in *tradingpb.AcceptOTCOffe
 		return nil, err
 	}
 	return &tradingpb.AcceptOTCOfferResponse{
-		Contract:     otcContractToProto(s, ctx, res.Contract),
-		PremiumOpId:  res.PremiumOpID,
+		Contract:    otcContractToProto(s, ctx, res.Contract),
+		PremiumOpId: res.PremiumOpID,
 	}, nil
 }
 

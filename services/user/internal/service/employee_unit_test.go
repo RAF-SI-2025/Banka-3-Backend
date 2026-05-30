@@ -20,7 +20,7 @@ func TestPermissionsForRole(t *testing.T) {
 		{"supervisor", permissions.RoleEmployeeSupervisor},
 		{"agent", permissions.RoleEmployeeAgent},
 		{"basic", permissions.RoleEmployeeBasic},
-		{"", permissions.RoleEmployeeBasic},   // unknown → basic
+		{"", permissions.RoleEmployeeBasic}, // unknown → basic
 		{"hax0r", permissions.RoleEmployeeBasic},
 	}
 	for _, tc := range cases {
@@ -246,4 +246,3 @@ func TestDiffEmployee(t *testing.T) {
 		}
 	})
 }
-

@@ -206,13 +206,13 @@ func (s *Service) SettleTrade(ctx context.Context, in SettleTradeInput) (*domain
 // (spec p.42). Direction "buy" means the actuary buys the base
 // currency by paying the quote currency; "sell" reverses both legs.
 type SettleForexFillInput struct {
-	Direction    string // "buy" | "sell" of the base currency
-	BaseCurrency domain.Currency
-	BaseAmount   string // qty × contract_size, in base currency
+	Direction     string // "buy" | "sell" of the base currency
+	BaseCurrency  domain.Currency
+	BaseAmount    string // qty × contract_size, in base currency
 	QuoteCurrency domain.Currency
-	QuoteAmount  string // qty × contract_size × price, in quote currency
-	OpID         string
-	Purpose      string
+	QuoteAmount   string // qty × contract_size × price, in quote currency
+	OpID          string
+	Purpose       string
 }
 
 // SettleForexFill atomically moves the two paired legs of a forex fill

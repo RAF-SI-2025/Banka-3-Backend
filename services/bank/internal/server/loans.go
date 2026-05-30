@@ -4,8 +4,8 @@ import (
 	"context"
 	"time"
 
-	"github.com/RAF-SI-2025/Banka-3-Backend/pkg/apperr"
 	bankpb "github.com/RAF-SI-2025/Banka-3-Backend/gen/proto/bank/v1"
+	"github.com/RAF-SI-2025/Banka-3-Backend/pkg/apperr"
 	"github.com/RAF-SI-2025/Banka-3-Backend/pkg/money"
 	"github.com/RAF-SI-2025/Banka-3-Backend/services/bank/internal/domain"
 	"github.com/RAF-SI-2025/Banka-3-Backend/services/bank/internal/service"
@@ -198,14 +198,14 @@ func loanToProto(l *domain.Loan) *bankpb.Loan {
 
 func installmentToProto(i *domain.LoanInstallment) *bankpb.LoanInstallment {
 	out := &bankpb.LoanInstallment{
-		Id:                 i.ID,
-		LoanId:             i.LoanID,
-		SequenceNumber:     int32(i.SequenceNumber),
-		Amount:             i.Amount,
-		InterestRateAtDue:  i.InterestRateAtDue,
-		Currency:           currencyToProto(i.Currency),
-		ExpectedDueDate:    i.ExpectedDueDate.Format("2006-01-02"),
-		Status:             installmentStatusToProto(i.Status),
+		Id:                i.ID,
+		LoanId:            i.LoanID,
+		SequenceNumber:    int32(i.SequenceNumber),
+		Amount:            i.Amount,
+		InterestRateAtDue: i.InterestRateAtDue,
+		Currency:          currencyToProto(i.Currency),
+		ExpectedDueDate:   i.ExpectedDueDate.Format("2006-01-02"),
+		Status:            installmentStatusToProto(i.Status),
 	}
 	if i.ActualPaidAt != nil {
 		out.ActualPaidAt = timestamppb.New(*i.ActualPaidAt)

@@ -17,11 +17,11 @@ import (
 // SecurityWithListing is the catalog row returned to the FE: the
 // security row, its (optional) listing, and derived margin metrics.
 type SecurityWithListing struct {
-	Security           *domain.Security
-	Listing            *domain.Listing
-	MaintenanceMargin  string // spec p.46
-	InitialMarginCost  string // 1.1 × maintenance margin (spec p.47)
-	MarketCap          string // spec p.40: outstanding_shares × current price (stocks only)
+	Security          *domain.Security
+	Listing           *domain.Listing
+	MaintenanceMargin string // spec p.46
+	InitialMarginCost string // 1.1 × maintenance margin (spec p.47)
+	MarketCap         string // spec p.40: outstanding_shares × current price (stocks only)
 }
 
 // UpsertSecurity admin-creates/updates a security. Validation is
@@ -350,13 +350,14 @@ func (s *Service) decorateSecurity(sec *domain.Security, l *domain.Listing) *Sec
 }
 
 // computeMaintenanceMargin per spec p.46-48:
-//   stock     = 50% × price
-//   future    = 10% × contract_size × price
-//   forex     = 10% × contract_size × price
-//   option    = 50% × contract_size × underlying_price (we approximate
-//               with the option's own listing.price when present;
-//               callers that need exact behaviour resolve via the
-//               underlying stock).
+//
+//	stock     = 50% × price
+//	future    = 10% × contract_size × price
+//	forex     = 10% × contract_size × price
+//	option    = 50% × contract_size × underlying_price (we approximate
+//	            with the option's own listing.price when present;
+//	            callers that need exact behaviour resolve via the
+//	            underlying stock).
 func computeMaintenanceMargin(sec *domain.Security, l *domain.Listing) (*big.Rat, bool) {
 	priceStr := ""
 	contrStr := "1"

@@ -51,9 +51,10 @@ func TestQuote_SameCurrency_NoConversion(t *testing.T) {
 // TestQuote_RSDToForeign mirrors the spec p.26 worked example:
 // "buy 10 EUR" — bank uses ASK of (EUR,RSD); commission 0.5%
 // is taken on the destination side. With ASK 117.50:
-//   raw = 1175 / 117.50 = 10.0000 EUR
-//   commission = 10.0000 × 0.005 = 0.0500 EUR
-//   net = 9.9500 EUR
+//
+//	raw = 1175 / 117.50 = 10.0000 EUR
+//	commission = 10.0000 × 0.005 = 0.0500 EUR
+//	net = 9.9500 EUR
 func TestQuote_RSDToForeign(t *testing.T) {
 	rates := &stubRates{
 		bid: map[string]string{"EUR/RSD": "117.20"},
@@ -79,9 +80,10 @@ func TestQuote_RSDToForeign(t *testing.T) {
 // TestQuote_ForeignToRSD: client sells 10 EUR. Per spec p.26 the bank
 // uses the ASK column on every leg (117.50), even when buying foreign.
 // Profit comes from the commission, not the spread.
-//   raw = 10 × 117.50 = 1175.0000 RSD
-//   commission = 1175.0 × 0.005 = 5.8750 RSD
-//   net = 1169.1250 RSD
+//
+//	raw = 10 × 117.50 = 1175.0000 RSD
+//	commission = 1175.0 × 0.005 = 5.8750 RSD
+//	net = 1169.1250 RSD
 func TestQuote_ForeignToRSD(t *testing.T) {
 	rates := &stubRates{
 		bid: map[string]string{"EUR/RSD": "117.20"},
@@ -128,11 +130,11 @@ func TestQuote_NoCommission(t *testing.T) {
 // EUR → USD never has a direct rate; bank converts EUR→RSD at the EUR
 // ASK, then RSD→USD at the USD ASK (spec p.26 primer 2).
 //
-//   100 EUR × 117.50 (EUR ask) = 11750 RSD
-//   11750 RSD / 110.50 (USD ask) = 106.3348 USD
-//   commission = 106.3348 × 0.005 = 0.5317 USD
-//   net = 105.8031 USD
-//   composite rate = 117.50 / 110.50 ≈ 1.06334…
+//	100 EUR × 117.50 (EUR ask) = 11750 RSD
+//	11750 RSD / 110.50 (USD ask) = 106.3348 USD
+//	commission = 106.3348 × 0.005 = 0.5317 USD
+//	net = 105.8031 USD
+//	composite rate = 117.50 / 110.50 ≈ 1.06334…
 func TestQuote_CrossCurrency(t *testing.T) {
 	rates := &stubRates{
 		bid: map[string]string{"EUR/RSD": "117.20", "USD/RSD": "110.20"},

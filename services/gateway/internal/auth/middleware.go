@@ -21,9 +21,9 @@ import (
 
 	"google.golang.org/grpc"
 
+	userpb "github.com/RAF-SI-2025/Banka-3-Backend/gen/proto/user/v1"
 	pkgauth "github.com/RAF-SI-2025/Banka-3-Backend/pkg/auth"
 	"github.com/RAF-SI-2025/Banka-3-Backend/pkg/sessionversion"
-	userpb "github.com/RAF-SI-2025/Banka-3-Backend/gen/proto/user/v1"
 )
 
 // SessionCache is the read+write surface the middleware needs from the

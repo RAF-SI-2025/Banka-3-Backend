@@ -53,10 +53,10 @@ var allowedKinds = map[string]verification.ActionKind{
 // actionLabels maps an action kind to Serbian copy the mobile app
 // shows next to each pending code (spec p.84 "Verifikacija").
 var actionLabels = map[verification.ActionKind]string{
-	verification.ActionPayment:      "Plaćanje",
-	verification.ActionTransfer:     "Prenos sredstava",
-	verification.ActionLimitChange:  "Promena limita",
-	verification.ActionCardIssue:    "Izdavanje kartice",
+	verification.ActionPayment:             "Plaćanje",
+	verification.ActionTransfer:            "Prenos sredstava",
+	verification.ActionLimitChange:         "Promena limita",
+	verification.ActionCardIssue:           "Izdavanje kartice",
 	verification.ActionOTCAccept:           "Prihvatanje OTC ponude",
 	verification.ActionOTCExercise:         "Izvršenje opcije",
 	verification.ActionFundInvest:          "Ulaganje u fond",

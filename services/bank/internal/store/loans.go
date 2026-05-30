@@ -488,10 +488,10 @@ func (s *Store) ApplyLatePenalty(
 // ListInstallmentsDueOn returns rows the daily cron should attempt to
 // debit. Two flavours:
 //
-//	1. status='unpaid' AND expected_due_date <= now — first attempt on
-//	   today's installments.
-//	2. status='overdue' AND overdue_since + INTERVAL '72 hours' <= now
-//	   — retry after the spec p.35 wait window has elapsed.
+//  1. status='unpaid' AND expected_due_date <= now — first attempt on
+//     today's installments.
+//  2. status='overdue' AND overdue_since + INTERVAL '72 hours' <= now
+//     — retry after the spec p.35 wait window has elapsed.
 //
 // Sorted by due date so older arrears are tried first.
 //

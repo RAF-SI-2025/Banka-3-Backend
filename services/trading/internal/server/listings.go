@@ -4,8 +4,8 @@ import (
 	"context"
 	"time"
 
-	"github.com/RAF-SI-2025/Banka-3-Backend/pkg/apperr"
 	tradingpb "github.com/RAF-SI-2025/Banka-3-Backend/gen/proto/trading/v1"
+	"github.com/RAF-SI-2025/Banka-3-Backend/pkg/apperr"
 	"github.com/RAF-SI-2025/Banka-3-Backend/services/trading/internal/domain"
 	"github.com/RAF-SI-2025/Banka-3-Backend/services/trading/internal/store"
 	"google.golang.org/protobuf/types/known/timestamppb"

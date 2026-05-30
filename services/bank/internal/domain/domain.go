@@ -142,27 +142,27 @@ type Company struct {
 // pgx scans the numeric column into a string via the ::text cast in
 // the SELECT lists.
 type Account struct {
-	ID                    string
-	Number                string
-	Name                  string
-	OwnerClientID         string
-	CompanyID             string // empty for personal
-	CreatedByEmployeeID   string
-	Kind                  AccountKind
-	Subtype               AccountSubtype
-	Currency              Currency
-	Status                AccountStatus
-	Balance               string
-	AvailableBalance      string
-	MaintenanceFee        string
-	DailyLimit            string
-	MonthlyLimit          string
-	DailySpent            string
-	MonthlySpent          string
-	CreatedAt             time.Time
-	ExpiresAt             *time.Time
-	UpdatedAt             time.Time
-	LastMaintenanceDebit  *time.Time // null until the first monthly cron run
+	ID                   string
+	Number               string
+	Name                 string
+	OwnerClientID        string
+	CompanyID            string // empty for personal
+	CreatedByEmployeeID  string
+	Kind                 AccountKind
+	Subtype              AccountSubtype
+	Currency             Currency
+	Status               AccountStatus
+	Balance              string
+	AvailableBalance     string
+	MaintenanceFee       string
+	DailyLimit           string
+	MonthlyLimit         string
+	DailySpent           string
+	MonthlySpent         string
+	CreatedAt            time.Time
+	ExpiresAt            *time.Time
+	UpdatedAt            time.Time
+	LastMaintenanceDebit *time.Time // null until the first monthly cron run
 }
 
 // =====================================================================

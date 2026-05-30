@@ -1555,9 +1555,9 @@ func TestIntegration_Execution_ForexNoHolding(t *testing.T) {
 		OrderType:  domain.OrderMarket,
 		Direction:  domain.DirectionBuy,
 		// Spec p.7 (E2E doc): forex minimum lot = 10.
-		Quantity:   10,
-		AllOrNone:  true,
-		AccountID:  uuid.NewString(),
+		Quantity:  10,
+		AllOrNone: true,
+		AccountID: uuid.NewString(),
 	})
 	if err != nil {
 		t.Fatalf("create forex order: %v", err)
@@ -2855,9 +2855,9 @@ func TestIntegration_Execution_ForexSell(t *testing.T) {
 		OrderType:  domain.OrderMarket,
 		Direction:  domain.DirectionSell,
 		// Spec p.7 (E2E doc): forex minimum lot = 10. Use the floor.
-		Quantity:   10,
-		AllOrNone:  true,
-		AccountID:  uuid.NewString(),
+		Quantity:  10,
+		AllOrNone: true,
+		AccountID: uuid.NewString(),
 	})
 	if err != nil {
 		t.Fatalf("create forex sell: %v", err)

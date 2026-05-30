@@ -241,7 +241,7 @@ func registerExternalOTCAcceptSaga(reg *saga.Registry, svc *Service) {
 							LocalAccountNumber: sc.State.LocalAccountNumber,
 							LocalRole:          domain.ExternalOTCRoleBuyer,
 							SecurityID:         sc.State.SecurityID,
-							SecurityTicker:    sc.State.SecurityTicker,
+							SecurityTicker:     sc.State.SecurityTicker,
 							SellerHoldingRef:   sc.State.SellerHoldingRef,
 							Quantity:           sc.State.Quantity,
 							StrikePrice:        sc.State.PricePerUnit,

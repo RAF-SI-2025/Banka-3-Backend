@@ -10,10 +10,10 @@ import (
 
 func TestAssertSameKindCounterparties(t *testing.T) {
 	cases := []struct {
-		name      string
-		buyerKind auth.UserKind
+		name       string
+		buyerKind  auth.UserKind
 		sellerKind domain.UserKind
-		wantErr   bool
+		wantErr    bool
 	}{
 		{"client-client ok", auth.KindClient, domain.KindClient, false},
 		{"employee-employee ok", auth.KindEmployee, domain.KindEmployee, false},

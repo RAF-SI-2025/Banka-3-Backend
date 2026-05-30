@@ -89,8 +89,8 @@ func (s *Store) GetFundTx(ctx context.Context, tx pgx.Tx, id string) (*domain.Fu
 
 // FundFilter narrows ListFunds.
 type FundFilter struct {
-	Status                string
-	ManagerUserID         string
+	Status                 string
+	ManagerUserID          string
 	MinContributionAtLeast string
 	MinContributionAtMost  string
 }

@@ -75,16 +75,16 @@ type PartnerHolding struct {
 
 // PartnerCreateOfferInput is the outbound side of CreateOffer.
 type PartnerCreateOfferInput struct {
-	RemoteBankCode    string
-	RemoteUserRef     string
-	SellerHoldingRef  string
-	SecurityTicker    string
-	SecurityType      domain.SecurityType
-	Currency          domain.Currency
-	Quantity          int32
-	PricePerUnit      string
-	Premium           string
-	SettlementDate    time.Time
+	RemoteBankCode   string
+	RemoteUserRef    string
+	SellerHoldingRef string
+	SecurityTicker   string
+	SecurityType     domain.SecurityType
+	Currency         domain.Currency
+	Quantity         int32
+	PricePerUnit     string
+	Premium          string
+	SettlementDate   time.Time
 	// LocalThreadID is our local mirror's id; we send it so the
 	// partner can echo it back on subsequent messages — keeps the
 	// thread identifiable on both sides without forcing the partner
@@ -248,20 +248,20 @@ func (s *Service) CreateExternalOTCOffer(ctx context.Context, in CreateExternalO
 	// committed. A partner 4xx flips the local mirror to 'rejected'
 	// for the user to retry.
 	out, err := s.PartnerOTC.CreateOffer(ctx, PartnerCreateOfferInput{
-		RemoteBankCode:    in.RemoteBankCode,
-		RemoteUserRef:     in.RemoteUserRef,
-		SellerHoldingRef:  in.SellerHoldingRef,
-		SecurityTicker:    in.SecurityTicker,
-		SecurityType:      in.SecurityType,
-		Currency:          in.Currency,
-		Quantity:          in.Quantity,
-		PricePerUnit:      in.PricePerUnit,
-		Premium:           in.Premium,
-		SettlementDate:    in.SettlementDate,
-		LocalThreadID:     live.ID,
-		LocalUserRef:      live.LocalUserID,
-		LocalDisplayName:  in.RemoteDisplayName, // partner's view echoes back; FE pre-fills
-		LocalAccountRef:   live.LocalAccountNumber,
+		RemoteBankCode:   in.RemoteBankCode,
+		RemoteUserRef:    in.RemoteUserRef,
+		SellerHoldingRef: in.SellerHoldingRef,
+		SecurityTicker:   in.SecurityTicker,
+		SecurityType:     in.SecurityType,
+		Currency:         in.Currency,
+		Quantity:         in.Quantity,
+		PricePerUnit:     in.PricePerUnit,
+		Premium:          in.Premium,
+		SettlementDate:   in.SettlementDate,
+		LocalThreadID:    live.ID,
+		LocalUserRef:     live.LocalUserID,
+		LocalDisplayName: in.RemoteDisplayName, // partner's view echoes back; FE pre-fills
+		LocalAccountRef:  live.LocalAccountNumber,
 	})
 	if err != nil {
 		// Best-effort flip to 'rejected' so the FE can show a final
@@ -758,9 +758,9 @@ func (s *Service) ReceiveExternalOTCAccept(ctx context.Context, in ReceiveExtern
 
 // ReceiveExternalOTCExerciseNoticeInput.
 type ReceiveExternalOTCExerciseNoticeInput struct {
-	SenderBankCode    string
-	SenderContractID  string
-	ExerciseOpID      string
+	SenderBankCode   string
+	SenderContractID string
+	ExerciseOpID     string
 }
 
 // ReceiveExternalOTCExerciseNotice handles a partner-initiated

@@ -69,9 +69,9 @@ type partnerActionRequest struct {
 }
 
 type partnerExerciseRequest struct {
-	SenderBankCode    string `json:"sender_bank_code"`
-	SenderContractID  string `json:"sender_contract_id"`
-	ExerciseOpID      string `json:"exercise_op_id"`
+	SenderBankCode   string `json:"sender_bank_code"`
+	SenderContractID string `json:"sender_contract_id"`
+	ExerciseOpID     string `json:"exercise_op_id"`
 }
 
 type partnerOfferResponse struct {

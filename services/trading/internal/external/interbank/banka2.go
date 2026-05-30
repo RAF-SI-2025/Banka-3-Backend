@@ -30,8 +30,8 @@ import (
 
 // banka2PublicStock mirrors rs.raf.banka2_bek.interbank.protocol.PublicStock.
 type banka2PublicStock struct {
-	Stock   banka2Stock      `json:"stock"`
-	Sellers []banka2Seller   `json:"sellers"`
+	Stock   banka2Stock    `json:"stock"`
+	Sellers []banka2Seller `json:"sellers"`
 }
 
 type banka2Stock struct {
@@ -39,8 +39,8 @@ type banka2Stock struct {
 }
 
 type banka2Seller struct {
-	Seller banka2ForeignID  `json:"seller"`
-	Amount json.Number      `json:"amount"`
+	Seller banka2ForeignID `json:"seller"`
+	Amount json.Number     `json:"amount"`
 }
 
 type banka2ForeignID struct {
@@ -94,7 +94,7 @@ func (c *Client) discoverBanka2(ctx context.Context, bankCode, tickerFilter stri
 			out = append(out, &service.PartnerHolding{
 				BankCode:         rowBankCode,
 				SellerUserRef:    s.Seller.ID,
-				SellerDisplay:    "", // Banka2 doesn't expose this on /public-stock; resolve via /user lookup later.
+				SellerDisplay:    "",          // Banka2 doesn't expose this on /public-stock; resolve via /user lookup later.
 				SellerHoldingRef: s.Seller.ID, // Banka2 keys by seller-id, not by holding row.
 				SecurityTicker:   ps.Stock.Ticker,
 				SecurityType:     domain.SecurityStock,
