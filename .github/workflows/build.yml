@@ -2,7 +2,7 @@ name: build-and-push
 
 on:
   push:
-    branches: [main]
+    branches: [main, deploy]
     tags: ['v*']
   workflow_dispatch:
     inputs:
@@ -102,6 +102,9 @@ jobs:
           fi
           if [[ "${{ github.ref }}" == "refs/heads/rewrite" ]]; then
             tags="$tags"$'\n'"$base:rewrite"
+          fi
+          if [[ "${{ github.ref }}" == "refs/heads/deploy" ]]; then
+            tags="$tags"$'\n'"$base:deploy"
           fi
           if [[ "${{ github.ref }}" == refs/tags/v* ]]; then
             tags="$tags"$'\n'"$base:${GITHUB_REF#refs/tags/}"

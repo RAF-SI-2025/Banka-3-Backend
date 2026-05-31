@@ -5,10 +5,10 @@ go 1.25.0
 require (
 	buf.build/go/protovalidate v1.2.0
 	github.com/RAF-SI-2025/Banka-3-Backend/gen v0.0.0-20260529170905-a2803418d2c2
-	github.com/golang-jwt/jwt/v5 v5.2.1
-	github.com/jackc/pgx/v5 v5.7.1
+	github.com/golang-jwt/jwt/v5 v5.2.2
+	github.com/jackc/pgx/v5 v5.9.2
 	github.com/prometheus/client_golang v1.20.5
-	github.com/redis/go-redis/v9 v9.7.0
+	github.com/redis/go-redis/v9 v9.7.3
 	golang.org/x/crypto v0.47.0
 	google.golang.org/grpc v1.80.0
 	google.golang.org/protobuf v1.36.11
