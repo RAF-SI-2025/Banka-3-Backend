@@ -10,7 +10,7 @@
 # into the bind-mounted repo (gen/, go.sum, bin/) end up owned by the
 # developer, not root.
 
-FROM golang:1.25-alpine
+FROM golang:1.26-alpine
 
 RUN apk add --no-cache bash git make postgresql-client wget ca-certificates
 

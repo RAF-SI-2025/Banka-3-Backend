@@ -4,7 +4,7 @@
 # (no pkg/ or gen/ imports) so it lives outside services/ + reuses a
 # vanilla stdlib build.
 
-FROM golang:1.25-alpine AS build
+FROM golang:1.26-alpine AS build
 WORKDIR /src
 COPY tools/mock-partner/go.mod ./go.mod
 COPY tools/mock-partner/main.go ./main.go

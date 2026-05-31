@@ -16,7 +16,7 @@
 # source — the runner only ever speaks `postgres://` — which strips the
 # whole vulnerable closure down to lib/pq alone.
 
-FROM golang:1.25-alpine AS migrate
+FROM golang:1.26-alpine AS migrate
 ARG MIGRATE_VERSION=v4.19.1
 RUN apk add --no-cache git
 WORKDIR /build
@@ -25,7 +25,7 @@ RUN go mod init banka/migrate-build >/dev/null && \
     CGO_ENABLED=0 go build -tags 'postgres' -trimpath -ldflags='-s -w' \
       -o /usr/local/bin/migrate github.com/golang-migrate/migrate/v4/cmd/migrate
 
-FROM alpine:3.20
+FROM alpine:3.23
 RUN apk add --no-cache bash ca-certificates && \
     addgroup -g 65532 -S nonroot && \
     adduser -u 65532 -S -G nonroot nonroot
