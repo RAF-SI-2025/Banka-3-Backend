@@ -1,0 +1,77 @@
+# Dependabot keeps dependencies current automatically so security fixes
+# don't sit unpatched between manual sweeps. Every update lands as a PR
+# gated by ci.yml (test/lint/build per service) — breakage shows up red
+# before merge, so we get currency without betting on bleeding-edge majors.
+#
+# Strategy: patch + minor bumps are GROUPED into one PR per ecosystem per
+# week (low noise); MAJOR bumps come as separate PRs for manual review,
+# since those are where behavioral breaks (grpc, pgx, …) live.
+#
+# Not covered (deliberately): the ARG-pinned tool versions in
+# docker/Dockerfile.tools (buf, migrate, gofumpt, golangci-lint) — they
+# don't ship in the deployed images, so they're not an attack surface and
+# stay on manual bumps.
+version: 2
+updates:
+  # Go modules across the workspace. Each module's go.mod is what the
+  # per-service Docker build compiles (GOWORK=off), so updating them
+  # independently matches how the images are actually built. Local
+  # `replace` targets (pkg, gen) are skipped by Dependabot automatically.
+  - package-ecosystem: gomod
+    directories:
+      - "/pkg"
+      - "/gen"
+      - "/services/*"
+      - "/tools/mock-partner"
+    schedule:
+      interval: weekly
+      day: monday
+      time: "06:00"
+      timezone: Europe/Belgrade
+    open-pull-requests-limit: 10
+    labels: ["dependencies", "go"]
+    commit-message:
+      prefix: "chore(deps)"
+    groups:
+      go-minor-patch:
+        update-types: ["minor", "patch"]
+
+  # Base images for the deployed/built images live under docker/
+  # (Dockerfile, Dockerfile.migrate, Dockerfile.tools). The peripheral
+  # Dockerfiles are covered too so OS-layer CVEs — the ones go.mod can't
+  # fix — don't drift. Docker bumps are grouped; a floating tag like
+  # golang:1.25 -> 1.26 still arrives as a reviewable PR.
+  - package-ecosystem: docker
+    directories:
+      - "/docker"
+      - "/tools/mock-partner"
+      - "/monitoring/discord-notifier"
+      - "/analytics/spark"
+    schedule:
+      interval: weekly
+      day: monday
+      time: "06:00"
+      timezone: Europe/Belgrade
+    open-pull-requests-limit: 10
+    labels: ["dependencies", "docker"]
+    commit-message:
+      prefix: "chore(docker)"
+    groups:
+      docker:
+        patterns: ["*"]
+
+  # Pinned action versions (docker/build-push-action@v6, checkout@v4, …).
+  - package-ecosystem: github-actions
+    directory: "/"
+    schedule:
+      interval: weekly
+      day: monday
+      time: "06:00"
+      timezone: Europe/Belgrade
+    open-pull-requests-limit: 10
+    labels: ["dependencies", "ci"]
+    commit-message:
+      prefix: "ci(deps)"
+    groups:
+      github-actions:
+        patterns: ["*"]
