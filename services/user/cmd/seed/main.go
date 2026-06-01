@@ -40,6 +40,11 @@
 //	                     "Pregled naloga" with the Profit Banke actuary
 //	                     leaderboard — cypress.config.ts's resetBackend
 //	                     reseed sets this so order specs self-fixture)
+//	SEED_TIMEOUT         (default 10m; Go duration string) — total
+//	                     deadline for the whole run. Bump if you keep
+//	                     hitting "context deadline exceeded" on
+//	                     seedTrading's daily-history loop (e.g. over
+//	                     a slow port-forward).
 //
 // The default password meets the spec's complexity rules (8–32 chars,
 // ≥2 digits, ≥1 upper, ≥1 lower) but should be changed in any shared
@@ -74,7 +79,19 @@ func main() {
 }
 
 func run() error {
-	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+	// 30s was tight even on a LAN Postgres; over a kubectl port-forward
+	// (per-row inserts × ~250 daily-price rows × ~7 securities) it always
+	// trips during seedTrading. Default to 10m and let SEED_TIMEOUT
+	// override it on either end.
+	timeout := 10 * time.Minute
+	if v := os.Getenv("SEED_TIMEOUT"); v != "" {
+		d, err := time.ParseDuration(v)
+		if err != nil {
+			return fmt.Errorf("SEED_TIMEOUT: %w", err)
+		}
+		timeout = d
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), timeout)
 	defer cancel()
 
 	dsn := os.Getenv("DATABASE_URL")
