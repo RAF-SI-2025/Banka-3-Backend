@@ -17,7 +17,7 @@ import (
 	"github.com/RAF-SI-2025/Banka-3-Backend/pkg/email"
 	"github.com/RAF-SI-2025/Banka-3-Backend/pkg/grpcserver"
 	"github.com/RAF-SI-2025/Banka-3-Backend/pkg/logger"
-	"github.com/RAF-SI-2025/Banka-3-Backend/pkg/observability"
+	"github.com/RAF-SI-2025/Banka-3-Backend/pkg/otelinit"
 	"github.com/RAF-SI-2025/Banka-3-Backend/pkg/postgres"
 	"github.com/RAF-SI-2025/Banka-3-Backend/pkg/probes"
 	pkgredis "github.com/RAF-SI-2025/Banka-3-Backend/pkg/redis"
@@ -43,6 +43,12 @@ func Run() error {
 
 	ctx, cancel := shutdown.Context()
 	defer cancel()
+
+	prov, err := otelinit.Init(ctx, "trading")
+	if err != nil {
+		return fmt.Errorf("otelinit: %w", err)
+	}
+	defer func() { _ = prov.Shutdown(context.Background()) }()
 
 	pool, err := postgres.Open(ctx, config.MustString("DATABASE_URL"))
 	if err != nil {
@@ -98,7 +104,9 @@ func Run() error {
 	// by the agent-limit check and the capital-gains tax math. The
 	// service tolerates a nil Rates field on a minimal dev stack.
 	if exAddr := config.String("EXCHANGE_GRPC_ADDR", ""); exAddr != "" {
-		conn, err := grpc.NewClient(exAddr, grpc.WithTransportCredentials(insecure.NewCredentials()))
+		conn, err := grpc.NewClient(exAddr, grpc.WithTransportCredentials(insecure.NewCredentials()),
+			grpc.WithStatsHandler(prov.GRPCClientHandler()),
+		)
 		if err != nil {
 			return fmt.Errorf("dial exchange: %w", err)
 		}
@@ -115,7 +123,9 @@ func Run() error {
 	// empty and the OTC notifier drops its lookups.
 	var userClient userpb.UserServiceClient
 	if userAddr := config.String("USER_GRPC_ADDR", ""); userAddr != "" {
-		conn, err := grpc.NewClient(userAddr, grpc.WithTransportCredentials(insecure.NewCredentials()))
+		conn, err := grpc.NewClient(userAddr, grpc.WithTransportCredentials(insecure.NewCredentials()),
+			grpc.WithStatsHandler(prov.GRPCClientHandler()),
+		)
 		if err != nil {
 			return fmt.Errorf("dial user: %w", err)
 		}
@@ -132,7 +142,9 @@ func Run() error {
 	// keep working.
 	var emailSender email.Sender
 	if notifAddr := config.String("NOTIFICATION_GRPC_ADDR", ""); notifAddr != "" {
-		conn, err := grpc.NewClient(notifAddr, grpc.WithTransportCredentials(insecure.NewCredentials()))
+		conn, err := grpc.NewClient(notifAddr, grpc.WithTransportCredentials(insecure.NewCredentials()),
+			grpc.WithStatsHandler(prov.GRPCClientHandler()),
+		)
 		if err != nil {
 			return fmt.Errorf("dial notification: %w", err)
 		}
@@ -154,7 +166,9 @@ func Run() error {
 	// move money between user account and bank house account. Without
 	// it, fills fail. Skip wiring on a dev stack that doesn't run bank.
 	if bankAddr := config.String("BANK_GRPC_ADDR", ""); bankAddr != "" {
-		conn, err := grpc.NewClient(bankAddr, grpc.WithTransportCredentials(insecure.NewCredentials()))
+		conn, err := grpc.NewClient(bankAddr, grpc.WithTransportCredentials(insecure.NewCredentials()),
+			grpc.WithStatsHandler(prov.GRPCClientHandler()),
+		)
 		if err != nil {
 			return fmt.Errorf("dial bank: %w", err)
 		}
@@ -243,13 +257,16 @@ func Run() error {
 	probeSrv := probes.New(fmt.Sprintf(":%d", config.Int("PROBE_PORT", 8081)))
 	probeSrv.Register("postgres", func(ctx context.Context) error { return postgres.Ping(ctx, pool) })
 	probeSrv.Register("redis", func(ctx context.Context) error { return pkgredis.Ping(ctx, rdb) })
-	probeSrv.MountMetrics(observability.New("trading").MetricsHandler())
 
 	grpcAddr := fmt.Sprintf(":%d", config.Int("GRPC_PORT", 50051))
+	metricsAddr := fmt.Sprintf(":%d", config.Int("METRICS_PORT", 9090))
 
 	g, gctx := errgroup.WithContext(ctx)
 	g.Go(func() error {
 		return probeSrv.ListenAndServe(gctx)
+	})
+	g.Go(func() error {
+		return prov.RunMetricsServer(gctx, metricsAddr)
 	})
 	g.Go(func() error {
 		return grpcserver.Run(gctx, log, grpcAddr, func(s *grpc.Server) {
@@ -259,7 +276,7 @@ func Run() error {
 			tradingpb.RegisterExternalOTCServiceServer(s, srv)
 			// Celina 5 — user-initiated cross-bank cash payments.
 			tradingpb.RegisterCrossBankPaymentServiceServer(s, srv)
-		})
+		}, grpcserver.WithStatsHandler(prov.GRPCServerHandler()))
 	})
 
 	// Spec p.38: agents' used_limit resets at 23:59 (Europe/Belgrade).

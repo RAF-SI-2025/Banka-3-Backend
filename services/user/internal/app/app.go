@@ -11,7 +11,7 @@ import (
 	"github.com/RAF-SI-2025/Banka-3-Backend/pkg/email"
 	"github.com/RAF-SI-2025/Banka-3-Backend/pkg/grpcserver"
 	"github.com/RAF-SI-2025/Banka-3-Backend/pkg/logger"
-	"github.com/RAF-SI-2025/Banka-3-Backend/pkg/observability"
+	"github.com/RAF-SI-2025/Banka-3-Backend/pkg/otelinit"
 	"github.com/RAF-SI-2025/Banka-3-Backend/pkg/postgres"
 	"github.com/RAF-SI-2025/Banka-3-Backend/pkg/probes"
 	pkgredis "github.com/RAF-SI-2025/Banka-3-Backend/pkg/redis"
@@ -37,6 +37,12 @@ func Run() error {
 
 	ctx, cancel := shutdown.Context()
 	defer cancel()
+
+	prov, err := otelinit.Init(ctx, "user")
+	if err != nil {
+		return fmt.Errorf("otelinit: %w", err)
+	}
+	defer func() { _ = prov.Shutdown(context.Background()) }()
 
 	pool, err := postgres.Open(ctx, config.MustString("DATABASE_URL"))
 	if err != nil {
@@ -83,7 +89,10 @@ func Run() error {
 	// supervisor demotion. Skip wiring on a minimal dev stack that
 	// doesn't run trading (the cascade no-ops with a warning).
 	if tradingAddr := config.String("TRADING_GRPC_ADDR", ""); tradingAddr != "" {
-		conn, err := grpc.NewClient(tradingAddr, grpc.WithTransportCredentials(insecure.NewCredentials()))
+		conn, err := grpc.NewClient(tradingAddr,
+			grpc.WithTransportCredentials(insecure.NewCredentials()),
+			grpc.WithStatsHandler(prov.GRPCClientHandler()),
+		)
 		if err != nil {
 			return fmt.Errorf("dial trading: %w", err)
 		}
@@ -96,18 +105,21 @@ func Run() error {
 	probeSrv := probes.New(fmt.Sprintf(":%d", config.Int("PROBE_PORT", 8081)))
 	probeSrv.Register("postgres", func(ctx context.Context) error { return postgres.Ping(ctx, pool) })
 	probeSrv.Register("redis", func(ctx context.Context) error { return pkgredis.Ping(ctx, rdb) })
-	probeSrv.MountMetrics(observability.New("user").MetricsHandler())
 
 	grpcAddr := fmt.Sprintf(":%d", config.Int("GRPC_PORT", 50051))
+	metricsAddr := fmt.Sprintf(":%d", config.Int("METRICS_PORT", 9090))
 
 	g, gctx := errgroup.WithContext(ctx)
 	g.Go(func() error {
 		return probeSrv.ListenAndServe(gctx)
 	})
 	g.Go(func() error {
+		return prov.RunMetricsServer(gctx, metricsAddr)
+	})
+	g.Go(func() error {
 		return grpcserver.Run(gctx, log, grpcAddr, func(s *grpc.Server) {
 			userpb.RegisterUserServiceServer(s, server.New(svc))
-		})
+		}, grpcserver.WithStatsHandler(prov.GRPCServerHandler()))
 	})
 
 	probeSrv.MarkReady()

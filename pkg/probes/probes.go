@@ -37,14 +37,6 @@ func New(addr string) *Server {
 	return s
 }
 
-// MountMetrics exposes /metrics on the probe server. Pass the handler
-// from observability.Observer.MetricsHandler(). Prometheus scrapes
-// the same port as readyz/healthz so the dev-stack only needs one
-// per-service hostname:port mapping.
-func (s *Server) MountMetrics(h http.Handler) {
-	s.mux.Handle("GET /metrics", h)
-}
-
 // Register adds a readiness check. Checks run in parallel on each /readyz
 // request with a 2s timeout each.
 func (s *Server) Register(name string, c Check) {

@@ -219,7 +219,12 @@ func withCORS(next http.Handler) http.Handler {
 		}
 		if r.Method == http.MethodOptions {
 			w.Header().Set("Access-Control-Allow-Methods", "GET, POST, PUT, PATCH, DELETE, OPTIONS")
-			w.Header().Set("Access-Control-Allow-Headers", "Authorization, Content-Type, Idempotency-Key, X-Verification-Id, X-Verification-Code")
+			// traceparent / tracestate / baggage are the W3C Trace
+			// Context headers Faro's TracingInstrumentation sets on
+			// every XHR; without them in the allow-list the browser
+			// strips them on cross-origin requests and frontend spans
+			// orphan from the backend trace in Tempo.
+			w.Header().Set("Access-Control-Allow-Headers", "Authorization, Content-Type, Idempotency-Key, X-Verification-Id, X-Verification-Code, traceparent, tracestate, baggage")
 			w.Header().Set("Access-Control-Max-Age", "300")
 			w.WriteHeader(http.StatusNoContent)
 			return

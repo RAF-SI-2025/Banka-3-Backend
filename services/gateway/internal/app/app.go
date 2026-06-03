@@ -16,7 +16,7 @@ import (
 	"github.com/RAF-SI-2025/Banka-3-Backend/pkg/config"
 	pkgidem "github.com/RAF-SI-2025/Banka-3-Backend/pkg/idempotency"
 	"github.com/RAF-SI-2025/Banka-3-Backend/pkg/logger"
-	"github.com/RAF-SI-2025/Banka-3-Backend/pkg/observability"
+	"github.com/RAF-SI-2025/Banka-3-Backend/pkg/otelinit"
 	"github.com/RAF-SI-2025/Banka-3-Backend/pkg/probes"
 	pkgredis "github.com/RAF-SI-2025/Banka-3-Backend/pkg/redis"
 	"github.com/RAF-SI-2025/Banka-3-Backend/pkg/sessionversion"
@@ -45,13 +45,19 @@ func Run() error {
 	ctx, cancel := shutdown.Context()
 	defer cancel()
 
+	prov, err := otelinit.Init(ctx, "gateway")
+	if err != nil {
+		return fmt.Errorf("otelinit: %w", err)
+	}
+	defer func() { _ = prov.Shutdown(context.Background()) }()
+
 	cs, err := clients.Dial(clients.Addrs{
 		User:         config.MustString("USER_GRPC_ADDR"),
 		Bank:         config.String("BANK_GRPC_ADDR", ""),
 		Trading:      config.String("TRADING_GRPC_ADDR", ""),
 		Exchange:     config.String("EXCHANGE_GRPC_ADDR", ""),
 		Notification: config.String("NOTIFICATION_GRPC_ADDR", ""),
-	})
+	}, clients.WithStatsHandler(prov.GRPCClientHandler()))
 	if err != nil {
 		return fmt.Errorf("dial upstreams: %w", err)
 	}
@@ -224,18 +230,27 @@ func Run() error {
 
 	probeSrv := probes.New(fmt.Sprintf(":%d", config.Int("PROBE_PORT", 8081)))
 	probeSrv.Register("redis", func(ctx context.Context) error { return pkgredis.Ping(ctx, rdb) })
-	probeSrv.MountMetrics(observability.New("gateway").MetricsHandler())
+	metricsAddr := fmt.Sprintf(":%d", config.Int("METRICS_PORT", 9090))
 
+	// otelhttp wraps the outermost handler so every inbound HTTP call
+	// becomes a root span (or continues the trace from the incoming
+	// traceparent header — Faro from the browser sets one). Inside,
+	// the grpc-gateway runtime invokes outgoing gRPC handlers whose
+	// stats handler (set in clients.Dial above) carries the trace
+	// down to user/bank/trading/exchange.
 	httpAddr := fmt.Sprintf(":%d", config.Int("HTTP_PORT", 8080))
 	httpSrv := &http.Server{
 		Addr:              httpAddr,
-		Handler:           httpHandler,
+		Handler:           prov.WrapHTTP(httpHandler, "gateway"),
 		ReadHeaderTimeout: 5 * time.Second,
 	}
 
 	g, gctx := errgroup.WithContext(ctx)
 	g.Go(func() error {
 		return probeSrv.ListenAndServe(gctx)
+	})
+	g.Go(func() error {
+		return prov.RunMetricsServer(gctx, metricsAddr)
 	})
 	g.Go(func() error {
 		log.Info("http listening", "addr", httpAddr)

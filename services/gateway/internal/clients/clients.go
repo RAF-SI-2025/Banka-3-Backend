@@ -12,6 +12,7 @@ import (
 
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials/insecure"
+	"google.golang.org/grpc/stats"
 )
 
 // Set bundles every upstream client. Address-less services stay nil
@@ -36,12 +37,30 @@ type Set struct {
 	conns []*grpc.ClientConn
 }
 
+// Option configures Dial.
+type Option func(*dialConfig)
+
+type dialConfig struct {
+	statsHandler stats.Handler
+}
+
+// WithStatsHandler attaches a grpc client stats.Handler — pass
+// otelinit.Provider.GRPCClientHandler() so outgoing W3C traceparent
+// is propagated from gateway → upstream services.
+func WithStatsHandler(h stats.Handler) Option { return func(c *dialConfig) { c.statsHandler = h } }
+
 // Dial connects to every upstream service that has a non-empty
 // address. Caller defers Close().
-func Dial(addrs Addrs) (*Set, error) {
+func Dial(addrs Addrs, opts ...Option) (*Set, error) {
+	cfg := dialConfig{}
+	for _, o := range opts {
+		o(&cfg)
+	}
+	d := dialer{statsHandler: cfg.statsHandler}
+
 	s := &Set{}
 
-	userConn, err := dial(addrs.User)
+	userConn, err := d.dial(addrs.User)
 	if err != nil {
 		return nil, fmt.Errorf("dial user: %w", err)
 	}
@@ -50,7 +69,7 @@ func Dial(addrs Addrs) (*Set, error) {
 	s.conns = append(s.conns, userConn)
 
 	if addrs.Bank != "" {
-		c, err := dial(addrs.Bank)
+		c, err := d.dial(addrs.Bank)
 		if err != nil {
 			return nil, fmt.Errorf("dial bank: %w", err)
 		}
@@ -61,7 +80,7 @@ func Dial(addrs Addrs) (*Set, error) {
 	}
 
 	if addrs.Exchange != "" {
-		c, err := dial(addrs.Exchange)
+		c, err := d.dial(addrs.Exchange)
 		if err != nil {
 			return nil, fmt.Errorf("dial exchange: %w", err)
 		}
@@ -71,7 +90,7 @@ func Dial(addrs Addrs) (*Set, error) {
 	}
 
 	if addrs.Trading != "" {
-		c, err := dial(addrs.Trading)
+		c, err := d.dial(addrs.Trading)
 		if err != nil {
 			return nil, fmt.Errorf("dial trading: %w", err)
 		}
@@ -100,11 +119,19 @@ type Addrs struct {
 	Notification string
 }
 
-func dial(target string) (*grpc.ClientConn, error) {
+type dialer struct {
+	statsHandler stats.Handler
+}
+
+func (d dialer) dial(target string) (*grpc.ClientConn, error) {
 	if target == "" {
 		return nil, fmt.Errorf("empty target")
 	}
-	return grpc.NewClient(target,
+	opts := []grpc.DialOption{
 		grpc.WithTransportCredentials(insecure.NewCredentials()),
-	)
+	}
+	if d.statsHandler != nil {
+		opts = append(opts, grpc.WithStatsHandler(d.statsHandler))
+	}
+	return grpc.NewClient(target, opts...)
 }
