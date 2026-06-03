@@ -39,8 +39,8 @@ import (
 	"go.opentelemetry.io/contrib/instrumentation/google.golang.org/grpc/otelgrpc"
 	"go.opentelemetry.io/contrib/instrumentation/net/http/otelhttp"
 	"go.opentelemetry.io/otel"
-	otelprom "go.opentelemetry.io/otel/exporters/prometheus"
 	"go.opentelemetry.io/otel/exporters/otlp/otlptrace/otlptracegrpc"
+	otelprom "go.opentelemetry.io/otel/exporters/prometheus"
 	"go.opentelemetry.io/otel/propagation"
 	sdkmetric "go.opentelemetry.io/otel/sdk/metric"
 	"go.opentelemetry.io/otel/sdk/resource"
@@ -51,10 +51,10 @@ import (
 
 // Provider bundles the lifetime objects produced by Init.
 type Provider struct {
-	tp           *sdktrace.TracerProvider
-	mp           *sdkmetric.MeterProvider
-	promReg      *prometheus.Registry
-	serviceName  string
+	tp          *sdktrace.TracerProvider
+	mp          *sdkmetric.MeterProvider
+	promReg     *prometheus.Registry
+	serviceName string
 }
 
 // Init builds and registers global TracerProvider + MeterProvider.
@@ -78,7 +78,7 @@ func Init(ctx context.Context, serviceName string) (*Provider, error) {
 			semconv.ServiceName(serviceName),
 			semconv.ServiceNamespace("banka-3"),
 		),
-		resource.WithFromEnv(),    // OTEL_RESOURCE_ATTRIBUTES
+		resource.WithFromEnv(), // OTEL_RESOURCE_ATTRIBUTES
 		resource.WithHost(),
 		resource.WithProcess(),
 		resource.WithTelemetrySDK(),
