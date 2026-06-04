@@ -9299,7 +9299,7 @@ var File_trading_v1_trading_proto protoreflect.FileDescriptor
 
 const file_trading_v1_trading_proto_rawDesc = "" +
 	"\n" +
-	"\x18trading/v1/trading.proto\x12\x10banka.trading.v1\x1a\x1cgoogle/api/annotations.proto\x1a\x1bgoogle/protobuf/empty.proto\x1a\x1fgoogle/protobuf/timestamp.proto\x1a\x1bbuf/validate/validate.proto\"\xbc\x02\n" +
+	"\x18trading/v1/trading.proto\x12\x10banka.trading.v1\x1a\x1bbuf/validate/validate.proto\x1a\x1cgoogle/api/annotations.proto\x1a\x1bgoogle/protobuf/empty.proto\x1a\x1fgoogle/protobuf/timestamp.proto\"\xbc\x02\n" +
 	"\vActuaryInfo\x12\x1f\n" +
 	"\vemployee_id\x18\x01 \x01(\tR\n" +
 	"employeeId\x121\n" +

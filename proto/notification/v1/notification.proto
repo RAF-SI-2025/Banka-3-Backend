@@ -24,34 +24,34 @@ service NotificationService {
 // route, throttle, or template based on it. Open-ended — extend
 // alongside new event types.
 enum EmailKind {
-  EMAIL_KIND_UNSPECIFIED        = 0;
-  EMAIL_KIND_GENERIC            = 1;
+  EMAIL_KIND_UNSPECIFIED = 0;
+  EMAIL_KIND_GENERIC = 1;
   EMAIL_KIND_ACCOUNT_ACTIVATION = 2;
-  EMAIL_KIND_PASSWORD_RESET     = 3;
-  EMAIL_KIND_PROFILE_CHANGE     = 4;
-  EMAIL_KIND_ACCOUNT_OPENED     = 5;
-  EMAIL_KIND_PAYMENT_SUCCESS    = 6;
-  EMAIL_KIND_CARD_STATUS        = 7;
-  EMAIL_KIND_LOAN_DECISION      = 8;
-  EMAIL_KIND_LOAN_MISSED        = 9;
-  EMAIL_KIND_OTC_COUNTER_OFFER  = 10;
-  EMAIL_KIND_OTC_ACCEPTED       = 11;
-  EMAIL_KIND_OTC_WITHDRAWN      = 12;
-  EMAIL_KIND_OTC_EXPIRED        = 13;
-  EMAIL_KIND_FUND_INVEST        = 14;
-  EMAIL_KIND_FUND_WITHDRAW      = 15;
-  EMAIL_KIND_FUND_HANDOVER      = 16;
+  EMAIL_KIND_PASSWORD_RESET = 3;
+  EMAIL_KIND_PROFILE_CHANGE = 4;
+  EMAIL_KIND_ACCOUNT_OPENED = 5;
+  EMAIL_KIND_PAYMENT_SUCCESS = 6;
+  EMAIL_KIND_CARD_STATUS = 7;
+  EMAIL_KIND_LOAN_DECISION = 8;
+  EMAIL_KIND_LOAN_MISSED = 9;
+  EMAIL_KIND_OTC_COUNTER_OFFER = 10;
+  EMAIL_KIND_OTC_ACCEPTED = 11;
+  EMAIL_KIND_OTC_WITHDRAWN = 12;
+  EMAIL_KIND_OTC_EXPIRED = 13;
+  EMAIL_KIND_FUND_INVEST = 14;
+  EMAIL_KIND_FUND_WITHDRAW = 15;
+  EMAIL_KIND_FUND_HANDOVER = 16;
 }
 
 message SendEmailRequest {
-  string    to             = 1 [(buf.validate.field).string.min_len = 3];
-  string    subject        = 2 [(buf.validate.field).string.min_len = 1];
-  string    body           = 3 [(buf.validate.field).string.min_len = 1];
-  bool      html           = 4;
-  EmailKind kind            = 5;
+  string to = 1 [(buf.validate.field).string.min_len = 3];
+  string subject = 2 [(buf.validate.field).string.min_len = 1];
+  string body = 3 [(buf.validate.field).string.min_len = 1];
+  bool html = 4;
+  EmailKind kind = 5;
   // origin_service tags the caller (e.g. "user", "bank", "trading")
   // for log-grepping. Optional.
-  string    origin_service = 6;
+  string origin_service = 6;
 }
 
 message SendEmailResponse {

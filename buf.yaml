@@ -8,6 +8,23 @@ deps:
 lint:
   use:
     - STANDARD
+  # The codebase predates this lint gate (added with the deploy-branch
+  # CI) and deliberately diverges from a few STANDARD rules. Excepting
+  # them keeps every other STANDARD check on — including for new RPCs —
+  # without an API-breaking rename of the entire generated surface:
+  #   - RPC_RESPONSE_STANDARD_NAME / RPC_REQUEST_RESPONSE_UNIQUE: handlers
+  #     return the domain message directly (e.g. CreateCard → Card) and
+  #     several RPCs share Account / Card / Empty req/resp types.
+  #   - RPC_REQUEST_STANDARD_NAME: a few RPCs take a domain/Empty request.
+  #   - PACKAGE_DIRECTORY_MATCH: protos live in proto/<svc>/v1 with
+  #     package banka.<svc>.v1 (no banka/ dir prefix).
+  #   - ENUM_VALUE_PREFIX: a few enums omit the enum-name value prefix.
+  except:
+    - RPC_RESPONSE_STANDARD_NAME
+    - RPC_REQUEST_RESPONSE_UNIQUE
+    - RPC_REQUEST_STANDARD_NAME
+    - PACKAGE_DIRECTORY_MATCH
+    - ENUM_VALUE_PREFIX
 breaking:
   use:
     - FILE

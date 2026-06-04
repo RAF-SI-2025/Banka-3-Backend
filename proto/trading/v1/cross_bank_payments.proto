@@ -2,9 +2,9 @@ syntax = "proto3";
 
 package banka.trading.v1;
 
+import "buf/validate/validate.proto";
 import "google/api/annotations.proto";
 import "google/protobuf/timestamp.proto";
-import "buf/validate/validate.proto";
 import "trading/v1/trading.proto";
 
 // CrossBankPaymentService owns the celina-5 user-initiated cross-bank
@@ -28,8 +28,7 @@ service CrossBankPaymentService {
   // (user_id, source_account_id) produces a deterministic
   // transaction_id; retries with the same key replay the existing
   // saga row instead of double-charging.
-  rpc SubmitCrossBankPayment(SubmitCrossBankPaymentRequest)
-      returns (SubmitCrossBankPaymentResponse) {
+  rpc SubmitCrossBankPayment(SubmitCrossBankPaymentRequest) returns (SubmitCrossBankPaymentResponse) {
     option (google.api.http) = {
       post: "/api/v1/payments/interbank"
       body: "*"
@@ -38,39 +37,33 @@ service CrossBankPaymentService {
 
   // GetCrossBankPayment fetches a saga row by transaction_id.
   // Auth: only the originator (or admin) sees their payment.
-  rpc GetCrossBankPayment(GetCrossBankPaymentRequest)
-      returns (CrossBankPayment) {
-    option (google.api.http) = {
-      get: "/api/v1/payments/interbank/{transaction_id}"
-    };
+  rpc GetCrossBankPayment(GetCrossBankPaymentRequest) returns (CrossBankPayment) {
+    option (google.api.http) = {get: "/api/v1/payments/interbank/{transaction_id}"};
   }
 }
 
 message SubmitCrossBankPaymentRequest {
   // Stable across retries; combined with (user_id, source_account_id)
   // to derive the saga transaction_id. Required.
-  string   idempotency_key       = 1
-      [(buf.validate.field).string.min_len = 1];
-  string   source_account_id     = 2
-      [(buf.validate.field).string.uuid = true];
-  string   remote_bank_code      = 3
-      [(buf.validate.field).string.min_len = 1];
+  string idempotency_key = 1 [(buf.validate.field).string.min_len = 1];
+  string source_account_id = 2 [(buf.validate.field).string.uuid = true];
+  string remote_bank_code = 3 [(buf.validate.field).string.min_len = 1];
   // 18-digit partner-bank account number; checksum (sum%11==0) is
   // re-validated server-side.
-  string   remote_account_number = 4
-      [(buf.validate.field).string.len = 18];
-  Currency currency              = 5
-      [(buf.validate.field).enum = {defined_only: true, not_in: [0]}];
+  string remote_account_number = 4 [(buf.validate.field).string.len = 18];
+  Currency currency = 5 [(buf.validate.field).enum = {
+    defined_only: true
+    not_in: [0]
+  }];
   // Positive decimal string, native currency.
-  string   amount                = 6
-      [(buf.validate.field).string.min_len = 1];
-  string   purpose               = 7;
+  string amount = 6 [(buf.validate.field).string.min_len = 1];
+  string purpose = 7;
 }
 
 message SubmitCrossBankPaymentResponse {
   string transaction_id = 1;
-  string status         = 2; // running | completed | failed | compensating
-  string last_error     = 3;
+  string status = 2; // running | completed | failed | compensating
+  string last_error = 3;
 }
 
 message GetCrossBankPaymentRequest {
@@ -78,19 +71,19 @@ message GetCrossBankPaymentRequest {
 }
 
 message CrossBankPayment {
-  string                    transaction_id        = 1;
-  string                    status                = 2;
-  string                    current_step          = 3;
-  int32                     attempts              = 4;
-  string                    last_error            = 5;
-  google.protobuf.Timestamp created_at            = 6;
-  google.protobuf.Timestamp updated_at            = 7;
+  string transaction_id = 1;
+  string status = 2;
+  string current_step = 3;
+  int32 attempts = 4;
+  string last_error = 5;
+  google.protobuf.Timestamp created_at = 6;
+  google.protobuf.Timestamp updated_at = 7;
 
-  string                    source_account_id     = 20;
-  string                    source_account_number = 21;
-  string                    remote_bank_code      = 22;
-  string                    remote_account_number = 23;
-  Currency                  currency              = 24;
-  string                    amount                = 25;
-  string                    purpose               = 26;
+  string source_account_id = 20;
+  string source_account_number = 21;
+  string remote_bank_code = 22;
+  string remote_account_number = 23;
+  Currency currency = 24;
+  string amount = 25;
+  string purpose = 26;
 }

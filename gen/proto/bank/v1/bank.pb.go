@@ -6259,7 +6259,7 @@ var File_bank_v1_bank_proto protoreflect.FileDescriptor
 
 const file_bank_v1_bank_proto_rawDesc = "" +
 	"\n" +
-	"\x12bank/v1/bank.proto\x12\rbanka.bank.v1\x1a\x1cgoogle/api/annotations.proto\x1a\x1bgoogle/protobuf/empty.proto\x1a\x1fgoogle/protobuf/timestamp.proto\x1a\x1bbuf/validate/validate.proto\"\xc2\x02\n" +
+	"\x12bank/v1/bank.proto\x12\rbanka.bank.v1\x1a\x1bbuf/validate/validate.proto\x1a\x1cgoogle/api/annotations.proto\x1a\x1bgoogle/protobuf/empty.proto\x1a\x1fgoogle/protobuf/timestamp.proto\"\xc2\x02\n" +
 	"\aCompany\x12\x0e\n" +
 	"\x02id\x18\x01 \x01(\tR\x02id\x12\x12\n" +
 	"\x04name\x18\x02 \x01(\tR\x04name\x12\x1f\n" +

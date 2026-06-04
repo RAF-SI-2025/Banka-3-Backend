@@ -2,10 +2,10 @@ syntax = "proto3";
 
 package banka.user.v1;
 
-import "google/api/annotations.proto";
-import "google/protobuf/timestamp.proto";
-import "google/protobuf/empty.proto";
 import "buf/validate/validate.proto";
+import "google/api/annotations.proto";
+import "google/protobuf/empty.proto";
+import "google/protobuf/timestamp.proto";
 
 // UserService owns authentication, employees, clients, and permissions.
 //
@@ -41,9 +41,7 @@ service UserService {
   }
 
   rpc Me(google.protobuf.Empty) returns (MeResponse) {
-    option (google.api.http) = {
-      get: "/api/v1/auth/me"
-    };
+    option (google.api.http) = {get: "/api/v1/auth/me"};
   }
 
   // -----------------------------------------------------------------
@@ -94,15 +92,11 @@ service UserService {
   }
 
   rpc ListEmployees(ListEmployeesRequest) returns (ListEmployeesResponse) {
-    option (google.api.http) = {
-      get: "/api/v1/employees"
-    };
+    option (google.api.http) = {get: "/api/v1/employees"};
   }
 
   rpc GetEmployee(GetEmployeeRequest) returns (Employee) {
-    option (google.api.http) = {
-      get: "/api/v1/employees/{id}"
-    };
+    option (google.api.http) = {get: "/api/v1/employees/{id}"};
   }
 
   rpc UpdateEmployee(UpdateEmployeeRequest) returns (Employee) {
@@ -142,15 +136,11 @@ service UserService {
   }
 
   rpc ListClients(ListClientsRequest) returns (ListClientsResponse) {
-    option (google.api.http) = {
-      get: "/api/v1/clients"
-    };
+    option (google.api.http) = {get: "/api/v1/clients"};
   }
 
   rpc GetClient(GetClientRequest) returns (Client) {
-    option (google.api.http) = {
-      get: "/api/v1/clients/{id}"
-    };
+    option (google.api.http) = {get: "/api/v1/clients/{id}"};
   }
 
   rpc UpdateClient(UpdateClientRequest) returns (Client) {
@@ -194,46 +184,46 @@ service UserService {
 
 enum UserKind {
   USER_KIND_UNSPECIFIED = 0;
-  USER_KIND_EMPLOYEE    = 1;
-  USER_KIND_CLIENT      = 2;
+  USER_KIND_EMPLOYEE = 1;
+  USER_KIND_CLIENT = 2;
 }
 
 enum Gender {
   GENDER_UNSPECIFIED = 0;
-  GENDER_MALE        = 1;
-  GENDER_FEMALE      = 2;
-  GENDER_OTHER       = 3;
+  GENDER_MALE = 1;
+  GENDER_FEMALE = 2;
+  GENDER_OTHER = 3;
 }
 
 message Employee {
-  string id            = 1;
-  string email         = 2;
-  string username      = 3;
-  string first_name    = 4;
-  string last_name     = 5;
-  string date_of_birth = 6;  // YYYY-MM-DD
-  Gender gender        = 7;
-  string phone         = 8;
-  string address       = 9;
-  string position      = 10;
-  string department    = 11;
-  bool   active        = 12;
-  bool   activated     = 13;  // false until employee sets initial password
+  string id = 1;
+  string email = 2;
+  string username = 3;
+  string first_name = 4;
+  string last_name = 5;
+  string date_of_birth = 6; // YYYY-MM-DD
+  Gender gender = 7;
+  string phone = 8;
+  string address = 9;
+  string position = 10;
+  string department = 11;
+  bool active = 12;
+  bool activated = 13; // false until employee sets initial password
   repeated string permissions = 14;
   google.protobuf.Timestamp created_at = 15;
   google.protobuf.Timestamp updated_at = 16;
 }
 
 message Client {
-  string id            = 1;
-  string email         = 2;
-  string first_name    = 3;
-  string last_name     = 4;
+  string id = 1;
+  string email = 2;
+  string first_name = 3;
+  string last_name = 4;
   string date_of_birth = 5;
-  Gender gender        = 6;
-  string phone         = 7;
-  string address       = 8;
-  bool   active        = 9;
+  Gender gender = 6;
+  string phone = 7;
+  string address = 8;
+  bool active = 9;
   repeated string permissions = 10;
   google.protobuf.Timestamp created_at = 11;
   google.protobuf.Timestamp updated_at = 12;
@@ -244,8 +234,11 @@ message Client {
 // =====================================================================
 
 message LoginRequest {
-  string email    = 1 [(buf.validate.field).string.email = true];
-  string password = 2 [(buf.validate.field).string = {min_len: 1, max_len: 64}];
+  string email = 1 [(buf.validate.field).string.email = true];
+  string password = 2 [(buf.validate.field).string = {
+    min_len: 1
+    max_len: 64
+  }];
   // long_lived_session is set by the mobile app (spec p.84 — no
   // session interval). When true the user service mints a long-lived
   // refresh token and the gateway returns it in the response body
@@ -255,15 +248,15 @@ message LoginRequest {
 }
 
 message LoginResponse {
-  string   access_token       = 1;
-  string   refresh_token      = 2;
-  int64    access_expires_in  = 3;  // seconds
-  int64    refresh_expires_in = 4;
-  UserKind user_kind          = 5;
-  string   user_id            = 6;
+  string access_token = 1;
+  string refresh_token = 2;
+  int64 access_expires_in = 3; // seconds
+  int64 refresh_expires_in = 4;
+  UserKind user_kind = 5;
+  string user_id = 6;
   repeated string permissions = 7;
-  string   first_name         = 8;
-  string   last_name          = 9;
+  string first_name = 8;
+  string last_name = 9;
 }
 
 message RefreshRequest {
@@ -275,10 +268,10 @@ message RefreshRequest {
 }
 
 message RefreshResponse {
-  string access_token       = 1;
-  string refresh_token      = 2;
-  int64  access_expires_in  = 3;
-  int64  refresh_expires_in = 4;
+  string access_token = 1;
+  string refresh_token = 2;
+  int64 access_expires_in = 3;
+  int64 refresh_expires_in = 4;
 }
 
 message LogoutRequest {
@@ -288,7 +281,7 @@ message LogoutRequest {
 message MeResponse {
   oneof user {
     Employee employee = 1;
-    Client   client   = 2;
+    Client client = 2;
   }
 }
 
@@ -300,10 +293,16 @@ message ActivateAccountRequest {
   // The activation token is a 32-byte URL-safe random string (43 chars
   // base64url, no padding). Be lenient on length but reject obvious
   // garbage so it can't reach the user service unparsed.
-  string token        = 1 [(buf.validate.field).string = {min_len: 16, max_len: 128}];
+  string token = 1 [(buf.validate.field).string = {
+    min_len: 16
+    max_len: 128
+  }];
   // Password complexity is enforced server-side in pkg/passwords; the
   // proto-level rule is just the spec p.10 length window.
-  string new_password = 2 [(buf.validate.field).string = {min_len: 8, max_len: 32}];
+  string new_password = 2 [(buf.validate.field).string = {
+    min_len: 8
+    max_len: 32
+  }];
 }
 
 message ResendActivationRequest {
@@ -315,8 +314,14 @@ message RequestPasswordResetRequest {
 }
 
 message ConfirmPasswordResetRequest {
-  string token        = 1 [(buf.validate.field).string = {min_len: 16, max_len: 128}];
-  string new_password = 2 [(buf.validate.field).string = {min_len: 8, max_len: 32}];
+  string token = 1 [(buf.validate.field).string = {
+    min_len: 16
+    max_len: 128
+  }];
+  string new_password = 2 [(buf.validate.field).string = {
+    min_len: 8
+    max_len: 32
+  }];
 }
 
 // =====================================================================
@@ -324,39 +329,75 @@ message ConfirmPasswordResetRequest {
 // =====================================================================
 
 message CreateEmployeeRequest {
-  string email         = 1  [(buf.validate.field).string.email = true];
-  string username      = 2  [(buf.validate.field).string = {min_len: 3, max_len: 32, pattern: "^[A-Za-z0-9_.-]+$"}];
-  string first_name    = 3  [(buf.validate.field).string = {min_len: 1, max_len: 64}];
-  string last_name     = 4  [(buf.validate.field).string = {min_len: 1, max_len: 64}];
+  string email = 1 [(buf.validate.field).string.email = true];
+  string username = 2 [(buf.validate.field).string = {
+    min_len: 3
+    max_len: 32
+    pattern: "^[A-Za-z0-9_.-]+$"
+  }];
+  string first_name = 3 [(buf.validate.field).string = {
+    min_len: 1
+    max_len: 64
+  }];
+  string last_name = 4 [(buf.validate.field).string = {
+    min_len: 1
+    max_len: 64
+  }];
   // YYYY-MM-DD per spec p.8.
-  string date_of_birth = 5  [(buf.validate.field).string.pattern = "^\\d{4}-\\d{2}-\\d{2}$"];
-  Gender gender        = 6  [(buf.validate.field).enum = {defined_only: true, not_in: [0]}];
-  string phone         = 7  [(buf.validate.field).string = {min_len: 1, max_len: 32, pattern: "^\\+?[0-9 ()-]+$"}];
-  string address       = 8  [(buf.validate.field).string = {min_len: 1, max_len: 200}];
-  string position      = 9  [(buf.validate.field).string = {min_len: 1, max_len: 64}];
-  string department    = 10 [(buf.validate.field).string = {min_len: 1, max_len: 64}];
+  string date_of_birth = 5 [(buf.validate.field).string.pattern = "^\\d{4}-\\d{2}-\\d{2}$"];
+  Gender gender = 6 [(buf.validate.field).enum = {
+    defined_only: true
+    not_in: [0]
+  }];
+  string phone = 7 [(buf.validate.field).string = {
+    min_len: 1
+    max_len: 32
+    pattern: "^\\+?[0-9 ()-]+$"
+  }];
+  string address = 8 [(buf.validate.field).string = {
+    min_len: 1
+    max_len: 200
+  }];
+  string position = 9 [(buf.validate.field).string = {
+    min_len: 1
+    max_len: 64
+  }];
+  string department = 10 [(buf.validate.field).string = {
+    min_len: 1
+    max_len: 64
+  }];
   // Optional so the server can distinguish "absent" (→ default true per
   // spec p.10: "Po default-u se podrazumeva da je korisnik aktivan")
   // from an explicit false. Generated as `*bool` in Go.
   optional bool active = 11;
   // Initial role bundle, applied as a permission set; later admin
   // actions can amend via SetEmployeePermissions.
-  string role          = 12 [(buf.validate.field).string = {in: ["admin", "supervisor", "agent", "basic"]}];
+  string role = 12 [(buf.validate.field).string = {
+    in: [
+      "admin",
+      "supervisor",
+      "agent",
+      "basic"
+    ]
+  }];
 }
 
 message ListEmployeesRequest {
-  string email_query    = 1 [(buf.validate.field).string.max_len = 128];
-  string name_query     = 2 [(buf.validate.field).string.max_len = 128];
+  string email_query = 1 [(buf.validate.field).string.max_len = 128];
+  string name_query = 2 [(buf.validate.field).string.max_len = 128];
   string position_query = 3 [(buf.validate.field).string.max_len = 64];
-  int32  page           = 4 [(buf.validate.field).int32 = {gte: 0}];          // 1-indexed; 0 → 1
-  int32  page_size      = 5 [(buf.validate.field).int32 = {gte: 0, lte: 200}]; // default 50, max 200
+  int32 page = 4 [(buf.validate.field).int32 = {gte: 0}]; // 1-indexed; 0 → 1
+  int32 page_size = 5 [(buf.validate.field).int32 = {
+    gte: 0
+    lte: 200
+  }]; // default 50, max 200
 }
 
 message ListEmployeesResponse {
   repeated Employee employees = 1;
-  int32  page                 = 2;
-  int32  page_size            = 3;
-  int64  total                = 4;
+  int32 page = 2;
+  int32 page_size = 3;
+  int64 total = 4;
 }
 
 message GetEmployeeRequest {
@@ -367,26 +408,58 @@ message UpdateEmployeeRequest {
   // Empty = no change for every field except id. We use IGNORE_IF_ZERO_VALUE
   // so the format checks fire only when the caller actually populates the
   // field.
-  string id            = 1  [(buf.validate.field).string.uuid = true];
-  string email         = 2  [(buf.validate.field).string.email = true, (buf.validate.field).ignore = IGNORE_IF_ZERO_VALUE];
-  string username      = 3  [(buf.validate.field).string = {min_len: 3, max_len: 32, pattern: "^[A-Za-z0-9_.-]+$"}, (buf.validate.field).ignore = IGNORE_IF_ZERO_VALUE];
-  string first_name    = 4  [(buf.validate.field).string = {min_len: 1, max_len: 64}, (buf.validate.field).ignore = IGNORE_IF_ZERO_VALUE];
-  string last_name     = 5  [(buf.validate.field).string = {min_len: 1, max_len: 64}, (buf.validate.field).ignore = IGNORE_IF_ZERO_VALUE];
-  string date_of_birth = 6  [(buf.validate.field).string.pattern = "^\\d{4}-\\d{2}-\\d{2}$", (buf.validate.field).ignore = IGNORE_IF_ZERO_VALUE];
-  Gender gender        = 7  [(buf.validate.field).enum.defined_only = true];
-  string phone         = 8  [(buf.validate.field).string = {min_len: 1, max_len: 32, pattern: "^\\+?[0-9 ()-]+$"}, (buf.validate.field).ignore = IGNORE_IF_ZERO_VALUE];
-  string address       = 9  [(buf.validate.field).string = {max_len: 200}];
-  string position      = 10 [(buf.validate.field).string.max_len = 64];
-  string department    = 11 [(buf.validate.field).string.max_len = 64];
+  string id = 1 [(buf.validate.field).string.uuid = true];
+  string email = 2 [
+    (buf.validate.field).string.email = true,
+    (buf.validate.field).ignore = IGNORE_IF_ZERO_VALUE
+  ];
+  string username = 3 [
+    (buf.validate.field).string = {
+      min_len: 3
+      max_len: 32
+      pattern: "^[A-Za-z0-9_.-]+$"
+    },
+    (buf.validate.field).ignore = IGNORE_IF_ZERO_VALUE
+  ];
+  string first_name = 4 [
+    (buf.validate.field).string = {
+      min_len: 1
+      max_len: 64
+    },
+    (buf.validate.field).ignore = IGNORE_IF_ZERO_VALUE
+  ];
+  string last_name = 5 [
+    (buf.validate.field).string = {
+      min_len: 1
+      max_len: 64
+    },
+    (buf.validate.field).ignore = IGNORE_IF_ZERO_VALUE
+  ];
+  string date_of_birth = 6 [
+    (buf.validate.field).string.pattern = "^\\d{4}-\\d{2}-\\d{2}$",
+    (buf.validate.field).ignore = IGNORE_IF_ZERO_VALUE
+  ];
+  Gender gender = 7 [(buf.validate.field).enum.defined_only = true];
+  string phone = 8 [
+    (buf.validate.field).string = {
+      min_len: 1
+      max_len: 32
+      pattern: "^\\+?[0-9 ()-]+$"
+    },
+    (buf.validate.field).ignore = IGNORE_IF_ZERO_VALUE
+  ];
+  string address = 9 [(buf.validate.field).string = {max_len: 200}];
+  string position = 10 [(buf.validate.field).string.max_len = 64];
+  string department = 11 [(buf.validate.field).string.max_len = 64];
 }
 
 message SetEmployeeActiveRequest {
-  string id     = 1 [(buf.validate.field).string.uuid = true];
-  bool   active = 2;
+  string id = 1 [(buf.validate.field).string.uuid = true];
+  bool active = 2;
 }
 
 message SetEmployeePermissionsRequest {
-  string id                  = 1 [(buf.validate.field).string.uuid = true];
+  string id = 1 [(buf.validate.field).string.uuid = true];
   // Permissions list is bounded; max 64 covers admin's full set with
   // headroom for c3+ growth.
   repeated string permissions = 2 [(buf.validate.field).repeated.max_items = 64];
@@ -397,27 +470,46 @@ message SetEmployeePermissionsRequest {
 // =====================================================================
 
 message CreateClientRequest {
-  string email         = 1 [(buf.validate.field).string.email = true];
-  string first_name    = 2 [(buf.validate.field).string = {min_len: 1, max_len: 64}];
-  string last_name     = 3 [(buf.validate.field).string = {min_len: 1, max_len: 64}];
+  string email = 1 [(buf.validate.field).string.email = true];
+  string first_name = 2 [(buf.validate.field).string = {
+    min_len: 1
+    max_len: 64
+  }];
+  string last_name = 3 [(buf.validate.field).string = {
+    min_len: 1
+    max_len: 64
+  }];
   string date_of_birth = 4 [(buf.validate.field).string.pattern = "^\\d{4}-\\d{2}-\\d{2}$"];
-  Gender gender        = 5 [(buf.validate.field).enum = {defined_only: true, not_in: [0]}];
-  string phone         = 6 [(buf.validate.field).string = {min_len: 1, max_len: 32, pattern: "^\\+?[0-9 ()-]+$"}];
-  string address       = 7 [(buf.validate.field).string = {min_len: 1, max_len: 200}];
+  Gender gender = 5 [(buf.validate.field).enum = {
+    defined_only: true
+    not_in: [0]
+  }];
+  string phone = 6 [(buf.validate.field).string = {
+    min_len: 1
+    max_len: 32
+    pattern: "^\\+?[0-9 ()-]+$"
+  }];
+  string address = 7 [(buf.validate.field).string = {
+    min_len: 1
+    max_len: 200
+  }];
 }
 
 message ListClientsRequest {
   string email_query = 1 [(buf.validate.field).string.max_len = 128];
-  string name_query  = 2 [(buf.validate.field).string.max_len = 128];
-  int32  page        = 3 [(buf.validate.field).int32 = {gte: 0}];
-  int32  page_size   = 4 [(buf.validate.field).int32 = {gte: 0, lte: 200}];
+  string name_query = 2 [(buf.validate.field).string.max_len = 128];
+  int32 page = 3 [(buf.validate.field).int32 = {gte: 0}];
+  int32 page_size = 4 [(buf.validate.field).int32 = {
+    gte: 0
+    lte: 200
+  }];
 }
 
 message ListClientsResponse {
   repeated Client clients = 1;
-  int32  page             = 2;
-  int32  page_size        = 3;
-  int64  total            = 4;
+  int32 page = 2;
+  int32 page_size = 3;
+  int64 total = 4;
 }
 
 message GetClientRequest {
@@ -425,14 +517,39 @@ message GetClientRequest {
 }
 
 message UpdateClientRequest {
-  string id            = 1 [(buf.validate.field).string.uuid = true];
-  string email         = 2 [(buf.validate.field).string.email = true, (buf.validate.field).ignore = IGNORE_IF_ZERO_VALUE];
-  string first_name    = 3 [(buf.validate.field).string = {min_len: 1, max_len: 64}, (buf.validate.field).ignore = IGNORE_IF_ZERO_VALUE];
-  string last_name     = 4 [(buf.validate.field).string = {min_len: 1, max_len: 64}, (buf.validate.field).ignore = IGNORE_IF_ZERO_VALUE];
-  string date_of_birth = 5 [(buf.validate.field).string.pattern = "^\\d{4}-\\d{2}-\\d{2}$", (buf.validate.field).ignore = IGNORE_IF_ZERO_VALUE];
-  Gender gender        = 6 [(buf.validate.field).enum.defined_only = true];
-  string phone         = 7 [(buf.validate.field).string = {min_len: 1, max_len: 32, pattern: "^\\+?[0-9 ()-]+$"}, (buf.validate.field).ignore = IGNORE_IF_ZERO_VALUE];
-  string address       = 8 [(buf.validate.field).string.max_len = 200];
+  string id = 1 [(buf.validate.field).string.uuid = true];
+  string email = 2 [
+    (buf.validate.field).string.email = true,
+    (buf.validate.field).ignore = IGNORE_IF_ZERO_VALUE
+  ];
+  string first_name = 3 [
+    (buf.validate.field).string = {
+      min_len: 1
+      max_len: 64
+    },
+    (buf.validate.field).ignore = IGNORE_IF_ZERO_VALUE
+  ];
+  string last_name = 4 [
+    (buf.validate.field).string = {
+      min_len: 1
+      max_len: 64
+    },
+    (buf.validate.field).ignore = IGNORE_IF_ZERO_VALUE
+  ];
+  string date_of_birth = 5 [
+    (buf.validate.field).string.pattern = "^\\d{4}-\\d{2}-\\d{2}$",
+    (buf.validate.field).ignore = IGNORE_IF_ZERO_VALUE
+  ];
+  Gender gender = 6 [(buf.validate.field).enum.defined_only = true];
+  string phone = 7 [
+    (buf.validate.field).string = {
+      min_len: 1
+      max_len: 32
+      pattern: "^\\+?[0-9 ()-]+$"
+    },
+    (buf.validate.field).ignore = IGNORE_IF_ZERO_VALUE
+  ];
+  string address = 8 [(buf.validate.field).string.max_len = 200];
 }
 
 // =====================================================================
@@ -441,7 +558,7 @@ message UpdateClientRequest {
 
 message GetSessionVersionRequest {
   UserKind user_kind = 1;
-  string   user_id   = 2;
+  string user_id = 2;
 }
 
 message GetSessionVersionResponse {
@@ -452,19 +569,19 @@ message GetSessionVersionResponse {
 // id pkg/verification minted), the owning user, and the action kind
 // string (verification.ActionKind values: 'payment', 'transfer', …).
 message RecordVerificationEventRequest {
-  string id          = 1;
-  string user_id     = 2;
+  string id = 1;
+  string user_id = 2;
   string action_kind = 3;
 }
 
 message ResolveVerificationEventRequest {
-  string id      = 1;
-  bool   success = 2;  // true → 'success', false → 'failed'
+  string id = 1;
+  bool success = 2; // true → 'success', false → 'failed'
 }
 
 message ListVerificationHistoryRequest {
   string user_id = 1;
-  int32  limit   = 2;  // 0 → service default cap
+  int32 limit = 2; // 0 → service default cap
 }
 
 // VerificationEvent is one historical request. status is the raw
@@ -472,10 +589,10 @@ message ListVerificationHistoryRequest {
 // projects an unresolved-but-stale 'pending' to expired for the
 // mobile UI using the code TTL.
 message VerificationEvent {
-  string                    id          = 1;
-  string                    action_kind = 2;
-  string                    status      = 3;
-  google.protobuf.Timestamp created_at  = 4;
+  string id = 1;
+  string action_kind = 2;
+  string status = 3;
+  google.protobuf.Timestamp created_at = 4;
   google.protobuf.Timestamp resolved_at = 5;
 }
 

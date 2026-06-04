@@ -2,9 +2,9 @@ syntax = "proto3";
 
 package banka.bank.v1;
 
+import "bank/v1/bank.proto";
 import "buf/validate/validate.proto";
 import "google/protobuf/timestamp.proto";
-import "bank/v1/bank.proto";
 
 // InterbankProtocolService owns the celina-5 cross-bank 2-phase
 // commit primitive that the spec p.77+ uses for inter-bank payments
@@ -43,11 +43,9 @@ service InterbankProtocolService {
   // answered idempotence_key without re-running the underlying
   // Prepare/Commit/Rollback. Two RPCs to keep the gateway's flow
   // simple: read first, fall through to processing, write at the end.
-  rpc RecordInboundMessage(RecordInboundMessageRequest)
-      returns (RecordInboundMessageResponse);
+  rpc RecordInboundMessage(RecordInboundMessageRequest) returns (RecordInboundMessageResponse);
 
-  rpc GetInboundMessage(GetInboundMessageRequest)
-      returns (GetInboundMessageResponse);
+  rpc GetInboundMessage(GetInboundMessageRequest) returns (GetInboundMessageResponse);
 }
 
 // -------------------------------------------------------------------
@@ -56,15 +54,15 @@ service InterbankProtocolService {
 
 enum InterbankTxStatus {
   INTERBANK_TX_STATUS_UNSPECIFIED = 0;
-  INTERBANK_TX_STATUS_PREPARED    = 1;
-  INTERBANK_TX_STATUS_COMMITTED   = 2;
+  INTERBANK_TX_STATUS_PREPARED = 1;
+  INTERBANK_TX_STATUS_COMMITTED = 2;
   INTERBANK_TX_STATUS_ROLLED_BACK = 3;
 }
 
 enum InterbankMessageType {
   INTERBANK_MESSAGE_TYPE_UNSPECIFIED = 0;
-  INTERBANK_MESSAGE_TYPE_NEW_TX      = 1;
-  INTERBANK_MESSAGE_TYPE_COMMIT_TX   = 2;
+  INTERBANK_MESSAGE_TYPE_NEW_TX = 1;
+  INTERBANK_MESSAGE_TYPE_COMMIT_TX = 2;
   INTERBANK_MESSAGE_TYPE_ROLLBACK_TX = 3;
 }
 
@@ -74,9 +72,9 @@ enum InterbankMessageType {
 enum InterbankPaymentDirection {
   INTERBANK_PAYMENT_DIRECTION_UNSPECIFIED = 0;
   // INBOUND — we are receiving funds; destination is local.
-  INTERBANK_PAYMENT_DIRECTION_INBOUND     = 1;
+  INTERBANK_PAYMENT_DIRECTION_INBOUND = 1;
   // OUTBOUND — we are sending funds; source is local.
-  INTERBANK_PAYMENT_DIRECTION_OUTBOUND    = 2;
+  INTERBANK_PAYMENT_DIRECTION_OUTBOUND = 2;
 }
 
 // -------------------------------------------------------------------
@@ -84,78 +82,82 @@ enum InterbankPaymentDirection {
 // -------------------------------------------------------------------
 
 message PreparePaymentRequest {
-  int32                     sender_routing_number = 1
-      [(buf.validate.field).int32.gt = 0];
-  string                    transaction_id        = 2
-      [(buf.validate.field).string.min_len = 1];
-  InterbankPaymentDirection direction             = 3
-      [(buf.validate.field).enum = {defined_only: true, not_in: [0]}];
+  int32 sender_routing_number = 1 [(buf.validate.field).int32.gt = 0];
+  string transaction_id = 2 [(buf.validate.field).string.min_len = 1];
+  InterbankPaymentDirection direction = 3 [(buf.validate.field).enum = {
+    defined_only: true
+    not_in: [0]
+  }];
   // local_account_number is the 18-digit account number on this bank;
   // validated against the spec sum(digits)%11 checksum at the gateway
   // before the RPC fires.
-  string                    local_account_number  = 4
-      [(buf.validate.field).string.len = 18];
-  string                    remote_account_number = 5
-      [(buf.validate.field).string.len = 18];
-  Currency                  currency              = 6
-      [(buf.validate.field).enum = {defined_only: true, not_in: [0]}];
-  string                    amount                = 7
-      [(buf.validate.field).string.min_len = 1];
+  string local_account_number = 4 [(buf.validate.field).string.len = 18];
+  string remote_account_number = 5 [(buf.validate.field).string.len = 18];
+  Currency currency = 6 [(buf.validate.field).enum = {
+    defined_only: true
+    not_in: [0]
+  }];
+  string amount = 7 [(buf.validate.field).string.min_len = 1];
   // Verbatim partner request body — stashed for audit and so a
   // commit/rollback can refer back to it.
-  string                    transaction_body      = 8;
+  string transaction_body = 8;
   // Optional purpose / description text, copied onto the ledger leg
   // on commit.
-  string                    purpose               = 9;
+  string purpose = 9;
 }
 
 message PreparePaymentResponse {
-  string                    transaction_id = 1;
-  InterbankTxStatus         status         = 2;
+  string transaction_id = 1;
+  InterbankTxStatus status = 2;
   // reservation_id is filled when direction=OUTBOUND so the gateway
   // can hand it back to the partner for traceability.
-  string                    reservation_id = 3;
-  google.protobuf.Timestamp prepared_at    = 4;
+  string reservation_id = 3;
+  google.protobuf.Timestamp prepared_at = 4;
 }
 
 message CommitPaymentRequest {
-  int32  sender_routing_number = 1 [(buf.validate.field).int32.gt = 0];
-  string transaction_id        = 2 [(buf.validate.field).string.min_len = 1];
+  int32 sender_routing_number = 1 [(buf.validate.field).int32.gt = 0];
+  string transaction_id = 2 [(buf.validate.field).string.min_len = 1];
 }
 
 message CommitPaymentResponse {
-  string                    transaction_id = 1;
-  InterbankTxStatus         status         = 2;
+  string transaction_id = 1;
+  InterbankTxStatus status = 2;
   // op_id is the local bank.transactions op_id assigned to the
   // committed leg; returned so the caller can correlate.
-  string                    op_id          = 3;
-  google.protobuf.Timestamp committed_at   = 4;
+  string op_id = 3;
+  google.protobuf.Timestamp committed_at = 4;
 }
 
 message RollbackPaymentRequest {
-  int32  sender_routing_number = 1 [(buf.validate.field).int32.gt = 0];
-  string transaction_id        = 2 [(buf.validate.field).string.min_len = 1];
+  int32 sender_routing_number = 1 [(buf.validate.field).int32.gt = 0];
+  string transaction_id = 2 [(buf.validate.field).string.min_len = 1];
   // reason is copied onto an audit row; optional.
-  string reason                = 3;
+  string reason = 3;
 }
 
 message RollbackPaymentResponse {
-  string                    transaction_id = 1;
-  InterbankTxStatus         status         = 2;
+  string transaction_id = 1;
+  InterbankTxStatus status = 2;
   google.protobuf.Timestamp rolled_back_at = 3;
 }
 
 message RecordInboundMessageRequest {
-  int32                sender_routing_number = 1
-      [(buf.validate.field).int32.gt = 0];
-  string               idempotence_key       = 2
-      [(buf.validate.field).string.min_len = 1];
-  InterbankMessageType message_type          = 3
-      [(buf.validate.field).enum = {defined_only: true, not_in: [0]}];
-  string               transaction_id        = 4;
-  int32                response_status       = 5
-      [(buf.validate.field).int32 = {in: [200, 202, 204]}];
-  string               response_body         = 6;
+  int32 sender_routing_number = 1 [(buf.validate.field).int32.gt = 0];
+  string idempotence_key = 2 [(buf.validate.field).string.min_len = 1];
+  InterbankMessageType message_type = 3 [(buf.validate.field).enum = {
+    defined_only: true
+    not_in: [0]
+  }];
+  string transaction_id = 4;
+  int32 response_status = 5 [(buf.validate.field).int32 = {
+    in: [
+      200,
+      202,
+      204
+    ]
+  }];
+  string response_body = 6;
 }
 
 message RecordInboundMessageResponse {
@@ -163,17 +165,17 @@ message RecordInboundMessageResponse {
 }
 
 message GetInboundMessageRequest {
-  int32  sender_routing_number = 1 [(buf.validate.field).int32.gt = 0];
-  string idempotence_key       = 2 [(buf.validate.field).string.min_len = 1];
+  int32 sender_routing_number = 1 [(buf.validate.field).int32.gt = 0];
+  string idempotence_key = 2 [(buf.validate.field).string.min_len = 1];
 }
 
 message GetInboundMessageResponse {
   // found=false when no record exists; the other fields are zero.
-  bool                      found           = 1;
-  InterbankMessageType      message_type    = 2;
-  string                    transaction_id  = 3;
-  int32                     response_status = 4;
-  string                    response_body   = 5;
-  google.protobuf.Timestamp recorded_at     = 6;
-  google.protobuf.Timestamp updated_at      = 7;
+  bool found = 1;
+  InterbankMessageType message_type = 2;
+  string transaction_id = 3;
+  int32 response_status = 4;
+  string response_body = 5;
+  google.protobuf.Timestamp recorded_at = 6;
+  google.protobuf.Timestamp updated_at = 7;
 }

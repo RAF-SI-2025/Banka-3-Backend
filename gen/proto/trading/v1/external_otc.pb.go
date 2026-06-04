@@ -2305,7 +2305,7 @@ var File_trading_v1_external_otc_proto protoreflect.FileDescriptor
 
 const file_trading_v1_external_otc_proto_rawDesc = "" +
 	"\n" +
-	"\x1dtrading/v1/external_otc.proto\x12\x10banka.trading.v1\x1a\x1cgoogle/api/annotations.proto\x1a\x1fgoogle/protobuf/timestamp.proto\x1a\x1bbuf/validate/validate.proto\x1a\x18trading/v1/trading.proto\"\xa8\x03\n" +
+	"\x1dtrading/v1/external_otc.proto\x12\x10banka.trading.v1\x1a\x1bbuf/validate/validate.proto\x1a\x1cgoogle/api/annotations.proto\x1a\x1fgoogle/protobuf/timestamp.proto\x1a\x18trading/v1/trading.proto\"\xa8\x03\n" +
 	"\x15ExternalPublicHolding\x12\x1b\n" +
 	"\tbank_code\x18\x01 \x01(\tR\bbankCode\x12&\n" +
 	"\x0fseller_user_ref\x18\x02 \x01(\tR\rsellerUserRef\x12%\n" +

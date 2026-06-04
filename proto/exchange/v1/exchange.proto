@@ -24,9 +24,7 @@ service ExchangeService {
   }
 
   rpc ListRates(ListRatesRequest) returns (ListRatesResponse) {
-    option (google.api.http) = {
-      get: "/api/v1/exchange/rates"
-    };
+    option (google.api.http) = {get: "/api/v1/exchange/rates"};
   }
 
   // Quote returns the most recent rate for from→to. Internal: callers
@@ -47,14 +45,14 @@ service ExchangeService {
 
 enum Currency {
   CURRENCY_UNSPECIFIED = 0;
-  CURRENCY_RSD         = 1;
-  CURRENCY_EUR         = 2;
-  CURRENCY_CHF         = 3;
-  CURRENCY_USD         = 4;
-  CURRENCY_GBP         = 5;
-  CURRENCY_JPY         = 6;
-  CURRENCY_CAD         = 7;
-  CURRENCY_AUD         = 8;
+  CURRENCY_RSD = 1;
+  CURRENCY_EUR = 2;
+  CURRENCY_CHF = 3;
+  CURRENCY_USD = 4;
+  CURRENCY_GBP = 5;
+  CURRENCY_JPY = 6;
+  CURRENCY_CAD = 7;
+  CURRENCY_AUD = 8;
 }
 
 // Rate is one row of the FX table. base/quote are decimal strings to
@@ -63,18 +61,18 @@ enum Currency {
 // (1 ± margin) on the mid; we store the resolved bid/ask so the bank
 // service doesn't need to know the spread policy.
 message Rate {
-  Currency from        = 1;
-  Currency to          = 2;
-  string   bid         = 3;  // bank buys X at this rate (sell-side for client)
-  string   ask         = 4;  // bank sells X at this rate (buy-side for client)
+  Currency from = 1;
+  Currency to = 2;
+  string bid = 3; // bank buys X at this rate (sell-side for client)
+  string ask = 4; // bank sells X at this rate (buy-side for client)
   google.protobuf.Timestamp updated_at = 5;
 }
 
 message UpsertRateRequest {
   Currency from = 1;
-  Currency to   = 2;
-  string   bid  = 3;
-  string   ask  = 4;
+  Currency to = 2;
+  string bid = 3;
+  string ask = 4;
 }
 
 message ListRatesRequest {
@@ -89,7 +87,7 @@ message ListRatesResponse {
 
 message QuoteRequest {
   Currency from = 1;
-  Currency to   = 2;
+  Currency to = 2;
 }
 
 message RefreshFXRatesRequest {}
