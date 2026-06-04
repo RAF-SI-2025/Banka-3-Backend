@@ -44,7 +44,7 @@ type Feeder struct {
 // Run blocks until ctx is done, calling Once at the configured
 // interval. The first tick fires immediately.
 func (f *Feeder) Run(ctx context.Context, interval time.Duration) error {
-	if err := f.Once(ctx); err != nil {
+	if _, err := f.Once(ctx); err != nil {
 		f.Log.Warn("fx feed initial fetch failed", "error", err)
 	}
 	t := time.NewTicker(interval)
@@ -54,18 +54,19 @@ func (f *Feeder) Run(ctx context.Context, interval time.Duration) error {
 		case <-ctx.Done():
 			return nil
 		case <-t.C:
-			if err := f.Once(ctx); err != nil {
+			if _, err := f.Once(ctx); err != nil {
 				f.Log.Warn("fx feed tick failed", "error", err)
 			}
 		}
 	}
 }
 
-// Once does one fetch + upsert pass. Returns the first hard error.
-func (f *Feeder) Once(ctx context.Context) error {
+// Once does one fetch + upsert pass and returns the number of rows
+// written. Returns the first hard error from the fetch.
+func (f *Feeder) Once(ctx context.Context) (int, error) {
 	rates, err := f.Fetcher.Fetch(ctx)
 	if err != nil {
-		return fmt.Errorf("fetch: %w", err)
+		return 0, fmt.Errorf("fetch: %w", err)
 	}
 	written := 0
 	for cur, rsdPerUnit := range rates {
@@ -87,7 +88,7 @@ func (f *Feeder) Once(ctx context.Context) error {
 		written++
 	}
 	f.Log.Info("fx feed updated", "rows", written)
-	return nil
+	return written, nil
 }
 
 func formatRate(r float64) string {

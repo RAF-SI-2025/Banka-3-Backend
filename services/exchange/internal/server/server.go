@@ -18,6 +18,16 @@ type Server struct {
 
 func New(svc *service.Service) *Server { return &Server{Svc: svc} }
 
+// RefreshFXRates fires one pass of the external FX feed. Normally driven
+// by the scheduler service; ExchangeWrite/admin-gated via the gateway.
+func (s *Server) RefreshFXRates(ctx context.Context, _ *exchangepb.RefreshFXRatesRequest) (*exchangepb.RefreshFXRatesResponse, error) {
+	written, err := s.Svc.RefreshRates(ctx)
+	if err != nil {
+		return nil, err
+	}
+	return &exchangepb.RefreshFXRatesResponse{Written: int32(written)}, nil
+}
+
 func (s *Server) UpsertRate(ctx context.Context, in *exchangepb.UpsertRateRequest) (*exchangepb.Rate, error) {
 	r, err := s.Svc.UpsertRate(ctx, &domain.Rate{
 		From: currencyFromProto(in.GetFrom()),

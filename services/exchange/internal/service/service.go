@@ -12,15 +12,38 @@ import (
 	"github.com/RAF-SI-2025/Banka-3-Backend/services/exchange/internal/store"
 )
 
+// RateRefresher does one fetch+upsert pass of the external FX feed.
+// Implemented by *feed.Feeder; injected by the app layer so the service
+// can expose the refresh as an RPC without importing the feed package.
+type RateRefresher interface {
+	Once(ctx context.Context) (int, error)
+}
+
 // Service is the FX rates aggregate. Slice 1 covers ingestion + lookup;
 // later c2 slices add a quote-with-commission helper for menjačnica.
 type Service struct {
 	Store *store.Store
 	Log   *slog.Logger
+	// Refresher is the external FX feed pass. Nil on a stack without a
+	// feed configured; RefreshRates then returns FailedPrecondition.
+	Refresher RateRefresher
 }
 
 func New(st *store.Store, log *slog.Logger) *Service {
 	return &Service{Store: st, Log: log}
+}
+
+// RefreshRates triggers one pass of the external FX feed and returns the
+// number of rate rows written. Normally the scheduler service drives
+// this; ExchangeWrite/admin-gated so ops can fire it on demand.
+func (s *Service) RefreshRates(ctx context.Context) (int, error) {
+	if err := s.requirePermission(ctx, permissions.ExchangeWrite); err != nil {
+		return 0, err
+	}
+	if s.Refresher == nil {
+		return 0, apperr.FailedPrecondition("fx feed not configured")
+	}
+	return s.Refresher.Once(ctx)
 }
 
 // UpsertRate writes a single rate. Permission: ExchangeWrite.

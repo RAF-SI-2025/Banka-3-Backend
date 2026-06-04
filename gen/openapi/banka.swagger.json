@@ -1692,6 +1692,39 @@
         ]
       }
     },
+    "/api/v1/exchange/rates/refresh": {
+      "post": {
+        "summary": "RefreshFXRates does one fetch+upsert pass of the external FX feed.\nNormally driven by the scheduler service; exposed so ops can fire it\non demand. Requires ExchangeWrite (or admin).",
+        "operationId": "ExchangeService_RefreshFXRates",
+        "responses": {
+          "200": {
+            "description": "A successful response.",
+            "schema": {
+              "$ref": "#/definitions/v1RefreshFXRatesResponse"
+            }
+          },
+          "default": {
+            "description": "An unexpected error response.",
+            "schema": {
+              "$ref": "#/definitions/rpcStatus"
+            }
+          }
+        },
+        "parameters": [
+          {
+            "name": "body",
+            "in": "body",
+            "required": true,
+            "schema": {
+              "$ref": "#/definitions/v1RefreshFXRatesRequest"
+            }
+          }
+        ],
+        "tags": [
+          "ExchangeService"
+        ]
+      }
+    },
     "/api/v1/exchanges": {
       "get": {
         "operationId": "TradingService_ListExchanges",
@@ -8312,6 +8345,19 @@
         }
       },
       "description": "RealizedPnLRow is one closing-sell row, decorated with the security\nticker for display. tax_amount_rsd is 15% of max(profit_rsd, 0) per\nspec p.62 (losses don't generate tax under the simple model)."
+    },
+    "v1RefreshFXRatesRequest": {
+      "type": "object"
+    },
+    "v1RefreshFXRatesResponse": {
+      "type": "object",
+      "properties": {
+        "written": {
+          "type": "integer",
+          "format": "int32",
+          "description": "written is the number of (currency→RSD) rate rows upserted."
+        }
+      }
     },
     "v1RefreshRequest": {
       "type": "object",

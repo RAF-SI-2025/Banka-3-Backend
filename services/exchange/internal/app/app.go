@@ -62,6 +62,17 @@ func Run() error {
 	st := store.New(db)
 	svc := service.New(st, log)
 
+	// The FX feeder is always constructed so the RefreshFXRates RPC works
+	// even when the in-process loop is disabled (the scheduler service
+	// drives it via RPC then). The loop itself is gated below.
+	feeder := &feed.Feeder{
+		Fetcher: &feed.OpenERAPI{BaseURL: config.String("FX_FEED_URL", "")},
+		Store:   st,
+		Log:     log,
+		Spread:  config.Float("FX_FEED_SPREAD", 0.01),
+	}
+	svc.Refresher = feeder
+
 	probeSrv := probes.New(fmt.Sprintf(":%d", config.Int("PROBE_PORT", 8081)))
 	probeSrv.Register("postgres", func(ctx context.Context) error { return db.Ping(ctx) })
 	probeSrv.Register("redis", func(ctx context.Context) error { return pkgredis.Ping(ctx, rdb) })
@@ -85,22 +96,20 @@ func Run() error {
 	// Background FX feed: periodically pulls public mid rates from the
 	// keyless open.er-api.com endpoint and upserts X→RSD pairs. The
 	// first tick fires immediately on boot; the 5-minute cadence keeps
-	// the menjačnica board fresh without straining the free upstream
-	// (it refreshes its own data daily anyway). Disable with
-	// FX_FEED_INTERVAL=0.
+	// the menjačnica board fresh without straining the free upstream.
+	//
+	// JOBS_ENABLED (default true) gates the in-process loop: when the
+	// scheduler service owns the schedule, exchange runs with
+	// JOBS_ENABLED=false and the scheduler drives RefreshFXRates via RPC,
+	// leaving exchange a stateless, horizontally-scalable handler.
+	// Disable entirely with FX_FEED_INTERVAL=0.
 	feedInterval := config.Duration("FX_FEED_INTERVAL", 5*time.Minute)
-	if feedInterval > 0 {
-		feeder := &feed.Feeder{
-			Fetcher: &feed.OpenERAPI{BaseURL: config.String("FX_FEED_URL", "")},
-			Store:   st,
-			Log:     log,
-			Spread:  config.Float("FX_FEED_SPREAD", 0.01),
-		}
+	if config.Bool("JOBS_ENABLED", true) && feedInterval > 0 {
 		g.Go(func() error {
 			return feeder.Run(gctx, feedInterval)
 		})
 	} else {
-		log.Info("fx feed disabled (FX_FEED_INTERVAL=0)")
+		log.Info("fx feed loop disabled (JOBS_ENABLED=false or FX_FEED_INTERVAL=0); refresh available via RPC")
 	}
 
 	probeSrv.MarkReady()

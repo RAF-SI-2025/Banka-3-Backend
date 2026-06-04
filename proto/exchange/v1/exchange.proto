@@ -33,6 +33,16 @@ service ExchangeService {
   // are expected to be other services, not end users. (External quotes
   // come from ListRates so the FE can render the menjačnica board.)
   rpc Quote(QuoteRequest) returns (Rate);
+
+  // RefreshFXRates does one fetch+upsert pass of the external FX feed.
+  // Normally driven by the scheduler service; exposed so ops can fire it
+  // on demand. Requires ExchangeWrite (or admin).
+  rpc RefreshFXRates(RefreshFXRatesRequest) returns (RefreshFXRatesResponse) {
+    option (google.api.http) = {
+      post: "/api/v1/exchange/rates/refresh"
+      body: "*"
+    };
+  }
 }
 
 enum Currency {
@@ -80,4 +90,11 @@ message ListRatesResponse {
 message QuoteRequest {
   Currency from = 1;
   Currency to   = 2;
+}
+
+message RefreshFXRatesRequest {}
+
+message RefreshFXRatesResponse {
+  // written is the number of (currency→RSD) rate rows upserted.
+  int32 written = 1;
 }
