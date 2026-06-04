@@ -37,7 +37,7 @@ type poolIface interface {
 }
 
 const sagaCols = `
-    transaction_id, saga_type, current_step, state,
+    transaction_id, saga_type, current_step, step_no, log, state,
     status, attempts, attempts_max, coalesce(last_error, ''),
     next_attempt_at, created_at, updated_at`
 
@@ -45,8 +45,9 @@ func scanSaga(row interface{ Scan(...any) error }) (*saga.Row, error) {
 	var r saga.Row
 	var status string
 	var state []byte
+	var logRaw []byte
 	if err := row.Scan(
-		&r.TransactionID, &r.SagaType, &r.CurrentStep, &state,
+		&r.TransactionID, &r.SagaType, &r.CurrentStep, &r.StepNo, &logRaw, &state,
 		&status, &r.Attempts, &r.AttemptsMax, &r.LastError,
 		&r.NextAttemptAt, &r.CreatedAt, &r.UpdatedAt,
 	); err != nil {
@@ -54,25 +55,43 @@ func scanSaga(row interface{ Scan(...any) error }) (*saga.Row, error) {
 	}
 	r.Status = saga.Status(status)
 	r.State = json.RawMessage(state)
+	if len(logRaw) > 0 {
+		if err := json.Unmarshal(logRaw, &r.Log); err != nil {
+			return nil, err
+		}
+	}
 	return &r, nil
+}
+
+// marshalLog encodes the saga's attempt log to JSON bytes, defaulting
+// to an empty array so the not-null `log jsonb` column is satisfied.
+func marshalLog(entries []saga.LogEntry) ([]byte, error) {
+	if len(entries) == 0 {
+		return []byte("[]"), nil
+	}
+	return json.Marshal(entries)
 }
 
 // Insert writes a new running saga row.
 func (s *SagaStore) Insert(ctx context.Context, row *saga.Row) error {
 	const q = `
         insert into "trading".saga_executions (
-            transaction_id, saga_type, current_step, state,
+            transaction_id, saga_type, current_step, step_no, log, state,
             status, attempts, attempts_max, next_attempt_at
         ) values (
-            $1, $2, $3, $4::jsonb,
-            $5, $6, $7, $8
+            $1, $2, $3, $4, $5::jsonb, $6::jsonb,
+            $7, $8, $9, $10
         )`
 	state := []byte(row.State)
 	if len(state) == 0 {
 		state = []byte("{}")
 	}
-	_, err := s.Pool.Exec(ctx, q,
-		row.TransactionID, row.SagaType, row.CurrentStep, state,
+	logRaw, err := marshalLog(row.Log)
+	if err != nil {
+		return apperr.Internal("encode saga log", err)
+	}
+	_, err = s.Pool.Exec(ctx, q,
+		row.TransactionID, row.SagaType, row.CurrentStep, row.StepNo, logRaw, state,
 		string(row.Status), row.Attempts, row.AttemptsMax, row.NextAttemptAt,
 	)
 	if err != nil {
@@ -102,20 +121,26 @@ func (s *SagaStore) Update(ctx context.Context, row *saga.Row) error {
 	const q = `
         update "trading".saga_executions set
             current_step    = $2,
-            state           = $3::jsonb,
-            status          = $4,
-            attempts        = $5,
-            attempts_max    = $6,
-            last_error      = nullif($7, ''),
-            next_attempt_at = $8,
+            step_no         = $3,
+            log             = $4::jsonb,
+            state           = $5::jsonb,
+            status          = $6,
+            attempts        = $7,
+            attempts_max    = $8,
+            last_error      = nullif($9, ''),
+            next_attempt_at = $10,
             updated_at      = now()
         where transaction_id = $1`
 	state := []byte(row.State)
 	if len(state) == 0 {
 		state = []byte("{}")
 	}
+	logRaw, err := marshalLog(row.Log)
+	if err != nil {
+		return apperr.Internal("encode saga log", err)
+	}
 	tag, err := s.Pool.Exec(ctx, q,
-		row.TransactionID, row.CurrentStep, state,
+		row.TransactionID, row.CurrentStep, row.StepNo, logRaw, state,
 		string(row.Status), row.Attempts, row.AttemptsMax, row.LastError,
 		row.NextAttemptAt,
 	)
