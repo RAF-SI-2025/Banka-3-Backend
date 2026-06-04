@@ -177,7 +177,8 @@ func TestForwardHappyPath(t *testing.T) {
 // TestPermanentErrorCompensatesInReverse stops at step 2's permanent
 // failure and walks step 1's Compensate. Verifies (a) reverse order,
 // (b) step 2's own Compensate isn't called (it never committed), and
-// (c) terminal status is `failed`.
+// (c) terminal status is `compensated` (a clean rollback, distinct
+// from the genuinely-stuck `failed`).
 func TestPermanentErrorCompensatesInReverse(t *testing.T) {
 	reg := NewRegistry()
 	Register[echoPayload](reg, Definition[echoPayload]{
@@ -215,8 +216,8 @@ func TestPermanentErrorCompensatesInReverse(t *testing.T) {
 	if err == nil {
 		t.Fatalf("Start: expected error")
 	}
-	if row.Status != StatusFailed {
-		t.Errorf("status = %s, want failed", row.Status)
+	if row.Status != StatusCompensated {
+		t.Errorf("status = %s, want compensated", row.Status)
 	}
 	var got echoPayload
 	_ = json.Unmarshal(row.State, &got)
@@ -390,8 +391,8 @@ func TestForceFailForwardPermanent(t *testing.T) {
 	if err == nil {
 		t.Fatalf("Start: expected fault-injection error")
 	}
-	if row.Status != StatusFailed {
-		t.Errorf("status = %s, want failed", row.Status)
+	if row.Status != StatusCompensated {
+		t.Errorf("status = %s, want compensated", row.Status)
 	}
 	var got echoPayload
 	_ = json.Unmarshal(row.State, &got)
@@ -451,10 +452,14 @@ func TestForceFailForwardTransient(t *testing.T) {
 	}
 }
 
-// TestForceCompensateFail verifies the Compensate-side directive parks
-// the saga in `failed` after compensation retry exhaustion.
-func TestForceCompensateFail(t *testing.T) {
+// TestForceCompensateFailThenSucceeds verifies the Compensate-side
+// directive fails the compensator transiently (parking the saga in
+// `compensating`), and that a later retry — once the failure budget
+// (Times) is spent — runs the real compensator and drives the saga to
+// `compensated`. This is the generic-saga mirror of SG-08.
+func TestForceCompensateFailThenSucceeds(t *testing.T) {
 	reg := NewRegistry()
+	var realComp int
 	Register[echoPayload](reg, Definition[echoPayload]{
 		Type: "test_force_comp",
 		Steps: []Step[echoPayload]{
@@ -465,6 +470,7 @@ func TestForceCompensateFail(t *testing.T) {
 					return nil
 				},
 				Compensate: func(_ context.Context, sc *Context[echoPayload]) error {
+					realComp++
 					sc.State.Notes = append(sc.State.Notes, "a:comp-real")
 					return nil
 				},
@@ -477,25 +483,52 @@ func TestForceCompensateFail(t *testing.T) {
 			},
 		},
 	})
-	o := New(newMemStore(), reg, quietLogger())
-	ctx := WithForceCompensateFail(context.Background(), ForceCompensateFail{Step: "a"})
+	store := newMemStore()
+	o := New(store, reg, quietLogger())
+	o.MaxBackoff = 0
+	// Times=1: the first compensate attempt fails, the next succeeds.
+	ctx := WithForceCompensateFail(context.Background(), ForceCompensateFail{Step: "a", Times: 1})
+	txID := "00000000-0000-0000-0000-000000000012"
 	row, err := Start(ctx, o, StartInput[echoPayload]{
-		TransactionID: "00000000-0000-0000-0000-000000000012",
+		TransactionID: txID,
 		SagaType:      "test_force_comp",
 		InitialState:  echoPayload{},
 	})
 	if err == nil {
-		t.Fatalf("Start: expected compensation fail")
+		t.Fatalf("Start: expected parked-compensation error on first pass")
 	}
-	if row.Status != StatusFailed {
-		t.Errorf("status = %s, want failed", row.Status)
+	if row.Status != StatusCompensating {
+		t.Fatalf("status after first pass = %s, want compensating (parked)", row.Status)
 	}
-	var got echoPayload
-	_ = json.Unmarshal(row.State, &got)
-	// Real a:comp must NOT have run — the injected fault returns first.
-	for _, n := range got.Notes {
-		if n == "a:comp-real" {
-			t.Errorf("real Compensate ran despite directive: notes=%v", got.Notes)
+	if realComp != 0 {
+		t.Errorf("real compensator ran %d times before budget spent; want 0", realComp)
+	}
+
+	// Backdate + resume with the same directive ctx: attempts==Times now,
+	// so the injected fault yields and the real compensator runs.
+	stored, _ := store.Get(context.Background(), txID)
+	stored.NextAttemptAt = time.Now().Add(-time.Second)
+	_ = store.Update(context.Background(), stored)
+	if err := o.Resume(ctx, txID); err != nil {
+		t.Fatalf("Resume: %v", err)
+	}
+	final, _ := store.Get(context.Background(), txID)
+	if final.Status != StatusCompensated {
+		t.Errorf("status after retry = %s, want compensated", final.Status)
+	}
+	if realComp != 1 {
+		t.Errorf("real compensator ran %d times, want exactly 1", realComp)
+	}
+	// Log: F1 ok (a committed), F2 err (b failed), C1 err (comp a's
+	// injected transient miss), C1 ok (comp a retried through).
+	wantSteps := []string{"F1", "F2", "C1", "C1"}
+	wantResults := []string{"ok", "err", "err", "ok"}
+	if len(final.Log) != len(wantSteps) {
+		t.Fatalf("log = %+v, want %d entries", final.Log, len(wantSteps))
+	}
+	for i, e := range final.Log {
+		if e.Step != wantSteps[i] || e.Result != wantResults[i] {
+			t.Errorf("log[%d] = %s:%s, want %s:%s", i, e.Step, e.Result, wantSteps[i], wantResults[i])
 		}
 	}
 }
