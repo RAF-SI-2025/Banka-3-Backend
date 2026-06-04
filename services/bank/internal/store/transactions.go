@@ -6,6 +6,7 @@ import (
 	"strings"
 
 	"github.com/RAF-SI-2025/Banka-3-Backend/pkg/apperr"
+	"github.com/RAF-SI-2025/Banka-3-Backend/pkg/postgres"
 	"github.com/RAF-SI-2025/Banka-3-Backend/services/bank/internal/domain"
 	"github.com/jackc/pgx/v5"
 )
@@ -91,7 +92,7 @@ func scanTransactionWithNumbers(row interface{ Scan(...any) error }) (*domain.Tr
 // the multi-step "debit source, credit destination, write ledger row"
 // invariant of every payment/transfer.
 func (s *Store) ExecuteAtomic(ctx context.Context, fn func(tx pgx.Tx) error) error {
-	return pgx.BeginFunc(ctx, s.Pool, func(tx pgx.Tx) error {
+	return pgx.BeginFunc(ctx, s.DB, func(tx pgx.Tx) error {
 		return fn(tx)
 	})
 }
@@ -250,7 +251,8 @@ func (s *Store) InsertTransaction(ctx context.Context, tx pgx.Tx, t *domain.Tran
         )
         returning ` + transactionColumns
 
-	row := tx.QueryRow(ctx, q,
+	row := tx.QueryRow(
+		ctx, q,
 		t.OpID, string(t.Kind), t.LegIndex,
 		t.FromAccountID, t.ToAccountID,
 		t.FromAmount, t.ToAmount, t.Rate,
@@ -306,7 +308,7 @@ func (s *Store) ListTransactions(ctx context.Context, f domain.TransactionFilter
 	}
 
 	var total int64
-	if err := s.Pool.QueryRow(ctx, `select count(*) from "bank".transactions t`+where, args...).Scan(&total); err != nil {
+	if err := s.DB.QueryRow(postgres.WithRead(ctx), `select count(*) from "bank".transactions t`+where, args...).Scan(&total); err != nil {
 		return nil, 0, apperr.Internal("count transactions", err)
 	}
 
@@ -315,7 +317,7 @@ func (s *Store) ListTransactions(ctx context.Context, f domain.TransactionFilter
 	listQ := `select ` + transactionReadColumns + transactionReadFrom + where +
 		fmt.Sprintf(" order by t.created_at desc, t.leg_index limit $%d offset $%d", len(args)+1, len(args)+2)
 
-	rows, err := s.Pool.Query(ctx, listQ, listArgs...)
+	rows, err := s.DB.Query(postgres.WithRead(ctx), listQ, listArgs...)
 	if err != nil {
 		return nil, 0, apperr.Internal("list transactions", err)
 	}
@@ -336,7 +338,7 @@ func (s *Store) ListTransactions(ctx context.Context, f domain.TransactionFilter
 // distinguishes "not yet settled" from "no rows".
 func (s *Store) GetTransactionsByOpID(ctx context.Context, opID string) ([]*domain.Transaction, error) {
 	q := `select ` + transactionReadColumns + transactionReadFrom + ` where t.op_id = $1 order by t.leg_index`
-	rows, err := s.Pool.Query(ctx, q, opID)
+	rows, err := s.DB.Query(ctx, q, opID)
 	if err != nil {
 		return nil, apperr.Internal("transactions by op", err)
 	}
@@ -356,7 +358,7 @@ func (s *Store) GetTransactionsByOpID(ctx context.Context, opID string) ([]*doma
 // or NotFound. Used by payment flow to resolve the recipient.
 func (s *Store) GetAccountByNumber(ctx context.Context, number string) (*domain.Account, error) {
 	const q = `select ` + accountColumns + ` from "bank".accounts where number = $1`
-	out, err := scanAccount(s.Pool.QueryRow(ctx, q, number))
+	out, err := scanAccount(s.DB.QueryRow(ctx, q, number))
 	if err != nil {
 		if noRows(err) {
 			return nil, apperr.NotFound("primalac (račun) ne postoji")

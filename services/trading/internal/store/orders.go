@@ -6,6 +6,7 @@ import (
 	"time"
 
 	"github.com/RAF-SI-2025/Banka-3-Backend/pkg/apperr"
+	"github.com/RAF-SI-2025/Banka-3-Backend/pkg/postgres"
 	"github.com/RAF-SI-2025/Banka-3-Backend/services/trading/internal/domain"
 	"github.com/jackc/pgx/v5"
 )
@@ -51,7 +52,8 @@ func (s *Store) CreateOrder(ctx context.Context, o *domain.Order) (*domain.Order
 	if actor == "" {
 		actor = string(o.UserKind)
 	}
-	row := s.Pool.QueryRow(ctx, q,
+	row := s.DB.QueryRow(
+		ctx, q,
 		o.UserID, string(o.UserKind), o.SecurityID, string(o.OrderType), string(o.Direction),
 		o.Quantity, o.ContractSize, o.PricePerUnit, o.LimitPrice, o.StopPrice,
 		o.AllOrNone, o.Margin, o.IsActuary, o.AccountID,
@@ -70,7 +72,7 @@ func (s *Store) CreateOrder(ctx context.Context, o *domain.Order) (*domain.Order
 // GetOrder returns one order or NotFound.
 func (s *Store) GetOrder(ctx context.Context, id string) (*domain.Order, error) {
 	q := `select ` + orderCols + ` from "trading".orders where id = $1`
-	out, err := scanOrder(s.Pool.QueryRow(ctx, q, id))
+	out, err := scanOrder(s.DB.QueryRow(ctx, q, id))
 	if err != nil {
 		if noRows(err) {
 			return nil, apperr.NotFound("nalog ne postoji")
@@ -136,7 +138,7 @@ func (s *Store) ListOrders(ctx context.Context, f OrderFilter, page, pageSize in
 	}
 
 	var total int64
-	if err := s.Pool.QueryRow(ctx, `select count(*) from "trading".orders`+where, args...).Scan(&total); err != nil {
+	if err := s.DB.QueryRow(postgres.WithRead(ctx), `select count(*) from "trading".orders`+where, args...).Scan(&total); err != nil {
 		return nil, 0, apperr.Internal("count orders", err)
 	}
 
@@ -144,7 +146,7 @@ func (s *Store) ListOrders(ctx context.Context, f OrderFilter, page, pageSize in
 		` order by created_at desc limit ` + intArg(len(args)+1) + ` offset ` + intArg(len(args)+2)
 	args = append(args, pageSize, (page-1)*pageSize)
 
-	rows, err := s.Pool.Query(ctx, q, args...)
+	rows, err := s.DB.Query(postgres.WithRead(ctx), q, args...)
 	if err != nil {
 		return nil, 0, apperr.Internal("list orders", err)
 	}
@@ -170,7 +172,7 @@ func (s *Store) ApproveOrder(ctx context.Context, orderID, approverID string) (*
             last_modification = now()
         where id = $1 and status = 'pending' and cancelled = false
         returning ` + orderCols
-	out, err := scanOrder(s.Pool.QueryRow(ctx, q, orderID, approverID))
+	out, err := scanOrder(s.DB.QueryRow(ctx, q, orderID, approverID))
 	if err != nil {
 		if noRows(err) {
 			return nil, apperr.FailedPrecondition("nalog nije u stanju 'pending'")
@@ -188,7 +190,7 @@ func (s *Store) DeclineOrder(ctx context.Context, orderID, approverID string) (*
             last_modification = now()
         where id = $1 and status = 'pending' and cancelled = false
         returning ` + orderCols
-	out, err := scanOrder(s.Pool.QueryRow(ctx, q, orderID, approverID))
+	out, err := scanOrder(s.DB.QueryRow(ctx, q, orderID, approverID))
 	if err != nil {
 		if noRows(err) {
 			return nil, apperr.FailedPrecondition("nalog nije u stanju 'pending'")
@@ -207,7 +209,7 @@ func (s *Store) CancelOrder(ctx context.Context, orderID string) (*domain.Order,
         set cancelled = true, last_modification = now()
         where id = $1 and cancelled = false and is_done = false
         returning ` + orderCols
-	out, err := scanOrder(s.Pool.QueryRow(ctx, q, orderID))
+	out, err := scanOrder(s.DB.QueryRow(ctx, q, orderID))
 	if err != nil {
 		if noRows(err) {
 			return nil, apperr.FailedPrecondition("nalog se ne može otkazati")
@@ -234,7 +236,7 @@ func (s *Store) PartialCancelOrder(ctx context.Context, orderID string, qty int3
           and is_done = false
           and remaining_quantity > $2
         returning ` + orderCols
-	out, err := scanOrder(s.Pool.QueryRow(ctx, q, orderID, qty))
+	out, err := scanOrder(s.DB.QueryRow(ctx, q, orderID, qty))
 	if err != nil {
 		if noRows(err) {
 			return nil, apperr.FailedPrecondition("nalog se ne može delimično otkazati")
@@ -271,7 +273,7 @@ func (s *Store) GetActiveOrdersForExecution(ctx context.Context, limit int) ([]*
 	      where status = 'approved' and cancelled = false and is_done = false
 	      order by last_modification asc
 	      limit $1`
-	rows, err := s.Pool.Query(ctx, q, limit)
+	rows, err := s.DB.Query(ctx, q, limit)
 	if err != nil {
 		return nil, apperr.Internal("active orders", err)
 	}

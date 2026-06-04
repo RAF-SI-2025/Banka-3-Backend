@@ -7,6 +7,7 @@ import (
 	"time"
 
 	"github.com/RAF-SI-2025/Banka-3-Backend/pkg/apperr"
+	"github.com/RAF-SI-2025/Banka-3-Backend/pkg/postgres"
 	"github.com/RAF-SI-2025/Banka-3-Backend/services/bank/internal/domain"
 	"github.com/jackc/pgx/v5"
 )
@@ -60,7 +61,8 @@ func (s *Store) CreateLoanRequest(ctx context.Context, r *domain.LoanRequest) (*
             nullif($10, 0), $11, nullif($12,''), 'pending'
         )
         returning ` + loanRequestColumns
-	out, err := scanLoanRequest(s.Pool.QueryRow(ctx, q,
+	out, err := scanLoanRequest(s.DB.QueryRow(
+		ctx, q,
 		r.ClientID, r.AccountID, string(r.LoanType), string(r.InterestType),
 		r.Amount, string(r.Currency), r.Purpose, r.MonthlySalary, string(r.EmploymentStatus),
 		r.EmploymentDurationMonths, r.InstallmentsTotal, r.ContactPhone,
@@ -73,7 +75,7 @@ func (s *Store) CreateLoanRequest(ctx context.Context, r *domain.LoanRequest) (*
 
 func (s *Store) GetLoanRequestByID(ctx context.Context, id string) (*domain.LoanRequest, error) {
 	const q = `select ` + loanRequestColumns + ` from "bank".loan_requests where id = $1`
-	out, err := scanLoanRequest(s.Pool.QueryRow(ctx, q, id))
+	out, err := scanLoanRequest(s.DB.QueryRow(postgres.WithRead(ctx), q, id))
 	if err != nil {
 		if noRows(err) {
 			return nil, apperr.NotFound("zahtev za kredit ne postoji")
@@ -131,14 +133,14 @@ func (s *Store) ListLoanRequests(ctx context.Context, f domain.LoanRequestFilter
 		where = " where " + strings.Join(conds, " and ")
 	}
 	var total int64
-	if err := s.Pool.QueryRow(ctx, `select count(*) from "bank".loan_requests`+where, args...).Scan(&total); err != nil {
+	if err := s.DB.QueryRow(postgres.WithRead(ctx), `select count(*) from "bank".loan_requests`+where, args...).Scan(&total); err != nil {
 		return nil, 0, apperr.Internal("count loan requests", err)
 	}
 	listArgs := append([]any{}, args...)
 	listArgs = append(listArgs, pageSize, (page-1)*pageSize)
 	listQ := `select ` + loanRequestColumns + ` from "bank".loan_requests` + where +
 		fmt.Sprintf(" order by created_at desc limit $%d offset $%d", len(args)+1, len(args)+2)
-	rows, err := s.Pool.Query(ctx, listQ, listArgs...)
+	rows, err := s.DB.Query(postgres.WithRead(ctx), listQ, listArgs...)
 	if err != nil {
 		return nil, 0, apperr.Internal("list loan requests", err)
 	}
@@ -206,7 +208,8 @@ func (s *Store) CreateLoan(ctx context.Context, tx pgx.Tx, l *domain.Loan) (*dom
             $15, nullif($16,'')::numeric, $17, $18
         )
         returning ` + loanColumns
-	out, err := scanLoan(tx.QueryRow(ctx, q,
+	out, err := scanLoan(tx.QueryRow(
+		ctx, q,
 		l.RequestID, l.LoanNumber, l.ClientID, l.AccountID,
 		string(l.LoanType), string(l.InterestType),
 		l.Principal, string(l.Currency),
@@ -225,7 +228,7 @@ func (s *Store) CreateLoan(ctx context.Context, tx pgx.Tx, l *domain.Loan) (*dom
 
 func (s *Store) GetLoanByID(ctx context.Context, id string) (*domain.Loan, error) {
 	const q = `select ` + loanColumns + ` from "bank".loans where id = $1`
-	out, err := scanLoan(s.Pool.QueryRow(ctx, q, id))
+	out, err := scanLoan(s.DB.QueryRow(postgres.WithRead(ctx), q, id))
 	if err != nil {
 		if noRows(err) {
 			return nil, apperr.NotFound("kredit ne postoji")
@@ -303,14 +306,14 @@ func (s *Store) ListLoans(ctx context.Context, f domain.LoanFilter, page, pageSi
 		where = " where " + strings.Join(conds, " and ")
 	}
 	var total int64
-	if err := s.Pool.QueryRow(ctx, `select count(*) from "bank".loans`+where, args...).Scan(&total); err != nil {
+	if err := s.DB.QueryRow(postgres.WithRead(ctx), `select count(*) from "bank".loans`+where, args...).Scan(&total); err != nil {
 		return nil, 0, apperr.Internal("count loans", err)
 	}
 	listArgs := append([]any{}, args...)
 	listArgs = append(listArgs, pageSize, (page-1)*pageSize)
 	listQ := `select ` + loanColumns + ` from "bank".loans` + where +
 		fmt.Sprintf(" order by contracted_at desc limit $%d offset $%d", len(args)+1, len(args)+2)
-	rows, err := s.Pool.Query(ctx, listQ, listArgs...)
+	rows, err := s.DB.Query(postgres.WithRead(ctx), listQ, listArgs...)
 	if err != nil {
 		return nil, 0, apperr.Internal("list loans", err)
 	}
@@ -330,7 +333,7 @@ func (s *Store) ListActiveVariableLoans(ctx context.Context) ([]*domain.Loan, er
 	const q = `select ` + loanColumns + ` from "bank".loans
               where interest_type = 'variable' and status in ('approved','overdue')
               order by id`
-	rows, err := s.Pool.Query(ctx, q)
+	rows, err := s.DB.Query(ctx, q)
 	if err != nil {
 		return nil, apperr.Internal("list variable loans", err)
 	}
@@ -379,7 +382,8 @@ func (s *Store) CreateInstallment(ctx context.Context, tx pgx.Tx, i *domain.Loan
              expected_due_date, status)
         values ($1,$2,$3::numeric,$4::numeric,$5,$6,$7)
         returning ` + installmentColumns
-	out, err := scanInstallment(tx.QueryRow(ctx, q,
+	out, err := scanInstallment(tx.QueryRow(
+		ctx, q,
 		i.LoanID, i.SequenceNumber, i.Amount, i.InterestRateAtDue, string(i.Currency),
 		i.ExpectedDueDate, string(i.Status),
 	))
@@ -403,7 +407,7 @@ func (s *Store) MarkInstallmentPaid(ctx context.Context, tx pgx.Tx, id string) e
 func (s *Store) CountPaidInstallments(ctx context.Context, loanID string) (int, error) {
 	const q = `select count(*) from "bank".loan_installments where loan_id = $1 and status = 'paid'`
 	var n int
-	if err := s.Pool.QueryRow(ctx, q, loanID).Scan(&n); err != nil {
+	if err := s.DB.QueryRow(ctx, q, loanID).Scan(&n); err != nil {
 		return 0, apperr.Internal("count paid installments", err)
 	}
 	return n, nil
@@ -505,7 +509,7 @@ func (s *Store) ListInstallmentsDueOn(ctx context.Context, dueOn time.Time) ([]*
          where (status = 'unpaid'  and expected_due_date <= $1::timestamptz)
             or (status = 'overdue' and overdue_since + interval '72 hours' <= $1::timestamptz)
          order by expected_due_date, sequence_number`
-	rows, err := s.Pool.Query(ctx, q, dueOn)
+	rows, err := s.DB.Query(ctx, q, dueOn)
 	if err != nil {
 		return nil, apperr.Internal("list due installments", err)
 	}
@@ -524,7 +528,7 @@ func (s *Store) ListInstallmentsDueOn(ctx context.Context, dueOn time.Time) ([]*
 func (s *Store) ListInstallmentsByLoan(ctx context.Context, loanID string) ([]*domain.LoanInstallment, error) {
 	const q = `select ` + installmentColumns + ` from "bank".loan_installments
               where loan_id = $1 order by sequence_number`
-	rows, err := s.Pool.Query(ctx, q, loanID)
+	rows, err := s.DB.Query(postgres.WithRead(ctx), q, loanID)
 	if err != nil {
 		return nil, apperr.Internal("list installments", err)
 	}

@@ -6,6 +6,7 @@ import (
 	"time"
 
 	"github.com/RAF-SI-2025/Banka-3-Backend/pkg/apperr"
+	"github.com/RAF-SI-2025/Banka-3-Backend/pkg/postgres"
 	"github.com/RAF-SI-2025/Banka-3-Backend/services/trading/internal/domain"
 	"github.com/jackc/pgx/v5"
 )
@@ -51,7 +52,8 @@ func (s *Store) UpsertSecurity(ctx context.Context, in *domain.Security) (*domai
                 open_interest     = excluded.open_interest,
                 updated_at        = now()
             returning ` + securityCols
-		row := s.Pool.QueryRow(ctx, q,
+		row := s.DB.QueryRow(
+			ctx, q,
 			in.Ticker, in.Name, string(in.Type), nullableText(in.ExchangeMIC), string(in.Currency),
 			nullableInt64(in.OutstandingShares), nullableNumeric(in.DividendYield),
 			nullableNumeric(in.ContractSize), nullableText(in.ContractUnit), in.SettlementDate,
@@ -76,7 +78,8 @@ func (s *Store) UpsertSecurity(ctx context.Context, in *domain.Security) (*domai
             updated_at = now()
         where id = $1
         returning ` + securityCols
-	row := s.Pool.QueryRow(ctx, q,
+	row := s.DB.QueryRow(
+		ctx, q,
 		in.ID, in.Ticker, in.Name, string(in.Type), nullableText(in.ExchangeMIC), string(in.Currency),
 		nullableInt64(in.OutstandingShares), nullableNumeric(in.DividendYield),
 		nullableNumeric(in.ContractSize), nullableText(in.ContractUnit), in.SettlementDate,
@@ -97,7 +100,7 @@ func (s *Store) UpsertSecurity(ctx context.Context, in *domain.Security) (*domai
 // GetSecurity returns one row by id.
 func (s *Store) GetSecurity(ctx context.Context, id string) (*domain.Security, error) {
 	q := `select ` + securityCols + ` from "trading".securities where id = $1`
-	out, err := scanSecurity(s.Pool.QueryRow(ctx, q, id))
+	out, err := scanSecurity(s.DB.QueryRow(postgres.WithRead(ctx), q, id))
 	if err != nil {
 		if noRows(err) {
 			return nil, apperr.NotFound("security not found")
@@ -111,7 +114,7 @@ func (s *Store) GetSecurity(ctx context.Context, id string) (*domain.Security, e
 // key. Returns NotFound on miss.
 func (s *Store) GetSecurityByTicker(ctx context.Context, ticker string, t domain.SecurityType) (*domain.Security, error) {
 	q := `select ` + securityCols + ` from "trading".securities where ticker = $1 and type = $2`
-	out, err := scanSecurity(s.Pool.QueryRow(ctx, q, ticker, string(t)))
+	out, err := scanSecurity(s.DB.QueryRow(postgres.WithRead(ctx), q, ticker, string(t)))
 	if err != nil {
 		if noRows(err) {
 			return nil, apperr.NotFound("security not found")
@@ -198,10 +201,14 @@ func (s *Store) ListSecurities(ctx context.Context, f SecurityFilter, page, page
 	for _, rb := range []struct {
 		val, col, op string
 	}{
-		{f.MinPrice, "l.price", ">="}, {f.MaxPrice, "l.price", "<="},
-		{f.MinAsk, "l.ask", ">="}, {f.MaxAsk, "l.ask", "<="},
-		{f.MinBid, "l.bid", ">="}, {f.MaxBid, "l.bid", "<="},
-		{f.MinVolume, "l.volume", ">="}, {f.MaxVolume, "l.volume", "<="},
+		{f.MinPrice, "l.price", ">="},
+		{f.MaxPrice, "l.price", "<="},
+		{f.MinAsk, "l.ask", ">="},
+		{f.MaxAsk, "l.ask", "<="},
+		{f.MinBid, "l.bid", ">="},
+		{f.MaxBid, "l.bid", "<="},
+		{f.MinVolume, "l.volume", ">="},
+		{f.MaxVolume, "l.volume", "<="},
 	} {
 		if strings.TrimSpace(rb.val) != "" {
 			add(rb.col+" "+rb.op+" ?::numeric", strings.TrimSpace(rb.val))
@@ -214,7 +221,7 @@ func (s *Store) ListSecurities(ctx context.Context, f SecurityFilter, page, page
 	}
 
 	var total int64
-	if err := s.Pool.QueryRow(ctx, "select count(*)"+fromJoin+where, args...).Scan(&total); err != nil {
+	if err := s.DB.QueryRow(postgres.WithRead(ctx), "select count(*)"+fromJoin+where, args...).Scan(&total); err != nil {
 		return nil, 0, apperr.Internal("count securities", err)
 	}
 
@@ -234,7 +241,7 @@ func (s *Store) ListSecurities(ctx context.Context, f SecurityFilter, page, page
 		order + " limit " + intArg(len(args)+1) + " offset " + intArg(len(args)+2)
 	args = append(args, pageSize, (page-1)*pageSize)
 
-	rows, err := s.Pool.Query(ctx, q, args...)
+	rows, err := s.DB.Query(postgres.WithRead(ctx), q, args...)
 	if err != nil {
 		return nil, 0, apperr.Internal("list securities", err)
 	}
@@ -262,7 +269,7 @@ func (s *Store) ListOptionsForUnderlying(ctx context.Context, stockID string, se
 		args = append(args, *settlement)
 	}
 	q += ` order by settlement_date asc, strike_price asc, option_type asc`
-	rows, err := s.Pool.Query(ctx, q, args...)
+	rows, err := s.DB.Query(postgres.WithRead(ctx), q, args...)
 	if err != nil {
 		return nil, apperr.Internal("list options", err)
 	}

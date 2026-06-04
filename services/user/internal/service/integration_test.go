@@ -34,6 +34,7 @@ import (
 	"github.com/RAF-SI-2025/Banka-3-Backend/pkg/auth"
 	"github.com/RAF-SI-2025/Banka-3-Backend/pkg/passwords"
 	"github.com/RAF-SI-2025/Banka-3-Backend/pkg/permissions"
+	"github.com/RAF-SI-2025/Banka-3-Backend/pkg/postgres"
 	"github.com/RAF-SI-2025/Banka-3-Backend/services/user/internal/domain"
 	"github.com/RAF-SI-2025/Banka-3-Backend/services/user/internal/store"
 )
@@ -102,7 +103,7 @@ func setup(t *testing.T) (*Service, *spyNotifier) {
 	resetSchema(t)
 	flushRedis(t)
 
-	st := store.New(fixPool)
+	st := store.New(postgres.NewDB(fixPool, nil))
 	notif := &spyNotifier{}
 	logger := slog.New(slog.NewTextHandler(os.Stderr, &slog.HandlerOptions{Level: slog.LevelWarn}))
 	svc := New(st, notif, fixRDB, Config{
@@ -177,6 +178,7 @@ func (s *spyNotifier) Send(_ context.Context, to, subject, body string, _ bool) 
 	s.out = append(s.out, sentEmail{to, subject, body})
 	return nil
 }
+
 func (s *spyNotifier) sentTo(addr string) []sentEmail {
 	s.mu.Lock()
 	defer s.mu.Unlock()
@@ -679,7 +681,8 @@ func TestIntegration_ListEmployees_FilterAndPaginate(t *testing.T) {
 
 	// Create a small population.
 	for i, name := range []string{"Marko", "Marija", "Ivan", "Ivana", "Petar"} {
-		createEmployee(t, svc,
+		createEmployee(
+			t, svc,
 			admin.ID,
 			fmt.Sprintf("emp%d@banka.local", i),
 			fmt.Sprintf("emp%d", i),
@@ -775,6 +778,7 @@ func indexOf(s, sub string) int {
 	}
 	return -1
 }
+
 func indexOfAny(s, chars string) int {
 	for i := 0; i < len(s); i++ {
 		for j := 0; j < len(chars); j++ {
@@ -785,6 +789,7 @@ func indexOfAny(s, chars string) int {
 	}
 	return -1
 }
+
 func contains(haystack []string, needle string) bool {
 	for _, h := range haystack {
 		if h == needle {
@@ -797,6 +802,7 @@ func contains(haystack []string, needle string) bool {
 	}
 	return false
 }
+
 func filterSubject(emails []sentEmail, sub string) []sentEmail {
 	var out []sentEmail
 	for _, e := range emails {
@@ -806,6 +812,7 @@ func filterSubject(emails []sentEmail, sub string) []sentEmail {
 	}
 	return out
 }
+
 func idsOf(emps []*domain.Employee) []string {
 	out := make([]string, len(emps))
 	for i, e := range emps {
@@ -813,6 +820,7 @@ func idsOf(emps []*domain.Employee) []string {
 	}
 	return out
 }
+
 func isApperr(err error, kind apperr.Kind) bool {
 	var ae *apperr.Error
 	if !errors.As(err, &ae) {

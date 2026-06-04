@@ -14,10 +14,12 @@ x-service-defaults: &service-defaults
   restart: on-failure
   environment: &service-env
     DATABASE_URL: "postgres://${POSTGRES_USER}:${POSTGRES_PASSWORD}@banka-postgres-1:5432/${POSTGRES_DB}?sslmode=disable"
-    # BonusReadReplicaRouting (#287). Empty by default → reads stay
-    # on the primary. Set in .env once `make replica` has the standby
-    # streaming.
-    DATABASE_READ_URL: "${DATABASE_READ_URL:-}"
+    # Read replica (mirrors the in-cluster banka-pg-pooler-ro). Defaults
+    # to the local streaming standby so reads marked postgres.WithRead(ctx)
+    # exercise the routed path and a stray write to RO fails loudly, same
+    # as prod. Set DATABASE_READ_URL="" in .env to collapse all reads back
+    # onto the primary (the standby container then just idles).
+    DATABASE_READ_URL: "${DATABASE_READ_URL:-postgres://${POSTGRES_USER}:${POSTGRES_PASSWORD}@banka-postgres_replica-1:5432/${POSTGRES_DB}?sslmode=disable}"
     REDIS_ADDR: "banka-redis-1:6379"
     REDIS_PASSWORD: "${REDIS_PASSWORD}"
     LOG_LEVEL: "${LOG_LEVEL:-info}"
@@ -39,9 +41,10 @@ x-service-defaults: &service-defaults
 # the migrations and crash on missing tables until the migrate run
 # completed.
 x-app-deps: &app-deps
-  postgres: { condition: service_healthy }
-  redis:    { condition: service_healthy }
-  migrate:  { condition: service_completed_successfully }
+  postgres:         { condition: service_healthy }
+  postgres_replica: { condition: service_healthy }
+  redis:            { condition: service_healthy }
+  migrate:          { condition: service_completed_successfully }
 
 services:
   postgres:
@@ -79,12 +82,12 @@ services:
       retries: 10
     networks: [banka]
 
-  # postgres_replica is profile-gated — `make replica` brings it up
-  # and bootstraps it from the primary. Apps continue to talk to the
-  # primary (DATABASE_URL) by default; routing reads to the replica
-  # is handled by the read-replica-router bonus (#287).
+  # Streaming hot standby — the local stand-in for the in-cluster
+  # banka-pg-pooler-ro. Part of the default stack so `make up` brings up
+  # prod-parity read routing in one shot: bootstraps from the primary via
+  # pg_basebackup, then streams. App services wait for it healthy (see
+  # x-app-deps) and send postgres.WithRead(ctx) reads here.
   postgres_replica:
-    profiles: ["replica"]
     image: postgres:18-alpine
     environment:
       PGUSER: "${POSTGRES_USER}"

@@ -4,6 +4,7 @@ import (
 	"context"
 
 	"github.com/RAF-SI-2025/Banka-3-Backend/pkg/apperr"
+	"github.com/RAF-SI-2025/Banka-3-Backend/pkg/postgres"
 	"github.com/RAF-SI-2025/Banka-3-Backend/services/user/internal/domain"
 )
 
@@ -20,7 +21,7 @@ func (s *Store) RecordVerificationEvent(ctx context.Context, id, userID, actionK
         insert into "user".verification_events (id, user_id, action_kind)
         values ($1, $2, $3)
         on conflict (id) do nothing`
-	if _, err := s.Pool.Exec(ctx, q, id, userID, actionKind); err != nil {
+	if _, err := s.DB.Exec(ctx, q, id, userID, actionKind); err != nil {
 		return apperr.Internal("record verification event", err)
 	}
 	return nil
@@ -40,7 +41,7 @@ func (s *Store) ResolveVerificationEvent(ctx context.Context, id string, success
         update "user".verification_events
            set status = $2, resolved_at = now()
          where id = $1 and status = 'pending'`
-	if _, err := s.Pool.Exec(ctx, q, id, status); err != nil {
+	if _, err := s.DB.Exec(ctx, q, id, status); err != nil {
 		return apperr.Internal("resolve verification event", err)
 	}
 	return nil
@@ -55,7 +56,7 @@ func (s *Store) ListVerificationEvents(ctx context.Context, userID string, limit
          where user_id = $1
          order by created_at desc
          limit $2`
-	rows, err := s.Pool.Query(ctx, q, userID, limit)
+	rows, err := s.DB.Query(postgres.WithRead(ctx), q, userID, limit)
 	if err != nil {
 		return nil, apperr.Internal("list verification events", err)
 	}

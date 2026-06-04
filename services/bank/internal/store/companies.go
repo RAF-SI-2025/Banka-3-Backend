@@ -6,6 +6,7 @@ import (
 	"strings"
 
 	"github.com/RAF-SI-2025/Banka-3-Backend/pkg/apperr"
+	"github.com/RAF-SI-2025/Banka-3-Backend/pkg/postgres"
 	"github.com/RAF-SI-2025/Banka-3-Backend/services/bank/internal/domain"
 )
 
@@ -31,7 +32,8 @@ func (s *Store) CreateCompany(ctx context.Context, c *domain.Company) (*domain.C
             (name, registry_id, tax_id, activity_code, address, owner_client_id)
         values ($1,$2,$3,$4,$5,$6)
         returning ` + companyColumns
-	out, err := scanCompany(s.Pool.QueryRow(ctx, q,
+	out, err := scanCompany(s.DB.QueryRow(
+		ctx, q,
 		c.Name, c.RegistryID, c.TaxID, c.ActivityCode, c.Address, c.OwnerClientID,
 	))
 	if err != nil {
@@ -45,7 +47,7 @@ func (s *Store) CreateCompany(ctx context.Context, c *domain.Company) (*domain.C
 
 func (s *Store) GetCompanyByID(ctx context.Context, id string) (*domain.Company, error) {
 	const q = `select ` + companyColumns + ` from "bank".companies where id = $1`
-	out, err := scanCompany(s.Pool.QueryRow(ctx, q, id))
+	out, err := scanCompany(s.DB.QueryRow(postgres.WithRead(ctx), q, id))
 	if err != nil {
 		if noRows(err) {
 			return nil, apperr.NotFound("company not found")
@@ -62,7 +64,8 @@ func (s *Store) UpdateCompany(ctx context.Context, c *domain.Company) (*domain.C
             updated_at = now()
         where id = $1
         returning ` + companyColumns
-	out, err := scanCompany(s.Pool.QueryRow(ctx, q,
+	out, err := scanCompany(s.DB.QueryRow(
+		ctx, q,
 		c.ID, c.Name, c.ActivityCode, c.Address, c.OwnerClientID,
 	))
 	if err != nil {
@@ -98,7 +101,7 @@ func (s *Store) ListCompanies(ctx context.Context, f domain.CompanyFilter, page,
 	}
 
 	var total int64
-	if err := s.Pool.QueryRow(ctx, `select count(*) from "bank".companies`+where, args...).Scan(&total); err != nil {
+	if err := s.DB.QueryRow(postgres.WithRead(ctx), `select count(*) from "bank".companies`+where, args...).Scan(&total); err != nil {
 		return nil, 0, apperr.Internal("count companies", err)
 	}
 
@@ -107,7 +110,7 @@ func (s *Store) ListCompanies(ctx context.Context, f domain.CompanyFilter, page,
 	listQ := `select ` + companyColumns + ` from "bank".companies` + where +
 		fmt.Sprintf(" order by lower(name) limit $%d offset $%d", len(args)+1, len(args)+2)
 
-	rows, err := s.Pool.Query(ctx, listQ, listArgs...)
+	rows, err := s.DB.Query(postgres.WithRead(ctx), listQ, listArgs...)
 	if err != nil {
 		return nil, 0, apperr.Internal("list companies", err)
 	}

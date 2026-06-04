@@ -29,7 +29,6 @@ import (
 	"github.com/RAF-SI-2025/Banka-3-Backend/services/trading/internal/server"
 	"github.com/RAF-SI-2025/Banka-3-Backend/services/trading/internal/service"
 	"github.com/RAF-SI-2025/Banka-3-Backend/services/trading/internal/store"
-	"github.com/jackc/pgx/v5/pgxpool"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials/insecure"
 
@@ -50,20 +49,18 @@ func Run() error {
 	}
 	defer func() { _ = prov.Shutdown(context.Background()) }()
 
-	pool, err := postgres.Open(ctx, config.MustString("DATABASE_URL"))
+	// OpenPair dials the primary (DATABASE_URL → banka-pg-pooler-rw) and,
+	// when set, a hot-standby read pool (DATABASE_READ_URL →
+	// banka-pg-pooler-ro). SELECTs marked postgres.WithRead(ctx) (list/
+	// get-catalog/report reads) route to the standby; writes,
+	// transactions, the SAGA orchestrator, execution-worker, cron and
+	// idempotency reads stay on the primary.
+	db, err := postgres.OpenPair(ctx, config.MustString("DATABASE_URL"), config.String("DATABASE_READ_URL", ""))
 	if err != nil {
 		return fmt.Errorf("postgres: %w", err)
 	}
-	defer pool.Close()
-
-	// BonusReadReplicaRouting (#287) — optional hot-standby pool.
-	var readPool *pgxpool.Pool
-	if readURL := config.String("DATABASE_READ_URL", ""); readURL != "" {
-		readPool, err = postgres.Open(ctx, readURL)
-		if err != nil {
-			return fmt.Errorf("postgres replica: %w", err)
-		}
-		defer readPool.Close()
+	defer db.Close()
+	if db.RO != nil {
 		log.Info("read replica routing enabled")
 	}
 
@@ -79,8 +76,7 @@ func Run() error {
 		belgrade = time.UTC
 	}
 
-	st := store.New(pool)
-	st.ReadPool = readPool
+	st := store.New(db)
 	svc := service.New(st, service.Config{
 		Belgrade:                belgrade,
 		FXCommission:            config.String("FX_COMMISSION", "0.005"),
@@ -104,7 +100,8 @@ func Run() error {
 	// by the agent-limit check and the capital-gains tax math. The
 	// service tolerates a nil Rates field on a minimal dev stack.
 	if exAddr := config.String("EXCHANGE_GRPC_ADDR", ""); exAddr != "" {
-		conn, err := grpc.NewClient(exAddr, grpc.WithTransportCredentials(insecure.NewCredentials()),
+		conn, err := grpc.NewClient(
+			exAddr, grpc.WithTransportCredentials(insecure.NewCredentials()),
 			grpc.WithStatsHandler(prov.GRPCClientHandler()),
 		)
 		if err != nil {
@@ -123,7 +120,8 @@ func Run() error {
 	// empty and the OTC notifier drops its lookups.
 	var userClient userpb.UserServiceClient
 	if userAddr := config.String("USER_GRPC_ADDR", ""); userAddr != "" {
-		conn, err := grpc.NewClient(userAddr, grpc.WithTransportCredentials(insecure.NewCredentials()),
+		conn, err := grpc.NewClient(
+			userAddr, grpc.WithTransportCredentials(insecure.NewCredentials()),
 			grpc.WithStatsHandler(prov.GRPCClientHandler()),
 		)
 		if err != nil {
@@ -142,7 +140,8 @@ func Run() error {
 	// keep working.
 	var emailSender email.Sender
 	if notifAddr := config.String("NOTIFICATION_GRPC_ADDR", ""); notifAddr != "" {
-		conn, err := grpc.NewClient(notifAddr, grpc.WithTransportCredentials(insecure.NewCredentials()),
+		conn, err := grpc.NewClient(
+			notifAddr, grpc.WithTransportCredentials(insecure.NewCredentials()),
 			grpc.WithStatsHandler(prov.GRPCClientHandler()),
 		)
 		if err != nil {
@@ -166,7 +165,8 @@ func Run() error {
 	// move money between user account and bank house account. Without
 	// it, fills fail. Skip wiring on a dev stack that doesn't run bank.
 	if bankAddr := config.String("BANK_GRPC_ADDR", ""); bankAddr != "" {
-		conn, err := grpc.NewClient(bankAddr, grpc.WithTransportCredentials(insecure.NewCredentials()),
+		conn, err := grpc.NewClient(
+			bankAddr, grpc.WithTransportCredentials(insecure.NewCredentials()),
 			grpc.WithStatsHandler(prov.GRPCClientHandler()),
 		)
 		if err != nil {
@@ -255,7 +255,7 @@ func Run() error {
 	service.RegisterSagas(sagaReg, svc)
 
 	probeSrv := probes.New(fmt.Sprintf(":%d", config.Int("PROBE_PORT", 8081)))
-	probeSrv.Register("postgres", func(ctx context.Context) error { return postgres.Ping(ctx, pool) })
+	probeSrv.Register("postgres", func(ctx context.Context) error { return db.Ping(ctx) })
 	probeSrv.Register("redis", func(ctx context.Context) error { return pkgredis.Ping(ctx, rdb) })
 
 	grpcAddr := fmt.Sprintf(":%d", config.Int("GRPC_PORT", 50051))

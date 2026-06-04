@@ -24,7 +24,7 @@ type SagaStore struct {
 
 // NewSagaStore returns a store bound to the given pgxpool. Caller is
 // usually the app layer: pass `st.Pool` from store.New().
-func (s *Store) Sagas() *SagaStore { return &SagaStore{Pool: s.Pool} }
+func (s *Store) Sagas() *SagaStore { return &SagaStore{Pool: s.DB.RW} }
 
 // poolIface is the slice of pgxpool.Pool we depend on, so tests can
 // stub it. The two methods cover both BeginTx (TryLock) and
@@ -71,7 +71,8 @@ func (s *SagaStore) Insert(ctx context.Context, row *saga.Row) error {
 	if len(state) == 0 {
 		state = []byte("{}")
 	}
-	_, err := s.Pool.Exec(ctx, q,
+	_, err := s.Pool.Exec(
+		ctx, q,
 		row.TransactionID, row.SagaType, row.CurrentStep, state,
 		string(row.Status), row.Attempts, row.AttemptsMax, row.NextAttemptAt,
 	)
@@ -114,7 +115,8 @@ func (s *SagaStore) Update(ctx context.Context, row *saga.Row) error {
 	if len(state) == 0 {
 		state = []byte("{}")
 	}
-	tag, err := s.Pool.Exec(ctx, q,
+	tag, err := s.Pool.Exec(
+		ctx, q,
 		row.TransactionID, row.CurrentStep, state,
 		string(row.Status), row.Attempts, row.AttemptsMax, row.LastError,
 		row.NextAttemptAt,

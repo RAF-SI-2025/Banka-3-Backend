@@ -5,6 +5,7 @@ import (
 	"strings"
 
 	"github.com/RAF-SI-2025/Banka-3-Backend/pkg/apperr"
+	"github.com/RAF-SI-2025/Banka-3-Backend/pkg/postgres"
 	"github.com/RAF-SI-2025/Banka-3-Backend/services/trading/internal/domain"
 	"github.com/jackc/pgx/v5"
 )
@@ -21,7 +22,7 @@ func (s *Store) UpsertActuaryInfo(ctx context.Context, in *domain.ActuaryInfo) (
               updated_at    = now()
         returning employee_id, type, daily_limit::text, used_limit::text, need_approval, created_at, updated_at`
 
-	row := s.Pool.QueryRow(ctx, q, in.EmployeeID, string(in.Type), in.DailyLimit, in.NeedApproval)
+	row := s.DB.QueryRow(ctx, q, in.EmployeeID, string(in.Type), in.DailyLimit, in.NeedApproval)
 	out, err := scanActuary(row)
 	if err != nil {
 		return nil, apperr.Internal("upsert actuary", err)
@@ -35,7 +36,7 @@ func (s *Store) GetActuaryInfo(ctx context.Context, employeeID string) (*domain.
         select employee_id, type, daily_limit::text, used_limit::text, need_approval, created_at, updated_at
         from "trading".actuary_info
         where employee_id = $1`
-	out, err := scanActuary(s.Pool.QueryRow(ctx, q, employeeID))
+	out, err := scanActuary(s.DB.QueryRow(ctx, q, employeeID))
 	if err != nil {
 		if noRows(err) {
 			return nil, apperr.NotFound("actuary not found")
@@ -52,7 +53,7 @@ func (s *Store) UpdateActuaryLimit(ctx context.Context, employeeID, dailyLimit s
         set daily_limit = $2, updated_at = now()
         where employee_id = $1
         returning employee_id, type, daily_limit::text, used_limit::text, need_approval, created_at, updated_at`
-	out, err := scanActuary(s.Pool.QueryRow(ctx, q, employeeID, dailyLimit))
+	out, err := scanActuary(s.DB.QueryRow(ctx, q, employeeID, dailyLimit))
 	if err != nil {
 		if noRows(err) {
 			return nil, apperr.NotFound("actuary not found")
@@ -69,7 +70,7 @@ func (s *Store) ResetActuaryUsedLimit(ctx context.Context, employeeID string) (*
         set used_limit = 0, updated_at = now()
         where employee_id = $1
         returning employee_id, type, daily_limit::text, used_limit::text, need_approval, created_at, updated_at`
-	out, err := scanActuary(s.Pool.QueryRow(ctx, q, employeeID))
+	out, err := scanActuary(s.DB.QueryRow(ctx, q, employeeID))
 	if err != nil {
 		if noRows(err) {
 			return nil, apperr.NotFound("actuary not found")
@@ -83,7 +84,7 @@ func (s *Store) ResetActuaryUsedLimit(ctx context.Context, employeeID string) (*
 // number affected. Used by the daily 23:59 cron.
 func (s *Store) ResetAllUsedLimits(ctx context.Context) (int64, error) {
 	const q = `update "trading".actuary_info set used_limit = 0, updated_at = now() where used_limit <> 0`
-	tag, err := s.Pool.Exec(ctx, q)
+	tag, err := s.DB.Exec(ctx, q)
 	if err != nil {
 		return 0, apperr.Internal("reset all used limits", err)
 	}
@@ -97,7 +98,7 @@ func (s *Store) SetActuaryNeedApproval(ctx context.Context, employeeID string, n
         set need_approval = $2, updated_at = now()
         where employee_id = $1
         returning employee_id, type, daily_limit::text, used_limit::text, need_approval, created_at, updated_at`
-	out, err := scanActuary(s.Pool.QueryRow(ctx, q, employeeID, need))
+	out, err := scanActuary(s.DB.QueryRow(ctx, q, employeeID, need))
 	if err != nil {
 		if noRows(err) {
 			return nil, apperr.NotFound("actuary not found")
@@ -172,7 +173,7 @@ func (s *Store) ListActuaries(ctx context.Context, t domain.ActuaryType, page, p
 
 	countQ := "select count(*) from \"trading\".actuary_info" + where
 	var total int64
-	if err := s.Pool.QueryRow(ctx, countQ, args...).Scan(&total); err != nil {
+	if err := s.DB.QueryRow(postgres.WithRead(ctx), countQ, args...).Scan(&total); err != nil {
 		return nil, 0, apperr.Internal("count actuaries", err)
 	}
 
@@ -182,7 +183,7 @@ func (s *Store) ListActuaries(ctx context.Context, t domain.ActuaryType, page, p
           limit ` + intArg(len(args)+1) + ` offset ` + intArg(len(args)+2)
 	args = append(args, pageSize, (page-1)*pageSize)
 
-	rows, err := s.Pool.Query(ctx, q, args...)
+	rows, err := s.DB.Query(postgres.WithRead(ctx), q, args...)
 	if err != nil {
 		return nil, 0, apperr.Internal("list actuaries", err)
 	}

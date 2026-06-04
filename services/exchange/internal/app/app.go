@@ -21,7 +21,6 @@ import (
 	"github.com/RAF-SI-2025/Banka-3-Backend/services/exchange/internal/server"
 	"github.com/RAF-SI-2025/Banka-3-Backend/services/exchange/internal/service"
 	"github.com/RAF-SI-2025/Banka-3-Backend/services/exchange/internal/store"
-	"github.com/jackc/pgx/v5/pgxpool"
 	"google.golang.org/grpc"
 
 	"golang.org/x/sync/errgroup"
@@ -41,20 +40,16 @@ func Run() error {
 	}
 	defer func() { _ = prov.Shutdown(context.Background()) }()
 
-	pool, err := postgres.Open(ctx, config.MustString("DATABASE_URL"))
+	// OpenPair dials the primary (DATABASE_URL → banka-pg-pooler-rw) and,
+	// when set, a hot-standby read pool (DATABASE_READ_URL →
+	// banka-pg-pooler-ro). Reads marked postgres.WithRead(ctx) route to
+	// the standby; writes and transactions stay on the primary.
+	db, err := postgres.OpenPair(ctx, config.MustString("DATABASE_URL"), config.String("DATABASE_READ_URL", ""))
 	if err != nil {
 		return fmt.Errorf("postgres: %w", err)
 	}
-	defer pool.Close()
-
-	// BonusReadReplicaRouting (#287) — optional hot-standby pool.
-	var readPool *pgxpool.Pool
-	if readURL := config.String("DATABASE_READ_URL", ""); readURL != "" {
-		readPool, err = postgres.Open(ctx, readURL)
-		if err != nil {
-			return fmt.Errorf("postgres replica: %w", err)
-		}
-		defer readPool.Close()
+	defer db.Close()
+	if db.RO != nil {
 		log.Info("read replica routing enabled")
 	}
 
@@ -64,12 +59,11 @@ func Run() error {
 	}
 	defer rdb.Close()
 
-	st := store.New(pool)
-	st.ReadPool = readPool
+	st := store.New(db)
 	svc := service.New(st, log)
 
 	probeSrv := probes.New(fmt.Sprintf(":%d", config.Int("PROBE_PORT", 8081)))
-	probeSrv.Register("postgres", func(ctx context.Context) error { return postgres.Ping(ctx, pool) })
+	probeSrv.Register("postgres", func(ctx context.Context) error { return db.Ping(ctx) })
 	probeSrv.Register("redis", func(ctx context.Context) error { return pkgredis.Ping(ctx, rdb) })
 
 	grpcAddr := fmt.Sprintf(":%d", config.Int("GRPC_PORT", 50051))

@@ -4,6 +4,7 @@ import (
 	"context"
 
 	"github.com/RAF-SI-2025/Banka-3-Backend/pkg/apperr"
+	"github.com/RAF-SI-2025/Banka-3-Backend/pkg/postgres"
 	"github.com/RAF-SI-2025/Banka-3-Backend/services/trading/internal/domain"
 	"github.com/jackc/pgx/v5"
 )
@@ -27,7 +28,8 @@ func (s *Store) UpsertExchange(ctx context.Context, e *domain.Exchange) (*domain
               close_local = excluded.close_local,
               updated_at  = now()
         returning ` + exchangeCols
-	row := s.Pool.QueryRow(ctx, q,
+	row := s.DB.QueryRow(
+		ctx, q,
 		e.MIC, e.Name, e.Acronym, e.Polity, string(e.Currency), e.Timezone, e.OpenLocal, e.CloseLocal,
 	)
 	out, err := scanExchange(row)
@@ -44,12 +46,12 @@ func (s *Store) SetExchangeOverride(ctx context.Context, mic string, state *doma
 	if state == nil {
 		q := `update "trading".exchanges set override_state = NULL, updated_at = now() where mic = $1
 		      returning ` + exchangeCols
-		out, err := scanExchange(s.Pool.QueryRow(ctx, q, mic))
+		out, err := scanExchange(s.DB.QueryRow(ctx, q, mic))
 		return wrapExchange(out, err)
 	}
 	q := `update "trading".exchanges set override_state = $2, updated_at = now() where mic = $1
 	      returning ` + exchangeCols
-	out, err := scanExchange(s.Pool.QueryRow(ctx, q, mic, string(*state)))
+	out, err := scanExchange(s.DB.QueryRow(ctx, q, mic, string(*state)))
 	return wrapExchange(out, err)
 }
 
@@ -66,14 +68,14 @@ func wrapExchange(out *domain.Exchange, err error) (*domain.Exchange, error) {
 // GetExchange returns one row by MIC or NotFound.
 func (s *Store) GetExchange(ctx context.Context, mic string) (*domain.Exchange, error) {
 	const q = `select ` + exchangeCols + ` from "trading".exchanges where mic = $1`
-	out, err := scanExchange(s.Pool.QueryRow(ctx, q, mic))
+	out, err := scanExchange(s.DB.QueryRow(ctx, q, mic))
 	return wrapExchange(out, err)
 }
 
 // ListExchanges returns every row, ordered alphabetically by MIC.
 func (s *Store) ListExchanges(ctx context.Context) ([]*domain.Exchange, error) {
 	const q = `select ` + exchangeCols + ` from "trading".exchanges order by mic`
-	rows, err := s.Pool.Query(ctx, q)
+	rows, err := s.DB.Query(postgres.WithRead(ctx), q)
 	if err != nil {
 		return nil, apperr.Internal("list exchanges", err)
 	}

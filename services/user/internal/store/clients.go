@@ -6,6 +6,7 @@ import (
 	"strings"
 
 	"github.com/RAF-SI-2025/Banka-3-Backend/pkg/apperr"
+	"github.com/RAF-SI-2025/Banka-3-Backend/pkg/postgres"
 	"github.com/RAF-SI-2025/Banka-3-Backend/services/user/internal/domain"
 )
 
@@ -41,7 +42,8 @@ func (s *Store) CreateClient(ctx context.Context, c *domain.Client) (*domain.Cli
         values ($1,$2,$3,$4,$5,$6,$7,$8,$9)
         returning ` + clientColumns
 
-	out, err := scanClient(s.Pool.QueryRow(ctx, q,
+	out, err := scanClient(s.DB.QueryRow(
+		ctx, q,
 		c.Email, c.FirstName, c.LastName, c.DateOfBirth, string(c.Gender),
 		c.Phone, c.Address, c.Active, c.Permissions,
 	))
@@ -57,7 +59,7 @@ func (s *Store) CreateClient(ctx context.Context, c *domain.Client) (*domain.Cli
 // GetClientByID returns the client or NotFound.
 func (s *Store) GetClientByID(ctx context.Context, id string) (*domain.Client, error) {
 	const q = `select ` + clientColumns + ` from "user".clients where id = $1`
-	out, err := scanClient(s.Pool.QueryRow(ctx, q, id))
+	out, err := scanClient(s.DB.QueryRow(postgres.WithRead(ctx), q, id))
 	if err != nil {
 		if noRows(err) {
 			return nil, apperr.NotFound("client not found")
@@ -70,7 +72,7 @@ func (s *Store) GetClientByID(ctx context.Context, id string) (*domain.Client, e
 // GetClientByEmail returns the client or NotFound.
 func (s *Store) GetClientByEmail(ctx context.Context, email string) (*domain.Client, error) {
 	const q = `select ` + clientColumns + ` from "user".clients where lower(email) = lower($1)`
-	out, err := scanClient(s.Pool.QueryRow(ctx, q, email))
+	out, err := scanClient(s.DB.QueryRow(ctx, q, email))
 	if err != nil {
 		if noRows(err) {
 			return nil, apperr.NotFound("client not found")
@@ -89,7 +91,8 @@ func (s *Store) UpdateClientProfile(ctx context.Context, c *domain.Client) (*dom
         where id = $1
         returning ` + clientColumns
 
-	out, err := scanClient(s.Pool.QueryRow(ctx, q,
+	out, err := scanClient(s.DB.QueryRow(
+		ctx, q,
 		c.ID, c.Email, c.FirstName, c.LastName, c.DateOfBirth,
 		string(c.Gender), c.Phone, c.Address,
 	))
@@ -110,7 +113,7 @@ func (s *Store) SetClientPasswordHash(ctx context.Context, id, hash string) erro
 	const q = `
         update "user".clients set password_hash = $2, session_version = session_version + 1
         where id = $1`
-	tag, err := s.Pool.Exec(ctx, q, id, hash)
+	tag, err := s.DB.Exec(ctx, q, id, hash)
 	if err != nil {
 		return apperr.Internal("set client password", err)
 	}
@@ -127,7 +130,7 @@ func (s *Store) IncrementClientSessionVersion(ctx context.Context, id string) (i
         where id = $1
         returning session_version`
 	var v int64
-	if err := s.Pool.QueryRow(ctx, q, id).Scan(&v); err != nil {
+	if err := s.DB.QueryRow(ctx, q, id).Scan(&v); err != nil {
 		if noRows(err) {
 			return 0, apperr.NotFound("client not found")
 		}
@@ -166,7 +169,7 @@ func (s *Store) ListClients(ctx context.Context, f domain.ClientFilter, page, pa
 	}
 
 	var total int64
-	if err := s.Pool.QueryRow(ctx, `select count(*) from "user".clients`+where, args...).Scan(&total); err != nil {
+	if err := s.DB.QueryRow(postgres.WithRead(ctx), `select count(*) from "user".clients`+where, args...).Scan(&total); err != nil {
 		return nil, 0, apperr.Internal("count clients", err)
 	}
 
@@ -175,7 +178,7 @@ func (s *Store) ListClients(ctx context.Context, f domain.ClientFilter, page, pa
 	listQ := `select ` + clientColumns + ` from "user".clients` + where +
 		fmt.Sprintf(" order by last_name, first_name limit $%d offset $%d", len(args)+1, len(args)+2)
 
-	rows, err := s.reader().Query(ctx, listQ, listArgs...)
+	rows, err := s.DB.Query(postgres.WithRead(ctx), listQ, listArgs...)
 	if err != nil {
 		return nil, 0, apperr.Internal("list clients", err)
 	}

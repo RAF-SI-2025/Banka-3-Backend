@@ -4,6 +4,7 @@ import (
 	"context"
 
 	"github.com/RAF-SI-2025/Banka-3-Backend/pkg/apperr"
+	"github.com/RAF-SI-2025/Banka-3-Backend/pkg/postgres"
 	"github.com/RAF-SI-2025/Banka-3-Backend/services/bank/internal/domain"
 )
 
@@ -36,7 +37,8 @@ func (s *Store) CreateCard(ctx context.Context, c *domain.Card) (*domain.Card, e
         values
             ($1,$2,$3,$4,$5,nullif($6,'')::uuid,$7::numeric,$8,$9)
         returning ` + cardColumns
-	out, err := scanCard(s.Pool.QueryRow(ctx, q,
+	out, err := scanCard(s.DB.QueryRow(
+		ctx, q,
 		c.Number, c.CVVHash, string(c.Brand), c.Name, c.AccountID, c.AuthorizedPersonID,
 		c.CardLimit, c.ExpiresAt, string(c.Status),
 	))
@@ -51,7 +53,7 @@ func (s *Store) CreateCard(ctx context.Context, c *domain.Card) (*domain.Card, e
 
 func (s *Store) GetCardByID(ctx context.Context, id string) (*domain.Card, error) {
 	const q = `select ` + cardColumns + ` from "bank".cards where id = $1`
-	out, err := scanCard(s.Pool.QueryRow(ctx, q, id))
+	out, err := scanCard(s.DB.QueryRow(postgres.WithRead(ctx), q, id))
 	if err != nil {
 		if noRows(err) {
 			return nil, apperr.NotFound("kartica ne postoji")
@@ -63,7 +65,7 @@ func (s *Store) GetCardByID(ctx context.Context, id string) (*domain.Card, error
 
 func (s *Store) ListCardsByAccount(ctx context.Context, accountID string) ([]*domain.Card, error) {
 	const q = `select ` + cardColumns + ` from "bank".cards where account_id = $1 order by created_at`
-	rows, err := s.Pool.Query(ctx, q, accountID)
+	rows, err := s.DB.Query(postgres.WithRead(ctx), q, accountID)
 	if err != nil {
 		return nil, apperr.Internal("list cards", err)
 	}
@@ -89,7 +91,7 @@ func (s *Store) ListCardsByOwner(ctx context.Context, ownerClientID string) ([]*
 	           join "bank".accounts a on a.id = c.account_id
 	           where a.owner_client_id = $1
 	           order by c.created_at`
-	rows, err := s.Pool.Query(ctx, q, ownerClientID)
+	rows, err := s.DB.Query(postgres.WithRead(ctx), q, ownerClientID)
 	if err != nil {
 		return nil, apperr.Internal("list cards by owner", err)
 	}
@@ -110,7 +112,7 @@ func (s *Store) ListCardsByOwner(ctx context.Context, ownerClientID string) ([]*
 // CardRead/Admin.
 func (s *Store) ListAllCards(ctx context.Context) ([]*domain.Card, error) {
 	const q = `select ` + cardColumns + ` from "bank".cards order by created_at`
-	rows, err := s.Pool.Query(ctx, q)
+	rows, err := s.DB.Query(postgres.WithRead(ctx), q)
 	if err != nil {
 		return nil, apperr.Internal("list all cards", err)
 	}
@@ -141,7 +143,7 @@ func (s *Store) CountActiveCards(ctx context.Context, accountID, authorizedPerso
 		q += ` and authorized_person_id is null`
 	}
 	var n int
-	if err := s.Pool.QueryRow(ctx, q, args...).Scan(&n); err != nil {
+	if err := s.DB.QueryRow(ctx, q, args...).Scan(&n); err != nil {
 		return 0, apperr.Internal("count cards", err)
 	}
 	return n, nil
@@ -152,7 +154,7 @@ func (s *Store) SetCardStatus(ctx context.Context, id string, status domain.Card
         update "bank".cards set status = $2, updated_at = now()
         where id = $1
         returning ` + cardColumns
-	out, err := scanCard(s.Pool.QueryRow(ctx, q, id, string(status)))
+	out, err := scanCard(s.DB.QueryRow(ctx, q, id, string(status)))
 	if err != nil {
 		if noRows(err) {
 			return nil, apperr.NotFound("kartica ne postoji")
@@ -167,7 +169,7 @@ func (s *Store) UpdateCardLimit(ctx context.Context, id, cardLimit string) (*dom
         update "bank".cards set card_limit = $2::numeric, updated_at = now()
         where id = $1
         returning ` + cardColumns
-	out, err := scanCard(s.Pool.QueryRow(ctx, q, id, cardLimit))
+	out, err := scanCard(s.DB.QueryRow(ctx, q, id, cardLimit))
 	if err != nil {
 		if noRows(err) {
 			return nil, apperr.NotFound("kartica ne postoji")

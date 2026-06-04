@@ -29,6 +29,7 @@ import (
 	"github.com/RAF-SI-2025/Banka-3-Backend/pkg/apperr"
 	"github.com/RAF-SI-2025/Banka-3-Backend/pkg/auth"
 	"github.com/RAF-SI-2025/Banka-3-Backend/pkg/permissions"
+	"github.com/RAF-SI-2025/Banka-3-Backend/pkg/postgres"
 	"github.com/RAF-SI-2025/Banka-3-Backend/services/bank/internal/domain"
 	"github.com/RAF-SI-2025/Banka-3-Backend/services/bank/internal/store"
 )
@@ -109,7 +110,7 @@ func setup(t *testing.T) *Service {
 
 	resetSchema(t)
 
-	st := store.New(fixPool)
+	st := store.New(postgres.NewDB(fixPool, nil))
 	logger := slog.New(slog.NewTextHandler(os.Stderr, &slog.HandlerOptions{Level: slog.LevelWarn}))
 	svc := New(st, Config{
 		BankCode:     "333",

@@ -56,7 +56,8 @@ func (s *Store) InsertInterbankTx(ctx context.Context, tx pgx.Tx, t *domain.Inte
             nullif($10, '')::uuid, $11
         )
         returning ` + interbankTxCols
-	row := execerOrPool(s, tx).QueryRow(ctx, q,
+	row := execerOrPool(s, tx).QueryRow(
+		ctx, q,
 		t.SenderRoutingNumber, t.TransactionID,
 		string(t.Direction), t.LocalAccountNumber, t.RemoteAccountNumber,
 		string(t.Currency), t.Amount, t.Purpose, t.TransactionBody,
@@ -85,7 +86,7 @@ func (s *Store) GetInterbankTx(ctx context.Context, tx pgx.Tx, senderRouting int
 	if tx != nil {
 		row = tx.QueryRow(ctx, q, senderRouting, txID)
 	} else {
-		row = s.Pool.QueryRow(ctx, q, senderRouting, txID)
+		row = s.DB.QueryRow(ctx, q, senderRouting, txID)
 	}
 	out, err := scanInterbankTx(row)
 	if err != nil {
@@ -155,7 +156,8 @@ func (s *Store) UpsertInterbankMessage(ctx context.Context, tx pgx.Tx, m *domain
             transaction_id, response_status, response_body
         ) values ($1, $2, $3, $4, $5, $6)
         on conflict (sender_routing_number, idempotence_key) do nothing`
-	_, err := execerOrPool(s, tx).Exec(ctx, q,
+	_, err := execerOrPool(s, tx).Exec(
+		ctx, q,
 		m.SenderRoutingNumber, m.IdempotenceKey, string(m.MessageType),
 		m.TransactionID, m.ResponseStatus, m.ResponseBody,
 	)
@@ -171,7 +173,7 @@ func (s *Store) GetInterbankMessage(ctx context.Context, senderRouting int, key 
 	const q = `select ` + interbankMsgCols + `
 	           from "bank".interbank_protocol_messages
 	           where sender_routing_number = $1 and idempotence_key = $2`
-	out, err := scanInterbankMsg(s.Pool.QueryRow(ctx, q, senderRouting, key))
+	out, err := scanInterbankMsg(s.DB.QueryRow(ctx, q, senderRouting, key))
 	if err != nil {
 		if noRows(err) {
 			return nil, apperr.NotFound("interbank message not seen")
@@ -187,7 +189,7 @@ func execerOrPool(s *Store, tx pgx.Tx) execer {
 	if tx != nil {
 		return tx
 	}
-	return s.Pool
+	return s.DB
 }
 
 // execer is the narrow surface execerOrPool returns. Satisfied by both

@@ -6,6 +6,7 @@ import (
 	"time"
 
 	"github.com/RAF-SI-2025/Banka-3-Backend/pkg/apperr"
+	"github.com/RAF-SI-2025/Banka-3-Backend/pkg/postgres"
 	"github.com/RAF-SI-2025/Banka-3-Backend/services/trading/internal/domain"
 	"github.com/jackc/pgx/v5"
 )
@@ -45,7 +46,8 @@ func (s *Store) InsertFund(ctx context.Context, f *domain.Fund) (*domain.Fund, e
             $1, $2, $3, $4,
             $5::numeric, $6::numeric, $7
         ) returning ` + fundCols
-	row := s.Pool.QueryRow(ctx, q,
+	row := s.DB.QueryRow(
+		ctx, q,
 		f.Name, f.Description, f.ManagerUserID, f.BankAccountID,
 		f.MinimumContribution, f.TotalUnits, string(f.Status),
 	)
@@ -62,7 +64,7 @@ func (s *Store) InsertFund(ctx context.Context, f *domain.Fund) (*domain.Fund, e
 // GetFund returns one fund by id.
 func (s *Store) GetFund(ctx context.Context, id string) (*domain.Fund, error) {
 	const q = `select ` + fundCols + ` from "trading".investment_funds where id = $1`
-	out, err := scanFund(s.Pool.QueryRow(ctx, q, id))
+	out, err := scanFund(s.DB.QueryRow(ctx, q, id))
 	if err != nil {
 		if noRows(err) {
 			return nil, apperr.NotFound("fond ne postoji")
@@ -124,7 +126,7 @@ func (s *Store) ListFunds(ctx context.Context, f FundFilter) ([]*domain.Fund, er
 	}
 	q := `select ` + fundCols + ` from "trading".investment_funds where ` +
 		strings.Join(conds, " and ") + ` order by name`
-	rows, err := s.Pool.Query(ctx, q, args...)
+	rows, err := s.DB.Query(postgres.WithRead(ctx), q, args...)
 	if err != nil {
 		return nil, apperr.Internal("list funds", err)
 	}
@@ -161,7 +163,7 @@ func (s *Store) ReassignFundManager(ctx context.Context, fromID, toID string) (i
 	           set manager_user_id = $2, updated_at = now()
 	           where manager_user_id = $1
 	             and status = 'active'`
-	tag, err := s.Pool.Exec(ctx, q, fromID, toID)
+	tag, err := s.DB.Exec(ctx, q, fromID, toID)
 	if err != nil {
 		return 0, apperr.Internal("reassign fund manager", err)
 	}
@@ -209,7 +211,7 @@ func scanFundPosition(row pgx.Row) (*domain.FundPosition, error) {
 func (s *Store) GetFundPosition(ctx context.Context, fundID, clientID string) (*domain.FundPosition, error) {
 	const q = `select ` + fundPositionCols + ` from "trading".client_fund_positions
 	           where fund_id = $1 and client_id = $2`
-	out, err := scanFundPosition(s.Pool.QueryRow(ctx, q, fundID, clientID))
+	out, err := scanFundPosition(s.DB.QueryRow(ctx, q, fundID, clientID))
 	if err != nil {
 		if noRows(err) {
 			return nil, apperr.NotFound("pozicija ne postoji")
@@ -304,7 +306,7 @@ func (s *Store) ListFundPositions(ctx context.Context, f FundPositionFilter) ([]
 	}
 	q := `select ` + fundPositionCols + ` from "trading".client_fund_positions where ` +
 		strings.Join(conds, " and ") + ` order by updated_at desc`
-	rows, err := s.Pool.Query(ctx, q, args...)
+	rows, err := s.DB.Query(postgres.WithRead(ctx), q, args...)
 	if err != nil {
 		return nil, apperr.Internal("list fund positions", err)
 	}
@@ -327,7 +329,7 @@ func (s *Store) SumPositionsInvestedRSD(ctx context.Context, fundID string) (str
 	const q = `select coalesce(sum(total_invested_rsd), 0)::text
 	           from "trading".client_fund_positions where fund_id = $1`
 	var out string
-	if err := s.Pool.QueryRow(ctx, q, fundID).Scan(&out); err != nil {
+	if err := s.DB.QueryRow(ctx, q, fundID).Scan(&out); err != nil {
 		return "", apperr.Internal("sum fund positions invested", err)
 	}
 	return out, nil
@@ -378,7 +380,8 @@ func (s *Store) InsertFundTransaction(ctx context.Context, tx pgx.Tx, t *domain.
             $4::numeric, $5::numeric, $6,
             $7, $8, nullif($9, '')::uuid
         ) returning ` + fundTxCols
-	row := tx.QueryRow(ctx, q,
+	row := tx.QueryRow(
+		ctx, q,
 		t.FundID, t.ClientID, t.InitiatorEmployeeID,
 		t.AmountRSD, t.UnitsDelta, t.SourceOrDestAccountID,
 		t.IsInflow, string(t.Status), t.SagaID,
@@ -423,7 +426,7 @@ func (s *Store) MarkFundTransactionStatus(
 // GetFundTransaction returns one row by id.
 func (s *Store) GetFundTransaction(ctx context.Context, id string) (*domain.FundTransaction, error) {
 	const q = `select ` + fundTxCols + ` from "trading".client_fund_transactions where id = $1`
-	out, err := scanFundTx(s.Pool.QueryRow(ctx, q, id))
+	out, err := scanFundTx(s.DB.QueryRow(ctx, q, id))
 	if err != nil {
 		if noRows(err) {
 			return nil, apperr.NotFound("fund transaction ne postoji")
@@ -438,7 +441,7 @@ func (s *Store) GetFundTransaction(ctx context.Context, id string) (*domain.Fund
 // step). NotFound when no pending row exists for that saga.
 func (s *Store) GetFundTransactionBySagaID(ctx context.Context, sagaID string) (*domain.FundTransaction, error) {
 	const q = `select ` + fundTxCols + ` from "trading".client_fund_transactions where saga_id = $1`
-	out, err := scanFundTx(s.Pool.QueryRow(ctx, q, sagaID))
+	out, err := scanFundTx(s.DB.QueryRow(ctx, q, sagaID))
 	if err != nil {
 		if noRows(err) {
 			return nil, apperr.NotFound("fund transaction za saga ne postoji")
@@ -485,13 +488,13 @@ func (s *Store) ListFundTransactions(ctx context.Context, f FundTransactionFilte
 	where := " where " + strings.Join(conds, " and ")
 	countSQL := `select count(*) from "trading".client_fund_transactions` + where
 	var total int64
-	if err := s.Pool.QueryRow(ctx, countSQL, args...).Scan(&total); err != nil {
+	if err := s.DB.QueryRow(postgres.WithRead(ctx), countSQL, args...).Scan(&total); err != nil {
 		return nil, 0, apperr.Internal("count fund transactions", err)
 	}
 	args = append(args, pageSize, (page-1)*pageSize)
 	pageSQL := `select ` + fundTxCols + ` from "trading".client_fund_transactions` + where +
 		` order by created_at desc limit ` + intArg(len(args)-1) + ` offset ` + intArg(len(args))
-	rows, err := s.Pool.Query(ctx, pageSQL, args...)
+	rows, err := s.DB.Query(postgres.WithRead(ctx), pageSQL, args...)
 	if err != nil {
 		return nil, 0, apperr.Internal("list fund transactions", err)
 	}
@@ -519,7 +522,7 @@ func (s *Store) InsertFundPerformanceSnapshot(ctx context.Context, snap *domain.
             (fund_id, snapshot_at, liquid_rsd, holdings_value_rsd)
         values ($1, $2, $3::numeric, $4::numeric)
         on conflict (fund_id, snapshot_at) do nothing`
-	if _, err := s.Pool.Exec(ctx, q, snap.FundID, snap.SnapshotAt, snap.LiquidRSD, snap.HoldingsValueRSD); err != nil {
+	if _, err := s.DB.Exec(ctx, q, snap.FundID, snap.SnapshotAt, snap.LiquidRSD, snap.HoldingsValueRSD); err != nil {
 		return apperr.Internal("insert fund snapshot", err)
 	}
 	return nil
@@ -537,7 +540,7 @@ func (s *Store) ListFundPerformanceSnapshots(ctx context.Context, fundID string,
         from "trading".fund_performance_snapshots
         where fund_id = $1 and snapshot_at >= $2
         order by snapshot_at`
-	rows, err := s.Pool.Query(ctx, q, fundID, since)
+	rows, err := s.DB.Query(postgres.WithRead(ctx), q, fundID, since)
 	if err != nil {
 		return nil, apperr.Internal("list fund snapshots", err)
 	}

@@ -6,6 +6,7 @@ import (
 	"time"
 
 	"github.com/RAF-SI-2025/Banka-3-Backend/pkg/apperr"
+	"github.com/RAF-SI-2025/Banka-3-Backend/pkg/postgres"
 	"github.com/RAF-SI-2025/Banka-3-Backend/services/trading/internal/domain"
 	"github.com/jackc/pgx/v5"
 )
@@ -40,7 +41,8 @@ func (s *Store) UpsertListing(ctx context.Context, l *domain.Listing) (*domain.L
             contract_size = excluded.contract_size,
             last_refresh  = now()
         returning ` + listingCols
-	row := s.Pool.QueryRow(ctx, q,
+	row := s.DB.QueryRow(
+		ctx, q,
 		l.SecurityID, nullableText(l.ExchangeMIC), l.Price, l.Ask, l.Bid, l.Volume, l.ChangeAmt, defaultStr(l.ContractSize, "1"),
 	)
 	out, err := scanListing(row)
@@ -53,7 +55,7 @@ func (s *Store) UpsertListing(ctx context.Context, l *domain.Listing) (*domain.L
 // GetListing returns one listing by id.
 func (s *Store) GetListing(ctx context.Context, id string) (*domain.Listing, error) {
 	q := `select ` + listingCols + ` from "trading".listings where id = $1`
-	out, err := scanListing(s.Pool.QueryRow(ctx, q, id))
+	out, err := scanListing(s.DB.QueryRow(postgres.WithRead(ctx), q, id))
 	if err != nil {
 		if noRows(err) {
 			return nil, apperr.NotFound("listing not found")
@@ -67,7 +69,7 @@ func (s *Store) GetListing(ctx context.Context, id string) (*domain.Listing, err
 // NotFound.
 func (s *Store) GetListingBySecurityID(ctx context.Context, securityID string) (*domain.Listing, error) {
 	q := `select ` + listingCols + ` from "trading".listings where security_id = $1`
-	out, err := scanListing(s.Pool.QueryRow(ctx, q, securityID))
+	out, err := scanListing(s.DB.QueryRow(postgres.WithRead(ctx), q, securityID))
 	if err != nil {
 		if noRows(err) {
 			return nil, apperr.NotFound("listing not found")
@@ -132,7 +134,8 @@ func (s *Store) ListListings(ctx context.Context, f ListingFilter, page, pageSiz
 	}
 
 	var total int64
-	if err := s.Pool.QueryRow(ctx,
+	if err := s.DB.QueryRow(
+		postgres.WithRead(ctx),
 		`select count(*) from "trading".listings l join "trading".securities s on s.id = l.security_id`+where,
 		args...,
 	).Scan(&total); err != nil {
@@ -162,7 +165,7 @@ func (s *Store) ListListings(ctx context.Context, f ListingFilter, page, pageSiz
 		` limit ` + intArg(len(args)+1) + ` offset ` + intArg(len(args)+2)
 	args = append(args, pageSize, (page-1)*pageSize)
 
-	rows, err := s.reader().Query(ctx, q, args...)
+	rows, err := s.DB.Query(postgres.WithRead(ctx), q, args...)
 	if err != nil {
 		return nil, 0, apperr.Internal("list listings", err)
 	}
@@ -195,7 +198,7 @@ func (s *Store) GetListingDailyHistory(ctx context.Context, listingID string, fr
 		q += " and date <= $" + intArg(len(args))[1:]
 	}
 	q += " order by date asc"
-	rows, err := s.reader().Query(ctx, q, args...)
+	rows, err := s.DB.Query(postgres.WithRead(ctx), q, args...)
 	if err != nil {
 		return nil, apperr.Internal("listing daily", err)
 	}
@@ -221,7 +224,7 @@ func (s *Store) UpsertListingDaily(ctx context.Context, r *domain.ListingDailyPr
         on conflict (listing_id, date) do update set
             price = excluded.price, ask = excluded.ask, bid = excluded.bid,
             change_amt = excluded.change_amt, volume = excluded.volume`
-	if _, err := s.Pool.Exec(ctx, q, r.ListingID, r.Date, r.Price, r.Ask, r.Bid, r.ChangeAmt, r.Volume); err != nil {
+	if _, err := s.DB.Exec(ctx, q, r.ListingID, r.Date, r.Price, r.Ask, r.Bid, r.ChangeAmt, r.Volume); err != nil {
 		return apperr.Internal("upsert listing daily", err)
 	}
 	return nil
