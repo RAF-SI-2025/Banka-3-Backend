@@ -345,6 +345,25 @@ service BankService {
       body: "*"
     };
   }
+
+  // RunMaintenanceFeeJob debits the monthly maintenance fee from every
+  // account due for it. Normally driven by the scheduler service; exposed
+  // as an RPC so ops can fire it on demand. Admin-only.
+  rpc RunMaintenanceFeeJob(RunMaintenanceFeeJobRequest) returns (RunMaintenanceFeeJobResponse) {
+    option (google.api.http) = {
+      post: "/api/v1/accounts/run-maintenance-fee-job"
+      body: "*"
+    };
+  }
+
+  // RunSpentResetJob zeroes the daily/monthly spent counters that are due
+  // to roll over. Normally driven by the scheduler service; admin-only.
+  rpc RunSpentResetJob(RunSpentResetJobRequest) returns (RunSpentResetJobResponse) {
+    option (google.api.http) = {
+      post: "/api/v1/accounts/run-spent-reset-job"
+      body: "*"
+    };
+  }
 }
 
 // =====================================================================
@@ -1144,4 +1163,23 @@ message RunVariableRateJobRequest {}
 
 message RunVariableRateJobResponse {
   int32 updated = 1;
+}
+
+message RunMaintenanceFeeJobRequest {
+  // as_of lets the caller process a specific date (YYYY-MM-DD) for
+  // testing. Empty → now.
+  string as_of = 1 [(buf.validate.field).string.pattern = "^\\d{4}-\\d{2}-\\d{2}$", (buf.validate.field).ignore = IGNORE_IF_ZERO_VALUE];
+}
+
+message RunMaintenanceFeeJobResponse {
+  int32 processed = 1;
+  int32 charged   = 2;
+  int32 skipped   = 3;
+}
+
+message RunSpentResetJobRequest {}
+
+message RunSpentResetJobResponse {
+  int64 daily   = 1;
+  int64 monthly = 2;
 }

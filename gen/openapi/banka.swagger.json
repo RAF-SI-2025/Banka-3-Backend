@@ -160,6 +160,72 @@
         ]
       }
     },
+    "/api/v1/accounts/run-maintenance-fee-job": {
+      "post": {
+        "summary": "RunMaintenanceFeeJob debits the monthly maintenance fee from every\naccount due for it. Normally driven by the scheduler service; exposed\nas an RPC so ops can fire it on demand. Admin-only.",
+        "operationId": "BankService_RunMaintenanceFeeJob",
+        "responses": {
+          "200": {
+            "description": "A successful response.",
+            "schema": {
+              "$ref": "#/definitions/v1RunMaintenanceFeeJobResponse"
+            }
+          },
+          "default": {
+            "description": "An unexpected error response.",
+            "schema": {
+              "$ref": "#/definitions/rpcStatus"
+            }
+          }
+        },
+        "parameters": [
+          {
+            "name": "body",
+            "in": "body",
+            "required": true,
+            "schema": {
+              "$ref": "#/definitions/v1RunMaintenanceFeeJobRequest"
+            }
+          }
+        ],
+        "tags": [
+          "BankService"
+        ]
+      }
+    },
+    "/api/v1/accounts/run-spent-reset-job": {
+      "post": {
+        "summary": "RunSpentResetJob zeroes the daily/monthly spent counters that are due\nto roll over. Normally driven by the scheduler service; admin-only.",
+        "operationId": "BankService_RunSpentResetJob",
+        "responses": {
+          "200": {
+            "description": "A successful response.",
+            "schema": {
+              "$ref": "#/definitions/v1RunSpentResetJobResponse"
+            }
+          },
+          "default": {
+            "description": "An unexpected error response.",
+            "schema": {
+              "$ref": "#/definitions/rpcStatus"
+            }
+          }
+        },
+        "parameters": [
+          {
+            "name": "body",
+            "in": "body",
+            "required": true,
+            "schema": {
+              "$ref": "#/definitions/v1RunSpentResetJobRequest"
+            }
+          }
+        ],
+        "tags": [
+          "BankService"
+        ]
+      }
+    },
     "/api/v1/accounts/{id}": {
       "get": {
         "operationId": "BankService_GetAccount",
@@ -8326,6 +8392,48 @@
         "overdue": {
           "type": "integer",
           "format": "int32"
+        }
+      }
+    },
+    "v1RunMaintenanceFeeJobRequest": {
+      "type": "object",
+      "properties": {
+        "asOf": {
+          "type": "string",
+          "description": "as_of lets the caller process a specific date (YYYY-MM-DD) for\ntesting. Empty → now."
+        }
+      }
+    },
+    "v1RunMaintenanceFeeJobResponse": {
+      "type": "object",
+      "properties": {
+        "processed": {
+          "type": "integer",
+          "format": "int32"
+        },
+        "charged": {
+          "type": "integer",
+          "format": "int32"
+        },
+        "skipped": {
+          "type": "integer",
+          "format": "int32"
+        }
+      }
+    },
+    "v1RunSpentResetJobRequest": {
+      "type": "object"
+    },
+    "v1RunSpentResetJobResponse": {
+      "type": "object",
+      "properties": {
+        "daily": {
+          "type": "string",
+          "format": "int64"
+        },
+        "monthly": {
+          "type": "string",
+          "format": "int64"
         }
       }
     },

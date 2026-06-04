@@ -181,27 +181,37 @@ func Run() error {
 	})
 
 	// Background jobs: daily installment collection + monthly variable-
-	// rate refresh. Both are bypassed (interval == 0) by default in
-	// tests; configure via INSTALLMENT_JOB_INTERVAL / VARIABLE_RATE_JOB_INTERVAL.
-	if installmentInterval > 0 {
-		g.Go(func() error {
-			return runJobLoop(gctx, log, "installments", installmentInterval, svc.RunInstallmentJobAuto)
-		})
-	}
-	if variableRateInterval > 0 {
-		g.Go(func() error {
-			return runJobLoop(gctx, log, "variable-rate", variableRateInterval, svc.RunVariableRateJobAuto)
-		})
-	}
-	if maintenanceFeeInterval > 0 {
-		g.Go(func() error {
-			return runJobLoop(gctx, log, "maintenance-fee", maintenanceFeeInterval, svc.RunMaintenanceFeeJobAuto)
-		})
-	}
-	if spentResetInterval > 0 {
-		g.Go(func() error {
-			return runJobLoop(gctx, log, "spent-reset", spentResetInterval, svc.RunSpentResetJobAuto)
-		})
+	// rate refresh + maintenance-fee + spent-counter reset. Each is
+	// bypassed (interval == 0) by default in tests; configure via
+	// INSTALLMENT_JOB_INTERVAL / VARIABLE_RATE_JOB_INTERVAL / etc.
+	//
+	// JOBS_ENABLED (default true) gates the whole set: when the deployment
+	// runs the scheduler service, bank is started with JOBS_ENABLED=false
+	// and the scheduler drives these via RPC instead — bank then becomes a
+	// stateless, horizontally-scalable request handler.
+	if config.Bool("JOBS_ENABLED", true) {
+		if installmentInterval > 0 {
+			g.Go(func() error {
+				return runJobLoop(gctx, log, "installments", installmentInterval, svc.RunInstallmentJobAuto)
+			})
+		}
+		if variableRateInterval > 0 {
+			g.Go(func() error {
+				return runJobLoop(gctx, log, "variable-rate", variableRateInterval, svc.RunVariableRateJobAuto)
+			})
+		}
+		if maintenanceFeeInterval > 0 {
+			g.Go(func() error {
+				return runJobLoop(gctx, log, "maintenance-fee", maintenanceFeeInterval, svc.RunMaintenanceFeeJobAuto)
+			})
+		}
+		if spentResetInterval > 0 {
+			g.Go(func() error {
+				return runJobLoop(gctx, log, "spent-reset", spentResetInterval, svc.RunSpentResetJobAuto)
+			})
+		}
+	} else {
+		log.Info("JOBS_ENABLED=false; in-process background jobs disabled (driven by scheduler service)")
 	}
 
 	probeSrv.MarkReady()
