@@ -227,6 +227,10 @@ services:
       EXCHANGE_GRPC_ADDR: "${EXCHANGE_GRPC_ADDR:-banka-exchange-1:50051}"
       NOTIFICATION_GRPC_ADDR: "${NOTIFICATION_GRPC_ADDR:-banka-notification-1:50051}"
       USER_GRPC_ADDR: "${USER_GRPC_ADDR:-banka-user-1:50051}"
+      # Background jobs are owned by the scheduler service (singleton).
+      # Set JOBS_ENABLED=true to revert to in-process jobs — but then do
+      # not also run the scheduler, or jobs fire twice.
+      JOBS_ENABLED: "${JOBS_ENABLED:-false}"
     ports:
       - "${BANK_GRPC_PORT:-50052}:50051"
       - "${BANK_PROBE_PORT:-8082}:8081"
@@ -240,6 +244,10 @@ services:
       dockerfile: docker/Dockerfile
       args:
         SERVICE: exchange
+    environment:
+      <<: *service-env
+      # FX feed loop owned by the scheduler service (see bank note).
+      JOBS_ENABLED: "${JOBS_ENABLED:-false}"
     ports:
       - "${EXCHANGE_GRPC_PORT:-50054}:50051"
       - "${EXCHANGE_PROBE_PORT:-8084}:8081"
@@ -289,10 +297,37 @@ services:
       BANK_ROUTING_NUMBER: "${BANK_ROUTING_NUMBER:-333}"
       INTERBANK_ROUTES: "${INTERBANK_ROUTES:-999:http://mock-partner:9099,334:http://banka-partner-gateway-1:8080}"
       INTERBANK_API_KEY: "${INTERBANK_API_KEY:-dev-outbound-banka3}"
+      # Workers + crons are owned by the scheduler service (see bank note).
+      JOBS_ENABLED: "${JOBS_ENABLED:-false}"
     ports:
       - "${TRADING_GRPC_PORT:-50053}:50051"
       - "${TRADING_PROBE_PORT:-8083}:8081"
     depends_on: *app-deps
+    networks: [banka]
+
+  # scheduler — the single non-replicatable driver of every cluster-wide
+  # cron + worker. Calls the bank/trading/exchange trigger RPCs on a
+  # schedule; those services run with JOBS_ENABLED=false and stay
+  # stateless. No DB/Redis. Leader election is off locally (sole
+  # instance); in k8s it's flipped on (LEADER_ELECTION=true) against a
+  # Lease so 2+ replicas can run with instant failover.
+  scheduler:
+    <<: *service-defaults
+    build:
+      context: .
+      dockerfile: docker/Dockerfile
+      args:
+        SERVICE: scheduler
+    environment:
+      <<: *service-env
+      BANK_GRPC_ADDR: "${BANK_GRPC_ADDR:-banka-bank-1:50051}"
+      TRADING_GRPC_ADDR: "${TRADING_GRPC_ADDR:-banka-trading-1:50051}"
+      EXCHANGE_GRPC_ADDR: "${EXCHANGE_GRPC_ADDR:-banka-exchange-1:50051}"
+      LEADER_ELECTION: "${LEADER_ELECTION:-false}"
+    depends_on:
+      bank: { condition: service_started }
+      trading: { condition: service_started }
+      exchange: { condition: service_started }
     networks: [banka]
 
   # Celina 5 — bundled mock partner bank for the dev stack. Serves the

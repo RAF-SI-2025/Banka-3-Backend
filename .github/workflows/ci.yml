@@ -27,6 +27,7 @@ jobs:
             exchange:     'services/exchange/**'
             notification: 'services/notification/**'
             gateway:      'services/gateway/**'
+            scheduler:    'services/scheduler/**'
             proto:
               - 'proto/**'
               - 'buf.yaml'
@@ -65,7 +66,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        service: [user, bank, trading, exchange, notification, gateway]
+        service: [user, bank, trading, exchange, notification, gateway, scheduler]
     steps:
       - uses: actions/checkout@v6
 

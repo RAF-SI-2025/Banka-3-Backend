@@ -36,6 +36,7 @@ jobs:
             exchange:     'services/exchange/**'
             notification: 'services/notification/**'
             gateway:      'services/gateway/**'
+            scheduler:    'services/scheduler/**'
             migrate:
               - 'docker/Dockerfile.migrate'
               - 'docker/run-migrations.sh'
@@ -51,7 +52,7 @@ jobs:
               - '.github/workflows/build.yml'
       - id: compute
         run: |
-          all='["user","bank","trading","exchange","notification","gateway","migrate"]'
+          all='["user","bank","trading","exchange","notification","gateway","scheduler","migrate"]'
           if [[ '${{ startsWith(github.ref, 'refs/tags/') }}' == 'true' || '${{ inputs.all }}' == 'true' ]]; then
             echo "modules=$all" >> "$GITHUB_OUTPUT"
             exit 0
