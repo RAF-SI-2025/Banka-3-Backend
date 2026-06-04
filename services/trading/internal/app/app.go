@@ -279,74 +279,80 @@ func Run() error {
 		}, grpcserver.WithStatsHandler(prov.GRPCServerHandler()))
 	})
 
-	// Spec p.38: agents' used_limit resets at 23:59 (Europe/Belgrade).
-	// The supervisor RPC exposes the same operation for manual reruns
-	// during dev; this loop fires it daily.
-	g.Go(func() error {
-		return runDailyAt(gctx, log, "actuary-used-limit-reset", belgrade, 23, 59, runActuaryDailyReset(svc))
-	})
-
-	// Spec p.55-56 partial-fill worker.
+	// Execution cadence interval is read regardless of whether this
+	// process runs the in-process worker: the service's per-order cadence
+	// math (RunExecutionTick) uses it whether the tick is driven by the
+	// in-process loop or by the scheduler's RunExecutionTick RPC.
 	tick := config.Duration("EXECUTION_TICK_INTERVAL", 10*time.Second)
 	svc.Cfg.ExecutionTickInterval = tick
-	g.Go(func() error {
-		return runExecutionWorker(gctx, log, svc, tick)
-	})
 
-	// Spec p.62 capital-gains tax — last day of each month at 23:55
-	// (Europe/Belgrade). Supervisor-triggered runs via the RunTax RPC
-	// share the same code path.
-	g.Go(func() error {
-		return runMonthlyTaxCron(gctx, log, svc, belgrade)
-	})
+	// In-process background workers + crons. JOBS_ENABLED (default true)
+	// gates the whole set: when the deployment runs the scheduler service,
+	// trading is started with JOBS_ENABLED=false and the scheduler drives
+	// these via the Run* RPCs instead — trading then becomes a stateless,
+	// horizontally-scalable request handler.
+	if config.Bool("JOBS_ENABLED", true) {
+		// Spec p.38: agents' used_limit resets at 23:59 (Europe/Belgrade).
+		g.Go(func() error {
+			return runDailyAt(gctx, log, "actuary-used-limit-reset", belgrade, 23, 59, runActuaryDailyReset(svc))
+		})
 
-	// Spec p.43 Black-Scholes option chain refresh. Daily; first tick
-	// fires immediately so a fresh container has options without delay.
-	optInterval := config.Duration("OPTIONS_REFRESH_INTERVAL", 24*time.Hour)
-	g.Go(func() error {
-		return runOptionsRefresh(gctx, log, svc, optInterval)
-	})
+		// Spec p.55-56 partial-fill worker.
+		g.Go(func() error {
+			return runExecutionWorker(gctx, log, svc, tick)
+		})
 
-	// Alpha Vantage refresh (spec p.40, p.42). 6h default cadence keeps
-	// us inside the free tier's 25/day quota with room for a manual
-	// rerun via SIGHUP-style restart. No-op when MarketData is nil.
-	mdInterval := config.Duration("MARKET_DATA_REFRESH_INTERVAL", 6*time.Hour)
-	g.Go(func() error {
-		return runMarketDataRefresh(gctx, log, svc, mdInterval)
-	})
+		// Spec p.62 capital-gains tax — last day of each month at 23:55
+		// (Europe/Belgrade). Supervisor-triggered runs via the RunTax RPC
+		// share the same code path.
+		g.Go(func() error {
+			return runMonthlyTaxCron(gctx, log, svc, belgrade)
+		})
 
-	// One-shot stock-history backfill (spec p.40). When an Alpha
-	// Vantage key is configured this pulls real daily history at
-	// startup so the listing-detail chart isn't limited to the keyless
-	// synthetic seed; the 6h live refresh above keeps today's point
-	// fresh thereafter. No-op when MarketData / History is nil.
-	g.Go(func() error {
-		return runStockHistoryBackfill(gctx, log, svc)
-	})
+		// Spec p.43 Black-Scholes option chain refresh. Daily; first tick
+		// fires immediately so a fresh container has options without delay.
+		optInterval := config.Duration("OPTIONS_REFRESH_INTERVAL", 24*time.Hour)
+		g.Go(func() error {
+			return runOptionsRefresh(gctx, log, svc, optInterval)
+		})
 
-	// c4 SAGA recovery worker — scans trading.saga_executions for rows
-	// parked by a transient error (or a crashed worker) and resumes
-	// them. The orchestrator's advisory lock keeps this from racing
-	// foreground saga drives.
-	sagaTick := config.Duration("SAGA_RECOVERY_TICK", 30*time.Second)
-	g.Go(func() error {
-		return runSagaRecoveryWorker(gctx, log, svc, sagaTick)
-	})
+		// Alpha Vantage refresh (spec p.40, p.42). 6h default cadence keeps
+		// us inside the free tier's 25/day quota. No-op when MarketData is nil.
+		mdInterval := config.Duration("MARKET_DATA_REFRESH_INTERVAL", 6*time.Hour)
+		g.Go(func() error {
+			return runMarketDataRefresh(gctx, log, svc, mdInterval)
+		})
 
-	// c4 OTC contract expiry sweep (spec p.69). 5min default cadence;
-	// the cron is idempotent and the work per tick is bounded by the
-	// number of contracts past settlement_date, so re-running shorter
-	// is fine but unnecessary.
-	otcExpiryTick := config.Duration("OTC_EXPIRY_TICK", 5*time.Minute)
-	g.Go(func() error {
-		return runOTCExpirySweep(gctx, log, svc, otcExpiryTick)
-	})
+		// One-shot stock-history backfill (spec p.40). When an Alpha
+		// Vantage key is configured this pulls real daily history at
+		// startup. No-op when MarketData / History is nil.
+		g.Go(func() error {
+			return runStockHistoryBackfill(gctx, log, svc)
+		})
 
-	// Fund performance snapshot cron (spec p.74). One snapshot per
-	// active fund per day at 23:50 Europe/Belgrade. Feeds the FE chart.
-	g.Go(func() error {
-		return runFundPerformanceCron(gctx, log, svc, belgrade)
-	})
+		// c4 SAGA recovery worker — resumes sagas parked by a transient
+		// error (or a crashed worker). The orchestrator's advisory lock
+		// keeps this from racing foreground saga drives.
+		sagaTick := config.Duration("SAGA_RECOVERY_TICK", 30*time.Second)
+		g.Go(func() error {
+			return runSagaRecoveryWorker(gctx, log, svc, sagaTick)
+		})
+
+		// c4 OTC contract expiry sweep (spec p.69). 5min default cadence;
+		// idempotent and bounded per tick.
+		otcExpiryTick := config.Duration("OTC_EXPIRY_TICK", 5*time.Minute)
+		g.Go(func() error {
+			return runOTCExpirySweep(gctx, log, svc, otcExpiryTick)
+		})
+
+		// Fund performance snapshot cron (spec p.74). One snapshot per
+		// active fund per day at 23:50 Europe/Belgrade. Feeds the FE chart.
+		g.Go(func() error {
+			return runFundPerformanceCron(gctx, log, svc, belgrade)
+		})
+	} else {
+		log.Info("JOBS_ENABLED=false; in-process workers/crons disabled (driven by scheduler service)")
+	}
 
 	probeSrv.MarkReady()
 	log.Info("trading service ready", "grpc", grpcAddr)

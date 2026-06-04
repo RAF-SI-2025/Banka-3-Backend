@@ -481,6 +481,60 @@ service TradingService {
   // their managed funds. Idempotent: a fund already managed by
   // `to_user_id` is a no-op.
   rpc ReassignSupervisorAssets(ReassignSupervisorAssetsRequest) returns (ReassignSupervisorAssetsResponse);
+
+  // --- Background job triggers (scheduler service) ---
+  // These mirror the in-process workers so the singleton scheduler can
+  // drive them out-of-process via gRPC, letting the trading service run
+  // stateless + horizontally-scaled (started with JOBS_ENABLED=false).
+
+  // RunExecutionTick runs one partial-fill pass over every active order.
+  // Internal-only (no http) — driven by the scheduler on a fast cadence.
+  rpc RunExecutionTick(RunExecutionTickRequest) returns (RunExecutionTickResponse);
+
+  // RunSagaRecoveryTick resumes every saga due for recovery. Internal-
+  // only — driven by the scheduler on a fast cadence.
+  rpc RunSagaRecoveryTick(RunSagaRecoveryTickRequest) returns (RunSagaRecoveryTickResponse);
+
+  // RunOTCExpirySweep expires OTC contracts past settlement. Admin-only.
+  rpc RunOTCExpirySweep(RunOTCExpirySweepRequest) returns (RunOTCExpirySweepResponse) {
+    option (google.api.http) = {
+      post: "/api/v1/otc/run-expiry-sweep"
+      body: "*"
+    };
+  }
+
+  // RunOptionsRefresh regenerates Black-Scholes option chains. Admin-only.
+  rpc RunOptionsRefresh(RunOptionsRefreshRequest) returns (RunOptionsRefreshResponse) {
+    option (google.api.http) = {
+      post: "/api/v1/options/run-refresh"
+      body: "*"
+    };
+  }
+
+  // RunMarketDataRefresh refreshes upstream stock + forex quotes. Admin-only.
+  rpc RunMarketDataRefresh(RunMarketDataRefreshRequest) returns (RunMarketDataRefreshResponse) {
+    option (google.api.http) = {
+      post: "/api/v1/market-data/run-refresh"
+      body: "*"
+    };
+  }
+
+  // RunStockHistoryBackfill backfills daily-close history. Admin-only.
+  rpc RunStockHistoryBackfill(RunStockHistoryBackfillRequest) returns (RunStockHistoryBackfillResponse) {
+    option (google.api.http) = {
+      post: "/api/v1/market-data/run-history-backfill"
+      body: "*"
+    };
+  }
+
+  // RunFundPerformanceSnapshot writes one perf snapshot per active fund.
+  // Admin-only.
+  rpc RunFundPerformanceSnapshot(RunFundPerformanceSnapshotRequest) returns (RunFundPerformanceSnapshotResponse) {
+    option (google.api.http) = {
+      post: "/api/v1/funds/run-performance-snapshot"
+      body: "*"
+    };
+  }
 }
 
 // =====================================================================
@@ -1636,4 +1690,59 @@ message ReassignSupervisorAssetsResponse {
   // funds_reassigned counts active fund rows whose manager_user_id was
   // flipped. Funds already managed by `to_user_id` are not counted.
   int32 funds_reassigned = 1;
+}
+
+// --- Background job trigger messages (scheduler service) ---
+
+message RunExecutionTickRequest {}
+
+message RunExecutionTickResponse {
+  int32 fired = 1;
+}
+
+message RunSagaRecoveryTickRequest {}
+
+message RunSagaRecoveryTickResponse {
+  int32 resumed = 1;
+}
+
+message RunOTCExpirySweepRequest {}
+
+message RunOTCExpirySweepResponse {
+  int32 contracts_expired = 1;
+  int32 shares_released   = 2;
+}
+
+message RunOptionsRefreshRequest {}
+
+message RunOptionsRefreshResponse {
+  int32 underlyings_processed = 1;
+  int32 options_upserted      = 2;
+  int32 skipped               = 3;
+}
+
+message RunMarketDataRefreshRequest {}
+
+message RunMarketDataRefreshResponse {
+  int32 stocks_updated     = 1;
+  int32 forex_updated      = 2;
+  int32 skipped            = 3;
+  int32 upstream_errors    = 4;
+  bool  upstream_throttled = 5;
+}
+
+message RunStockHistoryBackfillRequest {}
+
+message RunStockHistoryBackfillResponse {
+  int32 symbols_backfilled = 1;
+  int32 rows_written       = 2;
+  int32 skipped            = 3;
+  int32 upstream_errors    = 4;
+  bool  upstream_throttled = 5;
+}
+
+message RunFundPerformanceSnapshotRequest {}
+
+message RunFundPerformanceSnapshotResponse {
+  int32 funds = 1;
 }

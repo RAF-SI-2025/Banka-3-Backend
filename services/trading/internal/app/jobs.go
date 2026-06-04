@@ -297,21 +297,15 @@ func runSagaRecoveryWorker(ctx context.Context, log *slog.Logger, svc *service.S
 		case <-ctx.Done():
 			return nil
 		case <-t.C:
-			due, err := svc.SagaStore.DueForRecovery(ctx, 100)
+			// Shares its single-pass body with the RunSagaRecoveryTick RPC
+			// so the scheduler service can drive the same logic.
+			n, err := svc.RunSagaRecoveryTick(ctx)
 			if err != nil {
-				log.Warn("saga recovery: list due failed", "err", err.Error())
+				log.Warn("saga recovery: tick failed", "err", err.Error())
 				continue
 			}
-			for _, row := range due {
-				if err := svc.SagaOrch.Resume(ctx, row.TransactionID); err != nil {
-					log.Warn("saga recovery: resume failed",
-						"transaction_id", row.TransactionID,
-						"saga_type", row.SagaType,
-						"err", err.Error())
-				}
-			}
-			if len(due) > 0 {
-				log.Info("saga recovery tick", "rows", len(due))
+			if n > 0 {
+				log.Info("saga recovery tick", "rows", n)
 			}
 		}
 	}

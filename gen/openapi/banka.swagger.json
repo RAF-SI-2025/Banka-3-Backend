@@ -1959,6 +1959,39 @@
         ]
       }
     },
+    "/api/v1/funds/run-performance-snapshot": {
+      "post": {
+        "summary": "RunFundPerformanceSnapshot writes one perf snapshot per active fund.\nAdmin-only.",
+        "operationId": "TradingService_RunFundPerformanceSnapshot",
+        "responses": {
+          "200": {
+            "description": "A successful response.",
+            "schema": {
+              "$ref": "#/definitions/v1RunFundPerformanceSnapshotResponse"
+            }
+          },
+          "default": {
+            "description": "An unexpected error response.",
+            "schema": {
+              "$ref": "#/definitions/rpcStatus"
+            }
+          }
+        },
+        "parameters": [
+          {
+            "name": "body",
+            "in": "body",
+            "required": true,
+            "schema": {
+              "$ref": "#/definitions/v1RunFundPerformanceSnapshotRequest"
+            }
+          }
+        ],
+        "tags": [
+          "TradingService"
+        ]
+      }
+    },
     "/api/v1/funds/{id}": {
       "get": {
         "summary": "GetFund returns the fund detail including its holdings list and the\ncaller's position when one exists. Spec p.74.",
@@ -2663,6 +2696,72 @@
         ]
       }
     },
+    "/api/v1/market-data/run-history-backfill": {
+      "post": {
+        "summary": "RunStockHistoryBackfill backfills daily-close history. Admin-only.",
+        "operationId": "TradingService_RunStockHistoryBackfill",
+        "responses": {
+          "200": {
+            "description": "A successful response.",
+            "schema": {
+              "$ref": "#/definitions/v1RunStockHistoryBackfillResponse"
+            }
+          },
+          "default": {
+            "description": "An unexpected error response.",
+            "schema": {
+              "$ref": "#/definitions/rpcStatus"
+            }
+          }
+        },
+        "parameters": [
+          {
+            "name": "body",
+            "in": "body",
+            "required": true,
+            "schema": {
+              "$ref": "#/definitions/v1RunStockHistoryBackfillRequest"
+            }
+          }
+        ],
+        "tags": [
+          "TradingService"
+        ]
+      }
+    },
+    "/api/v1/market-data/run-refresh": {
+      "post": {
+        "summary": "RunMarketDataRefresh refreshes upstream stock + forex quotes. Admin-only.",
+        "operationId": "TradingService_RunMarketDataRefresh",
+        "responses": {
+          "200": {
+            "description": "A successful response.",
+            "schema": {
+              "$ref": "#/definitions/v1RunMarketDataRefreshResponse"
+            }
+          },
+          "default": {
+            "description": "An unexpected error response.",
+            "schema": {
+              "$ref": "#/definitions/rpcStatus"
+            }
+          }
+        },
+        "parameters": [
+          {
+            "name": "body",
+            "in": "body",
+            "required": true,
+            "schema": {
+              "$ref": "#/definitions/v1RunMarketDataRefreshRequest"
+            }
+          }
+        ],
+        "tags": [
+          "TradingService"
+        ]
+      }
+    },
     "/api/v1/menjacnica/quote": {
       "post": {
         "summary": "QuoteExchange returns the converted-amount preview for a\nmenjačnica or FX payment, including commission. The FE uses this\nto render the transfer-confirmation screen before the user clicks\nPotvrdi.",
@@ -2693,6 +2792,39 @@
         ],
         "tags": [
           "BankService"
+        ]
+      }
+    },
+    "/api/v1/options/run-refresh": {
+      "post": {
+        "summary": "RunOptionsRefresh regenerates Black-Scholes option chains. Admin-only.",
+        "operationId": "TradingService_RunOptionsRefresh",
+        "responses": {
+          "200": {
+            "description": "A successful response.",
+            "schema": {
+              "$ref": "#/definitions/v1RunOptionsRefreshResponse"
+            }
+          },
+          "default": {
+            "description": "An unexpected error response.",
+            "schema": {
+              "$ref": "#/definitions/rpcStatus"
+            }
+          }
+        },
+        "parameters": [
+          {
+            "name": "body",
+            "in": "body",
+            "required": true,
+            "schema": {
+              "$ref": "#/definitions/v1RunOptionsRefreshRequest"
+            }
+          }
+        ],
+        "tags": [
+          "TradingService"
         ]
       }
     },
@@ -3681,6 +3813,39 @@
             "required": true,
             "schema": {
               "$ref": "#/definitions/TradingServiceWithdrawOTCOfferBody"
+            }
+          }
+        ],
+        "tags": [
+          "TradingService"
+        ]
+      }
+    },
+    "/api/v1/otc/run-expiry-sweep": {
+      "post": {
+        "summary": "RunOTCExpirySweep expires OTC contracts past settlement. Admin-only.",
+        "operationId": "TradingService_RunOTCExpirySweep",
+        "responses": {
+          "200": {
+            "description": "A successful response.",
+            "schema": {
+              "$ref": "#/definitions/v1RunOTCExpirySweepResponse"
+            }
+          },
+          "default": {
+            "description": "An unexpected error response.",
+            "schema": {
+              "$ref": "#/definitions/rpcStatus"
+            }
+          }
+        },
+        "parameters": [
+          {
+            "name": "body",
+            "in": "body",
+            "required": true,
+            "schema": {
+              "$ref": "#/definitions/v1RunOTCExpirySweepRequest"
             }
           }
         ],
@@ -8415,6 +8580,18 @@
         }
       }
     },
+    "v1RunFundPerformanceSnapshotRequest": {
+      "type": "object"
+    },
+    "v1RunFundPerformanceSnapshotResponse": {
+      "type": "object",
+      "properties": {
+        "funds": {
+          "type": "integer",
+          "format": "int32"
+        }
+      }
+    },
     "v1RunInstallmentJobRequest": {
       "type": "object",
       "properties": {
@@ -8467,6 +8644,69 @@
         }
       }
     },
+    "v1RunMarketDataRefreshRequest": {
+      "type": "object"
+    },
+    "v1RunMarketDataRefreshResponse": {
+      "type": "object",
+      "properties": {
+        "stocksUpdated": {
+          "type": "integer",
+          "format": "int32"
+        },
+        "forexUpdated": {
+          "type": "integer",
+          "format": "int32"
+        },
+        "skipped": {
+          "type": "integer",
+          "format": "int32"
+        },
+        "upstreamErrors": {
+          "type": "integer",
+          "format": "int32"
+        },
+        "upstreamThrottled": {
+          "type": "boolean"
+        }
+      }
+    },
+    "v1RunOTCExpirySweepRequest": {
+      "type": "object"
+    },
+    "v1RunOTCExpirySweepResponse": {
+      "type": "object",
+      "properties": {
+        "contractsExpired": {
+          "type": "integer",
+          "format": "int32"
+        },
+        "sharesReleased": {
+          "type": "integer",
+          "format": "int32"
+        }
+      }
+    },
+    "v1RunOptionsRefreshRequest": {
+      "type": "object"
+    },
+    "v1RunOptionsRefreshResponse": {
+      "type": "object",
+      "properties": {
+        "underlyingsProcessed": {
+          "type": "integer",
+          "format": "int32"
+        },
+        "optionsUpserted": {
+          "type": "integer",
+          "format": "int32"
+        },
+        "skipped": {
+          "type": "integer",
+          "format": "int32"
+        }
+      }
+    },
     "v1RunSpentResetJobRequest": {
       "type": "object"
     },
@@ -8480,6 +8720,33 @@
         "monthly": {
           "type": "string",
           "format": "int64"
+        }
+      }
+    },
+    "v1RunStockHistoryBackfillRequest": {
+      "type": "object"
+    },
+    "v1RunStockHistoryBackfillResponse": {
+      "type": "object",
+      "properties": {
+        "symbolsBackfilled": {
+          "type": "integer",
+          "format": "int32"
+        },
+        "rowsWritten": {
+          "type": "integer",
+          "format": "int32"
+        },
+        "skipped": {
+          "type": "integer",
+          "format": "int32"
+        },
+        "upstreamErrors": {
+          "type": "integer",
+          "format": "int32"
+        },
+        "upstreamThrottled": {
+          "type": "boolean"
         }
       }
     },
