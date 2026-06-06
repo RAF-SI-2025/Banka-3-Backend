@@ -53,6 +53,28 @@ func (s *Server) ListRates(ctx context.Context, in *exchangepb.ListRatesRequest)
 	return &exchangepb.ListRatesResponse{Rates: out}, nil
 }
 
+func (s *Server) ListRateHistory(ctx context.Context, in *exchangepb.ListRateHistoryRequest) (*exchangepb.ListRateHistoryResponse, error) {
+	from := currencyFromProto(in.GetFrom())
+	to := currencyFromProto(in.GetTo())
+	points, err := s.Svc.ListRateHistory(ctx, from, to, int(in.GetDays()))
+	if err != nil {
+		return nil, err
+	}
+	out := make([]*exchangepb.RateHistoryPoint, 0, len(points))
+	for _, p := range points {
+		out = append(out, &exchangepb.RateHistoryPoint{
+			Bid:        p.Bid,
+			Ask:        p.Ask,
+			RecordedAt: timestamppb.New(p.RecordedAt),
+		})
+	}
+	return &exchangepb.ListRateHistoryResponse{
+		From:   currencyToProto(from),
+		To:     currencyToProto(to),
+		Points: out,
+	}, nil
+}
+
 func (s *Server) Quote(ctx context.Context, in *exchangepb.QuoteRequest) (*exchangepb.Rate, error) {
 	r, err := s.Svc.Quote(ctx, currencyFromProto(in.GetFrom()), currencyFromProto(in.GetTo()))
 	if err != nil {

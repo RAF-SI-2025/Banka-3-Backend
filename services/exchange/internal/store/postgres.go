@@ -4,6 +4,7 @@ package store
 import (
 	"context"
 	"errors"
+	"time"
 
 	"github.com/RAF-SI-2025/Banka-3-Backend/pkg/apperr"
 	"github.com/RAF-SI-2025/Banka-3-Backend/pkg/postgres"
@@ -86,6 +87,48 @@ func (s *Store) ListRates(ctx context.Context, from domain.Currency) ([]*domain.
 			return nil, apperr.Internal("scan fx rate", err)
 		}
 		out = append(out, r)
+	}
+	return out, rows.Err()
+}
+
+// InsertRateHistory appends one append-only observation of a pair. Called
+// from the feed alongside the latest-only UpsertRate so history accrues
+// going forward without disturbing the live rate.
+func (s *Store) InsertRateHistory(ctx context.Context, r *domain.Rate) error {
+	const q = `
+        insert into "exchange".fx_rate_history ("from", "to", bid, ask)
+        values ($1,$2,$3,$4)`
+	if _, err := s.DB.Exec(ctx, q, string(r.From), string(r.To), r.Bid, r.Ask); err != nil {
+		var pe interface{ SQLState() string }
+		if errors.As(err, &pe) && pe.SQLState() == "23514" {
+			return apperr.Validation("fx rate history violates a check constraint (positive amounts and ask ≥ bid)")
+		}
+		return apperr.Internal("insert fx rate history", err)
+	}
+	return nil
+}
+
+// ListRateHistory returns the recorded points for a pair on or after
+// since, newest first.
+func (s *Store) ListRateHistory(ctx context.Context, from, to domain.Currency, since time.Time) ([]*domain.RateHistoryPoint, error) {
+	const q = `
+        select bid::text, ask::text, recorded_at
+        from "exchange".fx_rate_history
+        where "from" = $1 and "to" = $2 and recorded_at >= $3
+        order by recorded_at desc`
+	rows, err := s.DB.Query(postgres.WithRead(ctx), q, string(from), string(to), since)
+	if err != nil {
+		return nil, apperr.Internal("list fx rate history", err)
+	}
+	defer rows.Close()
+
+	var out []*domain.RateHistoryPoint
+	for rows.Next() {
+		var p domain.RateHistoryPoint
+		if err := rows.Scan(&p.Bid, &p.Ask, &p.RecordedAt); err != nil {
+			return nil, apperr.Internal("scan fx rate history", err)
+		}
+		out = append(out, &p)
 	}
 	return out, rows.Err()
 }

@@ -1974,6 +1974,75 @@
         ]
       }
     },
+    "/api/v1/exchange/rates/history": {
+      "get": {
+        "summary": "ListRateHistory returns the recorded history for a single pair over\nthe last N days, newest first. Backs the mobile \"kursna lista u\nzadnjih mesec dana\" view. Append-only history accrues from the feed\n(see fx_rate_history); the latest-only ListRates is unaffected.",
+        "operationId": "ExchangeService_ListRateHistory",
+        "responses": {
+          "200": {
+            "description": "A successful response.",
+            "schema": {
+              "$ref": "#/definitions/v1ListRateHistoryResponse"
+            }
+          },
+          "default": {
+            "description": "An unexpected error response.",
+            "schema": {
+              "$ref": "#/definitions/rpcStatus"
+            }
+          }
+        },
+        "parameters": [
+          {
+            "name": "from",
+            "in": "query",
+            "required": false,
+            "type": "string",
+            "enum": [
+              "CURRENCY_UNSPECIFIED",
+              "CURRENCY_RSD",
+              "CURRENCY_EUR",
+              "CURRENCY_CHF",
+              "CURRENCY_USD",
+              "CURRENCY_GBP",
+              "CURRENCY_JPY",
+              "CURRENCY_CAD",
+              "CURRENCY_AUD"
+            ],
+            "default": "CURRENCY_UNSPECIFIED"
+          },
+          {
+            "name": "to",
+            "in": "query",
+            "required": false,
+            "type": "string",
+            "enum": [
+              "CURRENCY_UNSPECIFIED",
+              "CURRENCY_RSD",
+              "CURRENCY_EUR",
+              "CURRENCY_CHF",
+              "CURRENCY_USD",
+              "CURRENCY_GBP",
+              "CURRENCY_JPY",
+              "CURRENCY_CAD",
+              "CURRENCY_AUD"
+            ],
+            "default": "CURRENCY_UNSPECIFIED"
+          },
+          {
+            "name": "days",
+            "description": "days is the look-back window; defaults to 30 (last month) when 0 or\nnegative. Bound from the ?days= query param.",
+            "in": "query",
+            "required": false,
+            "type": "integer",
+            "format": "int32"
+          }
+        ],
+        "tags": [
+          "ExchangeService"
+        ]
+      }
+    },
     "/api/v1/exchange/rates/refresh": {
       "post": {
         "summary": "RefreshFXRates does one fetch+upsert pass of the external FX feed.\nNormally driven by the scheduler service; exposed so ops can fire it\non demand. Requires ExchangeWrite (or admin).",
@@ -9880,6 +9949,25 @@
         }
       }
     },
+    "v1ListRateHistoryResponse": {
+      "type": "object",
+      "properties": {
+        "from": {
+          "$ref": "#/definitions/bankaExchangeV1Currency"
+        },
+        "to": {
+          "$ref": "#/definitions/bankaExchangeV1Currency"
+        },
+        "points": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "$ref": "#/definitions/v1RateHistoryPoint"
+          },
+          "description": "points are ordered newest first."
+        }
+      }
+    },
     "v1ListRatesResponse": {
       "type": "object",
       "properties": {
@@ -11023,6 +11111,21 @@
         }
       },
       "description": "Rate is one row of the FX table. base/quote are decimal strings to\npreserve precision. The pair is directional: from RSD to EUR is a\ndifferent row than from EUR to RSD. The menjačnica formula uses\n(1 ± margin) on the mid; we store the resolved bid/ask so the bank\nservice doesn't need to know the spread policy."
+    },
+    "v1RateHistoryPoint": {
+      "type": "object",
+      "properties": {
+        "bid": {
+          "type": "string"
+        },
+        "ask": {
+          "type": "string"
+        },
+        "recordedAt": {
+          "type": "string",
+          "format": "date-time"
+        }
+      }
     },
     "v1RealizedPnLRow": {
       "type": "object",

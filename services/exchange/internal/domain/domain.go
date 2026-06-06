@@ -39,3 +39,12 @@ type Rate struct {
 	Ask       string
 	UpdatedAt time.Time
 }
+
+// RateHistoryPoint is one append-only historical observation of a pair's
+// bid/ask. Recorded on every feed refresh; read back for the mobile
+// last-month kursna lista.
+type RateHistoryPoint struct {
+	Bid        string
+	Ask        string
+	RecordedAt time.Time
+}

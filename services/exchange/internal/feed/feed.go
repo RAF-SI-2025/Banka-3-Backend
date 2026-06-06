@@ -75,15 +75,21 @@ func (f *Feeder) Once(ctx context.Context) (int, error) {
 		}
 		bid := rsdPerUnit * (1 - f.Spread)
 		ask := rsdPerUnit * (1 + f.Spread)
-		_, err := f.Store.UpsertRate(ctx, &domain.Rate{
+		r := &domain.Rate{
 			From: cur,
 			To:   domain.CurrencyRSD,
 			Bid:  formatRate(bid),
 			Ask:  formatRate(ask),
-		})
-		if err != nil {
+		}
+		if _, err := f.Store.UpsertRate(ctx, r); err != nil {
 			f.Log.Warn("fx feed upsert failed", "from", cur, "error", err)
 			continue
+		}
+		// Append an append-only history point so the mobile last-month
+		// kursna lista accrues over time. A history write failure must
+		// not abort the latest-only update — log and carry on.
+		if err := f.Store.InsertRateHistory(ctx, r); err != nil {
+			f.Log.Warn("fx feed history insert failed", "from", cur, "error", err)
 		}
 		written++
 	}

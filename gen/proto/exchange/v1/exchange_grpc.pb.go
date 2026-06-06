@@ -19,10 +19,11 @@ import (
 const _ = grpc.SupportPackageIsVersion9
 
 const (
-	ExchangeService_UpsertRate_FullMethodName     = "/banka.exchange.v1.ExchangeService/UpsertRate"
-	ExchangeService_ListRates_FullMethodName      = "/banka.exchange.v1.ExchangeService/ListRates"
-	ExchangeService_Quote_FullMethodName          = "/banka.exchange.v1.ExchangeService/Quote"
-	ExchangeService_RefreshFXRates_FullMethodName = "/banka.exchange.v1.ExchangeService/RefreshFXRates"
+	ExchangeService_UpsertRate_FullMethodName      = "/banka.exchange.v1.ExchangeService/UpsertRate"
+	ExchangeService_ListRates_FullMethodName       = "/banka.exchange.v1.ExchangeService/ListRates"
+	ExchangeService_ListRateHistory_FullMethodName = "/banka.exchange.v1.ExchangeService/ListRateHistory"
+	ExchangeService_Quote_FullMethodName           = "/banka.exchange.v1.ExchangeService/Quote"
+	ExchangeService_RefreshFXRates_FullMethodName  = "/banka.exchange.v1.ExchangeService/RefreshFXRates"
 )
 
 // ExchangeServiceClient is the client API for ExchangeService service.
@@ -42,6 +43,11 @@ const (
 type ExchangeServiceClient interface {
 	UpsertRate(ctx context.Context, in *UpsertRateRequest, opts ...grpc.CallOption) (*Rate, error)
 	ListRates(ctx context.Context, in *ListRatesRequest, opts ...grpc.CallOption) (*ListRatesResponse, error)
+	// ListRateHistory returns the recorded history for a single pair over
+	// the last N days, newest first. Backs the mobile "kursna lista u
+	// zadnjih mesec dana" view. Append-only history accrues from the feed
+	// (see fx_rate_history); the latest-only ListRates is unaffected.
+	ListRateHistory(ctx context.Context, in *ListRateHistoryRequest, opts ...grpc.CallOption) (*ListRateHistoryResponse, error)
 	// Quote returns the most recent rate for from→to. Internal: callers
 	// are expected to be other services, not end users. (External quotes
 	// come from ListRates so the FE can render the menjačnica board.)
@@ -74,6 +80,16 @@ func (c *exchangeServiceClient) ListRates(ctx context.Context, in *ListRatesRequ
 	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
 	out := new(ListRatesResponse)
 	err := c.cc.Invoke(ctx, ExchangeService_ListRates_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *exchangeServiceClient) ListRateHistory(ctx context.Context, in *ListRateHistoryRequest, opts ...grpc.CallOption) (*ListRateHistoryResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(ListRateHistoryResponse)
+	err := c.cc.Invoke(ctx, ExchangeService_ListRateHistory_FullMethodName, in, out, cOpts...)
 	if err != nil {
 		return nil, err
 	}
@@ -117,6 +133,11 @@ func (c *exchangeServiceClient) RefreshFXRates(ctx context.Context, in *RefreshF
 type ExchangeServiceServer interface {
 	UpsertRate(context.Context, *UpsertRateRequest) (*Rate, error)
 	ListRates(context.Context, *ListRatesRequest) (*ListRatesResponse, error)
+	// ListRateHistory returns the recorded history for a single pair over
+	// the last N days, newest first. Backs the mobile "kursna lista u
+	// zadnjih mesec dana" view. Append-only history accrues from the feed
+	// (see fx_rate_history); the latest-only ListRates is unaffected.
+	ListRateHistory(context.Context, *ListRateHistoryRequest) (*ListRateHistoryResponse, error)
 	// Quote returns the most recent rate for from→to. Internal: callers
 	// are expected to be other services, not end users. (External quotes
 	// come from ListRates so the FE can render the menjačnica board.)
@@ -139,6 +160,9 @@ func (UnimplementedExchangeServiceServer) UpsertRate(context.Context, *UpsertRat
 }
 func (UnimplementedExchangeServiceServer) ListRates(context.Context, *ListRatesRequest) (*ListRatesResponse, error) {
 	return nil, status.Error(codes.Unimplemented, "method ListRates not implemented")
+}
+func (UnimplementedExchangeServiceServer) ListRateHistory(context.Context, *ListRateHistoryRequest) (*ListRateHistoryResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method ListRateHistory not implemented")
 }
 func (UnimplementedExchangeServiceServer) Quote(context.Context, *QuoteRequest) (*Rate, error) {
 	return nil, status.Error(codes.Unimplemented, "method Quote not implemented")
@@ -202,6 +226,24 @@ func _ExchangeService_ListRates_Handler(srv interface{}, ctx context.Context, de
 	return interceptor(ctx, in, info, handler)
 }
 
+func _ExchangeService_ListRateHistory_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(ListRateHistoryRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(ExchangeServiceServer).ListRateHistory(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: ExchangeService_ListRateHistory_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(ExchangeServiceServer).ListRateHistory(ctx, req.(*ListRateHistoryRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
 func _ExchangeService_Quote_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
 	in := new(QuoteRequest)
 	if err := dec(in); err != nil {
@@ -252,6 +294,10 @@ var ExchangeService_ServiceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "ListRates",
 			Handler:    _ExchangeService_ListRates_Handler,
+		},
+		{
+			MethodName: "ListRateHistory",
+			Handler:    _ExchangeService_ListRateHistory_Handler,
 		},
 		{
 			MethodName: "Quote",
