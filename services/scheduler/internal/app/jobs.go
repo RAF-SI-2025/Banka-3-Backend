@@ -60,6 +60,7 @@ func (a *App) buildJobs() []job {
 			a.monthlyEnd("trading-tax", 23, 55, a.tradingTax),
 			a.daily("trading-fund-perf", 23, 50, a.tradingFundPerf),
 			a.interval("trading-price-alerts", config.Duration("PRICE_ALERT_TICK", time.Minute), true, a.tradingPriceAlerts),
+			a.daily("trading-dca", 0, 5, a.tradingDCA),
 		)
 	}
 	if a.exchange != nil {
@@ -293,6 +294,17 @@ func (a *App) tradingPriceAlerts(ctx context.Context) error {
 	}
 	if r.GetTriggered() > 0 {
 		a.log.Info("price alert sweep ran", "triggered", r.GetTriggered())
+	}
+	return nil
+}
+
+func (a *App) tradingDCA(ctx context.Context) error {
+	r, err := a.trading.RunRecurringOrders(ctx, &tradingpb.RunRecurringOrdersRequest{})
+	if err != nil {
+		return err
+	}
+	if r.GetCreated() > 0 {
+		a.log.Info("dca recurring orders ran", "created", r.GetCreated())
 	}
 	return nil
 }

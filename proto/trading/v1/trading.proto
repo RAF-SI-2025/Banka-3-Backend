@@ -552,6 +552,57 @@ service TradingService {
   rpc RemoveFromWatchlist(RemoveFromWatchlistRequest) returns (RemoveFromWatchlistResponse) {
     option (google.api.http) = {delete: "/api/v1/watchlists/{id}/items/{security_id}"};
   }
+
+  // -----------------------------------------------------------------
+  // Recurring orders / "Trajni nalog" (DCA — todoSpec C3 S47-S53).
+  //
+  // A user schedules a recurring Market BUY of a security on a cadence
+  // (DAILY/WEEKLY/MONTHLY), sized either by RSD amount (BYAMOUNT) or by
+  // a fixed share quantity (BYQUANTITY). On each NextRun a cron creates
+  // a Market BUY order and advances NextRun by the cadence. Insufficient
+  // funds skip the order, notify the client, and still advance.
+  // -----------------------------------------------------------------
+
+  // CreateRecurringOrder schedules a recurring Market BUY for the caller
+  // (S47/S48). Active=true with NextRun set to the next execution date.
+  rpc CreateRecurringOrder(CreateRecurringOrderRequest) returns (RecurringOrder) {
+    option (google.api.http) = {
+      post: "/api/v1/recurring-orders"
+      body: "*"
+    };
+  }
+
+  // ListRecurringOrders returns the caller's own recurring orders
+  // (active + paused).
+  rpc ListRecurringOrders(ListRecurringOrdersRequest) returns (ListRecurringOrdersResponse) {
+    option (google.api.http) = {get: "/api/v1/recurring-orders"};
+  }
+
+  // PauseRecurringOrder flips Active=false so the cron skips it (S51).
+  rpc PauseRecurringOrder(PauseRecurringOrderRequest) returns (RecurringOrder) {
+    option (google.api.http) = {
+      post: "/api/v1/recurring-orders/{id}/pause"
+      body: "*"
+    };
+  }
+
+  // ResumeRecurringOrder flips Active=true so the cron picks it back up.
+  rpc ResumeRecurringOrder(ResumeRecurringOrderRequest) returns (RecurringOrder) {
+    option (google.api.http) = {
+      post: "/api/v1/recurring-orders/{id}/resume"
+      body: "*"
+    };
+  }
+
+  // CancelRecurringOrder deletes a recurring order permanently (S52).
+  rpc CancelRecurringOrder(CancelRecurringOrderRequest) returns (CancelRecurringOrderResponse) {
+    option (google.api.http) = {delete: "/api/v1/recurring-orders/{id}"};
+  }
+
+  // RunRecurringOrders creates a Market BUY for every due recurring
+  // order and advances each NextRun (S49/S50). Internal-only — driven by
+  // the scheduler on a daily cadence.
+  rpc RunRecurringOrders(RunRecurringOrdersRequest) returns (RunRecurringOrdersResponse);
 }
 
 // =====================================================================
@@ -1909,3 +1960,81 @@ message RemoveFromWatchlistRequest {
 }
 
 message RemoveFromWatchlistResponse {}
+
+// =====================================================================
+// Recurring orders / "Trajni nalog" (DCA — todoSpec C3 S47-S53)
+// =====================================================================
+
+// RecurringMode discriminates how each scheduled BUY is sized.
+enum RecurringMode {
+  RECURRING_MODE_UNSPECIFIED = 0;
+  // BYAMOUNT sizes each BUY so its RSD notional matches amount_rsd; the
+  // cron derives the share quantity at execution time (S47).
+  RECURRING_MODE_BYAMOUNT = 1;
+  // BYQUANTITY buys a fixed share quantity each cycle (S48).
+  RECURRING_MODE_BYQUANTITY = 2;
+}
+
+message RecurringOrder {
+  string id = 1;
+  string user_id = 2;
+  UserKind user_kind = 3;
+  string security_id = 4;
+  Direction direction = 5; // always BUY in the current scope
+  RecurringMode mode = 6;
+  string amount_rsd = 7; // decimal RSD notional (BYAMOUNT); empty otherwise
+  int32 quantity = 8; // fixed share count (BYQUANTITY); 0 otherwise
+  string account_id = 9;
+  // cadence is one of DAILY / WEEKLY / MONTHLY (pkg/schedule.Cadence).
+  string cadence = 10;
+  google.protobuf.Timestamp next_run = 11;
+  bool active = 12;
+  google.protobuf.Timestamp created_at = 13;
+  google.protobuf.Timestamp updated_at = 14;
+}
+
+message CreateRecurringOrderRequest {
+  string security_id = 1 [(buf.validate.field).string.uuid = true];
+  RecurringMode mode = 2 [(buf.validate.field).enum = {
+    defined_only: true
+    not_in: [0]
+  }];
+  // amount_rsd is required for BYAMOUNT, quantity for BYQUANTITY; the
+  // service validates the mode-specific field.
+  string amount_rsd = 3;
+  int32 quantity = 4;
+  string account_id = 5 [(buf.validate.field).string.uuid = true];
+  // cadence is one of DAILY / WEEKLY / MONTHLY.
+  string cadence = 6 [(buf.validate.field).string.min_len = 1];
+  // start_date optionally anchors the first NextRun (RFC3339). When
+  // empty the first run is one cadence interval from now.
+  string start_date = 7;
+}
+
+message ListRecurringOrdersRequest {}
+
+message ListRecurringOrdersResponse {
+  repeated RecurringOrder recurring_orders = 1;
+}
+
+message PauseRecurringOrderRequest {
+  string id = 1 [(buf.validate.field).string.uuid = true];
+}
+
+message ResumeRecurringOrderRequest {
+  string id = 1 [(buf.validate.field).string.uuid = true];
+}
+
+message CancelRecurringOrderRequest {
+  string id = 1 [(buf.validate.field).string.uuid = true];
+}
+
+message CancelRecurringOrderResponse {}
+
+message RunRecurringOrdersRequest {}
+
+message RunRecurringOrdersResponse {
+  // created is the number of Market BUY orders placed this run (skips
+  // due to insufficient funds are not counted).
+  int32 created = 1;
+}

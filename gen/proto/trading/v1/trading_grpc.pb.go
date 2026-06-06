@@ -88,6 +88,12 @@ const (
 	TradingService_DeleteWatchlist_FullMethodName            = "/banka.trading.v1.TradingService/DeleteWatchlist"
 	TradingService_AddToWatchlist_FullMethodName             = "/banka.trading.v1.TradingService/AddToWatchlist"
 	TradingService_RemoveFromWatchlist_FullMethodName        = "/banka.trading.v1.TradingService/RemoveFromWatchlist"
+	TradingService_CreateRecurringOrder_FullMethodName       = "/banka.trading.v1.TradingService/CreateRecurringOrder"
+	TradingService_ListRecurringOrders_FullMethodName        = "/banka.trading.v1.TradingService/ListRecurringOrders"
+	TradingService_PauseRecurringOrder_FullMethodName        = "/banka.trading.v1.TradingService/PauseRecurringOrder"
+	TradingService_ResumeRecurringOrder_FullMethodName       = "/banka.trading.v1.TradingService/ResumeRecurringOrder"
+	TradingService_CancelRecurringOrder_FullMethodName       = "/banka.trading.v1.TradingService/CancelRecurringOrder"
+	TradingService_RunRecurringOrders_FullMethodName         = "/banka.trading.v1.TradingService/RunRecurringOrders"
 )
 
 // TradingServiceClient is the client API for TradingService service.
@@ -267,6 +273,22 @@ type TradingServiceClient interface {
 	// RemoveFromWatchlist removes a security from one of the caller's
 	// watchlists (S37).
 	RemoveFromWatchlist(ctx context.Context, in *RemoveFromWatchlistRequest, opts ...grpc.CallOption) (*RemoveFromWatchlistResponse, error)
+	// CreateRecurringOrder schedules a recurring Market BUY for the caller
+	// (S47/S48). Active=true with NextRun set to the next execution date.
+	CreateRecurringOrder(ctx context.Context, in *CreateRecurringOrderRequest, opts ...grpc.CallOption) (*RecurringOrder, error)
+	// ListRecurringOrders returns the caller's own recurring orders
+	// (active + paused).
+	ListRecurringOrders(ctx context.Context, in *ListRecurringOrdersRequest, opts ...grpc.CallOption) (*ListRecurringOrdersResponse, error)
+	// PauseRecurringOrder flips Active=false so the cron skips it (S51).
+	PauseRecurringOrder(ctx context.Context, in *PauseRecurringOrderRequest, opts ...grpc.CallOption) (*RecurringOrder, error)
+	// ResumeRecurringOrder flips Active=true so the cron picks it back up.
+	ResumeRecurringOrder(ctx context.Context, in *ResumeRecurringOrderRequest, opts ...grpc.CallOption) (*RecurringOrder, error)
+	// CancelRecurringOrder deletes a recurring order permanently (S52).
+	CancelRecurringOrder(ctx context.Context, in *CancelRecurringOrderRequest, opts ...grpc.CallOption) (*CancelRecurringOrderResponse, error)
+	// RunRecurringOrders creates a Market BUY for every due recurring
+	// order and advances each NextRun (S49/S50). Internal-only — driven by
+	// the scheduler on a daily cadence.
+	RunRecurringOrders(ctx context.Context, in *RunRecurringOrdersRequest, opts ...grpc.CallOption) (*RunRecurringOrdersResponse, error)
 }
 
 type tradingServiceClient struct {
@@ -957,6 +979,66 @@ func (c *tradingServiceClient) RemoveFromWatchlist(ctx context.Context, in *Remo
 	return out, nil
 }
 
+func (c *tradingServiceClient) CreateRecurringOrder(ctx context.Context, in *CreateRecurringOrderRequest, opts ...grpc.CallOption) (*RecurringOrder, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(RecurringOrder)
+	err := c.cc.Invoke(ctx, TradingService_CreateRecurringOrder_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *tradingServiceClient) ListRecurringOrders(ctx context.Context, in *ListRecurringOrdersRequest, opts ...grpc.CallOption) (*ListRecurringOrdersResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(ListRecurringOrdersResponse)
+	err := c.cc.Invoke(ctx, TradingService_ListRecurringOrders_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *tradingServiceClient) PauseRecurringOrder(ctx context.Context, in *PauseRecurringOrderRequest, opts ...grpc.CallOption) (*RecurringOrder, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(RecurringOrder)
+	err := c.cc.Invoke(ctx, TradingService_PauseRecurringOrder_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *tradingServiceClient) ResumeRecurringOrder(ctx context.Context, in *ResumeRecurringOrderRequest, opts ...grpc.CallOption) (*RecurringOrder, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(RecurringOrder)
+	err := c.cc.Invoke(ctx, TradingService_ResumeRecurringOrder_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *tradingServiceClient) CancelRecurringOrder(ctx context.Context, in *CancelRecurringOrderRequest, opts ...grpc.CallOption) (*CancelRecurringOrderResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(CancelRecurringOrderResponse)
+	err := c.cc.Invoke(ctx, TradingService_CancelRecurringOrder_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *tradingServiceClient) RunRecurringOrders(ctx context.Context, in *RunRecurringOrdersRequest, opts ...grpc.CallOption) (*RunRecurringOrdersResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(RunRecurringOrdersResponse)
+	err := c.cc.Invoke(ctx, TradingService_RunRecurringOrders_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
 // TradingServiceServer is the server API for TradingService service.
 // All implementations should embed UnimplementedTradingServiceServer
 // for forward compatibility.
@@ -1134,6 +1216,22 @@ type TradingServiceServer interface {
 	// RemoveFromWatchlist removes a security from one of the caller's
 	// watchlists (S37).
 	RemoveFromWatchlist(context.Context, *RemoveFromWatchlistRequest) (*RemoveFromWatchlistResponse, error)
+	// CreateRecurringOrder schedules a recurring Market BUY for the caller
+	// (S47/S48). Active=true with NextRun set to the next execution date.
+	CreateRecurringOrder(context.Context, *CreateRecurringOrderRequest) (*RecurringOrder, error)
+	// ListRecurringOrders returns the caller's own recurring orders
+	// (active + paused).
+	ListRecurringOrders(context.Context, *ListRecurringOrdersRequest) (*ListRecurringOrdersResponse, error)
+	// PauseRecurringOrder flips Active=false so the cron skips it (S51).
+	PauseRecurringOrder(context.Context, *PauseRecurringOrderRequest) (*RecurringOrder, error)
+	// ResumeRecurringOrder flips Active=true so the cron picks it back up.
+	ResumeRecurringOrder(context.Context, *ResumeRecurringOrderRequest) (*RecurringOrder, error)
+	// CancelRecurringOrder deletes a recurring order permanently (S52).
+	CancelRecurringOrder(context.Context, *CancelRecurringOrderRequest) (*CancelRecurringOrderResponse, error)
+	// RunRecurringOrders creates a Market BUY for every due recurring
+	// order and advances each NextRun (S49/S50). Internal-only — driven by
+	// the scheduler on a daily cadence.
+	RunRecurringOrders(context.Context, *RunRecurringOrdersRequest) (*RunRecurringOrdersResponse, error)
 }
 
 // UnimplementedTradingServiceServer should be embedded to have
@@ -1346,6 +1444,24 @@ func (UnimplementedTradingServiceServer) AddToWatchlist(context.Context, *AddToW
 }
 func (UnimplementedTradingServiceServer) RemoveFromWatchlist(context.Context, *RemoveFromWatchlistRequest) (*RemoveFromWatchlistResponse, error) {
 	return nil, status.Error(codes.Unimplemented, "method RemoveFromWatchlist not implemented")
+}
+func (UnimplementedTradingServiceServer) CreateRecurringOrder(context.Context, *CreateRecurringOrderRequest) (*RecurringOrder, error) {
+	return nil, status.Error(codes.Unimplemented, "method CreateRecurringOrder not implemented")
+}
+func (UnimplementedTradingServiceServer) ListRecurringOrders(context.Context, *ListRecurringOrdersRequest) (*ListRecurringOrdersResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method ListRecurringOrders not implemented")
+}
+func (UnimplementedTradingServiceServer) PauseRecurringOrder(context.Context, *PauseRecurringOrderRequest) (*RecurringOrder, error) {
+	return nil, status.Error(codes.Unimplemented, "method PauseRecurringOrder not implemented")
+}
+func (UnimplementedTradingServiceServer) ResumeRecurringOrder(context.Context, *ResumeRecurringOrderRequest) (*RecurringOrder, error) {
+	return nil, status.Error(codes.Unimplemented, "method ResumeRecurringOrder not implemented")
+}
+func (UnimplementedTradingServiceServer) CancelRecurringOrder(context.Context, *CancelRecurringOrderRequest) (*CancelRecurringOrderResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method CancelRecurringOrder not implemented")
+}
+func (UnimplementedTradingServiceServer) RunRecurringOrders(context.Context, *RunRecurringOrdersRequest) (*RunRecurringOrdersResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method RunRecurringOrders not implemented")
 }
 func (UnimplementedTradingServiceServer) testEmbeddedByValue() {}
 
@@ -2591,6 +2707,114 @@ func _TradingService_RemoveFromWatchlist_Handler(srv interface{}, ctx context.Co
 	return interceptor(ctx, in, info, handler)
 }
 
+func _TradingService_CreateRecurringOrder_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(CreateRecurringOrderRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(TradingServiceServer).CreateRecurringOrder(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: TradingService_CreateRecurringOrder_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(TradingServiceServer).CreateRecurringOrder(ctx, req.(*CreateRecurringOrderRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _TradingService_ListRecurringOrders_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(ListRecurringOrdersRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(TradingServiceServer).ListRecurringOrders(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: TradingService_ListRecurringOrders_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(TradingServiceServer).ListRecurringOrders(ctx, req.(*ListRecurringOrdersRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _TradingService_PauseRecurringOrder_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(PauseRecurringOrderRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(TradingServiceServer).PauseRecurringOrder(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: TradingService_PauseRecurringOrder_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(TradingServiceServer).PauseRecurringOrder(ctx, req.(*PauseRecurringOrderRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _TradingService_ResumeRecurringOrder_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(ResumeRecurringOrderRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(TradingServiceServer).ResumeRecurringOrder(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: TradingService_ResumeRecurringOrder_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(TradingServiceServer).ResumeRecurringOrder(ctx, req.(*ResumeRecurringOrderRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _TradingService_CancelRecurringOrder_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(CancelRecurringOrderRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(TradingServiceServer).CancelRecurringOrder(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: TradingService_CancelRecurringOrder_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(TradingServiceServer).CancelRecurringOrder(ctx, req.(*CancelRecurringOrderRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _TradingService_RunRecurringOrders_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(RunRecurringOrdersRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(TradingServiceServer).RunRecurringOrders(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: TradingService_RunRecurringOrders_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(TradingServiceServer).RunRecurringOrders(ctx, req.(*RunRecurringOrdersRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
 // TradingService_ServiceDesc is the grpc.ServiceDesc for TradingService service.
 // It's only intended for direct use with grpc.RegisterService,
 // and not to be introspected or modified (even as a copy)
@@ -2869,6 +3093,30 @@ var TradingService_ServiceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "RemoveFromWatchlist",
 			Handler:    _TradingService_RemoveFromWatchlist_Handler,
+		},
+		{
+			MethodName: "CreateRecurringOrder",
+			Handler:    _TradingService_CreateRecurringOrder_Handler,
+		},
+		{
+			MethodName: "ListRecurringOrders",
+			Handler:    _TradingService_ListRecurringOrders_Handler,
+		},
+		{
+			MethodName: "PauseRecurringOrder",
+			Handler:    _TradingService_PauseRecurringOrder_Handler,
+		},
+		{
+			MethodName: "ResumeRecurringOrder",
+			Handler:    _TradingService_ResumeRecurringOrder_Handler,
+		},
+		{
+			MethodName: "CancelRecurringOrder",
+			Handler:    _TradingService_CancelRecurringOrder_Handler,
+		},
+		{
+			MethodName: "RunRecurringOrders",
+			Handler:    _TradingService_RunRecurringOrders_Handler,
 		},
 	},
 	Streams:  []grpc.StreamDesc{},

@@ -115,7 +115,12 @@ message Notification {
 
 message CreateNotificationRequest {
   string user_id = 1 [(buf.validate.field).string.uuid = true];
-  string user_kind = 2 [(buf.validate.field).string = {in: ["client", "employee"]}];
+  string user_kind = 2 [(buf.validate.field).string = {
+    in: [
+      "client",
+      "employee"
+    ]
+  }];
   string kind = 3;
   string title = 4 [(buf.validate.field).string.min_len = 1];
   string body = 5 [(buf.validate.field).string.min_len = 1];
@@ -125,7 +130,10 @@ message ListNotificationsRequest {
   // 1-indexed; 0 is treated as 1.
   int32 page = 1 [(buf.validate.field).int32.gte = 0];
   // default 50, max 200.
-  int32 page_size = 2 [(buf.validate.field).int32 = {gte: 0, lte: 200}];
+  int32 page_size = 2 [(buf.validate.field).int32 = {
+    gte: 0
+    lte: 200
+  }];
   // When true, only unread notifications are returned.
   bool unread_only = 3;
 }
