@@ -40,6 +40,162 @@ service CrossBankPaymentService {
   rpc GetCrossBankPayment(GetCrossBankPaymentRequest) returns (CrossBankPayment) {
     option (google.api.http) = {get: "/api/v1/payments/interbank/{transaction_id}"};
   }
+
+  // --- Retry queue (celina 5 — todoSpec "Retry queue") ---
+
+  // ListInterbankRetries returns the caller's own retry-queue entries.
+  // When a partner bank is unavailable the cross-bank payment is parked
+  // and retried every 5s; after 30s without success it fails and the
+  // client is notified. This surfaces those entries for transparency.
+  rpc ListInterbankRetries(ListInterbankRetriesRequest) returns (ListInterbankRetriesResponse) {
+    option (google.api.http) = {get: "/api/v1/payments/interbank/retries"};
+  }
+
+  // RunInterbankRetryTick re-drives every due pending retry entry.
+  // Internal-only RPC driven by the scheduler's 5s `trading-interbank-retry`
+  // job (no http annotation).
+  rpc RunInterbankRetryTick(RunInterbankRetryTickRequest) returns (RunInterbankRetryTickResponse);
+
+  // --- Scheduled / periodic inter-bank payments (celina 5 —
+  // todoSpec "Scheduled/periodic inter-bank payments") ---
+
+  // CreateScheduledInterbankPayment schedules a cross-bank payment to run
+  // once on a future date or to repeat on a cadence. Spec example:
+  // "Svakog prvog u mesecu poslati 400 EUR na dati račun."
+  rpc CreateScheduledInterbankPayment(CreateScheduledInterbankPaymentRequest) returns (ScheduledInterbankPayment) {
+    option (google.api.http) = {
+      post: "/api/v1/cross-bank-payments/scheduled"
+      body: "*"
+    };
+  }
+
+  // ListScheduledInterbankPayments returns the caller's own scheduled
+  // payments (active + paused).
+  rpc ListScheduledInterbankPayments(ListScheduledInterbankPaymentsRequest) returns (ListScheduledInterbankPaymentsResponse) {
+    option (google.api.http) = {get: "/api/v1/cross-bank-payments/scheduled"};
+  }
+
+  // PauseScheduledInterbankPayment flips active=false so the sweep skips it.
+  rpc PauseScheduledInterbankPayment(PauseScheduledInterbankPaymentRequest) returns (ScheduledInterbankPayment) {
+    option (google.api.http) = {
+      post: "/api/v1/cross-bank-payments/scheduled/{id}/pause"
+      body: "*"
+    };
+  }
+
+  // ResumeScheduledInterbankPayment flips active=true so the sweep resumes it.
+  rpc ResumeScheduledInterbankPayment(ResumeScheduledInterbankPaymentRequest) returns (ScheduledInterbankPayment) {
+    option (google.api.http) = {
+      post: "/api/v1/cross-bank-payments/scheduled/{id}/resume"
+      body: "*"
+    };
+  }
+
+  // CancelScheduledInterbankPayment deletes a scheduled payment permanently.
+  rpc CancelScheduledInterbankPayment(CancelScheduledInterbankPaymentRequest) returns (CancelScheduledInterbankPaymentResponse) {
+    option (google.api.http) = {delete: "/api/v1/cross-bank-payments/scheduled/{id}"};
+  }
+
+  // RunDueInterbankPayments submits every due scheduled payment.
+  // Internal-only RPC driven by the scheduler's daily
+  // `trading-scheduled-interbank` job (no http annotation).
+  rpc RunDueInterbankPayments(RunDueInterbankPaymentsRequest) returns (RunDueInterbankPaymentsResponse);
+}
+
+// --- Retry queue messages ---
+
+message ListInterbankRetriesRequest {}
+
+message ListInterbankRetriesResponse {
+  repeated InterbankRetryEntry entries = 1;
+}
+
+message InterbankRetryEntry {
+  string id = 1;
+  string transaction_id = 2;
+  string partner_bank_code = 3;
+  string operation = 4;
+  int32 attempt_count = 5;
+  google.protobuf.Timestamp next_retry_at = 6;
+  google.protobuf.Timestamp deadline_at = 7;
+  string status = 8; // pending | succeeded | failed
+  string last_error = 9;
+  google.protobuf.Timestamp created_at = 10;
+  google.protobuf.Timestamp updated_at = 11;
+}
+
+message RunInterbankRetryTickRequest {}
+
+message RunInterbankRetryTickResponse {
+  // settled is the number of entries that reached a terminal state this
+  // tick (succeeded + failed).
+  int32 settled = 1;
+}
+
+// --- Scheduled inter-bank payment messages ---
+
+message ScheduledInterbankPayment {
+  string id = 1;
+  string user_id = 2;
+  string source_account_id = 3;
+  string dest_bank_code = 4;
+  string dest_account_number = 5;
+  Currency currency = 6;
+  string amount = 7;
+  string purpose = 8;
+  // cadence is one of ONCE / DAILY / WEEKLY / MONTHLY (pkg/schedule.Cadence).
+  string cadence = 9;
+  google.protobuf.Timestamp next_run = 10;
+  bool active = 11;
+  string last_status = 12; // most recent run's outcome (running|completed|failed)
+  string last_error = 13;
+  google.protobuf.Timestamp last_run_at = 14;
+  google.protobuf.Timestamp created_at = 15;
+  google.protobuf.Timestamp updated_at = 16;
+}
+
+message CreateScheduledInterbankPaymentRequest {
+  string source_account_id = 1 [(buf.validate.field).string.uuid = true];
+  string dest_bank_code = 2 [(buf.validate.field).string.min_len = 1];
+  string dest_account_number = 3 [(buf.validate.field).string.len = 18];
+  Currency currency = 4 [(buf.validate.field).enum = {
+    defined_only: true
+    not_in: [0]
+  }];
+  string amount = 5 [(buf.validate.field).string.min_len = 1];
+  string purpose = 6;
+  // cadence is one of ONCE / DAILY / WEEKLY / MONTHLY.
+  string cadence = 7 [(buf.validate.field).string.min_len = 1];
+  // start_date (RFC3339) anchors the first run. Required for ONCE
+  // (validated to be in the future); optional for recurring cadences.
+  string start_date = 8;
+}
+
+message ListScheduledInterbankPaymentsRequest {}
+
+message ListScheduledInterbankPaymentsResponse {
+  repeated ScheduledInterbankPayment scheduled_payments = 1;
+}
+
+message PauseScheduledInterbankPaymentRequest {
+  string id = 1 [(buf.validate.field).string.uuid = true];
+}
+
+message ResumeScheduledInterbankPaymentRequest {
+  string id = 1 [(buf.validate.field).string.uuid = true];
+}
+
+message CancelScheduledInterbankPaymentRequest {
+  string id = 1 [(buf.validate.field).string.uuid = true];
+}
+
+message CancelScheduledInterbankPaymentResponse {}
+
+message RunDueInterbankPaymentsRequest {}
+
+message RunDueInterbankPaymentsResponse {
+  // submitted is the number of payments successfully submitted this run.
+  int32 submitted = 1;
 }
 
 message SubmitCrossBankPaymentRequest {

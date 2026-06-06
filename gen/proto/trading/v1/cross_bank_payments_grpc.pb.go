@@ -19,8 +19,16 @@ import (
 const _ = grpc.SupportPackageIsVersion9
 
 const (
-	CrossBankPaymentService_SubmitCrossBankPayment_FullMethodName = "/banka.trading.v1.CrossBankPaymentService/SubmitCrossBankPayment"
-	CrossBankPaymentService_GetCrossBankPayment_FullMethodName    = "/banka.trading.v1.CrossBankPaymentService/GetCrossBankPayment"
+	CrossBankPaymentService_SubmitCrossBankPayment_FullMethodName          = "/banka.trading.v1.CrossBankPaymentService/SubmitCrossBankPayment"
+	CrossBankPaymentService_GetCrossBankPayment_FullMethodName             = "/banka.trading.v1.CrossBankPaymentService/GetCrossBankPayment"
+	CrossBankPaymentService_ListInterbankRetries_FullMethodName            = "/banka.trading.v1.CrossBankPaymentService/ListInterbankRetries"
+	CrossBankPaymentService_RunInterbankRetryTick_FullMethodName           = "/banka.trading.v1.CrossBankPaymentService/RunInterbankRetryTick"
+	CrossBankPaymentService_CreateScheduledInterbankPayment_FullMethodName = "/banka.trading.v1.CrossBankPaymentService/CreateScheduledInterbankPayment"
+	CrossBankPaymentService_ListScheduledInterbankPayments_FullMethodName  = "/banka.trading.v1.CrossBankPaymentService/ListScheduledInterbankPayments"
+	CrossBankPaymentService_PauseScheduledInterbankPayment_FullMethodName  = "/banka.trading.v1.CrossBankPaymentService/PauseScheduledInterbankPayment"
+	CrossBankPaymentService_ResumeScheduledInterbankPayment_FullMethodName = "/banka.trading.v1.CrossBankPaymentService/ResumeScheduledInterbankPayment"
+	CrossBankPaymentService_CancelScheduledInterbankPayment_FullMethodName = "/banka.trading.v1.CrossBankPaymentService/CancelScheduledInterbankPayment"
+	CrossBankPaymentService_RunDueInterbankPayments_FullMethodName         = "/banka.trading.v1.CrossBankPaymentService/RunDueInterbankPayments"
 )
 
 // CrossBankPaymentServiceClient is the client API for CrossBankPaymentService service.
@@ -52,6 +60,32 @@ type CrossBankPaymentServiceClient interface {
 	// GetCrossBankPayment fetches a saga row by transaction_id.
 	// Auth: only the originator (or admin) sees their payment.
 	GetCrossBankPayment(ctx context.Context, in *GetCrossBankPaymentRequest, opts ...grpc.CallOption) (*CrossBankPayment, error)
+	// ListInterbankRetries returns the caller's own retry-queue entries.
+	// When a partner bank is unavailable the cross-bank payment is parked
+	// and retried every 5s; after 30s without success it fails and the
+	// client is notified. This surfaces those entries for transparency.
+	ListInterbankRetries(ctx context.Context, in *ListInterbankRetriesRequest, opts ...grpc.CallOption) (*ListInterbankRetriesResponse, error)
+	// RunInterbankRetryTick re-drives every due pending retry entry.
+	// Internal-only RPC driven by the scheduler's 5s `trading-interbank-retry`
+	// job (no http annotation).
+	RunInterbankRetryTick(ctx context.Context, in *RunInterbankRetryTickRequest, opts ...grpc.CallOption) (*RunInterbankRetryTickResponse, error)
+	// CreateScheduledInterbankPayment schedules a cross-bank payment to run
+	// once on a future date or to repeat on a cadence. Spec example:
+	// "Svakog prvog u mesecu poslati 400 EUR na dati račun."
+	CreateScheduledInterbankPayment(ctx context.Context, in *CreateScheduledInterbankPaymentRequest, opts ...grpc.CallOption) (*ScheduledInterbankPayment, error)
+	// ListScheduledInterbankPayments returns the caller's own scheduled
+	// payments (active + paused).
+	ListScheduledInterbankPayments(ctx context.Context, in *ListScheduledInterbankPaymentsRequest, opts ...grpc.CallOption) (*ListScheduledInterbankPaymentsResponse, error)
+	// PauseScheduledInterbankPayment flips active=false so the sweep skips it.
+	PauseScheduledInterbankPayment(ctx context.Context, in *PauseScheduledInterbankPaymentRequest, opts ...grpc.CallOption) (*ScheduledInterbankPayment, error)
+	// ResumeScheduledInterbankPayment flips active=true so the sweep resumes it.
+	ResumeScheduledInterbankPayment(ctx context.Context, in *ResumeScheduledInterbankPaymentRequest, opts ...grpc.CallOption) (*ScheduledInterbankPayment, error)
+	// CancelScheduledInterbankPayment deletes a scheduled payment permanently.
+	CancelScheduledInterbankPayment(ctx context.Context, in *CancelScheduledInterbankPaymentRequest, opts ...grpc.CallOption) (*CancelScheduledInterbankPaymentResponse, error)
+	// RunDueInterbankPayments submits every due scheduled payment.
+	// Internal-only RPC driven by the scheduler's daily
+	// `trading-scheduled-interbank` job (no http annotation).
+	RunDueInterbankPayments(ctx context.Context, in *RunDueInterbankPaymentsRequest, opts ...grpc.CallOption) (*RunDueInterbankPaymentsResponse, error)
 }
 
 type crossBankPaymentServiceClient struct {
@@ -76,6 +110,86 @@ func (c *crossBankPaymentServiceClient) GetCrossBankPayment(ctx context.Context,
 	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
 	out := new(CrossBankPayment)
 	err := c.cc.Invoke(ctx, CrossBankPaymentService_GetCrossBankPayment_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *crossBankPaymentServiceClient) ListInterbankRetries(ctx context.Context, in *ListInterbankRetriesRequest, opts ...grpc.CallOption) (*ListInterbankRetriesResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(ListInterbankRetriesResponse)
+	err := c.cc.Invoke(ctx, CrossBankPaymentService_ListInterbankRetries_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *crossBankPaymentServiceClient) RunInterbankRetryTick(ctx context.Context, in *RunInterbankRetryTickRequest, opts ...grpc.CallOption) (*RunInterbankRetryTickResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(RunInterbankRetryTickResponse)
+	err := c.cc.Invoke(ctx, CrossBankPaymentService_RunInterbankRetryTick_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *crossBankPaymentServiceClient) CreateScheduledInterbankPayment(ctx context.Context, in *CreateScheduledInterbankPaymentRequest, opts ...grpc.CallOption) (*ScheduledInterbankPayment, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(ScheduledInterbankPayment)
+	err := c.cc.Invoke(ctx, CrossBankPaymentService_CreateScheduledInterbankPayment_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *crossBankPaymentServiceClient) ListScheduledInterbankPayments(ctx context.Context, in *ListScheduledInterbankPaymentsRequest, opts ...grpc.CallOption) (*ListScheduledInterbankPaymentsResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(ListScheduledInterbankPaymentsResponse)
+	err := c.cc.Invoke(ctx, CrossBankPaymentService_ListScheduledInterbankPayments_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *crossBankPaymentServiceClient) PauseScheduledInterbankPayment(ctx context.Context, in *PauseScheduledInterbankPaymentRequest, opts ...grpc.CallOption) (*ScheduledInterbankPayment, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(ScheduledInterbankPayment)
+	err := c.cc.Invoke(ctx, CrossBankPaymentService_PauseScheduledInterbankPayment_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *crossBankPaymentServiceClient) ResumeScheduledInterbankPayment(ctx context.Context, in *ResumeScheduledInterbankPaymentRequest, opts ...grpc.CallOption) (*ScheduledInterbankPayment, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(ScheduledInterbankPayment)
+	err := c.cc.Invoke(ctx, CrossBankPaymentService_ResumeScheduledInterbankPayment_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *crossBankPaymentServiceClient) CancelScheduledInterbankPayment(ctx context.Context, in *CancelScheduledInterbankPaymentRequest, opts ...grpc.CallOption) (*CancelScheduledInterbankPaymentResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(CancelScheduledInterbankPaymentResponse)
+	err := c.cc.Invoke(ctx, CrossBankPaymentService_CancelScheduledInterbankPayment_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *crossBankPaymentServiceClient) RunDueInterbankPayments(ctx context.Context, in *RunDueInterbankPaymentsRequest, opts ...grpc.CallOption) (*RunDueInterbankPaymentsResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(RunDueInterbankPaymentsResponse)
+	err := c.cc.Invoke(ctx, CrossBankPaymentService_RunDueInterbankPayments_FullMethodName, in, out, cOpts...)
 	if err != nil {
 		return nil, err
 	}
@@ -111,6 +225,32 @@ type CrossBankPaymentServiceServer interface {
 	// GetCrossBankPayment fetches a saga row by transaction_id.
 	// Auth: only the originator (or admin) sees their payment.
 	GetCrossBankPayment(context.Context, *GetCrossBankPaymentRequest) (*CrossBankPayment, error)
+	// ListInterbankRetries returns the caller's own retry-queue entries.
+	// When a partner bank is unavailable the cross-bank payment is parked
+	// and retried every 5s; after 30s without success it fails and the
+	// client is notified. This surfaces those entries for transparency.
+	ListInterbankRetries(context.Context, *ListInterbankRetriesRequest) (*ListInterbankRetriesResponse, error)
+	// RunInterbankRetryTick re-drives every due pending retry entry.
+	// Internal-only RPC driven by the scheduler's 5s `trading-interbank-retry`
+	// job (no http annotation).
+	RunInterbankRetryTick(context.Context, *RunInterbankRetryTickRequest) (*RunInterbankRetryTickResponse, error)
+	// CreateScheduledInterbankPayment schedules a cross-bank payment to run
+	// once on a future date or to repeat on a cadence. Spec example:
+	// "Svakog prvog u mesecu poslati 400 EUR na dati račun."
+	CreateScheduledInterbankPayment(context.Context, *CreateScheduledInterbankPaymentRequest) (*ScheduledInterbankPayment, error)
+	// ListScheduledInterbankPayments returns the caller's own scheduled
+	// payments (active + paused).
+	ListScheduledInterbankPayments(context.Context, *ListScheduledInterbankPaymentsRequest) (*ListScheduledInterbankPaymentsResponse, error)
+	// PauseScheduledInterbankPayment flips active=false so the sweep skips it.
+	PauseScheduledInterbankPayment(context.Context, *PauseScheduledInterbankPaymentRequest) (*ScheduledInterbankPayment, error)
+	// ResumeScheduledInterbankPayment flips active=true so the sweep resumes it.
+	ResumeScheduledInterbankPayment(context.Context, *ResumeScheduledInterbankPaymentRequest) (*ScheduledInterbankPayment, error)
+	// CancelScheduledInterbankPayment deletes a scheduled payment permanently.
+	CancelScheduledInterbankPayment(context.Context, *CancelScheduledInterbankPaymentRequest) (*CancelScheduledInterbankPaymentResponse, error)
+	// RunDueInterbankPayments submits every due scheduled payment.
+	// Internal-only RPC driven by the scheduler's daily
+	// `trading-scheduled-interbank` job (no http annotation).
+	RunDueInterbankPayments(context.Context, *RunDueInterbankPaymentsRequest) (*RunDueInterbankPaymentsResponse, error)
 }
 
 // UnimplementedCrossBankPaymentServiceServer should be embedded to have
@@ -125,6 +265,30 @@ func (UnimplementedCrossBankPaymentServiceServer) SubmitCrossBankPayment(context
 }
 func (UnimplementedCrossBankPaymentServiceServer) GetCrossBankPayment(context.Context, *GetCrossBankPaymentRequest) (*CrossBankPayment, error) {
 	return nil, status.Error(codes.Unimplemented, "method GetCrossBankPayment not implemented")
+}
+func (UnimplementedCrossBankPaymentServiceServer) ListInterbankRetries(context.Context, *ListInterbankRetriesRequest) (*ListInterbankRetriesResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method ListInterbankRetries not implemented")
+}
+func (UnimplementedCrossBankPaymentServiceServer) RunInterbankRetryTick(context.Context, *RunInterbankRetryTickRequest) (*RunInterbankRetryTickResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method RunInterbankRetryTick not implemented")
+}
+func (UnimplementedCrossBankPaymentServiceServer) CreateScheduledInterbankPayment(context.Context, *CreateScheduledInterbankPaymentRequest) (*ScheduledInterbankPayment, error) {
+	return nil, status.Error(codes.Unimplemented, "method CreateScheduledInterbankPayment not implemented")
+}
+func (UnimplementedCrossBankPaymentServiceServer) ListScheduledInterbankPayments(context.Context, *ListScheduledInterbankPaymentsRequest) (*ListScheduledInterbankPaymentsResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method ListScheduledInterbankPayments not implemented")
+}
+func (UnimplementedCrossBankPaymentServiceServer) PauseScheduledInterbankPayment(context.Context, *PauseScheduledInterbankPaymentRequest) (*ScheduledInterbankPayment, error) {
+	return nil, status.Error(codes.Unimplemented, "method PauseScheduledInterbankPayment not implemented")
+}
+func (UnimplementedCrossBankPaymentServiceServer) ResumeScheduledInterbankPayment(context.Context, *ResumeScheduledInterbankPaymentRequest) (*ScheduledInterbankPayment, error) {
+	return nil, status.Error(codes.Unimplemented, "method ResumeScheduledInterbankPayment not implemented")
+}
+func (UnimplementedCrossBankPaymentServiceServer) CancelScheduledInterbankPayment(context.Context, *CancelScheduledInterbankPaymentRequest) (*CancelScheduledInterbankPaymentResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method CancelScheduledInterbankPayment not implemented")
+}
+func (UnimplementedCrossBankPaymentServiceServer) RunDueInterbankPayments(context.Context, *RunDueInterbankPaymentsRequest) (*RunDueInterbankPaymentsResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method RunDueInterbankPayments not implemented")
 }
 func (UnimplementedCrossBankPaymentServiceServer) testEmbeddedByValue() {}
 
@@ -182,6 +346,150 @@ func _CrossBankPaymentService_GetCrossBankPayment_Handler(srv interface{}, ctx c
 	return interceptor(ctx, in, info, handler)
 }
 
+func _CrossBankPaymentService_ListInterbankRetries_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(ListInterbankRetriesRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(CrossBankPaymentServiceServer).ListInterbankRetries(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: CrossBankPaymentService_ListInterbankRetries_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(CrossBankPaymentServiceServer).ListInterbankRetries(ctx, req.(*ListInterbankRetriesRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _CrossBankPaymentService_RunInterbankRetryTick_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(RunInterbankRetryTickRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(CrossBankPaymentServiceServer).RunInterbankRetryTick(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: CrossBankPaymentService_RunInterbankRetryTick_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(CrossBankPaymentServiceServer).RunInterbankRetryTick(ctx, req.(*RunInterbankRetryTickRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _CrossBankPaymentService_CreateScheduledInterbankPayment_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(CreateScheduledInterbankPaymentRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(CrossBankPaymentServiceServer).CreateScheduledInterbankPayment(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: CrossBankPaymentService_CreateScheduledInterbankPayment_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(CrossBankPaymentServiceServer).CreateScheduledInterbankPayment(ctx, req.(*CreateScheduledInterbankPaymentRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _CrossBankPaymentService_ListScheduledInterbankPayments_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(ListScheduledInterbankPaymentsRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(CrossBankPaymentServiceServer).ListScheduledInterbankPayments(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: CrossBankPaymentService_ListScheduledInterbankPayments_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(CrossBankPaymentServiceServer).ListScheduledInterbankPayments(ctx, req.(*ListScheduledInterbankPaymentsRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _CrossBankPaymentService_PauseScheduledInterbankPayment_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(PauseScheduledInterbankPaymentRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(CrossBankPaymentServiceServer).PauseScheduledInterbankPayment(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: CrossBankPaymentService_PauseScheduledInterbankPayment_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(CrossBankPaymentServiceServer).PauseScheduledInterbankPayment(ctx, req.(*PauseScheduledInterbankPaymentRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _CrossBankPaymentService_ResumeScheduledInterbankPayment_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(ResumeScheduledInterbankPaymentRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(CrossBankPaymentServiceServer).ResumeScheduledInterbankPayment(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: CrossBankPaymentService_ResumeScheduledInterbankPayment_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(CrossBankPaymentServiceServer).ResumeScheduledInterbankPayment(ctx, req.(*ResumeScheduledInterbankPaymentRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _CrossBankPaymentService_CancelScheduledInterbankPayment_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(CancelScheduledInterbankPaymentRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(CrossBankPaymentServiceServer).CancelScheduledInterbankPayment(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: CrossBankPaymentService_CancelScheduledInterbankPayment_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(CrossBankPaymentServiceServer).CancelScheduledInterbankPayment(ctx, req.(*CancelScheduledInterbankPaymentRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _CrossBankPaymentService_RunDueInterbankPayments_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(RunDueInterbankPaymentsRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(CrossBankPaymentServiceServer).RunDueInterbankPayments(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: CrossBankPaymentService_RunDueInterbankPayments_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(CrossBankPaymentServiceServer).RunDueInterbankPayments(ctx, req.(*RunDueInterbankPaymentsRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
 // CrossBankPaymentService_ServiceDesc is the grpc.ServiceDesc for CrossBankPaymentService service.
 // It's only intended for direct use with grpc.RegisterService,
 // and not to be introspected or modified (even as a copy)
@@ -196,6 +504,38 @@ var CrossBankPaymentService_ServiceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "GetCrossBankPayment",
 			Handler:    _CrossBankPaymentService_GetCrossBankPayment_Handler,
+		},
+		{
+			MethodName: "ListInterbankRetries",
+			Handler:    _CrossBankPaymentService_ListInterbankRetries_Handler,
+		},
+		{
+			MethodName: "RunInterbankRetryTick",
+			Handler:    _CrossBankPaymentService_RunInterbankRetryTick_Handler,
+		},
+		{
+			MethodName: "CreateScheduledInterbankPayment",
+			Handler:    _CrossBankPaymentService_CreateScheduledInterbankPayment_Handler,
+		},
+		{
+			MethodName: "ListScheduledInterbankPayments",
+			Handler:    _CrossBankPaymentService_ListScheduledInterbankPayments_Handler,
+		},
+		{
+			MethodName: "PauseScheduledInterbankPayment",
+			Handler:    _CrossBankPaymentService_PauseScheduledInterbankPayment_Handler,
+		},
+		{
+			MethodName: "ResumeScheduledInterbankPayment",
+			Handler:    _CrossBankPaymentService_ResumeScheduledInterbankPayment_Handler,
+		},
+		{
+			MethodName: "CancelScheduledInterbankPayment",
+			Handler:    _CrossBankPaymentService_CancelScheduledInterbankPayment_Handler,
+		},
+		{
+			MethodName: "RunDueInterbankPayments",
+			Handler:    _CrossBankPaymentService_RunDueInterbankPayments_Handler,
 		},
 	},
 	Streams:  []grpc.StreamDesc{},

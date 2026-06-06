@@ -67,6 +67,15 @@ func (a *App) buildJobs() []job {
 			// Fired daily; RunDividendPayout no-ops unless the call lands
 			// on the last business day of the quarter (todoSpec C3 S54).
 			a.daily("trading-dividends", 23, 45, a.tradingDividends),
+			// Celina 5 — inter-bank retry queue: re-drive parked
+			// cross-bank payments every 5s (spec: retry every 5s, abort
+			// after 30s). fireNow so the worker picks up entries promptly
+			// on leader acquisition.
+			a.interval("trading-interbank-retry", config.Duration("INTERBANK_RETRY_TICK", 5*time.Second), true, a.tradingInterbankRetry),
+			// Celina 5 — scheduled/periodic inter-bank payments: submit
+			// every due scheduled cross-bank payment. Daily sweep (the
+			// finest cadence is DAILY).
+			a.daily("trading-scheduled-interbank", 0, 15, a.tradingScheduledInterbank),
 		)
 	}
 	if a.exchange != nil {
@@ -344,6 +353,28 @@ func (a *App) tradingDCA(ctx context.Context) error {
 	}
 	if r.GetCreated() > 0 {
 		a.log.Info("dca recurring orders ran", "created", r.GetCreated())
+	}
+	return nil
+}
+
+func (a *App) tradingInterbankRetry(ctx context.Context) error {
+	r, err := a.crossBank.RunInterbankRetryTick(ctx, &tradingpb.RunInterbankRetryTickRequest{})
+	if err != nil {
+		return err
+	}
+	if r.GetSettled() > 0 {
+		a.log.Info("interbank retry tick", "settled", r.GetSettled())
+	}
+	return nil
+}
+
+func (a *App) tradingScheduledInterbank(ctx context.Context) error {
+	r, err := a.crossBank.RunDueInterbankPayments(ctx, &tradingpb.RunDueInterbankPaymentsRequest{})
+	if err != nil {
+		return err
+	}
+	if r.GetSubmitted() > 0 {
+		a.log.Info("scheduled interbank payments ran", "submitted", r.GetSubmitted())
 	}
 	return nil
 }
