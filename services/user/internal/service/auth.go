@@ -8,6 +8,7 @@ import (
 
 	"github.com/RAF-SI-2025/Banka-3-Backend/pkg/apperr"
 	"github.com/RAF-SI-2025/Banka-3-Backend/pkg/auth"
+	"github.com/RAF-SI-2025/Banka-3-Backend/pkg/bizmetric"
 	"github.com/RAF-SI-2025/Banka-3-Backend/pkg/passwords"
 	"github.com/RAF-SI-2025/Banka-3-Backend/pkg/tokens"
 	"github.com/RAF-SI-2025/Banka-3-Backend/services/user/internal/domain"
@@ -61,9 +62,15 @@ type LoginResult struct {
 // valid email addresses by observing different error responses. The
 // spec calls out the wrong-password copy explicitly (E2E p.4) and we
 // apply it uniformly to the unknown-email path too.
-func (s *Service) Login(ctx context.Context, email, password string, opts ...LoginOption) (*LoginResult, error) {
+func (s *Service) Login(ctx context.Context, email, password string, opts ...LoginOption) (res *LoginResult, err error) {
+	// banka_user_logins_total — emit on every return so the business
+	// dashboard sees the success/failure mix. Reason mapping is in
+	// loginResult below; keep it stable, the dashboard colorises by it.
+	defer func() { bizmetric.UserLogin(ctx, loginResult(err)) }()
+
 	email = strings.TrimSpace(email)
 	if email == "" || password == "" {
+		s.Log.WarnContext(ctx, "login rejected: missing credentials")
 		return nil, apperr.Validation("email and password are required")
 	}
 	longLived := resolveOpts(opts).longLived
@@ -105,9 +112,11 @@ func (s *Service) completeLogin(
 	longLived bool,
 ) (*LoginResult, error) {
 	if !active {
+		s.Log.WarnContext(ctx, "login rejected: account disabled", "user_id", userID, "kind", kind)
 		return nil, apperr.PermissionDenied("nalog je deaktiviran")
 	}
 	if !activated {
+		s.Log.WarnContext(ctx, "login rejected: account not activated", "user_id", userID, "kind", kind)
 		return nil, apperr.FailedPrecondition("nalog nije aktiviran")
 	}
 	// Brute-force lockout (S7–S8): refuse a still-locked account before
@@ -117,6 +126,7 @@ func (s *Service) completeLogin(
 	}
 	ok, err := passwords.Verify(password, passwordHash)
 	if err != nil || !ok {
+		s.Log.WarnContext(ctx, "login rejected: bad password", "user_id", userID, "kind", kind)
 		// Wrong password: bump the counter and lock once the threshold
 		// is reached (S7–S8).
 		newCount, _ := s.Store.IncrementFailedLogin(ctx, kind, userID)
@@ -286,6 +296,31 @@ func (s *Service) lookupAuthState(ctx context.Context, kind domain.UserKind, use
 		return c.Permissions, c.SessionVersion, c.Active, nil
 	}
 	return nil, 0, false, apperr.Internal("unknown user kind", nil)
+}
+
+// loginResult maps a Login() return into a stable label for the
+// banka_user_logins_total counter. The label set is small and shared
+// with the business dashboard's colour overrides.
+func loginResult(err error) string {
+	if err == nil {
+		return "ok"
+	}
+	var ae *apperr.Error
+	if !errors.As(err, &ae) {
+		return "internal"
+	}
+	switch ae.Kind {
+	case apperr.KindUnauthenticated:
+		return "bad_password" // includes "email not found" — indistinguishable by design
+	case apperr.KindValidation:
+		return "validation"
+	case apperr.KindPermissionDenied:
+		return "disabled"
+	case apperr.KindFailedPrecondition:
+		return "not_activated"
+	default:
+		return "internal"
+	}
 }
 
 func isNotFound(err error) bool {

@@ -52,6 +52,7 @@ import (
 	"fmt"
 	"time"
 
+	"github.com/exaring/otelpgx"
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgconn"
 	"github.com/jackc/pgx/v5/pgxpool"
@@ -71,6 +72,12 @@ func Open(ctx context.Context, dsn string) (*pgxpool.Pool, error) {
 	cfg.MinConns = 1
 	cfg.MaxConnLifetime = 30 * time.Minute
 	cfg.MaxConnIdleTime = 5 * time.Minute
+	// otelpgx hooks into pgx's per-query callbacks so every SQL op
+	// becomes a child span of the calling request's span. Query
+	// parameters are omitted from the span (default) to keep PII like
+	// account numbers / amounts out of Tempo — only the statement text
+	// and timings are recorded.
+	cfg.ConnConfig.Tracer = otelpgx.NewTracer()
 
 	pool, err := pgxpool.NewWithConfig(ctx, cfg)
 	if err != nil {

@@ -526,9 +526,9 @@ func TestSG11_CoordinatorRestart(t *testing.T) {
 		_ = store.Insert(context.Background(), &Row{
 			TransactionID: "sg11a", SagaType: "ex",
 			CurrentStep: "reserve_seller_shares", StepNo: 2,
-			Log:         []LogEntry{{Step: "F1", Result: "ok"}, {Step: "F2", Result: "ok"}},
-			State:       mustJSON(exState{Qty: 10, Strike: 300}),
-			Status:      StatusRunning, AttemptsMax: 8, NextAttemptAt: time.Now().Add(-time.Second),
+			Log:    []LogEntry{{Step: "F1", Result: "ok"}, {Step: "F2", Result: "ok"}},
+			State:  mustJSON(exState{Qty: 10, Strike: 300}),
+			Status: StatusRunning, AttemptsMax: 8, NextAttemptAt: time.Now().Add(-time.Second),
 		})
 		o := New(store, reg, quietLogger())
 
@@ -562,9 +562,9 @@ func TestSG11_CoordinatorRestart(t *testing.T) {
 		_ = store.Insert(context.Background(), &Row{
 			TransactionID: "sg11b", SagaType: "ex",
 			CurrentStep: "reserve_buyer_strike", StepNo: 2,
-			Log:         []LogEntry{{Step: "F1", Result: "ok"}, {Step: "F2", Result: "err"}},
-			State:       mustJSON(exState{Qty: 10, Strike: 300}),
-			Status:      StatusCompensating, AttemptsMax: 8, NextAttemptAt: time.Now().Add(-time.Second),
+			Log:    []LogEntry{{Step: "F1", Result: "ok"}, {Step: "F2", Result: "err"}},
+			State:  mustJSON(exState{Qty: 10, Strike: 300}),
+			Status: StatusCompensating, AttemptsMax: 8, NextAttemptAt: time.Now().Add(-time.Second),
 		})
 		o := New(store, reg, quietLogger())
 

@@ -79,10 +79,10 @@ func TestQuarterOf(t *testing.T) {
 func TestLastBusinessDayOfQuarter(t *testing.T) {
 	utc := time.UTC
 	cases := []struct {
-		year, q          int
-		wantY            int
-		wantM            time.Month
-		wantD            int
+		year, q int
+		wantY   int
+		wantM   time.Month
+		wantD   int
 	}{
 		// 2026-03-31 is a Tuesday → itself.
 		{2026, 1, 2026, time.March, 31},

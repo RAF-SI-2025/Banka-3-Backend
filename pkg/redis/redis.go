@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"time"
 
+	"github.com/redis/go-redis/extra/redisotel/v9"
 	"github.com/redis/go-redis/v9"
 )
 
@@ -18,6 +19,16 @@ func Open(ctx context.Context, addr, password string) (*redis.Client, error) {
 		ReadTimeout:  3 * time.Second,
 		WriteTimeout: 3 * time.Second,
 	})
+	// redisotel hooks into go-redis's per-command callback so every
+	// SET/GET/HGET/EXPIRE/... becomes a child span of the calling
+	// request. Failure to install the hook is non-fatal — log only,
+	// keep serving; redis still works, just without trace correlation.
+	if err := redisotel.InstrumentTracing(c); err != nil {
+		// No logger here (pkg/redis is library-level). Swallow — the
+		// service main has the option to wire a logger later if this
+		// turns out to be useful to surface.
+		_ = err
+	}
 	pingCtx, cancel := context.WithTimeout(ctx, 5*time.Second)
 	defer cancel()
 	if err := c.Ping(pingCtx).Err(); err != nil {

@@ -249,8 +249,11 @@ func Run() error {
 	// down to user/bank/trading/exchange.
 	httpAddr := fmt.Sprintf(":%d", config.Int("HTTP_PORT", 8080))
 	httpSrv := &http.Server{
-		Addr:              httpAddr,
-		Handler:           prov.WrapHTTP(httpHandler, "gateway"),
+		Addr: httpAddr,
+		// accessLog sits inside otelhttp so its span timing still
+		// reflects the full handler. Log lines correlate with Tempo
+		// traces via the W3C traceparent on the request context.
+		Handler:           prov.WrapHTTP(accessLog(log, httpHandler), "gateway"),
 		ReadHeaderTimeout: 5 * time.Second,
 	}
 
