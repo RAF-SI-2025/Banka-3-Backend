@@ -139,6 +139,7 @@ func Run() error {
 			r.PartnerPayments = &router.PartnerPayments{
 				APIKey:    apiKey,
 				Interbank: cs.InterbankProtocol,
+				SignKey:   config.String("INTERBANK_SIGN_KEY", ""),
 			}
 		}
 		// Banka-2 dialect inbound shim — re-uses the same shared API

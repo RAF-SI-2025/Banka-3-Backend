@@ -19,6 +19,7 @@
 package router
 
 import (
+	"bytes"
 	"context"
 	"crypto/subtle"
 	"encoding/json"
@@ -28,6 +29,7 @@ import (
 	bankpb "github.com/RAF-SI-2025/Banka-3-Backend/gen/proto/bank/v1"
 	pkgauth "github.com/RAF-SI-2025/Banka-3-Backend/pkg/auth"
 	"github.com/RAF-SI-2025/Banka-3-Backend/pkg/permissions"
+	"github.com/RAF-SI-2025/Banka-3-Backend/pkg/signature"
 )
 
 // partnerCtx stamps the gateway's admin-sentinel principal as outgoing
@@ -49,6 +51,13 @@ func partnerCtx(ctx context.Context) context.Context {
 type PartnerPayments struct {
 	APIKey    string
 	Interbank bankpb.InterbankProtocolServiceClient
+	// SignKey enables celina-5 digital-signature verification on inbound
+	// partner messages. When set, guard() verifies X-Timestamp +
+	// X-Signature against the raw request body via pkg/signature and
+	// rejects bad/missing/stale signatures with 401, in addition to the
+	// X-Api-Key check. Empty disables verification so a dev stack without
+	// INTERBANK_SIGN_KEY accepts unsigned partner traffic.
+	SignKey string
 }
 
 // Wire types — native protocol, snake_case JSON.
@@ -107,11 +116,29 @@ func (p *PartnerPayments) MountPartnerPayments(mux *http.ServeMux) {
 
 func (p *PartnerPayments) guard(h http.HandlerFunc) http.HandlerFunc {
 	expected := []byte(p.APIKey)
+	verifier := signature.New(p.SignKey)
 	return func(w http.ResponseWriter, r *http.Request) {
 		got := []byte(r.Header.Get("X-Api-Key"))
 		if subtle.ConstantTimeCompare(got, expected) != 1 {
 			writeError(w, http.StatusUnauthorized, "invalid X-Api-Key")
 			return
+		}
+		// Celina-5 digital signature: when a sign key is configured,
+		// verify the timestamp + signature over the raw body before the
+		// handler runs. The body is buffered and restored so downstream
+		// handlers (which read r.Body themselves) are unaffected.
+		if verifier.Enabled() {
+			body, err := io.ReadAll(io.LimitReader(r.Body, 1<<20))
+			_ = r.Body.Close()
+			if err != nil {
+				writeError(w, http.StatusBadRequest, "read body: "+err.Error())
+				return
+			}
+			if err := verifier.Verify(body, r.Header.Get("X-Timestamp"), r.Header.Get("X-Signature")); err != nil {
+				writeError(w, http.StatusUnauthorized, "invalid signature: "+err.Error())
+				return
+			}
+			r.Body = io.NopCloser(bytes.NewReader(body))
 		}
 		h(w, r)
 	}

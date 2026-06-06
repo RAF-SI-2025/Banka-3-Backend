@@ -11,6 +11,8 @@ import (
 	"strings"
 	"sync"
 	"time"
+
+	"github.com/RAF-SI-2025/Banka-3-Backend/pkg/signature"
 )
 
 // Protocol identifies which wire shape a partner bank speaks.
@@ -49,6 +51,12 @@ type Config struct {
 	// OwnRoutingNumber identifies this bank to the partner (echoed in
 	// request payloads so partners can populate their remote_bank_code).
 	OwnRoutingNumber string
+	// SignKey is the shared secret for the celina-5 digital-signature
+	// primitive (INTERBANK_SIGN_KEY). When non-empty, every outbound
+	// request is stamped with X-Timestamp, X-Content-Hash, and
+	// X-Signature so the receiving bank can authenticate us and detect
+	// tampering/replay. Empty disables signing (dev stack without a key).
+	SignKey string
 	// HTTPClient — caller may override; defaults to a 10s-timeout client.
 	HTTPClient *http.Client
 }
@@ -59,6 +67,7 @@ type Config struct {
 type Client struct {
 	cfg       Config
 	log       *slog.Logger
+	signer    *signature.Signer
 	protocols sync.Map // bankCode -> Protocol (sticky after first probe)
 }
 
@@ -70,7 +79,7 @@ func New(cfg Config, log *slog.Logger) *Client {
 	if log == nil {
 		log = slog.Default()
 	}
-	return &Client{cfg: cfg, log: log}
+	return &Client{cfg: cfg, log: log, signer: signature.New(cfg.SignKey)}
 }
 
 // baseURL returns the registered URL for the bank code, or "".
@@ -153,6 +162,28 @@ func (c *Client) probeOK(ctx context.Context, method, url string, withAPIKey boo
 	return resp.StatusCode >= 200 && resp.StatusCode < 300
 }
 
+// signRequest stamps the celina-5 digital-signature headers on an
+// outbound request when a sign key is configured. body is the exact
+// bytes that will be sent (nil/empty for GET probes). When signing is
+// disabled the request is left untouched, so a dev stack without
+// INTERBANK_SIGN_KEY interoperates with an unsigned peer.
+func (c *Client) signRequest(req *http.Request, body []byte) {
+	if c.signer == nil || !c.signer.Enabled() {
+		return
+	}
+	ts := c.signer.Timestamp()
+	sig, err := c.signer.Sign(body, ts)
+	if err != nil {
+		// Enabled() is true so the only error is a programming bug;
+		// log and send unsigned rather than dropping the request.
+		c.log.Warn("interbank sign failed", "error", err)
+		return
+	}
+	req.Header.Set("X-Timestamp", ts)
+	req.Header.Set("X-Content-Hash", signature.ContentHash(body))
+	req.Header.Set("X-Signature", sig)
+}
+
 // doJSON marshals body to JSON, attaches API key, fires the request,
 // reads up to ~1 MiB of response into respBody, returns the response
 // status code and body (regardless of status — callers decide whether
@@ -160,8 +191,10 @@ func (c *Client) probeOK(ctx context.Context, method, url string, withAPIKey boo
 // the caller can surface the partner's error message.
 func (c *Client) doJSON(ctx context.Context, method, url string, body any) (int, []byte, error) {
 	var reader io.Reader
+	var buf []byte
 	if body != nil {
-		buf, err := json.Marshal(body)
+		var err error
+		buf, err = json.Marshal(body)
 		if err != nil {
 			return 0, nil, fmt.Errorf("marshal: %w", err)
 		}
@@ -177,6 +210,7 @@ func (c *Client) doJSON(ctx context.Context, method, url string, body any) (int,
 	if k := c.apiKeyForURL(url); k != "" {
 		req.Header.Set("X-Api-Key", k)
 	}
+	c.signRequest(req, buf)
 	resp, err := c.cfg.HTTPClient.Do(req)
 	if err != nil {
 		return 0, nil, fmt.Errorf("do request: %w", err)
