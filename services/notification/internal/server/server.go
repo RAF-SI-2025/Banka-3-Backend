@@ -8,20 +8,23 @@ import (
 
 	notifpb "github.com/RAF-SI-2025/Banka-3-Backend/gen/proto/notification/v1"
 	"github.com/RAF-SI-2025/Banka-3-Backend/pkg/email"
+	"github.com/RAF-SI-2025/Banka-3-Backend/services/notification/internal/store"
 )
 
-// Server is the gRPC implementation of NotificationService. The service
-// is a thin pass-through to pkg/email — templating happens in the
-// caller; this service owns the SMTP credentials and tags outbound
-// events with their kind for observability.
+// Server is the gRPC implementation of NotificationService. Email
+// dispatch (SendEmail) is a thin pass-through to pkg/email — templating
+// happens in the caller; this service owns the SMTP credentials. The
+// in-app notification feed (CreateNotification + List/MarkRead, see
+// notifications.go) is backed by Store.
 type Server struct {
 	notifpb.UnimplementedNotificationServiceServer
 	Sender email.Sender
+	Store  *store.Store
 	Log    *slog.Logger
 }
 
-func New(sender email.Sender, log *slog.Logger) *Server {
-	return &Server{Sender: sender, Log: log}
+func New(sender email.Sender, st *store.Store, log *slog.Logger) *Server {
+	return &Server{Sender: sender, Store: st, Log: log}
 }
 
 // SendEmail dispatches one message. Idempotency is the caller's

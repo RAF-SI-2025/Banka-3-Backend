@@ -101,6 +101,22 @@ type MarginChecker interface {
 	ClientLargestActiveLoan(ctx context.Context, clientID string) (currency domain.Currency, amount string, err error)
 }
 
+// Notifier fans a trading event out to the recipient's email and in-app
+// feed (todoSpec C3 order/price-alert notifications). The caller builds
+// the Serbian copy and supplies the recipient; the adapter in
+// internal/app dials notification-svc (SendEmail + CreateNotification).
+// May be nil on a dev stack without notification-svc wired — every call
+// site must nil-check, the same as the other optional dependencies on
+// this struct. Best-effort: a delivery failure must never fail the
+// underlying trading operation.
+type Notifier interface {
+	// InApp writes one in-app notification row for (userID, kind).
+	// eventKind tags the row for FE grouping (e.g. "order", "price_alert").
+	InApp(ctx context.Context, userID string, kind domain.UserKind, eventKind, title, body string) error
+	// Email sends a rendered message. A "" recipient is a no-op.
+	Email(ctx context.Context, to, subject, body string) error
+}
+
 // Service is the trading aggregate. Sub-aggregates are split per file
 // (actuaries, exchanges, securities, listings, orders, portfolio,
 // tax) but share this struct so cross-aggregate methods (e.g. order
@@ -132,6 +148,10 @@ type Service struct {
 	// (spec p.63). May be nil on a minimal dev stack; display_name
 	// then comes back empty.
 	Users UserResolver
+	// Notifier fans order/price-alert events out to email + the in-app
+	// feed (todoSpec C3). May be nil on a dev stack without
+	// notification-svc; call sites nil-check. Wired in internal/app.
+	Notifier Notifier
 	// MarketData refreshes stock + forex listings against an upstream
 	// quote feed (spec p.40, p.42). Nil when the feed isn't wired —
 	// the cron then no-ops.

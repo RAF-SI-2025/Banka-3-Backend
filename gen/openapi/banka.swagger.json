@@ -2795,6 +2795,126 @@
         ]
       }
     },
+    "/api/v1/notifications": {
+      "get": {
+        "summary": "ListNotifications returns the caller's own notifications, newest\nfirst. The recipient is taken from the authenticated principal in\ngRPC metadata — never from the request — so a user can only read\ntheir own feed.",
+        "operationId": "NotificationService_ListNotifications",
+        "responses": {
+          "200": {
+            "description": "A successful response.",
+            "schema": {
+              "$ref": "#/definitions/v1ListNotificationsResponse"
+            }
+          },
+          "default": {
+            "description": "An unexpected error response.",
+            "schema": {
+              "$ref": "#/definitions/rpcStatus"
+            }
+          }
+        },
+        "parameters": [
+          {
+            "name": "page",
+            "description": "1-indexed; 0 is treated as 1.",
+            "in": "query",
+            "required": false,
+            "type": "integer",
+            "format": "int32"
+          },
+          {
+            "name": "pageSize",
+            "description": "default 50, max 200.",
+            "in": "query",
+            "required": false,
+            "type": "integer",
+            "format": "int32"
+          },
+          {
+            "name": "unreadOnly",
+            "description": "When true, only unread notifications are returned.",
+            "in": "query",
+            "required": false,
+            "type": "boolean"
+          }
+        ],
+        "tags": [
+          "NotificationService"
+        ]
+      }
+    },
+    "/api/v1/notifications/read-all": {
+      "post": {
+        "summary": "MarkAllNotificationsRead flips every unread notification of the\ncaller to read and returns how many were affected.",
+        "operationId": "NotificationService_MarkAllNotificationsRead",
+        "responses": {
+          "200": {
+            "description": "A successful response.",
+            "schema": {
+              "$ref": "#/definitions/v1MarkAllNotificationsReadResponse"
+            }
+          },
+          "default": {
+            "description": "An unexpected error response.",
+            "schema": {
+              "$ref": "#/definitions/rpcStatus"
+            }
+          }
+        },
+        "parameters": [
+          {
+            "name": "body",
+            "in": "body",
+            "required": true,
+            "schema": {
+              "$ref": "#/definitions/v1MarkAllNotificationsReadRequest"
+            }
+          }
+        ],
+        "tags": [
+          "NotificationService"
+        ]
+      }
+    },
+    "/api/v1/notifications/{id}/read": {
+      "post": {
+        "summary": "MarkNotificationRead flips one of the caller's notifications to read.",
+        "operationId": "NotificationService_MarkNotificationRead",
+        "responses": {
+          "200": {
+            "description": "A successful response.",
+            "schema": {
+              "$ref": "#/definitions/v1Notification"
+            }
+          },
+          "default": {
+            "description": "An unexpected error response.",
+            "schema": {
+              "$ref": "#/definitions/rpcStatus"
+            }
+          }
+        },
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "type": "string"
+          },
+          {
+            "name": "body",
+            "in": "body",
+            "required": true,
+            "schema": {
+              "$ref": "#/definitions/NotificationServiceMarkNotificationReadBody"
+            }
+          }
+        ],
+        "tags": [
+          "NotificationService"
+        ]
+      }
+    },
     "/api/v1/options/run-refresh": {
       "post": {
         "summary": "RunOptionsRefresh regenerates Black-Scholes option chains. Admin-only.",
@@ -4916,6 +5036,9 @@
       }
     },
     "ExternalOTCServiceWithdrawExternalOTCOfferBody": {
+      "type": "object"
+    },
+    "NotificationServiceMarkNotificationReadBody": {
       "type": "object"
     },
     "TradingServiceAcceptOTCOfferBody": {
@@ -7454,6 +7577,35 @@
         }
       }
     },
+    "v1ListNotificationsResponse": {
+      "type": "object",
+      "properties": {
+        "items": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "$ref": "#/definitions/v1Notification"
+          }
+        },
+        "page": {
+          "type": "integer",
+          "format": "int32"
+        },
+        "pageSize": {
+          "type": "integer",
+          "format": "int32"
+        },
+        "total": {
+          "type": "string",
+          "format": "int64",
+          "description": "total matches the filter (all, or unread-only); unread is the\ncaller's total unread count regardless of the filter/page — the FE\nrenders it as the bell badge."
+        },
+        "unread": {
+          "type": "string",
+          "format": "int64"
+        }
+      }
+    },
     "v1ListOTCContractsResponse": {
       "type": "object",
       "properties": {
@@ -7960,6 +8112,18 @@
         }
       }
     },
+    "v1MarkAllNotificationsReadRequest": {
+      "type": "object"
+    },
+    "v1MarkAllNotificationsReadResponse": {
+      "type": "object",
+      "properties": {
+        "marked": {
+          "type": "string",
+          "format": "int64"
+        }
+      }
+    },
     "v1MeResponse": {
       "type": "object",
       "properties": {
@@ -7970,6 +8134,42 @@
           "$ref": "#/definitions/v1Client"
         }
       }
+    },
+    "v1Notification": {
+      "type": "object",
+      "properties": {
+        "id": {
+          "type": "string"
+        },
+        "userId": {
+          "type": "string"
+        },
+        "userKind": {
+          "type": "string",
+          "description": "user_kind is \"client\" or \"employee\" (matches the JWT kind claim)."
+        },
+        "kind": {
+          "type": "string",
+          "description": "kind tags the originating event for FE icon/grouping; free-form,\ne.g. \"payment\", \"transfer\", \"card\", \"order\", \"otc\". Defaults to\n\"generic\"."
+        },
+        "title": {
+          "type": "string"
+        },
+        "body": {
+          "type": "string"
+        },
+        "read": {
+          "type": "boolean",
+          "description": "read is true once the user has seen it; read_at is the RFC3339\ntimestamp it was marked read (empty while unread)."
+        },
+        "readAt": {
+          "type": "string"
+        },
+        "createdAt": {
+          "type": "string"
+        }
+      },
+      "description": "Notification is one in-app notification row."
     },
     "v1OTCContract": {
       "type": "object",

@@ -38,6 +38,11 @@ type Service struct {
 	// backed flows so the bank service doesn't have to keep its own
 	// copy of the email (cross-schema joins are forbidden).
 	UserResolver UserResolver
+	// InApp writes user-facing events to the in-app notification feed
+	// (todoSpec S19), alongside the email Notifier. Nil → in-app rows
+	// are skipped (email still goes out). Wired to notification-svc
+	// CreateNotification by the app layer.
+	InApp InAppNotifier
 	// Now is the legacy wall-clock seam — tests still pin it to a
 	// deterministic value. Production leaves it nil and now() falls
 	// through to Clock, then time.Now as a last resort.
@@ -76,6 +81,13 @@ type Notifier interface {
 // layer wires this to a user-service gRPC client.
 type UserResolver interface {
 	ClientEmail(ctx context.Context, clientID string) (string, error)
+}
+
+// InAppNotifier persists a user-facing event to the in-app notification
+// feed. Matches notification-svc CreateNotification; the app layer wires
+// it to a notification-service gRPC client.
+type InAppNotifier interface {
+	Notify(ctx context.Context, userID, userKind, kind, title, body string) error
 }
 
 func New(st *store.Store, cfg Config, log *slog.Logger) *Service {

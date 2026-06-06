@@ -8,6 +8,7 @@ package notificationv1
 
 import (
 	_ "buf.build/gen/go/bufbuild/protovalidate/protocolbuffers/go/buf/validate"
+	_ "google.golang.org/genproto/googleapis/api/annotations"
 	protoreflect "google.golang.org/protobuf/reflect/protoreflect"
 	protoimpl "google.golang.org/protobuf/runtime/protoimpl"
 	reflect "reflect"
@@ -248,6 +249,463 @@ func (x *SendEmailResponse) GetMessageId() string {
 	return ""
 }
 
+// Notification is one in-app notification row.
+type Notification struct {
+	state  protoimpl.MessageState `protogen:"open.v1"`
+	Id     string                 `protobuf:"bytes,1,opt,name=id,proto3" json:"id,omitempty"`
+	UserId string                 `protobuf:"bytes,2,opt,name=user_id,json=userId,proto3" json:"user_id,omitempty"`
+	// user_kind is "client" or "employee" (matches the JWT kind claim).
+	UserKind string `protobuf:"bytes,3,opt,name=user_kind,json=userKind,proto3" json:"user_kind,omitempty"`
+	// kind tags the originating event for FE icon/grouping; free-form,
+	// e.g. "payment", "transfer", "card", "order", "otc". Defaults to
+	// "generic".
+	Kind  string `protobuf:"bytes,4,opt,name=kind,proto3" json:"kind,omitempty"`
+	Title string `protobuf:"bytes,5,opt,name=title,proto3" json:"title,omitempty"`
+	Body  string `protobuf:"bytes,6,opt,name=body,proto3" json:"body,omitempty"`
+	// read is true once the user has seen it; read_at is the RFC3339
+	// timestamp it was marked read (empty while unread).
+	Read          bool   `protobuf:"varint,7,opt,name=read,proto3" json:"read,omitempty"`
+	ReadAt        string `protobuf:"bytes,8,opt,name=read_at,json=readAt,proto3" json:"read_at,omitempty"`
+	CreatedAt     string `protobuf:"bytes,9,opt,name=created_at,json=createdAt,proto3" json:"created_at,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *Notification) Reset() {
+	*x = Notification{}
+	mi := &file_notification_v1_notification_proto_msgTypes[2]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *Notification) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*Notification) ProtoMessage() {}
+
+func (x *Notification) ProtoReflect() protoreflect.Message {
+	mi := &file_notification_v1_notification_proto_msgTypes[2]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use Notification.ProtoReflect.Descriptor instead.
+func (*Notification) Descriptor() ([]byte, []int) {
+	return file_notification_v1_notification_proto_rawDescGZIP(), []int{2}
+}
+
+func (x *Notification) GetId() string {
+	if x != nil {
+		return x.Id
+	}
+	return ""
+}
+
+func (x *Notification) GetUserId() string {
+	if x != nil {
+		return x.UserId
+	}
+	return ""
+}
+
+func (x *Notification) GetUserKind() string {
+	if x != nil {
+		return x.UserKind
+	}
+	return ""
+}
+
+func (x *Notification) GetKind() string {
+	if x != nil {
+		return x.Kind
+	}
+	return ""
+}
+
+func (x *Notification) GetTitle() string {
+	if x != nil {
+		return x.Title
+	}
+	return ""
+}
+
+func (x *Notification) GetBody() string {
+	if x != nil {
+		return x.Body
+	}
+	return ""
+}
+
+func (x *Notification) GetRead() bool {
+	if x != nil {
+		return x.Read
+	}
+	return false
+}
+
+func (x *Notification) GetReadAt() string {
+	if x != nil {
+		return x.ReadAt
+	}
+	return ""
+}
+
+func (x *Notification) GetCreatedAt() string {
+	if x != nil {
+		return x.CreatedAt
+	}
+	return ""
+}
+
+type CreateNotificationRequest struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	UserId        string                 `protobuf:"bytes,1,opt,name=user_id,json=userId,proto3" json:"user_id,omitempty"`
+	UserKind      string                 `protobuf:"bytes,2,opt,name=user_kind,json=userKind,proto3" json:"user_kind,omitempty"`
+	Kind          string                 `protobuf:"bytes,3,opt,name=kind,proto3" json:"kind,omitempty"`
+	Title         string                 `protobuf:"bytes,4,opt,name=title,proto3" json:"title,omitempty"`
+	Body          string                 `protobuf:"bytes,5,opt,name=body,proto3" json:"body,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *CreateNotificationRequest) Reset() {
+	*x = CreateNotificationRequest{}
+	mi := &file_notification_v1_notification_proto_msgTypes[3]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *CreateNotificationRequest) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*CreateNotificationRequest) ProtoMessage() {}
+
+func (x *CreateNotificationRequest) ProtoReflect() protoreflect.Message {
+	mi := &file_notification_v1_notification_proto_msgTypes[3]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use CreateNotificationRequest.ProtoReflect.Descriptor instead.
+func (*CreateNotificationRequest) Descriptor() ([]byte, []int) {
+	return file_notification_v1_notification_proto_rawDescGZIP(), []int{3}
+}
+
+func (x *CreateNotificationRequest) GetUserId() string {
+	if x != nil {
+		return x.UserId
+	}
+	return ""
+}
+
+func (x *CreateNotificationRequest) GetUserKind() string {
+	if x != nil {
+		return x.UserKind
+	}
+	return ""
+}
+
+func (x *CreateNotificationRequest) GetKind() string {
+	if x != nil {
+		return x.Kind
+	}
+	return ""
+}
+
+func (x *CreateNotificationRequest) GetTitle() string {
+	if x != nil {
+		return x.Title
+	}
+	return ""
+}
+
+func (x *CreateNotificationRequest) GetBody() string {
+	if x != nil {
+		return x.Body
+	}
+	return ""
+}
+
+type ListNotificationsRequest struct {
+	state protoimpl.MessageState `protogen:"open.v1"`
+	// 1-indexed; 0 is treated as 1.
+	Page int32 `protobuf:"varint,1,opt,name=page,proto3" json:"page,omitempty"`
+	// default 50, max 200.
+	PageSize int32 `protobuf:"varint,2,opt,name=page_size,json=pageSize,proto3" json:"page_size,omitempty"`
+	// When true, only unread notifications are returned.
+	UnreadOnly    bool `protobuf:"varint,3,opt,name=unread_only,json=unreadOnly,proto3" json:"unread_only,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *ListNotificationsRequest) Reset() {
+	*x = ListNotificationsRequest{}
+	mi := &file_notification_v1_notification_proto_msgTypes[4]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *ListNotificationsRequest) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*ListNotificationsRequest) ProtoMessage() {}
+
+func (x *ListNotificationsRequest) ProtoReflect() protoreflect.Message {
+	mi := &file_notification_v1_notification_proto_msgTypes[4]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use ListNotificationsRequest.ProtoReflect.Descriptor instead.
+func (*ListNotificationsRequest) Descriptor() ([]byte, []int) {
+	return file_notification_v1_notification_proto_rawDescGZIP(), []int{4}
+}
+
+func (x *ListNotificationsRequest) GetPage() int32 {
+	if x != nil {
+		return x.Page
+	}
+	return 0
+}
+
+func (x *ListNotificationsRequest) GetPageSize() int32 {
+	if x != nil {
+		return x.PageSize
+	}
+	return 0
+}
+
+func (x *ListNotificationsRequest) GetUnreadOnly() bool {
+	if x != nil {
+		return x.UnreadOnly
+	}
+	return false
+}
+
+type ListNotificationsResponse struct {
+	state    protoimpl.MessageState `protogen:"open.v1"`
+	Items    []*Notification        `protobuf:"bytes,1,rep,name=items,proto3" json:"items,omitempty"`
+	Page     int32                  `protobuf:"varint,2,opt,name=page,proto3" json:"page,omitempty"`
+	PageSize int32                  `protobuf:"varint,3,opt,name=page_size,json=pageSize,proto3" json:"page_size,omitempty"`
+	// total matches the filter (all, or unread-only); unread is the
+	// caller's total unread count regardless of the filter/page — the FE
+	// renders it as the bell badge.
+	Total         int64 `protobuf:"varint,4,opt,name=total,proto3" json:"total,omitempty"`
+	Unread        int64 `protobuf:"varint,5,opt,name=unread,proto3" json:"unread,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *ListNotificationsResponse) Reset() {
+	*x = ListNotificationsResponse{}
+	mi := &file_notification_v1_notification_proto_msgTypes[5]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *ListNotificationsResponse) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*ListNotificationsResponse) ProtoMessage() {}
+
+func (x *ListNotificationsResponse) ProtoReflect() protoreflect.Message {
+	mi := &file_notification_v1_notification_proto_msgTypes[5]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use ListNotificationsResponse.ProtoReflect.Descriptor instead.
+func (*ListNotificationsResponse) Descriptor() ([]byte, []int) {
+	return file_notification_v1_notification_proto_rawDescGZIP(), []int{5}
+}
+
+func (x *ListNotificationsResponse) GetItems() []*Notification {
+	if x != nil {
+		return x.Items
+	}
+	return nil
+}
+
+func (x *ListNotificationsResponse) GetPage() int32 {
+	if x != nil {
+		return x.Page
+	}
+	return 0
+}
+
+func (x *ListNotificationsResponse) GetPageSize() int32 {
+	if x != nil {
+		return x.PageSize
+	}
+	return 0
+}
+
+func (x *ListNotificationsResponse) GetTotal() int64 {
+	if x != nil {
+		return x.Total
+	}
+	return 0
+}
+
+func (x *ListNotificationsResponse) GetUnread() int64 {
+	if x != nil {
+		return x.Unread
+	}
+	return 0
+}
+
+type MarkNotificationReadRequest struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	Id            string                 `protobuf:"bytes,1,opt,name=id,proto3" json:"id,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *MarkNotificationReadRequest) Reset() {
+	*x = MarkNotificationReadRequest{}
+	mi := &file_notification_v1_notification_proto_msgTypes[6]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *MarkNotificationReadRequest) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*MarkNotificationReadRequest) ProtoMessage() {}
+
+func (x *MarkNotificationReadRequest) ProtoReflect() protoreflect.Message {
+	mi := &file_notification_v1_notification_proto_msgTypes[6]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use MarkNotificationReadRequest.ProtoReflect.Descriptor instead.
+func (*MarkNotificationReadRequest) Descriptor() ([]byte, []int) {
+	return file_notification_v1_notification_proto_rawDescGZIP(), []int{6}
+}
+
+func (x *MarkNotificationReadRequest) GetId() string {
+	if x != nil {
+		return x.Id
+	}
+	return ""
+}
+
+type MarkAllNotificationsReadRequest struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *MarkAllNotificationsReadRequest) Reset() {
+	*x = MarkAllNotificationsReadRequest{}
+	mi := &file_notification_v1_notification_proto_msgTypes[7]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *MarkAllNotificationsReadRequest) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*MarkAllNotificationsReadRequest) ProtoMessage() {}
+
+func (x *MarkAllNotificationsReadRequest) ProtoReflect() protoreflect.Message {
+	mi := &file_notification_v1_notification_proto_msgTypes[7]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use MarkAllNotificationsReadRequest.ProtoReflect.Descriptor instead.
+func (*MarkAllNotificationsReadRequest) Descriptor() ([]byte, []int) {
+	return file_notification_v1_notification_proto_rawDescGZIP(), []int{7}
+}
+
+type MarkAllNotificationsReadResponse struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	Marked        int64                  `protobuf:"varint,1,opt,name=marked,proto3" json:"marked,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *MarkAllNotificationsReadResponse) Reset() {
+	*x = MarkAllNotificationsReadResponse{}
+	mi := &file_notification_v1_notification_proto_msgTypes[8]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *MarkAllNotificationsReadResponse) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*MarkAllNotificationsReadResponse) ProtoMessage() {}
+
+func (x *MarkAllNotificationsReadResponse) ProtoReflect() protoreflect.Message {
+	mi := &file_notification_v1_notification_proto_msgTypes[8]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use MarkAllNotificationsReadResponse.ProtoReflect.Descriptor instead.
+func (*MarkAllNotificationsReadResponse) Descriptor() ([]byte, []int) {
+	return file_notification_v1_notification_proto_rawDescGZIP(), []int{8}
+}
+
+func (x *MarkAllNotificationsReadResponse) GetMarked() int64 {
+	if x != nil {
+		return x.Marked
+	}
+	return 0
+}
+
 type HealthRequest struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
 	unknownFields protoimpl.UnknownFields
@@ -256,7 +714,7 @@ type HealthRequest struct {
 
 func (x *HealthRequest) Reset() {
 	*x = HealthRequest{}
-	mi := &file_notification_v1_notification_proto_msgTypes[2]
+	mi := &file_notification_v1_notification_proto_msgTypes[9]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -268,7 +726,7 @@ func (x *HealthRequest) String() string {
 func (*HealthRequest) ProtoMessage() {}
 
 func (x *HealthRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_notification_v1_notification_proto_msgTypes[2]
+	mi := &file_notification_v1_notification_proto_msgTypes[9]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -281,7 +739,7 @@ func (x *HealthRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use HealthRequest.ProtoReflect.Descriptor instead.
 func (*HealthRequest) Descriptor() ([]byte, []int) {
-	return file_notification_v1_notification_proto_rawDescGZIP(), []int{2}
+	return file_notification_v1_notification_proto_rawDescGZIP(), []int{9}
 }
 
 type HealthResponse struct {
@@ -293,7 +751,7 @@ type HealthResponse struct {
 
 func (x *HealthResponse) Reset() {
 	*x = HealthResponse{}
-	mi := &file_notification_v1_notification_proto_msgTypes[3]
+	mi := &file_notification_v1_notification_proto_msgTypes[10]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -305,7 +763,7 @@ func (x *HealthResponse) String() string {
 func (*HealthResponse) ProtoMessage() {}
 
 func (x *HealthResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_notification_v1_notification_proto_msgTypes[3]
+	mi := &file_notification_v1_notification_proto_msgTypes[10]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -318,7 +776,7 @@ func (x *HealthResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use HealthResponse.ProtoReflect.Descriptor instead.
 func (*HealthResponse) Descriptor() ([]byte, []int) {
-	return file_notification_v1_notification_proto_rawDescGZIP(), []int{3}
+	return file_notification_v1_notification_proto_rawDescGZIP(), []int{10}
 }
 
 func (x *HealthResponse) GetStatus() string {
@@ -332,7 +790,7 @@ var File_notification_v1_notification_proto protoreflect.FileDescriptor
 
 const file_notification_v1_notification_proto_rawDesc = "" +
 	"\n" +
-	"\"notification/v1/notification.proto\x12\x15banka.notification.v1\x1a\x1bbuf/validate/validate.proto\"\xdc\x01\n" +
+	"\"notification/v1/notification.proto\x12\x15banka.notification.v1\x1a\x1bbuf/validate/validate.proto\x1a\x1cgoogle/api/annotations.proto\"\xdc\x01\n" +
 	"\x10SendEmailRequest\x12\x17\n" +
 	"\x02to\x18\x01 \x01(\tB\a\xbaH\x04r\x02\x10\x03R\x02to\x12!\n" +
 	"\asubject\x18\x02 \x01(\tB\a\xbaH\x04r\x02\x10\x01R\asubject\x12\x1b\n" +
@@ -342,7 +800,41 @@ const file_notification_v1_notification_proto_rawDesc = "" +
 	"\x0eorigin_service\x18\x06 \x01(\tR\roriginService\"2\n" +
 	"\x11SendEmailResponse\x12\x1d\n" +
 	"\n" +
-	"message_id\x18\x01 \x01(\tR\tmessageId\"\x0f\n" +
+	"message_id\x18\x01 \x01(\tR\tmessageId\"\xde\x01\n" +
+	"\fNotification\x12\x0e\n" +
+	"\x02id\x18\x01 \x01(\tR\x02id\x12\x17\n" +
+	"\auser_id\x18\x02 \x01(\tR\x06userId\x12\x1b\n" +
+	"\tuser_kind\x18\x03 \x01(\tR\buserKind\x12\x12\n" +
+	"\x04kind\x18\x04 \x01(\tR\x04kind\x12\x14\n" +
+	"\x05title\x18\x05 \x01(\tR\x05title\x12\x12\n" +
+	"\x04body\x18\x06 \x01(\tR\x04body\x12\x12\n" +
+	"\x04read\x18\a \x01(\bR\x04read\x12\x17\n" +
+	"\aread_at\x18\b \x01(\tR\x06readAt\x12\x1d\n" +
+	"\n" +
+	"created_at\x18\t \x01(\tR\tcreatedAt\"\xc4\x01\n" +
+	"\x19CreateNotificationRequest\x12!\n" +
+	"\auser_id\x18\x01 \x01(\tB\b\xbaH\x05r\x03\xb0\x01\x01R\x06userId\x124\n" +
+	"\tuser_kind\x18\x02 \x01(\tB\x17\xbaH\x14r\x12R\x06clientR\bemployeeR\buserKind\x12\x12\n" +
+	"\x04kind\x18\x03 \x01(\tR\x04kind\x12\x1d\n" +
+	"\x05title\x18\x04 \x01(\tB\a\xbaH\x04r\x02\x10\x01R\x05title\x12\x1b\n" +
+	"\x04body\x18\x05 \x01(\tB\a\xbaH\x04r\x02\x10\x01R\x04body\"\x81\x01\n" +
+	"\x18ListNotificationsRequest\x12\x1b\n" +
+	"\x04page\x18\x01 \x01(\x05B\a\xbaH\x04\x1a\x02(\x00R\x04page\x12'\n" +
+	"\tpage_size\x18\x02 \x01(\x05B\n" +
+	"\xbaH\a\x1a\x05\x18\xc8\x01(\x00R\bpageSize\x12\x1f\n" +
+	"\vunread_only\x18\x03 \x01(\bR\n" +
+	"unreadOnly\"\xb5\x01\n" +
+	"\x19ListNotificationsResponse\x129\n" +
+	"\x05items\x18\x01 \x03(\v2#.banka.notification.v1.NotificationR\x05items\x12\x12\n" +
+	"\x04page\x18\x02 \x01(\x05R\x04page\x12\x1b\n" +
+	"\tpage_size\x18\x03 \x01(\x05R\bpageSize\x12\x14\n" +
+	"\x05total\x18\x04 \x01(\x03R\x05total\x12\x16\n" +
+	"\x06unread\x18\x05 \x01(\x03R\x06unread\"7\n" +
+	"\x1bMarkNotificationReadRequest\x12\x18\n" +
+	"\x02id\x18\x01 \x01(\tB\b\xbaH\x05r\x03\xb0\x01\x01R\x02id\"!\n" +
+	"\x1fMarkAllNotificationsReadRequest\":\n" +
+	" MarkAllNotificationsReadResponse\x12\x16\n" +
+	"\x06marked\x18\x01 \x01(\x03R\x06marked\"\x0f\n" +
 	"\rHealthRequest\"(\n" +
 	"\x0eHealthResponse\x12\x16\n" +
 	"\x06status\x18\x01 \x01(\tR\x06status*\x86\x04\n" +
@@ -364,9 +856,13 @@ const file_notification_v1_notification_proto_rawDesc = "" +
 	"\x16EMAIL_KIND_OTC_EXPIRED\x10\r\x12\x1a\n" +
 	"\x16EMAIL_KIND_FUND_INVEST\x10\x0e\x12\x1c\n" +
 	"\x18EMAIL_KIND_FUND_WITHDRAW\x10\x0f\x12\x1c\n" +
-	"\x18EMAIL_KIND_FUND_HANDOVER\x10\x102\xcc\x01\n" +
+	"\x18EMAIL_KIND_FUND_HANDOVER\x10\x102\xa8\x06\n" +
 	"\x13NotificationService\x12^\n" +
-	"\tSendEmail\x12'.banka.notification.v1.SendEmailRequest\x1a(.banka.notification.v1.SendEmailResponse\x12U\n" +
+	"\tSendEmail\x12'.banka.notification.v1.SendEmailRequest\x1a(.banka.notification.v1.SendEmailResponse\x12k\n" +
+	"\x12CreateNotification\x120.banka.notification.v1.CreateNotificationRequest\x1a#.banka.notification.v1.Notification\x12\x95\x01\n" +
+	"\x11ListNotifications\x12/.banka.notification.v1.ListNotificationsRequest\x1a0.banka.notification.v1.ListNotificationsResponse\"\x1d\x82\xd3\xe4\x93\x02\x17\x12\x15/api/v1/notifications\x12\x9b\x01\n" +
+	"\x14MarkNotificationRead\x122.banka.notification.v1.MarkNotificationReadRequest\x1a#.banka.notification.v1.Notification\"*\x82\xd3\xe4\x93\x02$:\x01*\"\x1f/api/v1/notifications/{id}/read\x12\xb6\x01\n" +
+	"\x18MarkAllNotificationsRead\x126.banka.notification.v1.MarkAllNotificationsReadRequest\x1a7.banka.notification.v1.MarkAllNotificationsReadResponse\")\x82\xd3\xe4\x93\x02#:\x01*\"\x1e/api/v1/notifications/read-all\x12U\n" +
 	"\x06Health\x12$.banka.notification.v1.HealthRequest\x1a%.banka.notification.v1.HealthResponseB\xf5\x01\n" +
 	"\x19com.banka.notification.v1B\x11NotificationProtoP\x01ZOgithub.com/RAF-SI-2025/Banka-3-Backend/gen/proto/notification/v1;notificationv1\xa2\x02\x03BNX\xaa\x02\x15Banka.Notification.V1\xca\x02\x15Banka\\Notification\\V1\xe2\x02!Banka\\Notification\\V1\\GPBMetadata\xea\x02\x17Banka::Notification::V1b\x06proto3"
 
@@ -383,25 +879,41 @@ func file_notification_v1_notification_proto_rawDescGZIP() []byte {
 }
 
 var file_notification_v1_notification_proto_enumTypes = make([]protoimpl.EnumInfo, 1)
-var file_notification_v1_notification_proto_msgTypes = make([]protoimpl.MessageInfo, 4)
+var file_notification_v1_notification_proto_msgTypes = make([]protoimpl.MessageInfo, 11)
 var file_notification_v1_notification_proto_goTypes = []any{
-	(EmailKind)(0),            // 0: banka.notification.v1.EmailKind
-	(*SendEmailRequest)(nil),  // 1: banka.notification.v1.SendEmailRequest
-	(*SendEmailResponse)(nil), // 2: banka.notification.v1.SendEmailResponse
-	(*HealthRequest)(nil),     // 3: banka.notification.v1.HealthRequest
-	(*HealthResponse)(nil),    // 4: banka.notification.v1.HealthResponse
+	(EmailKind)(0),                           // 0: banka.notification.v1.EmailKind
+	(*SendEmailRequest)(nil),                 // 1: banka.notification.v1.SendEmailRequest
+	(*SendEmailResponse)(nil),                // 2: banka.notification.v1.SendEmailResponse
+	(*Notification)(nil),                     // 3: banka.notification.v1.Notification
+	(*CreateNotificationRequest)(nil),        // 4: banka.notification.v1.CreateNotificationRequest
+	(*ListNotificationsRequest)(nil),         // 5: banka.notification.v1.ListNotificationsRequest
+	(*ListNotificationsResponse)(nil),        // 6: banka.notification.v1.ListNotificationsResponse
+	(*MarkNotificationReadRequest)(nil),      // 7: banka.notification.v1.MarkNotificationReadRequest
+	(*MarkAllNotificationsReadRequest)(nil),  // 8: banka.notification.v1.MarkAllNotificationsReadRequest
+	(*MarkAllNotificationsReadResponse)(nil), // 9: banka.notification.v1.MarkAllNotificationsReadResponse
+	(*HealthRequest)(nil),                    // 10: banka.notification.v1.HealthRequest
+	(*HealthResponse)(nil),                   // 11: banka.notification.v1.HealthResponse
 }
 var file_notification_v1_notification_proto_depIdxs = []int32{
-	0, // 0: banka.notification.v1.SendEmailRequest.kind:type_name -> banka.notification.v1.EmailKind
-	1, // 1: banka.notification.v1.NotificationService.SendEmail:input_type -> banka.notification.v1.SendEmailRequest
-	3, // 2: banka.notification.v1.NotificationService.Health:input_type -> banka.notification.v1.HealthRequest
-	2, // 3: banka.notification.v1.NotificationService.SendEmail:output_type -> banka.notification.v1.SendEmailResponse
-	4, // 4: banka.notification.v1.NotificationService.Health:output_type -> banka.notification.v1.HealthResponse
-	3, // [3:5] is the sub-list for method output_type
-	1, // [1:3] is the sub-list for method input_type
-	1, // [1:1] is the sub-list for extension type_name
-	1, // [1:1] is the sub-list for extension extendee
-	0, // [0:1] is the sub-list for field type_name
+	0,  // 0: banka.notification.v1.SendEmailRequest.kind:type_name -> banka.notification.v1.EmailKind
+	3,  // 1: banka.notification.v1.ListNotificationsResponse.items:type_name -> banka.notification.v1.Notification
+	1,  // 2: banka.notification.v1.NotificationService.SendEmail:input_type -> banka.notification.v1.SendEmailRequest
+	4,  // 3: banka.notification.v1.NotificationService.CreateNotification:input_type -> banka.notification.v1.CreateNotificationRequest
+	5,  // 4: banka.notification.v1.NotificationService.ListNotifications:input_type -> banka.notification.v1.ListNotificationsRequest
+	7,  // 5: banka.notification.v1.NotificationService.MarkNotificationRead:input_type -> banka.notification.v1.MarkNotificationReadRequest
+	8,  // 6: banka.notification.v1.NotificationService.MarkAllNotificationsRead:input_type -> banka.notification.v1.MarkAllNotificationsReadRequest
+	10, // 7: banka.notification.v1.NotificationService.Health:input_type -> banka.notification.v1.HealthRequest
+	2,  // 8: banka.notification.v1.NotificationService.SendEmail:output_type -> banka.notification.v1.SendEmailResponse
+	3,  // 9: banka.notification.v1.NotificationService.CreateNotification:output_type -> banka.notification.v1.Notification
+	6,  // 10: banka.notification.v1.NotificationService.ListNotifications:output_type -> banka.notification.v1.ListNotificationsResponse
+	3,  // 11: banka.notification.v1.NotificationService.MarkNotificationRead:output_type -> banka.notification.v1.Notification
+	9,  // 12: banka.notification.v1.NotificationService.MarkAllNotificationsRead:output_type -> banka.notification.v1.MarkAllNotificationsReadResponse
+	11, // 13: banka.notification.v1.NotificationService.Health:output_type -> banka.notification.v1.HealthResponse
+	8,  // [8:14] is the sub-list for method output_type
+	2,  // [2:8] is the sub-list for method input_type
+	2,  // [2:2] is the sub-list for extension type_name
+	2,  // [2:2] is the sub-list for extension extendee
+	0,  // [0:2] is the sub-list for field type_name
 }
 
 func init() { file_notification_v1_notification_proto_init() }
@@ -415,7 +927,7 @@ func file_notification_v1_notification_proto_init() {
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
 			RawDescriptor: unsafe.Slice(unsafe.StringData(file_notification_v1_notification_proto_rawDesc), len(file_notification_v1_notification_proto_rawDesc)),
 			NumEnums:      1,
-			NumMessages:   4,
+			NumMessages:   11,
 			NumExtensions: 0,
 			NumServices:   1,
 		},

@@ -7,12 +7,29 @@ import (
 	"github.com/RAF-SI-2025/Banka-3-Backend/services/bank/internal/domain"
 )
 
-// notify is a best-effort email send. When Notifier or UserResolver is
-// not wired (unit tests, dev without SMTP), we log and move on —
-// notifications must never fail a business operation.
-func (s *Service) notify(ctx context.Context, clientID, subject, body string) {
+// notify fans a user-facing event out to the in-app feed and email.
+// Both legs are best-effort and independent — a notification must never
+// fail a business operation. eventKind tags the in-app row for FE
+// grouping ("payment", "card", "loan", "account"). The in-app leg does
+// not depend on email resolution, so the panel still gets the row even
+// when SMTP / the user-service lookup is unavailable.
+func (s *Service) notify(ctx context.Context, clientID, eventKind, subject, body string) {
+	if clientID == "" || clientID == domain.SystemOwnerID {
+		return
+	}
+
+	// In-app leg (todoSpec S19). Clients log in with their client id as
+	// the JWT subject, so client_id is the notification recipient's
+	// user_id and the kind is always "client".
+	if s.InApp != nil {
+		if err := s.InApp.Notify(ctx, clientID, "client", eventKind, subject, body); err != nil {
+			s.Log.Warn("notify: in-app create failed", "client_id", clientID, "error", err)
+		}
+	}
+
+	// Email leg.
 	if s.Notifier == nil || s.UserResolver == nil {
-		s.Log.Info("notification skipped (no notifier wired)", "client_id", clientID, "subject", subject)
+		s.Log.Info("notification email skipped (no notifier wired)", "client_id", clientID, "subject", subject)
 		return
 	}
 	to, err := s.UserResolver.ClientEmail(ctx, clientID)
@@ -48,7 +65,7 @@ func (s *Service) notifyCardStatusChanged(ctx context.Context, c *domain.Card, o
 	if subject == "" {
 		return
 	}
-	s.notify(ctx, ownerClientID, subject, body)
+	s.notify(ctx, ownerClientID, "card", subject, body)
 }
 
 // notifyLoanDecision emits a Serbian notice on approve/reject.
@@ -59,7 +76,7 @@ func (s *Service) notifyLoanDecision(ctx context.Context, req *domain.LoanReques
 			"Poštovani,\n\nVaš zahtev za %s kredit u iznosu %s %s je odobren. Sredstva su uplaćena na Vaš račun.\n\nBanka 3",
 			loanTypeSerbian(req.LoanType), req.Amount, req.Currency,
 		)
-		s.notify(ctx, req.ClientID, "Vaš zahtev za kredit je odobren", body)
+		s.notify(ctx, req.ClientID, "loan", "Vaš zahtev za kredit je odobren", body)
 	case domain.RequestRejected:
 		reason := req.RejectionReason
 		if reason == "" {
@@ -69,7 +86,7 @@ func (s *Service) notifyLoanDecision(ctx context.Context, req *domain.LoanReques
 			"Poštovani,\n\nNažalost, Vaš zahtev za %s kredit u iznosu %s %s je odbijen.\nRazlog: %s.\n\nBanka 3",
 			loanTypeSerbian(req.LoanType), req.Amount, req.Currency, reason,
 		)
-		s.notify(ctx, req.ClientID, "Vaš zahtev za kredit je odbijen", body)
+		s.notify(ctx, req.ClientID, "loan", "Vaš zahtev za kredit je odbijen", body)
 	}
 }
 
@@ -85,7 +102,7 @@ func (s *Service) notifyAccountCreated(ctx context.Context, a *domain.Account) {
 		"Poštovani,\n\nVaš novi račun %s (%s) je otvoren. Početno stanje: %s %s.\n\nBanka 3",
 		a.Number, a.Name, a.Balance, a.Currency,
 	)
-	s.notify(ctx, a.OwnerClientID, "Vaš novi račun je otvoren", body)
+	s.notify(ctx, a.OwnerClientID, "account", "Vaš novi račun je otvoren", body)
 }
 
 // notifyPaymentSucceeded emits the spec-E2E "Klijent dobija email
@@ -100,7 +117,7 @@ func (s *Service) notifyPaymentSucceeded(ctx context.Context, fromClientID strin
 		"Poštovani,\n\nUspešno je realizovano plaćanje sa računa %s na račun %s u iznosu %s %s.\n\nBanka 3",
 		fromAccountNumber, toAccountNumber, amount, currency,
 	)
-	s.notify(ctx, fromClientID, "Potvrda plaćanja", body)
+	s.notify(ctx, fromClientID, "payment", "Potvrda plaćanja", body)
 }
 
 // notifyInstallmentMissed runs from the cron when a loan can't pay an
@@ -110,7 +127,7 @@ func (s *Service) notifyInstallmentMissed(ctx context.Context, loan *domain.Loan
 		"Poštovani,\n\nUplata %d. rate u iznosu %s %s za kredit %s nije realizovana zbog nedovoljnih sredstava na računu. Molimo Vas da napunite račun kako biste izbegli kašnjenje.\n\nBanka 3",
 		inst.SequenceNumber, inst.Amount, inst.Currency, loan.LoanNumber,
 	)
-	s.notify(ctx, loan.ClientID, "Rata kredita nije naplaćena", body)
+	s.notify(ctx, loan.ClientID, "loan", "Rata kredita nije naplaćena", body)
 }
 
 func loanTypeSerbian(t domain.LoanType) string {

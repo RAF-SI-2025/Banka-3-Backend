@@ -63,3 +63,17 @@ func (n *notifClientAdapter) Send(ctx context.Context, to, subject, body string,
 	})
 	return err
 }
+
+// Notify satisfies service.InAppNotifier — writes one in-app
+// notification row via notification-svc CreateNotification (todoSpec
+// S19). Same client/connection as the email path.
+func (n *notifClientAdapter) Notify(ctx context.Context, userID, userKind, kind, title, body string) error {
+	_, err := n.c.CreateNotification(ctx, &notifpb.CreateNotificationRequest{
+		UserId:   userID,
+		UserKind: userKind,
+		Kind:     kind,
+		Title:    title,
+		Body:     body,
+	})
+	return err
+}
