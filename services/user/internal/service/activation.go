@@ -157,6 +157,10 @@ func (s *Service) ConfirmPasswordReset(ctx context.Context, token, newPassword s
 	if err := s.Store.RevokeAllRefreshTokens(ctx, kind, userID); err != nil {
 		return err
 	}
+	// Resetting the password clears any brute-force lockout (S10).
+	if err := s.Store.ResetFailedLogin(ctx, kind, userID); err != nil {
+		s.Log.Warn("reset failed login on password reset failed", "user_kind", string(kind), "user_id", userID, "error", err)
+	}
 	return nil
 }
 

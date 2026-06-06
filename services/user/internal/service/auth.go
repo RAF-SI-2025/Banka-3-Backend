@@ -13,6 +13,14 @@ import (
 	"github.com/RAF-SI-2025/Banka-3-Backend/services/user/internal/domain"
 )
 
+// Brute-force login lockout (todoSpec S7–S11): after maxFailedLogins
+// consecutive failed attempts the account is locked for lockoutDuration.
+// Applies to both employees and clients.
+const (
+	maxFailedLogins = 5
+	lockoutDuration = 15 * time.Minute
+)
+
 // LoginOption tweaks token issuance. Variadic so the existing
 // (ctx,email,password) / (ctx,token) call sites — including the c1
 // test suite — stay source-compatible; only the mobile path passes one.
@@ -62,7 +70,7 @@ func (s *Service) Login(ctx context.Context, email, password string, opts ...Log
 
 	emp, err := s.Store.GetEmployeeByEmail(ctx, email)
 	if err == nil {
-		return s.completeLogin(ctx, emp.ID, emp.Email, domain.KindEmployee, emp.PasswordHash, emp.Active, emp.Activated(), emp.Permissions, emp.SessionVersion, emp.FirstName, emp.LastName, password, longLived)
+		return s.completeLogin(ctx, emp.ID, emp.Email, domain.KindEmployee, emp.PasswordHash, emp.Active, emp.Activated(), emp.Permissions, emp.SessionVersion, emp.FirstName, emp.LastName, emp.FailedLoginAttempts, emp.LockedUntil, password, longLived)
 	}
 	if !isNotFound(err) {
 		return nil, err
@@ -70,7 +78,7 @@ func (s *Service) Login(ctx context.Context, email, password string, opts ...Log
 
 	cl, err := s.Store.GetClientByEmail(ctx, email)
 	if err == nil {
-		return s.completeLogin(ctx, cl.ID, cl.Email, domain.KindClient, cl.PasswordHash, cl.Active, cl.PasswordHash != "", cl.Permissions, cl.SessionVersion, cl.FirstName, cl.LastName, password, longLived)
+		return s.completeLogin(ctx, cl.ID, cl.Email, domain.KindClient, cl.PasswordHash, cl.Active, cl.PasswordHash != "", cl.Permissions, cl.SessionVersion, cl.FirstName, cl.LastName, cl.FailedLoginAttempts, cl.LockedUntil, password, longLived)
 	}
 	if !isNotFound(err) {
 		return nil, err
@@ -91,6 +99,8 @@ func (s *Service) completeLogin(
 	perms []string,
 	sessionVersion int64,
 	firstName, lastName string,
+	failedAttempts int,
+	lockedUntil *time.Time,
 	password string,
 	longLived bool,
 ) (*LoginResult, error) {
@@ -100,9 +110,30 @@ func (s *Service) completeLogin(
 	if !activated {
 		return nil, apperr.FailedPrecondition("nalog nije aktiviran")
 	}
+	// Brute-force lockout (S7–S8): refuse a still-locked account before
+	// even checking the password.
+	if lockedUntil != nil && lockedUntil.After(s.Clock.Now()) {
+		return nil, apperr.PermissionDenied("Nalog je privremeno zaključan zbog previše neuspešnih pokušaja. Pokušajte ponovo kasnije.")
+	}
 	ok, err := passwords.Verify(password, passwordHash)
 	if err != nil || !ok {
+		// Wrong password: bump the counter and lock once the threshold
+		// is reached (S7–S8).
+		newCount, _ := s.Store.IncrementFailedLogin(ctx, kind, userID)
+		if newCount >= maxFailedLogins {
+			if lerr := s.Store.LockUser(ctx, kind, userID, s.Clock.Now().Add(lockoutDuration)); lerr != nil {
+				s.Log.Warn("lock user failed", "user_kind", string(kind), "user_id", userID, "error", lerr)
+			}
+			s.sendLockoutEmail(ctx, email, firstName)
+			return nil, apperr.PermissionDenied("Nalog je zaključan zbog previše neuspešnih pokušaja prijave. Proverite email za uputstvo o resetovanju lozinke.")
+		}
 		return nil, apperr.Unauthenticated("Neispravni kredencijali")
+	}
+	// Successful login clears any accumulated failures / lock (S9, S11).
+	if failedAttempts > 0 || lockedUntil != nil {
+		if rerr := s.Store.ResetFailedLogin(ctx, kind, userID); rerr != nil {
+			s.Log.Warn("reset failed login failed", "user_kind", string(kind), "user_id", userID, "error", rerr)
+		}
 	}
 	r, err := s.issueTokens(ctx, kind, userID, perms, sessionVersion, longLived)
 	if err != nil {
@@ -149,6 +180,27 @@ func (s *Service) issueTokens(ctx context.Context, kind domain.UserKind, userID 
 		UserID:           userID,
 		Permissions:      perms,
 	}, nil
+}
+
+// sendLockoutEmail notifies the user (Serbian) that their account was
+// locked after too many failed login attempts (S8). Best-effort: a nil
+// notifier or a send error never fails the login flow.
+func (s *Service) sendLockoutEmail(ctx context.Context, to, firstName string) {
+	if s.Notifier == nil {
+		return
+	}
+	subject := "Nalog je privremeno zaključan"
+	body := "Poštovani " + firstName + ",\n\n" +
+		"vaš nalog je privremeno zaključan jer je zabeleženo previše neuspešnih " +
+		"pokušaja prijave. Nalog će se automatski otključati nakon 15 minuta.\n\n" +
+		"Ako želite, već sada možete resetovati lozinku na sledećem linku:\n\n" +
+		s.Cfg.WebBaseURL + "/password-reset\n\n" +
+		"Ako niste vi pokušavali da se prijavite, preporučujemo da odmah resetujete " +
+		"lozinku i kontaktirate podršku.\n\n" +
+		"– Banka 3"
+	if err := s.Notifier.Send(ctx, to, subject, body, false); err != nil {
+		s.Log.Warn("lockout email failed", "to", to, "error", err)
+	}
 }
 
 // Refresh rotates the refresh token. The presented one is revoked
