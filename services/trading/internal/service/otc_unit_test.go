@@ -2,6 +2,7 @@ package service
 
 import (
 	"testing"
+	"time"
 
 	"github.com/RAF-SI-2025/Banka-3-Backend/pkg/auth"
 	"github.com/RAF-SI-2025/Banka-3-Backend/pkg/permissions"
@@ -77,6 +78,70 @@ func TestValidateOTCMoneyFields(t *testing.T) {
 			err := validateOTCMoneyFields(c.qty, c.price, c.premium)
 			if (err != nil) != c.wantErr {
 				t.Fatalf("wantErr=%v gotErr=%v", c.wantErr, err)
+			}
+		})
+	}
+}
+
+// TestDaysUntilExpiry validates the calendar-day distance predicate used
+// by the S63 pre-expiry warning sweep. Crucially, the function must
+// respect calendar day boundaries in the Europe/Belgrade timezone (not UTC),
+// and it must return exactly 3 on the single day that triggers the warning.
+func TestDaysUntilExpiry(t *testing.T) {
+	belgrade, err := time.LoadLocation("Europe/Belgrade")
+	if err != nil {
+		t.Fatalf("load location: %v", err)
+	}
+
+	// Anchor: "today" is 2026-06-06 09:00 Belgrade = 07:00 UTC.
+	now := time.Date(2026, 6, 6, 9, 0, 0, 0, belgrade)
+
+	cases := []struct {
+		name       string
+		settlement time.Time // in UTC for realism (DB stores UTC)
+		wantDays   int
+	}{
+		{
+			name:       "expires today (midnight Belgrade)",
+			settlement: time.Date(2026, 6, 6, 0, 0, 0, 0, belgrade).UTC(),
+			wantDays:   0,
+		},
+		{
+			name:       "expires tomorrow",
+			settlement: time.Date(2026, 6, 7, 0, 0, 0, 0, belgrade).UTC(),
+			wantDays:   1,
+		},
+		{
+			name:       "expires in exactly 3 days — warning fires",
+			settlement: time.Date(2026, 6, 9, 0, 0, 0, 0, belgrade).UTC(),
+			wantDays:   3,
+		},
+		{
+			name:       "expires in 4 days — no warning",
+			settlement: time.Date(2026, 6, 10, 0, 0, 0, 0, belgrade).UTC(),
+			wantDays:   4,
+		},
+		{
+			name: "settlement late-night UTC crosses midnight Belgrade: 2026-06-08T23:30 UTC = 2026-06-09T01:30 Belgrade",
+			// settlement_date stored as 2026-06-09 midnight Belgrade = 2026-06-08 22:00 UTC
+			// "now" is 2026-06-06 09:00 Belgrade → daysUntil should be 3
+			settlement: time.Date(2026, 6, 8, 22, 0, 0, 0, time.UTC),
+			wantDays:   3,
+		},
+		{
+			name: "warning day: same calendar date from end-of-day 'now'",
+			// now near end of business on the warning day
+			settlement: time.Date(2026, 6, 9, 0, 0, 0, 0, belgrade).UTC(),
+			wantDays:   3,
+		},
+	}
+
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			got := daysUntilExpiry(now, tc.settlement, belgrade)
+			if got != tc.wantDays {
+				t.Fatalf("daysUntilExpiry: want %d got %d (settlement=%v now=%v)",
+					tc.wantDays, got, tc.settlement, now)
 			}
 		})
 	}

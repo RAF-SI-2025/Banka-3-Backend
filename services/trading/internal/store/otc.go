@@ -465,6 +465,39 @@ func (s *Store) ListExpiredOTCContracts(ctx context.Context, today time.Time) ([
 	return out, rows.Err()
 }
 
+// ListOTCContractsExpiringSoon returns active contracts whose
+// settlement_date falls on the calendar day that is exactly `calendarDaysAhead`
+// days after `now` in the given timezone. Used by the pre-expiry warning
+// sweep (scenario S63): calendarDaysAhead == 3 fires once, naturally,
+// on the day that is exactly 3 days before expiry.
+func (s *Store) ListOTCContractsExpiringSoon(ctx context.Context, now time.Time, loc *time.Location, calendarDaysAhead int) ([]*domain.OTCContract, error) {
+	// Compute the target calendar date in the provided timezone.
+	target := now.In(loc).AddDate(0, 0, calendarDaysAhead)
+	targetDate := time.Date(target.Year(), target.Month(), target.Day(), 0, 0, 0, 0, loc)
+	dayStart := targetDate.UTC()
+	dayEnd := targetDate.AddDate(0, 0, 1).UTC()
+
+	const q = `select ` + otcContractCols + ` from "trading".otc_contracts
+	           where status = 'active'
+	             and settlement_date >= $1
+	             and settlement_date < $2
+	           order by settlement_date`
+	rows, err := s.DB.Query(ctx, q, dayStart, dayEnd)
+	if err != nil {
+		return nil, apperr.Internal("list otc contracts expiring soon", err)
+	}
+	defer rows.Close()
+	var out []*domain.OTCContract
+	for rows.Next() {
+		c, err := scanOTCContract(rows)
+		if err != nil {
+			return nil, apperr.Internal("scan otc contract expiring soon", err)
+		}
+		out = append(out, c)
+	}
+	return out, rows.Err()
+}
+
 // ListPublicHoldings returns holding rows with public_count > reserved_count
 // owned by someone other than `excludeUserID`. Used by the OTC discovery
 // board; the service decorates each row with the security + listing.

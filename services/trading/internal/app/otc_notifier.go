@@ -109,6 +109,32 @@ func (n *otcEmailNotifier) OnOTCContractExpired(ctx context.Context, c *domain.O
 	n.dispatch(ctx, addr, "OTC ugovor istekao", body)
 }
 
+func (n *otcEmailNotifier) OnOTCContractExpiringSoon(ctx context.Context, c *domain.OTCContract, recipientID string, kind domain.UserKind, daysLeft int) {
+	if n == nil {
+		return
+	}
+	addr, err := n.recipientEmail(ctx, recipientID, kind)
+	if err != nil || addr == "" {
+		n.log.Warn("otc email: skip expiring-soon (recipient unresolved)",
+			"recipient_id", recipientID, "err", errString(err))
+		return
+	}
+	body := fmt.Sprintf(
+		"Vaš OTC ugovor %s ističe za %d %s, na datum %s.\n\nStrike cena: %s %s\nPremija plaćena: %s %s\n\nAko želite da iskoristite ugovor, otvorite portal i pokrenite izvršenje pre datuma isteka.",
+		c.ID, daysLeft, daysWord(daysLeft), c.SettlementDate.Format("2006-01-02"),
+		c.StrikePrice, c.Currency, c.PremiumPaid, c.Currency,
+	)
+	n.dispatch(ctx, addr, fmt.Sprintf("OTC ugovor ističe za %d dana", daysLeft), body)
+}
+
+// daysWord returns the correct Serbian noun form for "dan/dana".
+func daysWord(n int) string {
+	if n == 1 {
+		return "dan"
+	}
+	return "dana"
+}
+
 func (n *otcEmailNotifier) recipientEmail(ctx context.Context, userID string, kind domain.UserKind) (string, error) {
 	if n.users == nil {
 		return "", nil
