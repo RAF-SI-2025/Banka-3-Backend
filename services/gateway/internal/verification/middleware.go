@@ -43,6 +43,11 @@ type Rule struct {
 func DefaultRules() []Rule {
 	return []Rule{
 		{http.MethodPost, regexp.MustCompile(`^/api/v1/payments$`), verification.ActionPayment},
+		// Scheduling a future-dated payment moves money on the scheduled
+		// date; the spec gates the scheduling step "nakon verifikacije"
+		// (todoSpec C2). Same 6-digit dialog / action kind as an
+		// immediate payment.
+		{http.MethodPost, regexp.MustCompile(`^/api/v1/scheduled-payments$`), verification.ActionPayment},
 		{http.MethodPost, regexp.MustCompile(`^/api/v1/transfers$`), verification.ActionTransfer},
 		{http.MethodPost, regexp.MustCompile(`^/api/v1/cards$`), verification.ActionCardIssue},
 		{http.MethodPatch, regexp.MustCompile(`^/api/v1/accounts/[^/]+/limits$`), verification.ActionLimitChange},

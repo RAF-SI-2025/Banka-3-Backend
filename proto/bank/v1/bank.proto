@@ -234,6 +234,32 @@ service BankService {
   }
 
   // -----------------------------------------------------------------
+  // Scheduled payments — "Zakazivanje plaćanja" (todoSpec C2). A
+  // one-time future-dated intra-bank payment. Scheduling is
+  // verification-gated at the gateway (same 6-digit dialog as a normal
+  // payment); the central scheduler's bank-scheduled-payments sweep
+  // executes due rows. The client can list + cancel before execution.
+  // -----------------------------------------------------------------
+
+  rpc SchedulePayment(SchedulePaymentRequest) returns (ScheduledPayment) {
+    option (google.api.http) = {
+      post: "/api/v1/scheduled-payments"
+      body: "*"
+    };
+  }
+  rpc ListScheduledPayments(ListScheduledPaymentsRequest) returns (ListScheduledPaymentsResponse) {
+    option (google.api.http) = {get: "/api/v1/scheduled-payments"};
+  }
+  rpc CancelScheduledPayment(CancelScheduledPaymentRequest) returns (ScheduledPayment) {
+    option (google.api.http) = {delete: "/api/v1/scheduled-payments/{id}"};
+  }
+
+  // RunDueScheduledPayments attempts execution of every scheduled
+  // payment whose date has arrived. Normally driven by the scheduler
+  // service; admin-only. Internal — no http annotation.
+  rpc RunDueScheduledPayments(RunDueScheduledPaymentsRequest) returns (RunDueScheduledPaymentsResponse);
+
+  // -----------------------------------------------------------------
   // Cards
   // -----------------------------------------------------------------
 
@@ -946,6 +972,76 @@ message UpdatePaymentRecipientRequest {
 
 message DeletePaymentRecipientRequest {
   string id = 1 [(buf.validate.field).string.uuid = true];
+}
+
+// =====================================================================
+// Scheduled payments ("Zakazivanje plaćanja", todoSpec C2)
+// =====================================================================
+
+enum ScheduledPaymentStatus {
+  SCHEDULED_PAYMENT_STATUS_UNSPECIFIED = 0;
+  SCHEDULED_PAYMENT_STATUS_SCHEDULED = 1;
+  SCHEDULED_PAYMENT_STATUS_COMPLETED = 2;
+  SCHEDULED_PAYMENT_STATUS_FAILED = 3;
+  SCHEDULED_PAYMENT_STATUS_CANCELLED = 4;
+}
+
+message ScheduledPayment {
+  string id = 1;
+  string client_id = 2;
+  string from_account_id = 3;
+  string to_account_number = 4;
+  string amount = 5;
+  Currency currency = 6;
+  string recipient_name = 7;
+  string payment_code = 8;
+  string purpose = 9;
+  string model = 10;
+  string reference_number = 11;
+  google.protobuf.Timestamp scheduled_date = 12;
+  ScheduledPaymentStatus status = 13;
+  string failure_reason = 14;
+  google.protobuf.Timestamp created_at = 15;
+  google.protobuf.Timestamp executed_at = 16;
+}
+
+message SchedulePaymentRequest {
+  string from_account_id = 1 [(buf.validate.field).string.uuid = true];
+  string to_account_number = 2 [(buf.validate.field).string.pattern = "^[0-9]{18}$"];
+  string amount = 3 [(buf.validate.field).string.pattern = "^(0*[1-9][0-9]*|[0-9]+\\.[0-9]{1,4}|0\\.0*[1-9][0-9]{0,3})$"];
+  string recipient_name = 4 [(buf.validate.field).string = {
+    min_len: 1
+    max_len: 100
+  }];
+  string payment_code = 5 [
+    (buf.validate.field).string.pattern = "^[12][0-9]{2}$",
+    (buf.validate.field).ignore = IGNORE_IF_ZERO_VALUE
+  ];
+  string reference_number = 6 [(buf.validate.field).string.max_len = 64];
+  string model = 7 [(buf.validate.field).string.max_len = 4];
+  string purpose = 8 [(buf.validate.field).string.max_len = 200];
+  // Future date the payment should execute on. Server rejects a
+  // non-future value (spec: "Sistem proverava da li je datum u
+  // budućnosti").
+  google.protobuf.Timestamp scheduled_date = 9 [(buf.validate.field).required = true];
+}
+
+message ListScheduledPaymentsRequest {}
+
+message ListScheduledPaymentsResponse {
+  repeated ScheduledPayment scheduled_payments = 1;
+}
+
+message CancelScheduledPaymentRequest {
+  string id = 1 [(buf.validate.field).string.uuid = true];
+}
+
+message RunDueScheduledPaymentsRequest {}
+
+message RunDueScheduledPaymentsResponse {
+  int32 processed = 1;
+  int32 succeeded = 2;
+  int32 failed = 3;
 }
 
 // =====================================================================
