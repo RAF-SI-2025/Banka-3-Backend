@@ -1942,6 +1942,178 @@
         ]
       }
     },
+    "/api/v1/forex-forwards": {
+      "get": {
+        "summary": "ListForexForwards returns the caller's forward contracts.",
+        "operationId": "BankService_ListForexForwards",
+        "responses": {
+          "200": {
+            "description": "A successful response.",
+            "schema": {
+              "$ref": "#/definitions/v1ListForexForwardsResponse"
+            }
+          },
+          "default": {
+            "description": "An unexpected error response.",
+            "schema": {
+              "$ref": "#/definitions/rpcStatus"
+            }
+          }
+        },
+        "tags": [
+          "BankService"
+        ]
+      },
+      "post": {
+        "summary": "CreateForexForward concludes a forward: locks the rate, reserves the\nRSD obligation on the client's RSD account, charges the commission,\nand persists the contract as 'active'.",
+        "operationId": "BankService_CreateForexForward",
+        "responses": {
+          "200": {
+            "description": "A successful response.",
+            "schema": {
+              "$ref": "#/definitions/v1ForexForward"
+            }
+          },
+          "default": {
+            "description": "An unexpected error response.",
+            "schema": {
+              "$ref": "#/definitions/rpcStatus"
+            }
+          }
+        },
+        "parameters": [
+          {
+            "name": "body",
+            "in": "body",
+            "required": true,
+            "schema": {
+              "$ref": "#/definitions/v1CreateForexForwardRequest"
+            }
+          }
+        ],
+        "tags": [
+          "BankService"
+        ]
+      }
+    },
+    "/api/v1/forex-forwards/quote": {
+      "post": {
+        "summary": "QuoteForexForward returns a side-effect-free preview of a prospective\nforward: the locked-in ForwardRate (= SpotAsk × (1 + days/365 ×\nspread)) plus the reserved obligation amount and commission.",
+        "operationId": "BankService_QuoteForexForward",
+        "responses": {
+          "200": {
+            "description": "A successful response.",
+            "schema": {
+              "$ref": "#/definitions/v1ForexForwardQuote"
+            }
+          },
+          "default": {
+            "description": "An unexpected error response.",
+            "schema": {
+              "$ref": "#/definitions/rpcStatus"
+            }
+          }
+        },
+        "parameters": [
+          {
+            "name": "body",
+            "in": "body",
+            "required": true,
+            "schema": {
+              "$ref": "#/definitions/v1QuoteForexForwardRequest"
+            }
+          }
+        ],
+        "tags": [
+          "BankService"
+        ]
+      }
+    },
+    "/api/v1/forex-forwards/spreads": {
+      "get": {
+        "summary": "GetForexForwardSpreads returns every configured pair's SpreadFactor.",
+        "operationId": "BankService_GetForexForwardSpreads",
+        "responses": {
+          "200": {
+            "description": "A successful response.",
+            "schema": {
+              "$ref": "#/definitions/v1GetForexForwardSpreadsResponse"
+            }
+          },
+          "default": {
+            "description": "An unexpected error response.",
+            "schema": {
+              "$ref": "#/definitions/rpcStatus"
+            }
+          }
+        },
+        "tags": [
+          "BankService"
+        ]
+      },
+      "put": {
+        "summary": "SetForexForwardSpread upserts a pair's SpreadFactor. Supervisor-only.",
+        "operationId": "BankService_SetForexForwardSpread",
+        "responses": {
+          "200": {
+            "description": "A successful response.",
+            "schema": {
+              "$ref": "#/definitions/v1ForexForwardSpread"
+            }
+          },
+          "default": {
+            "description": "An unexpected error response.",
+            "schema": {
+              "$ref": "#/definitions/rpcStatus"
+            }
+          }
+        },
+        "parameters": [
+          {
+            "name": "body",
+            "in": "body",
+            "required": true,
+            "schema": {
+              "$ref": "#/definitions/v1SetForexForwardSpreadRequest"
+            }
+          }
+        ],
+        "tags": [
+          "BankService"
+        ]
+      }
+    },
+    "/api/v1/forex-forwards/{id}": {
+      "delete": {
+        "summary": "CancelForexForward cancels a still-'active' contract and releases the\nreservation.",
+        "operationId": "BankService_CancelForexForward",
+        "responses": {
+          "200": {
+            "description": "A successful response.",
+            "schema": {
+              "$ref": "#/definitions/v1ForexForward"
+            }
+          },
+          "default": {
+            "description": "An unexpected error response.",
+            "schema": {
+              "$ref": "#/definitions/rpcStatus"
+            }
+          }
+        },
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "type": "string"
+          }
+        ],
+        "tags": [
+          "BankService"
+        ]
+      }
+    },
     "/api/v1/funds": {
       "get": {
         "summary": "ListFunds returns the fund discovery list (spec p.71). Supervisors\nand clients with funds.read.* can browse; rows include total_value,\nprofit, and minimum_contribution for sorting/filtering.",
@@ -6929,6 +7101,21 @@
         }
       }
     },
+    "v1CreateForexForwardRequest": {
+      "type": "object",
+      "properties": {
+        "baseCurrency": {
+          "$ref": "#/definitions/bankaBankV1Currency"
+        },
+        "notional": {
+          "type": "string"
+        },
+        "settlementDate": {
+          "type": "string",
+          "format": "date-time"
+        }
+      }
+    },
     "v1CreateFundRequest": {
       "type": "object",
       "properties": {
@@ -7722,6 +7909,143 @@
       },
       "description": "ExternalPublicHolding is one row in the discovery aggregation —\nflattened across partner banks."
     },
+    "v1ForexForward": {
+      "type": "object",
+      "properties": {
+        "id": {
+          "type": "string"
+        },
+        "clientId": {
+          "type": "string"
+        },
+        "baseCurrency": {
+          "$ref": "#/definitions/bankaBankV1Currency",
+          "title": "notional currency (bought forward)"
+        },
+        "quoteCurrency": {
+          "$ref": "#/definitions/bankaBankV1Currency",
+          "title": "settlement leg (RSD)"
+        },
+        "notional": {
+          "type": "string"
+        },
+        "forwardRate": {
+          "type": "string",
+          "title": "locked quote-per-1-base"
+        },
+        "spotAskRate": {
+          "type": "string"
+        },
+        "spreadFactor": {
+          "type": "string"
+        },
+        "daysToSettlement": {
+          "type": "integer",
+          "format": "int32"
+        },
+        "commission": {
+          "type": "string"
+        },
+        "reservationId": {
+          "type": "string"
+        },
+        "fromAccountId": {
+          "type": "string",
+          "title": "client RSD account, debited at settlement"
+        },
+        "toAccountId": {
+          "type": "string",
+          "title": "client base-currency account, credited at settlement"
+        },
+        "settlementDate": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "status": {
+          "$ref": "#/definitions/v1ForexForwardStatus"
+        },
+        "failureReason": {
+          "type": "string"
+        },
+        "createdAt": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "settledAt": {
+          "type": "string",
+          "format": "date-time"
+        }
+      },
+      "description": "ForexForward is one concluded forward contract."
+    },
+    "v1ForexForwardQuote": {
+      "type": "object",
+      "properties": {
+        "baseCurrency": {
+          "$ref": "#/definitions/bankaBankV1Currency"
+        },
+        "quoteCurrency": {
+          "$ref": "#/definitions/bankaBankV1Currency"
+        },
+        "notional": {
+          "type": "string"
+        },
+        "spotAskRate": {
+          "type": "string"
+        },
+        "spreadFactor": {
+          "type": "string"
+        },
+        "daysToSettlement": {
+          "type": "integer",
+          "format": "int32"
+        },
+        "forwardRate": {
+          "type": "string"
+        },
+        "quoteAmount": {
+          "type": "string",
+          "title": "forward_rate × notional (reserved at conclusion)"
+        },
+        "commission": {
+          "type": "string"
+        }
+      },
+      "description": "ForexForwardQuote is the side-effect-free preview returned by\nQuoteForexForward."
+    },
+    "v1ForexForwardSpread": {
+      "type": "object",
+      "properties": {
+        "baseCurrency": {
+          "$ref": "#/definitions/bankaBankV1Currency"
+        },
+        "quoteCurrency": {
+          "$ref": "#/definitions/bankaBankV1Currency"
+        },
+        "spreadFactor": {
+          "type": "string"
+        },
+        "updatedBy": {
+          "type": "string"
+        },
+        "updatedAt": {
+          "type": "string",
+          "format": "date-time"
+        }
+      },
+      "description": "ForexForwardSpread is the per-pair annualised spread factor."
+    },
+    "v1ForexForwardStatus": {
+      "type": "string",
+      "enum": [
+        "FOREX_FORWARD_STATUS_UNSPECIFIED",
+        "FOREX_FORWARD_STATUS_ACTIVE",
+        "FOREX_FORWARD_STATUS_SETTLED",
+        "FOREX_FORWARD_STATUS_CANCELLED",
+        "FOREX_FORWARD_STATUS_FAILED"
+      ],
+      "default": "FOREX_FORWARD_STATUS_UNSPECIFIED"
+    },
     "v1Fund": {
       "type": "object",
       "properties": {
@@ -8046,6 +8370,18 @@
         },
         "contract": {
           "$ref": "#/definitions/v1ExternalOTCContract"
+        }
+      }
+    },
+    "v1GetForexForwardSpreadsResponse": {
+      "type": "object",
+      "properties": {
+        "spreads": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "$ref": "#/definitions/v1ForexForwardSpread"
+          }
         }
       }
     },
@@ -8442,6 +8778,18 @@
           "items": {
             "type": "object",
             "$ref": "#/definitions/v1ExternalPublicHolding"
+          }
+        }
+      }
+    },
+    "v1ListForexForwardsResponse": {
+      "type": "object",
+      "properties": {
+        "forexForwards": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "$ref": "#/definitions/v1ForexForward"
           }
         }
       }
@@ -9798,6 +10146,22 @@
         }
       }
     },
+    "v1QuoteForexForwardRequest": {
+      "type": "object",
+      "properties": {
+        "baseCurrency": {
+          "$ref": "#/definitions/bankaBankV1Currency"
+        },
+        "notional": {
+          "type": "string"
+        },
+        "settlementDate": {
+          "type": "string",
+          "format": "date-time",
+          "description": "YYYY-MM-DD settlement date in the future."
+        }
+      }
+    },
     "v1Rate": {
       "type": "object",
       "properties": {
@@ -10442,6 +10806,20 @@
         }
       },
       "description": "SecurityWithListing collapses (security, listing) for the catalog\nportal so the FE doesn't need to round-trip per row."
+    },
+    "v1SetForexForwardSpreadRequest": {
+      "type": "object",
+      "properties": {
+        "baseCurrency": {
+          "$ref": "#/definitions/bankaBankV1Currency"
+        },
+        "quoteCurrency": {
+          "$ref": "#/definitions/bankaBankV1Currency"
+        },
+        "spreadFactor": {
+          "type": "string"
+        }
+      }
     },
     "v1SubmitCrossBankPaymentRequest": {
       "type": "object",

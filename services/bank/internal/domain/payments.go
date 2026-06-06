@@ -41,6 +41,15 @@ const (
 	// engine converts (commission-free) so RSD-only holders still get
 	// paid (S56).
 	TxKindDividend TransactionKind = "dividend"
+
+	// TxKindForexForward tags the settlement leg of a forex forward
+	// (terminski valutni ugovor, todoSpec C3). On the settlement date the
+	// bank performs a DIRECT fixed-rate conversion at the locked
+	// ForwardRate (not a menjačnica RSD round-trip): debit RSD from the
+	// client's RSD account and credit the notional in the base currency
+	// to the client's base-currency account, both legs hopping through
+	// the bank's per-currency house accounts.
+	TxKindForexForward TransactionKind = "forex_forward"
 )
 
 // ReservationState pins the bank.reservations row lifecycle (c4).

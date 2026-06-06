@@ -72,6 +72,13 @@ func DefaultRules() []Rule {
 		// gate (and vice versa); same 6-digit UX, FE labels the dialog
 		// "Međubankarsko plaćanje".
 		{http.MethodPost, regexp.MustCompile(`^/api/v1/payments/interbank$`), verification.ActionInterbankPayment},
+		// Concluding a forex forward (terminski ugovor, todoSpec C3)
+		// reserves the RSD obligation and charges a commission on the
+		// client's account, so it's money-moving and gated like a payment.
+		// The /quote and /spreads sub-routes don't move money and are not
+		// gated — the trailing-$ anchor keeps this matching the bare
+		// conclude endpoint only.
+		{http.MethodPost, regexp.MustCompile(`^/api/v1/forex-forwards$`), verification.ActionPayment},
 	}
 }
 
