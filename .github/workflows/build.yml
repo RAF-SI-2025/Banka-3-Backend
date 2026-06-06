@@ -218,9 +218,9 @@ jobs:
           # Retry once if the push still races — a failure after that
           # is genuine (auth, missing branch protection bypass, etc.)
           # and we want CI to fail loud.
-          git commit -m "ci(dev): bump ${MODULES} → ${SHA:0:8}
-
-Origin: ${{ github.server_url }}/${{ github.repository }}/commit/${SHA}"
+          git commit \
+            -m "ci(dev): bump ${MODULES} → ${SHA:0:8}" \
+            -m "Origin: ${{ github.server_url }}/${{ github.repository }}/commit/${SHA}"
           for attempt in 1 2; do
             if git push origin main; then
               exit 0
