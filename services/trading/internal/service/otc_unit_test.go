@@ -222,6 +222,106 @@ func TestDaysUntilExpiry(t *testing.T) {
 	}
 }
 
+// TestSubtractBusinessDays validates the Mon–Fri business-day walk used
+// by the OTC offer auto-expiry sweep (todoSpec "Automatska promena stanja
+// pregovora": 3 radna dana, weekends skipped).
+func TestSubtractBusinessDays(t *testing.T) {
+	belgrade, err := time.LoadLocation("Europe/Belgrade")
+	if err != nil {
+		t.Fatalf("load location: %v", err)
+	}
+	mk := func(y int, m time.Month, d, h int) time.Time {
+		return time.Date(y, m, d, h, 0, 0, 0, belgrade)
+	}
+	cases := []struct {
+		name string
+		from time.Time
+		n    int
+		want time.Time
+	}{
+		// 2026-06-08 is a Monday; 2026-06-06/07 are Sat/Sun.
+		{
+			name: "Monday minus 3 business days lands on prior Wednesday",
+			from: mk(2026, 6, 8, 10), // Mon
+			n:    3,
+			want: mk(2026, 6, 3, 10), // Wed (Mon→Fri→Thu→Wed)
+		},
+		{
+			name: "Monday minus 1 business day lands on Friday",
+			from: mk(2026, 6, 8, 10), // Mon
+			n:    1,
+			want: mk(2026, 6, 5, 10), // Fri
+		},
+		{
+			name: "Wednesday minus 3 business days lands on prior Friday",
+			from: mk(2026, 6, 10, 9), // Wed
+			n:    3,
+			want: mk(2026, 6, 5, 9), // Fri (Wed→Tue→Mon→Fri)
+		},
+		{
+			name: "zero business days is identity",
+			from: mk(2026, 6, 10, 9),
+			n:    0,
+			want: mk(2026, 6, 10, 9),
+		},
+		{
+			name: "Saturday minus 1 business day lands on Friday",
+			from: mk(2026, 6, 6, 12), // Sat
+			n:    1,
+			want: mk(2026, 6, 5, 12), // Fri
+		},
+		{
+			name: "time-of-day preserved across the walk",
+			from: mk(2026, 6, 8, 17), // Mon 17:00
+			n:    2,
+			want: mk(2026, 6, 4, 17), // Thu 17:00
+		},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			got := subtractBusinessDays(tc.from, tc.n, belgrade)
+			if !got.Equal(tc.want) {
+				t.Fatalf("subtractBusinessDays(%v, %d) = %v, want %v",
+					tc.from, tc.n, got, tc.want)
+			}
+		})
+	}
+}
+
+// TestGuardOTCOfferTermination exercises the cancel/reject actor guard
+// (todoSpec C4): only the originator may cancel, only the counterparty
+// may reject, and a non-party is rejected outright.
+func TestGuardOTCOfferTermination(t *testing.T) {
+	// modified_by = "buyer" → buyer is the originator of the live row.
+	offer := &domain.OTCOffer{
+		BuyerID:    "buyer",
+		SellerID:   "seller",
+		ModifiedBy: "buyer",
+	}
+	cases := []struct {
+		name    string
+		caller  string
+		target  domain.OTCStatus
+		wantErr bool
+	}{
+		{"originator cancels own offer", "buyer", domain.OTCStatusCancelled, false},
+		{"counterparty cannot cancel", "seller", domain.OTCStatusCancelled, true},
+		{"counterparty rejects offer", "seller", domain.OTCStatusRejected, false},
+		{"originator cannot reject own offer", "buyer", domain.OTCStatusRejected, true},
+		{"non-party cannot cancel", "stranger", domain.OTCStatusCancelled, true},
+		{"non-party cannot reject", "stranger", domain.OTCStatusRejected, true},
+		{"unknown target status is rejected", "buyer", domain.OTCStatusOpen, true},
+	}
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			err := guardOTCOfferTermination(offer, c.caller, c.target)
+			if (err != nil) != c.wantErr {
+				t.Fatalf("wantErr=%v gotErr=%v", c.wantErr, err)
+			}
+		})
+	}
+}
+
 func TestOtherParty(t *testing.T) {
 	o := &domain.OTCOffer{
 		BuyerID:    "buyer",

@@ -57,6 +57,8 @@ const (
 	TradingService_CreateOTCOffer_FullMethodName             = "/banka.trading.v1.TradingService/CreateOTCOffer"
 	TradingService_CounterOfferOTC_FullMethodName            = "/banka.trading.v1.TradingService/CounterOfferOTC"
 	TradingService_WithdrawOTCOffer_FullMethodName           = "/banka.trading.v1.TradingService/WithdrawOTCOffer"
+	TradingService_CancelOTCOffer_FullMethodName             = "/banka.trading.v1.TradingService/CancelOTCOffer"
+	TradingService_RejectOTCOffer_FullMethodName             = "/banka.trading.v1.TradingService/RejectOTCOffer"
 	TradingService_ListOTCThreads_FullMethodName             = "/banka.trading.v1.TradingService/ListOTCThreads"
 	TradingService_GetOTCThread_FullMethodName               = "/banka.trading.v1.TradingService/GetOTCThread"
 	TradingService_AcceptOTCOffer_FullMethodName             = "/banka.trading.v1.TradingService/AcceptOTCOffer"
@@ -188,6 +190,18 @@ type TradingServiceClient interface {
 	// may call; the open row flips to `withdrawn` and the seller's
 	// reservation is released.
 	WithdrawOTCOffer(ctx context.Context, in *WithdrawOTCOfferRequest, opts ...grpc.CallOption) (*OTCOffer, error)
+	// CancelOTCOffer lets the originator cancel their own active offer
+	// (todoSpec "Automatska promena stanja pregovora"). Only the party who
+	// proposed the live iteration may call; the open row flips to
+	// `cancelled` and the reservation is released. A state-change
+	// notification fires to the counterparty.
+	CancelOTCOffer(ctx context.Context, in *CancelOTCOfferRequest, opts ...grpc.CallOption) (*OTCOffer, error)
+	// RejectOTCOffer lets the counterparty decline the latest open offer in
+	// a thread (todoSpec "Automatska promena stanja pregovora"). Only the
+	// party who did NOT propose the live iteration may call; the open row
+	// flips to `rejected` and the reservation is released. A state-change
+	// notification fires to the originator.
+	RejectOTCOffer(ctx context.Context, in *RejectOTCOfferRequest, opts ...grpc.CallOption) (*OTCOffer, error)
 	// ListOTCThreads drives the "Aktivne ponude" page (spec p.69) — every
 	// thread the caller participates in (as buyer or seller), most-recent
 	// iteration per thread.
@@ -694,6 +708,26 @@ func (c *tradingServiceClient) WithdrawOTCOffer(ctx context.Context, in *Withdra
 	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
 	out := new(OTCOffer)
 	err := c.cc.Invoke(ctx, TradingService_WithdrawOTCOffer_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *tradingServiceClient) CancelOTCOffer(ctx context.Context, in *CancelOTCOfferRequest, opts ...grpc.CallOption) (*OTCOffer, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(OTCOffer)
+	err := c.cc.Invoke(ctx, TradingService_CancelOTCOffer_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *tradingServiceClient) RejectOTCOffer(ctx context.Context, in *RejectOTCOfferRequest, opts ...grpc.CallOption) (*OTCOffer, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(OTCOffer)
+	err := c.cc.Invoke(ctx, TradingService_RejectOTCOffer_FullMethodName, in, out, cOpts...)
 	if err != nil {
 		return nil, err
 	}
@@ -1207,6 +1241,18 @@ type TradingServiceServer interface {
 	// may call; the open row flips to `withdrawn` and the seller's
 	// reservation is released.
 	WithdrawOTCOffer(context.Context, *WithdrawOTCOfferRequest) (*OTCOffer, error)
+	// CancelOTCOffer lets the originator cancel their own active offer
+	// (todoSpec "Automatska promena stanja pregovora"). Only the party who
+	// proposed the live iteration may call; the open row flips to
+	// `cancelled` and the reservation is released. A state-change
+	// notification fires to the counterparty.
+	CancelOTCOffer(context.Context, *CancelOTCOfferRequest) (*OTCOffer, error)
+	// RejectOTCOffer lets the counterparty decline the latest open offer in
+	// a thread (todoSpec "Automatska promena stanja pregovora"). Only the
+	// party who did NOT propose the live iteration may call; the open row
+	// flips to `rejected` and the reservation is released. A state-change
+	// notification fires to the originator.
+	RejectOTCOffer(context.Context, *RejectOTCOfferRequest) (*OTCOffer, error)
 	// ListOTCThreads drives the "Aktivne ponude" page (spec p.69) — every
 	// thread the caller participates in (as buyer or seller), most-recent
 	// iteration per thread.
@@ -1458,6 +1504,12 @@ func (UnimplementedTradingServiceServer) CounterOfferOTC(context.Context, *Count
 }
 func (UnimplementedTradingServiceServer) WithdrawOTCOffer(context.Context, *WithdrawOTCOfferRequest) (*OTCOffer, error) {
 	return nil, status.Error(codes.Unimplemented, "method WithdrawOTCOffer not implemented")
+}
+func (UnimplementedTradingServiceServer) CancelOTCOffer(context.Context, *CancelOTCOfferRequest) (*OTCOffer, error) {
+	return nil, status.Error(codes.Unimplemented, "method CancelOTCOffer not implemented")
+}
+func (UnimplementedTradingServiceServer) RejectOTCOffer(context.Context, *RejectOTCOfferRequest) (*OTCOffer, error) {
+	return nil, status.Error(codes.Unimplemented, "method RejectOTCOffer not implemented")
 }
 func (UnimplementedTradingServiceServer) ListOTCThreads(context.Context, *ListOTCThreadsRequest) (*ListOTCThreadsResponse, error) {
 	return nil, status.Error(codes.Unimplemented, "method ListOTCThreads not implemented")
@@ -2267,6 +2319,42 @@ func _TradingService_WithdrawOTCOffer_Handler(srv interface{}, ctx context.Conte
 	}
 	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
 		return srv.(TradingServiceServer).WithdrawOTCOffer(ctx, req.(*WithdrawOTCOfferRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _TradingService_CancelOTCOffer_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(CancelOTCOfferRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(TradingServiceServer).CancelOTCOffer(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: TradingService_CancelOTCOffer_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(TradingServiceServer).CancelOTCOffer(ctx, req.(*CancelOTCOfferRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _TradingService_RejectOTCOffer_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(RejectOTCOfferRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(TradingServiceServer).RejectOTCOffer(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: TradingService_RejectOTCOffer_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(TradingServiceServer).RejectOTCOffer(ctx, req.(*RejectOTCOfferRequest))
 	}
 	return interceptor(ctx, in, info, handler)
 }
@@ -3181,6 +3269,14 @@ var TradingService_ServiceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "WithdrawOTCOffer",
 			Handler:    _TradingService_WithdrawOTCOffer_Handler,
+		},
+		{
+			MethodName: "CancelOTCOffer",
+			Handler:    _TradingService_CancelOTCOffer_Handler,
+		},
+		{
+			MethodName: "RejectOTCOffer",
+			Handler:    _TradingService_RejectOTCOffer_Handler,
 		},
 		{
 			MethodName: "ListOTCThreads",

@@ -339,9 +339,13 @@ type OptionExercise struct {
 //   - superseded → a prior iteration in the same thread; kept for audit.
 //   - accepted   → the iteration the counterparty accepted; promoted to
 //     an otc_contracts row.
-//   - withdrawn  → either party pulled out before accept.
-//   - expired    → never used today (offers don't TTL); reserved for
-//     future "auto-withdraw stale threads" policy.
+//   - withdrawn  → either party pulled out before accept (legacy generic
+//     "odustao" — both Cancel and Reject below are the spec-precise forms).
+//   - cancelled  → the originator cancelled their own open offer
+//     (todoSpec "Automatska promena stanja pregovora").
+//   - rejected   → the counterparty declined the latest open offer.
+//   - expired    → aged out: an open offer with no activity for 3 business
+//     days is auto-expired by the OTC sweep.
 type OTCStatus string
 
 const (
@@ -349,6 +353,8 @@ const (
 	OTCStatusSuperseded OTCStatus = "superseded"
 	OTCStatusAccepted   OTCStatus = "accepted"
 	OTCStatusWithdrawn  OTCStatus = "withdrawn"
+	OTCStatusCancelled  OTCStatus = "cancelled"
+	OTCStatusRejected   OTCStatus = "rejected"
 	OTCStatusExpired    OTCStatus = "expired"
 )
 

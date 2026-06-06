@@ -252,10 +252,12 @@ func runOTCExpirySweep(ctx context.Context, log *slog.Logger, svc *service.Servi
 			log.Warn("otc expiry sweep failed", "err", err.Error())
 			return
 		}
-		if res.ContractsExpired > 0 {
+		if res.ContractsExpired > 0 || res.OffersExpired > 0 || res.OffersWarned > 0 {
 			log.Info("otc expiry sweep ran",
 				"contracts", res.ContractsExpired,
-				"shares_released", res.SharesReleased)
+				"shares_released", res.SharesReleased,
+				"offers_expired", res.OffersExpired,
+				"offers_warned", res.OffersWarned)
 		}
 	}
 	once()

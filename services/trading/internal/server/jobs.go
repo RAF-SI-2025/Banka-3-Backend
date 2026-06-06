@@ -63,6 +63,8 @@ func (s *Server) RunOTCExpirySweep(ctx context.Context, _ *tradingpb.RunOTCExpir
 	return &tradingpb.RunOTCExpirySweepResponse{
 		ContractsExpired: int32(r.ContractsExpired),
 		SharesReleased:   r.SharesReleased,
+		OffersExpired:    int32(r.OffersExpired),
+		OffersWarned:     int32(r.OffersWarned),
 	}, nil
 }
 

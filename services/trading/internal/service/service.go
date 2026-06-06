@@ -235,6 +235,15 @@ type OTCNotifier interface {
 	// expires in daysLeft calendar days (scenario S63). Called once per
 	// contract when daysLeft == 3 so the holder can act before expiry.
 	OnOTCContractExpiringSoon(ctx context.Context, contract *domain.OTCContract, recipientID string, recipientKind domain.UserKind, daysLeft int)
+	// OnOTCOfferStateChanged notifies a party that an offer in their
+	// thread moved to a new terminal state — cancelled, rejected, or
+	// auto-expired (todoSpec "Automatska promena stanja pregovora").
+	// The recipient is the affected counterparty.
+	OnOTCOfferStateChanged(ctx context.Context, offer *domain.OTCOffer, recipientID string, recipientKind domain.UserKind)
+	// OnOTCOfferExpiringSoon warns a party that an open offer is about to
+	// be auto-expired for inactivity (one business day out), so they can
+	// extend/renew/change it before it ages out.
+	OnOTCOfferExpiringSoon(ctx context.Context, offer *domain.OTCOffer, recipientID string, recipientKind domain.UserKind)
 }
 
 // BankReservations is the trading-service view of bank's c4 reservation

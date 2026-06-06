@@ -114,6 +114,22 @@ func (s *Server) WithdrawOTCOffer(ctx context.Context, in *tradingpb.WithdrawOTC
 	return otcOfferToProto(s, ctx, offer), nil
 }
 
+func (s *Server) CancelOTCOffer(ctx context.Context, in *tradingpb.CancelOTCOfferRequest) (*tradingpb.OTCOffer, error) {
+	offer, err := s.Svc.CancelOTCOffer(ctx, in.GetThreadId())
+	if err != nil {
+		return nil, err
+	}
+	return otcOfferToProto(s, ctx, offer), nil
+}
+
+func (s *Server) RejectOTCOffer(ctx context.Context, in *tradingpb.RejectOTCOfferRequest) (*tradingpb.OTCOffer, error) {
+	offer, err := s.Svc.RejectOTCOffer(ctx, in.GetThreadId())
+	if err != nil {
+		return nil, err
+	}
+	return otcOfferToProto(s, ctx, offer), nil
+}
+
 func (s *Server) ListOTCThreads(ctx context.Context, in *tradingpb.ListOTCThreadsRequest) (*tradingpb.ListOTCThreadsResponse, error) {
 	rows, err := s.Svc.ListOTCThreads(ctx, service.ListOTCThreadsInput{
 		PartyUserID:   in.GetPartyUserId(),
@@ -284,6 +300,10 @@ func otcStatusToProto(s domain.OTCStatus) tradingpb.OTCStatus {
 		return tradingpb.OTCStatus_OTC_STATUS_ACCEPTED
 	case domain.OTCStatusWithdrawn:
 		return tradingpb.OTCStatus_OTC_STATUS_WITHDRAWN
+	case domain.OTCStatusCancelled:
+		return tradingpb.OTCStatus_OTC_STATUS_CANCELLED
+	case domain.OTCStatusRejected:
+		return tradingpb.OTCStatus_OTC_STATUS_REJECTED
 	case domain.OTCStatusExpired:
 		return tradingpb.OTCStatus_OTC_STATUS_EXPIRED
 	}

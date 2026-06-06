@@ -285,6 +285,30 @@ service TradingService {
     };
   }
 
+  // CancelOTCOffer lets the originator cancel their own active offer
+  // (todoSpec "Automatska promena stanja pregovora"). Only the party who
+  // proposed the live iteration may call; the open row flips to
+  // `cancelled` and the reservation is released. A state-change
+  // notification fires to the counterparty.
+  rpc CancelOTCOffer(CancelOTCOfferRequest) returns (OTCOffer) {
+    option (google.api.http) = {
+      post: "/api/v1/otc/offers/{thread_id}/cancel"
+      body: "*"
+    };
+  }
+
+  // RejectOTCOffer lets the counterparty decline the latest open offer in
+  // a thread (todoSpec "Automatska promena stanja pregovora"). Only the
+  // party who did NOT propose the live iteration may call; the open row
+  // flips to `rejected` and the reservation is released. A state-change
+  // notification fires to the originator.
+  rpc RejectOTCOffer(RejectOTCOfferRequest) returns (OTCOffer) {
+    option (google.api.http) = {
+      post: "/api/v1/otc/offers/{thread_id}/reject"
+      body: "*"
+    };
+  }
+
   // ListOTCThreads drives the "Aktivne ponude" page (spec p.69) — every
   // thread the caller participates in (as buyer or seller), most-recent
   // iteration per thread.
@@ -1388,6 +1412,8 @@ enum OTCStatus {
   OTC_STATUS_ACCEPTED = 3;
   OTC_STATUS_WITHDRAWN = 4;
   OTC_STATUS_EXPIRED = 5;
+  OTC_STATUS_CANCELLED = 6;
+  OTC_STATUS_REJECTED = 7;
 }
 
 enum OTCContractStatus {
@@ -1523,6 +1549,14 @@ message CounterOfferOTCRequest {
 }
 
 message WithdrawOTCOfferRequest {
+  string thread_id = 1 [(buf.validate.field).string.uuid = true];
+}
+
+message CancelOTCOfferRequest {
+  string thread_id = 1 [(buf.validate.field).string.uuid = true];
+}
+
+message RejectOTCOfferRequest {
   string thread_id = 1 [(buf.validate.field).string.uuid = true];
 }
 
@@ -2005,6 +2039,12 @@ message RunOTCExpirySweepRequest {}
 message RunOTCExpirySweepResponse {
   int32 contracts_expired = 1;
   int32 shares_released = 2;
+  // offers_expired counts open offers auto-expired after 3 business days
+  // of inactivity (todoSpec "Automatska promena stanja pregovora").
+  int32 offers_expired = 3;
+  // offers_warned counts pre-expiry warnings sent for offers approaching
+  // the inactivity cutoff.
+  int32 offers_warned = 4;
 }
 
 message RunOptionsRefreshRequest {}

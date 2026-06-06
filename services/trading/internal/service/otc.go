@@ -568,6 +568,103 @@ func (s *Service) WithdrawOTCOffer(ctx context.Context, threadID string) (*domai
 	return out, nil
 }
 
+// RejectOTCOffer lets the COUNTERPARTY decline the latest open offer in
+// a thread (todoSpec "Automatska promena stanja pregovora" — Rejected =
+// the counterparty declines an offer). The party who proposed the live
+// iteration (`modified_by`) cannot reject their own proposal; they cancel
+// it instead. The open row flips to `rejected` and the seller's
+// reservation for that iteration is released. A state-change notification
+// fires to the originator.
+func (s *Service) RejectOTCOffer(ctx context.Context, threadID string) (*domain.OTCOffer, error) {
+	return s.terminateOTCOffer(ctx, threadID, domain.OTCStatusRejected)
+}
+
+// CancelOTCOffer lets the ORIGINATOR cancel their own active offer
+// (todoSpec "Automatska promena stanja pregovora" — Cancelled = the
+// originator cancels their own active offer). Only the party who proposed
+// the live iteration (`modified_by`) may cancel it. The open row flips to
+// `cancelled` and the seller's reservation for that iteration is
+// released. A state-change notification fires to the counterparty.
+func (s *Service) CancelOTCOffer(ctx context.Context, threadID string) (*domain.OTCOffer, error) {
+	return s.terminateOTCOffer(ctx, threadID, domain.OTCStatusCancelled)
+}
+
+// terminateOTCOffer is the shared cancel/reject path. It validates the
+// caller is the correct party for the requested terminal status (only an
+// open/active offer can be cancelled/rejected), releases the reservation,
+// flips the row, and fires the state-change notification.
+//
+//   - cancelled → only the originator (modified_by == caller) may act;
+//     notify the counterparty.
+//   - rejected  → only the counterparty (modified_by != caller) may act;
+//     notify the originator.
+func (s *Service) terminateOTCOffer(ctx context.Context, threadID string, target domain.OTCStatus) (*domain.OTCOffer, error) {
+	p, err := s.requirePrincipal(ctx)
+	if err != nil {
+		return nil, err
+	}
+	if err := requireOTCTrader(p); err != nil {
+		return nil, err
+	}
+
+	var out *domain.OTCOffer
+	err = s.Store.ExecuteAtomic(ctx, func(tx pgx.Tx) error {
+		open, err := s.Store.GetOpenOTCOfferByThread(ctx, tx, threadID)
+		if err != nil {
+			return err
+		}
+		if err := guardOTCOfferTermination(open, p.UserID, target); err != nil {
+			return err
+		}
+		// Release the reservation for this iteration's qty.
+		if open.Quantity > 0 {
+			if _, err := s.Store.DecrementReservedHolding(ctx, tx, open.SellerHoldingID, open.Quantity); err != nil {
+				return err
+			}
+		}
+		updated, err := s.Store.MarkOTCOfferStatus(ctx, tx, open.ID, target)
+		if err != nil {
+			return err
+		}
+		out = updated
+		return nil
+	})
+	if err != nil {
+		return nil, err
+	}
+	if s.OTCNotifier != nil {
+		recipient, kind := otherParty(out, p.UserID)
+		s.OTCNotifier.OnOTCOfferStateChanged(ctx, out, recipient, kind)
+	}
+	return out, nil
+}
+
+// guardOTCOfferTermination enforces who may move an open offer to a
+// cancelled/rejected terminal state. The caller must be a party to the
+// thread; only the originator (the party who proposed the live iteration,
+// i.e. modified_by) may cancel, and only the counterparty may reject.
+// Only an open offer reaches here (the store's GetOpenOTCOfferByThread
+// returns NotFound otherwise), so this guards the actor, not the state.
+func guardOTCOfferTermination(open *domain.OTCOffer, callerID string, target domain.OTCStatus) error {
+	if open.BuyerID != callerID && open.SellerID != callerID {
+		return apperr.PermissionDenied("niste strana u ovoj pregovaračkoj niti")
+	}
+	isOriginator := open.ModifiedBy == callerID
+	switch target {
+	case domain.OTCStatusCancelled:
+		if !isOriginator {
+			return apperr.FailedPrecondition("samo strana koja je poslala ponudu može da je otkaže")
+		}
+	case domain.OTCStatusRejected:
+		if isOriginator {
+			return apperr.FailedPrecondition("ne možete da odbijete sopstvenu ponudu")
+		}
+	default:
+		return apperr.Internal("nepoznat ciljni status ponude", nil)
+	}
+	return nil
+}
+
 // =====================================================================
 // Read paths
 // =====================================================================

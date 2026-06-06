@@ -230,6 +230,58 @@ func (s *Store) MarkOTCOfferStatus(ctx context.Context, tx pgx.Tx, offerID strin
 	return out, nil
 }
 
+// ListStaleOpenOTCOffers returns open offer iterations whose last
+// activity (updated_at) is at or before `cutoff`. Used by the OTC sweep
+// to auto-expire offers inactive for 3 business days — the caller
+// computes `cutoff` as the timestamp 3 business days before now.
+func (s *Store) ListStaleOpenOTCOffers(ctx context.Context, cutoff time.Time) ([]*domain.OTCOffer, error) {
+	const q = `select ` + otcOfferCols + ` from "trading".otc_offers
+	           where status = 'open' and updated_at <= $1
+	           order by updated_at`
+	rows, err := s.DB.Query(ctx, q, cutoff)
+	if err != nil {
+		return nil, apperr.Internal("list stale open otc offers", err)
+	}
+	defer rows.Close()
+	var out []*domain.OTCOffer
+	for rows.Next() {
+		o, err := scanOTCOffer(rows)
+		if err != nil {
+			return nil, apperr.Internal("scan otc offer", err)
+		}
+		out = append(out, o)
+	}
+	return out, rows.Err()
+}
+
+// ListOpenOTCOffersExpiringSoon returns open offer iterations whose last
+// activity (updated_at) falls in the half-open interval (warnFrom,
+// warnTo]. Used by the pre-expiry warning: the caller sizes the window so
+// it captures offers ~1 business day away from the 3-business-day
+// inactivity cutoff (i.e. offers that have already been inactive for
+// 2 business days but not yet 3).
+func (s *Store) ListOpenOTCOffersExpiringSoon(ctx context.Context, warnFrom, warnTo time.Time) ([]*domain.OTCOffer, error) {
+	const q = `select ` + otcOfferCols + ` from "trading".otc_offers
+	           where status = 'open'
+	             and updated_at > $1
+	             and updated_at <= $2
+	           order by updated_at`
+	rows, err := s.DB.Query(ctx, q, warnFrom, warnTo)
+	if err != nil {
+		return nil, apperr.Internal("list open otc offers expiring soon", err)
+	}
+	defer rows.Close()
+	var out []*domain.OTCOffer
+	for rows.Next() {
+		o, err := scanOTCOffer(rows)
+		if err != nil {
+			return nil, apperr.Internal("scan otc offer", err)
+		}
+		out = append(out, o)
+	}
+	return out, rows.Err()
+}
+
 // SupersedePriorOTCOffers flips every `open` iteration in a thread to
 // `superseded`. Used by counter — the new iteration becomes the live
 // one; prior iterations stay as audit.
