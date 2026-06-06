@@ -453,6 +453,33 @@ func (s *stubReservations) Transfer(_ context.Context, in TransferInput) (string
 	return in.OpID, nil
 }
 
+// SettleDividend + ListClientAccounts satisfy the two BankReservations
+// methods the dividends feature (todoSpec S54-S59) added in dividends.go.
+// Without them the whole `integration` build for trading fails to
+// compile. No integration test exercises the dividend-payout path yet, so
+// these are minimal: SettleDividend credits the destination (mirroring
+// Transfer's credit side) and ListClientAccounts returns no accounts.
+// Extend with an owner→accounts map when wiring dividend-payout
+// integration coverage.
+func (s *stubReservations) SettleDividend(_ context.Context, in DividendSettleInput) (string, error) {
+	s.Lock()
+	defer s.Unlock()
+	dst, _ := money.Parse(s.balances[in.AccountID])
+	if dst == nil {
+		dst = money.MustParse("0")
+	}
+	amt, _ := money.Parse(in.Amount)
+	if amt == nil {
+		amt = money.MustParse("0")
+	}
+	s.balances[in.AccountID] = money.FormatAmount(money.Add(dst, amt))
+	return in.OpID, nil
+}
+
+func (s *stubReservations) ListClientAccounts(_ context.Context, _ string, _ domain.Currency) ([]BankAccount, error) {
+	return nil, nil
+}
+
 // setup connects (lazily) to Postgres. Returns a skip reason if the
 // stack isn't reachable so tests are skipped rather than failed when
 // run outside the dev compose.
