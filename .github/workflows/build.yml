@@ -152,3 +152,80 @@ jobs:
         run: |
           cosign sign --yes \
             "${{ env.REGISTRY }}/${{ env.PROJECT }}/${{ matrix.service }}@${{ steps.build.outputs.digest }}"
+
+  # Bump overlays/dev/kustomization.yaml in Banka-3-Infrastructure to
+  # the commit SHA we just built — that's the continuous-deployment
+  # mechanism for the dev environment. Argo CD watches the dev overlay
+  # on main; the commit this job lands becomes the next dev sync.
+  #
+  # Only runs on main-branch pushes. PRs, tags, and other branches
+  # don't bump dev — prod is bumped manually by editing overlays/prod
+  # behind a release tag.
+  #
+  # Requires INFRA_REPO_TOKEN secret: a fine-grained PAT (or GitHub
+  # App installation token) with `contents: write` on the
+  # Banka-3-Infrastructure repo. GITHUB_TOKEN doesn't have cross-repo
+  # write access by default.
+  bump-dev-manifests:
+    needs: [changes, services]
+    if: ${{ github.ref == 'refs/heads/main' && needs.services.result == 'success' && needs.changes.outputs.modules != '[]' && needs.changes.outputs.modules != '' }}
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - name: Checkout infra repo
+        uses: actions/checkout@v6
+        with:
+          repository: RAF-SI-2025/Banka-3-Infrastructure
+          token: ${{ secrets.INFRA_REPO_TOKEN }}
+          ref: main
+
+      - name: Install yq
+        run: |
+          sudo curl -sSfL -o /usr/local/bin/yq \
+            https://github.com/mikefarah/yq/releases/download/v4.44.3/yq_linux_amd64
+          sudo chmod +x /usr/local/bin/yq
+
+      - name: Bump image tags for built services
+        env:
+          MODULES: ${{ needs.changes.outputs.modules }}
+          SHA: ${{ github.sha }}
+        run: |
+          # MODULES is a JSON array like ["user","bank","migrate"]. For
+          # each, swap the matching entry's newTag in overlays/dev/
+          # kustomization.yaml. yq selects by .name so re-ordering the
+          # block doesn't break the bump.
+          for svc in $(echo "$MODULES" | jq -r '.[]'); do
+            echo "bumping $svc → $SHA"
+            yq -i "(.images[] | select(.name == \"registry.urosevicvuk.dev/raf-banka3/${svc}\")).newTag = \"${SHA}\"" \
+              overlays/dev/kustomization.yaml
+          done
+
+      - name: Commit and push
+        env:
+          SHA: ${{ github.sha }}
+          MODULES: ${{ needs.changes.outputs.modules }}
+        run: |
+          git config user.name  "banka-ci"
+          git config user.email "ci@raf-project.com"
+          git add overlays/dev/kustomization.yaml
+          if git diff --cached --quiet; then
+            echo "No manifest changes (likely a re-run); nothing to push."
+            exit 0
+          fi
+          # Pull --rebase to absorb any concurrent dev bumps from a
+          # second pipeline that landed between our checkout and push.
+          # Retry once if the push still races — a failure after that
+          # is genuine (auth, missing branch protection bypass, etc.)
+          # and we want CI to fail loud.
+          git commit -m "ci(dev): bump ${MODULES} → ${SHA:0:8}
+
+Origin: ${{ github.server_url }}/${{ github.repository }}/commit/${SHA}"
+          for attempt in 1 2; do
+            if git push origin main; then
+              exit 0
+            fi
+            echo "push failed (attempt $attempt); rebasing and retrying"
+            git pull --rebase origin main
+          done
+          echo "push failed after retries"; exit 1
