@@ -255,6 +255,10 @@ func (s *Service) CreateOrder(ctx context.Context, in CreateOrderInput) (*Create
 	if status == domain.OrderStatusApproved && permissions.Has(p.Permissions, permissions.ActuaryAgent) {
 		s.maybeChargeAgentLimit(ctx, out)
 	}
+	// S20: an agent order that needs supervisor approval entered Pending.
+	if out.Status == domain.OrderStatusPending {
+		s.notifyOrderPending(ctx, out)
+	}
 	return &CreateOrderResult{Order: out, ExchangeClosed: exchangeClosed}, nil
 }
 
@@ -344,6 +348,8 @@ func (s *Service) ApproveOrder(ctx context.Context, id string) (*domain.Order, e
 		}
 		s.Log.Info("auto-declined approval — security past settlement date",
 			"order_id", id, "security_id", cur.SecurityID, "settlement", sec.SettlementDate)
+		// S25: system auto-cancelled the order because the security expired.
+		s.notifyOrderAutoCancelled(ctx, declined, "hartija je istekla pre izvršenja")
 		return declined, apperr.FailedPrecondition("hartija je istekla — nalog je automatski odbijen")
 	}
 	out, err := s.Store.ApproveOrder(ctx, id, p.UserID)
@@ -356,6 +362,8 @@ func (s *Service) ApproveOrder(ctx context.Context, id string) (*domain.Order, e
 	if cur.UserKind == domain.KindEmployee {
 		s.maybeChargeAgentLimit(ctx, cur)
 	}
+	// S21: supervisor approved the order.
+	s.notifyOrderApproved(ctx, out)
 	return out, nil
 }
 
@@ -369,7 +377,13 @@ func (s *Service) DeclineOrder(ctx context.Context, id, reason string) (*domain.
 	if reason != "" {
 		s.Log.Info("order declined", "order_id", id, "by", p.UserID, "reason", reason)
 	}
-	return s.Store.DeclineOrder(ctx, id, p.UserID)
+	out, err := s.Store.DeclineOrder(ctx, id, p.UserID)
+	if err != nil {
+		return nil, err
+	}
+	// S22: supervisor declined the order.
+	s.notifyOrderDeclined(ctx, out)
+	return out, nil
 }
 
 // CancelOrder marks the order cancelled. Only the order's owner (or a
