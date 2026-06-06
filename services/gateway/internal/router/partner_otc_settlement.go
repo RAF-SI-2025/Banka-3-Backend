@@ -1,0 +1,202 @@
+package router
+
+import (
+	"encoding/json"
+	"fmt"
+	"strconv"
+	"strings"
+)
+
+// =====================================================================
+// Cross-bank OTC option settlement — envelope classification + parsing.
+//
+// Banka-4 (protocol-notes §2/§3) settles accepted OTC options through the
+// same POST /interbank 2PC envelope as cash, but with multi-asset
+// postings the cash path can't represent:
+//
+//   * accept   — premium (MONAS) + the option right (OPTION asset) moving
+//                between PERSON accounts.
+//   * exercise — strike (MONAS) + shares (STOCK) flowing through an
+//                OPTION account (the contract acting as escrow).
+//
+// This file only CLASSIFIES and PARSES the envelope into the seller-side
+// view (the postings that touch OUR routing number). The settlement
+// itself is performed by the trading service; the gateway routing lives
+// in partner_banka2.go.
+// =====================================================================
+
+// b2SettlementKind discriminates an inbound NEW_TX envelope.
+type b2SettlementKind int
+
+const (
+	// b2KindCash — every posting is MONAS on an ACCOUNT/PERSON. The
+	// existing cash 2PC path handles it.
+	b2KindCash b2SettlementKind = iota
+	// b2KindOTCAccept — carries an OPTION *asset* (the option right being
+	// transferred on accept).
+	b2KindOTCAccept
+	// b2KindOTCExercise — carries an OPTION *account* (the contract escrow)
+	// or a STOCK asset (share delivery on exercise).
+	b2KindOTCExercise
+)
+
+// classifyB2Transaction decides which settlement path an envelope needs.
+// OPTION asset wins (accept); otherwise an OPTION account or STOCK asset
+// means exercise; otherwise it's a plain cash transfer.
+func classifyB2Transaction(tx b2Transaction) b2SettlementKind {
+	var optionAsset, stockAsset, optionAccount bool
+	for i := range tx.Postings {
+		switch tx.Postings[i].Asset.Type {
+		case "OPTION":
+			optionAsset = true
+		case "STOCK":
+			stockAsset = true
+		}
+		if tx.Postings[i].Account.Type == "OPTION" {
+			optionAccount = true
+		}
+	}
+	switch {
+	case optionAsset:
+		return b2KindOTCAccept
+	case optionAccount || stockAsset:
+		return b2KindOTCExercise
+	default:
+		return b2KindCash
+	}
+}
+
+// Inner asset bodies (the `asset` blob inside a b2Asset).
+type b2OptionAssetBody struct {
+	NegotiationID b2ForeignID `json:"negotiationId"`
+}
+
+type b2StockAssetBody struct {
+	Ticker string `json:"ticker"`
+}
+
+// b2OTCSettlement is the seller-side view of an accept/exercise envelope:
+// only the postings whose account references OUR routing number. The
+// counterparty postings (buyer's account/person at the other bank) are
+// that bank's concern and are ignored here.
+type b2OTCSettlement struct {
+	Kind b2SettlementKind
+	// OptionRef is the OTC reference minted by us (routing == ours):
+	// the negotiationId on accept, the contractId on exercise.
+	OptionRef b2ForeignID
+	// SellerID is our seller PERSON (accept only — the option-right giver).
+	SellerID b2ForeignID
+	// CashAmount/CashCurrency is the MONAS leg credited to our side:
+	// premium on accept, strike on exercise. Positive decimal string.
+	CashAmount   string
+	CashCurrency string
+	// Ticker/Quantity describe the share leg on exercise.
+	Ticker   string
+	Quantity int64
+}
+
+// b2AmountSign splits a wire amount into sign + absolute decimal string.
+// Spec convention: negative = asset leaves, positive = asset enters.
+func b2AmountSign(n json.Number) (positive bool, abs string) {
+	s := strings.TrimSpace(string(n))
+	switch {
+	case strings.HasPrefix(s, "-"):
+		return false, strings.TrimPrefix(s, "-")
+	case strings.HasPrefix(s, "+"):
+		return true, strings.TrimPrefix(s, "+")
+	default:
+		return true, s
+	}
+}
+
+// parseB2OTCSettlement extracts the seller-side settlement intent from an
+// accept/exercise envelope. ourRouting is this bank's routing number.
+// Returns an error for a cash envelope or one with no posting touching us.
+func parseB2OTCSettlement(tx b2Transaction, ourRouting int) (*b2OTCSettlement, error) {
+	kind := classifyB2Transaction(tx)
+	out := &b2OTCSettlement{Kind: kind}
+
+	ours := func(a b2TxAccount) bool {
+		return a.ID != nil && a.ID.RoutingNumber == ourRouting
+	}
+
+	switch kind {
+	case b2KindOTCAccept:
+		for i := range tx.Postings {
+			p := tx.Postings[i]
+			if !ours(p.Account) {
+				continue
+			}
+			switch {
+			case p.Asset.Type == "OPTION" && p.Account.Type == "PERSON":
+				// Our seller gives the option right (amount < 0).
+				if pos, _ := b2AmountSign(p.Amount); !pos {
+					out.SellerID = *p.Account.ID
+					out.OptionRef = optionNegotiationID(p.Asset)
+				}
+			case p.Asset.Type == "MONAS" && p.Account.Type == "PERSON":
+				// Premium credited to our seller (amount > 0).
+				if pos, abs := b2AmountSign(p.Amount); pos {
+					out.CashAmount = abs
+					out.CashCurrency = banka2CurrencyFromAsset(p.Asset)
+				}
+			}
+		}
+		if out.OptionRef.ID == "" {
+			return nil, fmt.Errorf("accept settlement: no OPTION posting for routing %d", ourRouting)
+		}
+
+	case b2KindOTCExercise:
+		for i := range tx.Postings {
+			p := tx.Postings[i]
+			if p.Account.Type != "OPTION" || !ours(p.Account) {
+				continue
+			}
+			// Both the strike (MONAS) and the share delivery (STOCK) flow
+			// through our contract escrow account.
+			out.OptionRef = *p.Account.ID
+			switch p.Asset.Type {
+			case "MONAS":
+				if pos, abs := b2AmountSign(p.Amount); pos {
+					out.CashAmount = abs
+					out.CashCurrency = banka2CurrencyFromAsset(p.Asset)
+				}
+			case "STOCK":
+				_, abs := b2AmountSign(p.Amount)
+				out.Quantity, _ = strconv.ParseInt(abs, 10, 64)
+				out.Ticker = stockTicker(p.Asset)
+			}
+		}
+		if out.OptionRef.ID == "" {
+			return nil, fmt.Errorf("exercise settlement: no OPTION account for routing %d", ourRouting)
+		}
+
+	default:
+		return nil, fmt.Errorf("not an OTC settlement envelope")
+	}
+	return out, nil
+}
+
+// optionNegotiationID reads the negotiationId out of an OPTION asset body.
+func optionNegotiationID(a b2Asset) b2ForeignID {
+	if a.Asset == nil {
+		return b2ForeignID{}
+	}
+	var body b2OptionAssetBody
+	if err := json.Unmarshal(*a.Asset, &body); err != nil {
+		return b2ForeignID{}
+	}
+	return body.NegotiationID
+}
+
+// stockTicker reads the ticker out of a STOCK asset body.
+func stockTicker(a b2Asset) string {
+	if a.Asset == nil {
+		return ""
+	}
+	var body b2StockAssetBody
+	if err := json.Unmarshal(*a.Asset, &body); err != nil {
+		return ""
+	}
+	return body.Ticker
+}
