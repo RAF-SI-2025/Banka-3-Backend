@@ -1696,6 +1696,10 @@ func (s *stubUsers) EmployeePermissions(_ context.Context, userID string) ([]str
 	return nil, nil
 }
 
+func (s *stubUsers) RecordAudit(_ context.Context, _, _, _, _, _, _, _, _ string) error {
+	return nil
+}
+
 // writeRealizedGainAt seeds a realized_gain row at a chosen wall-clock
 // time so date-range filtering can be exercised. realized_at defaults
 // to now() when omitted; the integration tests below pin it explicitly.
