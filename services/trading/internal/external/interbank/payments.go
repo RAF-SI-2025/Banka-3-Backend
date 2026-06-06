@@ -420,6 +420,7 @@ func (c *Client) doJSONWithHeaders(ctx context.Context, method, url string, body
 	if k := c.apiKeyForURL(url); k != "" {
 		req.Header.Set("X-Api-Key", k)
 	}
+	c.signRequest(req, buf)
 	for k, v := range headers {
 		req.Header.Set(k, v)
 	}
