@@ -27,8 +27,24 @@ Owns (Session B will NOT edit):
   external_otc_*_saga step handlers)
 - `services/trading/internal/store/saga.go`
 - any `saga_executions` migration / SAGA fault-injection
-⚠️ Not yet pushed to origin as of this writing — footprint inferred; Session C
-should push its branch + declare its exact files + any migration number here.
+
+**Status (2026-06-06): pushed.** Branch `feat/saga-exercise-fault-tests`
+(PR #318). The SAGA_test.pdf conformance work (compensated terminal +
+step_no/log, trading migration **0017**, CompensateOnTransient on
+otc_exercise) was already merged to main earlier. This branch adds only the
+integration-tagged force-fail suite
+`services/trading/internal/service/saga_exercise_faultinject_integration_test.go`.
+No new migration.
+
+⚠️ **Cross-lane touch (heads-up for Session B):** this branch also edits the
+shared `services/trading/internal/service/integration_test.go` — it adds
+`stubReservations.SettleDividend` + `.ListClientAccounts`. The merged
+quarterly-dividend feature put those two methods on the `BankReservations`
+interface (dividends.go) but never updated the test double, so
+`make test-integration` for trading was failing to **compile** on main. The
+stubs are minimal (SettleDividend credits the dest; ListClientAccounts
+returns none). If the dividends owner has a fuller fix in flight, drop mine
+and keep yours — no behavioural dependency.
 
 ## Rules
 - Pre-assign migration numbers. Next free: trading after **0024**, bank after
