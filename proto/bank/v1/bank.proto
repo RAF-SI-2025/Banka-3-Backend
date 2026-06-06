@@ -375,6 +375,58 @@ service BankService {
       body: "*"
     };
   }
+
+  // -----------------------------------------------------------------
+  // Forex forwards (terminski valutni ugovori, todoSpec C3)
+  // -----------------------------------------------------------------
+
+  // QuoteForexForward returns a side-effect-free preview of a prospective
+  // forward: the locked-in ForwardRate (= SpotAsk × (1 + days/365 ×
+  // spread)) plus the reserved obligation amount and commission.
+  rpc QuoteForexForward(QuoteForexForwardRequest) returns (ForexForwardQuote) {
+    option (google.api.http) = {
+      post: "/api/v1/forex-forwards/quote"
+      body: "*"
+    };
+  }
+
+  // CreateForexForward concludes a forward: locks the rate, reserves the
+  // RSD obligation on the client's RSD account, charges the commission,
+  // and persists the contract as 'active'.
+  rpc CreateForexForward(CreateForexForwardRequest) returns (ForexForward) {
+    option (google.api.http) = {
+      post: "/api/v1/forex-forwards"
+      body: "*"
+    };
+  }
+
+  // ListForexForwards returns the caller's forward contracts.
+  rpc ListForexForwards(ListForexForwardsRequest) returns (ListForexForwardsResponse) {
+    option (google.api.http) = {get: "/api/v1/forex-forwards"};
+  }
+
+  // CancelForexForward cancels a still-'active' contract and releases the
+  // reservation.
+  rpc CancelForexForward(CancelForexForwardRequest) returns (ForexForward) {
+    option (google.api.http) = {delete: "/api/v1/forex-forwards/{id}"};
+  }
+
+  // GetForexForwardSpreads returns every configured pair's SpreadFactor.
+  rpc GetForexForwardSpreads(GetForexForwardSpreadsRequest) returns (GetForexForwardSpreadsResponse) {
+    option (google.api.http) = {get: "/api/v1/forex-forwards/spreads"};
+  }
+
+  // SetForexForwardSpread upserts a pair's SpreadFactor. Supervisor-only.
+  rpc SetForexForwardSpread(SetForexForwardSpreadRequest) returns (ForexForwardSpread) {
+    option (google.api.http) = {
+      put: "/api/v1/forex-forwards/spreads"
+      body: "*"
+    };
+  }
+
+  // RunForexForwardSettlement settles every active forward whose
+  // settlement date has arrived. Internal — driven by the scheduler.
+  rpc RunForexForwardSettlement(RunForexForwardSettlementRequest) returns (RunForexForwardSettlementResponse);
 }
 
 // =====================================================================
@@ -1463,4 +1515,104 @@ message RunSpentResetJobRequest {}
 message RunSpentResetJobResponse {
   int64 daily = 1;
   int64 monthly = 2;
+}
+
+// =====================================================================
+// Forex forwards (terminski valutni ugovori, todoSpec C3)
+// =====================================================================
+
+enum ForexForwardStatus {
+  FOREX_FORWARD_STATUS_UNSPECIFIED = 0;
+  FOREX_FORWARD_STATUS_ACTIVE = 1;
+  FOREX_FORWARD_STATUS_SETTLED = 2;
+  FOREX_FORWARD_STATUS_CANCELLED = 3;
+  FOREX_FORWARD_STATUS_FAILED = 4;
+}
+
+// ForexForward is one concluded forward contract.
+message ForexForward {
+  string id = 1;
+  string client_id = 2;
+  Currency base_currency = 3; // notional currency (bought forward)
+  Currency quote_currency = 4; // settlement leg (RSD)
+  string notional = 5;
+  string forward_rate = 6; // locked quote-per-1-base
+  string spot_ask_rate = 7;
+  string spread_factor = 8;
+  int32 days_to_settlement = 9;
+  string commission = 10;
+  string reservation_id = 11;
+  string from_account_id = 12; // client RSD account, debited at settlement
+  string to_account_id = 13; // client base-currency account, credited at settlement
+  google.protobuf.Timestamp settlement_date = 14;
+  ForexForwardStatus status = 15;
+  string failure_reason = 16;
+  google.protobuf.Timestamp created_at = 17;
+  google.protobuf.Timestamp settled_at = 18;
+}
+
+// ForexForwardSpread is the per-pair annualised spread factor.
+message ForexForwardSpread {
+  Currency base_currency = 1;
+  Currency quote_currency = 2;
+  string spread_factor = 3;
+  string updated_by = 4;
+  google.protobuf.Timestamp updated_at = 5;
+}
+
+// ForexForwardQuote is the side-effect-free preview returned by
+// QuoteForexForward.
+message ForexForwardQuote {
+  Currency base_currency = 1;
+  Currency quote_currency = 2;
+  string notional = 3;
+  string spot_ask_rate = 4;
+  string spread_factor = 5;
+  int32 days_to_settlement = 6;
+  string forward_rate = 7;
+  string quote_amount = 8; // forward_rate × notional (reserved at conclusion)
+  string commission = 9;
+}
+
+message QuoteForexForwardRequest {
+  Currency base_currency = 1 [(buf.validate.field).enum.defined_only = true];
+  string notional = 2 [(buf.validate.field).string.min_len = 1];
+  // YYYY-MM-DD settlement date in the future.
+  google.protobuf.Timestamp settlement_date = 3 [(buf.validate.field).required = true];
+}
+
+message CreateForexForwardRequest {
+  Currency base_currency = 1 [(buf.validate.field).enum.defined_only = true];
+  string notional = 2 [(buf.validate.field).string.min_len = 1];
+  google.protobuf.Timestamp settlement_date = 3 [(buf.validate.field).required = true];
+}
+
+message ListForexForwardsRequest {}
+
+message ListForexForwardsResponse {
+  repeated ForexForward forex_forwards = 1;
+}
+
+message CancelForexForwardRequest {
+  string id = 1 [(buf.validate.field).string.uuid = true];
+}
+
+message GetForexForwardSpreadsRequest {}
+
+message GetForexForwardSpreadsResponse {
+  repeated ForexForwardSpread spreads = 1;
+}
+
+message SetForexForwardSpreadRequest {
+  Currency base_currency = 1 [(buf.validate.field).enum.defined_only = true];
+  Currency quote_currency = 2 [(buf.validate.field).enum.defined_only = true];
+  string spread_factor = 3 [(buf.validate.field).string.min_len = 1];
+}
+
+message RunForexForwardSettlementRequest {}
+
+message RunForexForwardSettlementResponse {
+  int32 processed = 1;
+  int32 settled = 2;
+  int32 failed = 3;
 }

@@ -38,6 +38,7 @@ var allowedReservationOpKinds = map[string]domain.TransactionKind{
 	string(domain.TxKindFundInvest):       domain.TxKindFundInvest,
 	string(domain.TxKindFundWithdraw):     domain.TxKindFundWithdraw,
 	string(domain.TxKindInterbankPayment): domain.TxKindInterbankPayment,
+	string(domain.TxKindForexForward):     domain.TxKindForexForward,
 }
 
 // ReserveFundsInput is the validated payload of an RPC call.

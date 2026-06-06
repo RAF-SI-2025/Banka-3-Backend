@@ -20,53 +20,60 @@ import (
 const _ = grpc.SupportPackageIsVersion9
 
 const (
-	BankService_CreateCompany_FullMethodName           = "/banka.bank.v1.BankService/CreateCompany"
-	BankService_ListCompanies_FullMethodName           = "/banka.bank.v1.BankService/ListCompanies"
-	BankService_GetCompany_FullMethodName              = "/banka.bank.v1.BankService/GetCompany"
-	BankService_UpdateCompany_FullMethodName           = "/banka.bank.v1.BankService/UpdateCompany"
-	BankService_CreateAccount_FullMethodName           = "/banka.bank.v1.BankService/CreateAccount"
-	BankService_ListAccounts_FullMethodName            = "/banka.bank.v1.BankService/ListAccounts"
-	BankService_GetAccount_FullMethodName              = "/banka.bank.v1.BankService/GetAccount"
-	BankService_UpdateAccountLimits_FullMethodName     = "/banka.bank.v1.BankService/UpdateAccountLimits"
-	BankService_UpdateAccountName_FullMethodName       = "/banka.bank.v1.BankService/UpdateAccountName"
-	BankService_SetAccountStatus_FullMethodName        = "/banka.bank.v1.BankService/SetAccountStatus"
-	BankService_GetSystemAccount_FullMethodName        = "/banka.bank.v1.BankService/GetSystemAccount"
-	BankService_SettleTrade_FullMethodName             = "/banka.bank.v1.BankService/SettleTrade"
-	BankService_SettleCapitalGainsTax_FullMethodName   = "/banka.bank.v1.BankService/SettleCapitalGainsTax"
-	BankService_SettleDividend_FullMethodName          = "/banka.bank.v1.BankService/SettleDividend"
-	BankService_SettleForexFill_FullMethodName         = "/banka.bank.v1.BankService/SettleForexFill"
-	BankService_ReserveFunds_FullMethodName            = "/banka.bank.v1.BankService/ReserveFunds"
-	BankService_ReleaseFunds_FullMethodName            = "/banka.bank.v1.BankService/ReleaseFunds"
-	BankService_CommitReservedFunds_FullMethodName     = "/banka.bank.v1.BankService/CommitReservedFunds"
-	BankService_TransferBetweenClients_FullMethodName  = "/banka.bank.v1.BankService/TransferBetweenClients"
-	BankService_CreateFundAccount_FullMethodName       = "/banka.bank.v1.BankService/CreateFundAccount"
-	BankService_CreatePayment_FullMethodName           = "/banka.bank.v1.BankService/CreatePayment"
-	BankService_CreateTransfer_FullMethodName          = "/banka.bank.v1.BankService/CreateTransfer"
-	BankService_QuoteExchange_FullMethodName           = "/banka.bank.v1.BankService/QuoteExchange"
-	BankService_ListTransactions_FullMethodName        = "/banka.bank.v1.BankService/ListTransactions"
-	BankService_CreatePaymentRecipient_FullMethodName  = "/banka.bank.v1.BankService/CreatePaymentRecipient"
-	BankService_ListPaymentRecipients_FullMethodName   = "/banka.bank.v1.BankService/ListPaymentRecipients"
-	BankService_UpdatePaymentRecipient_FullMethodName  = "/banka.bank.v1.BankService/UpdatePaymentRecipient"
-	BankService_DeletePaymentRecipient_FullMethodName  = "/banka.bank.v1.BankService/DeletePaymentRecipient"
-	BankService_SchedulePayment_FullMethodName         = "/banka.bank.v1.BankService/SchedulePayment"
-	BankService_ListScheduledPayments_FullMethodName   = "/banka.bank.v1.BankService/ListScheduledPayments"
-	BankService_CancelScheduledPayment_FullMethodName  = "/banka.bank.v1.BankService/CancelScheduledPayment"
-	BankService_RunDueScheduledPayments_FullMethodName = "/banka.bank.v1.BankService/RunDueScheduledPayments"
-	BankService_CreateCard_FullMethodName              = "/banka.bank.v1.BankService/CreateCard"
-	BankService_ListCards_FullMethodName               = "/banka.bank.v1.BankService/ListCards"
-	BankService_SetCardStatus_FullMethodName           = "/banka.bank.v1.BankService/SetCardStatus"
-	BankService_UpdateCardLimit_FullMethodName         = "/banka.bank.v1.BankService/UpdateCardLimit"
-	BankService_CreateAuthorizedPerson_FullMethodName  = "/banka.bank.v1.BankService/CreateAuthorizedPerson"
-	BankService_ListAuthorizedPersons_FullMethodName   = "/banka.bank.v1.BankService/ListAuthorizedPersons"
-	BankService_SubmitLoanRequest_FullMethodName       = "/banka.bank.v1.BankService/SubmitLoanRequest"
-	BankService_ListLoanRequests_FullMethodName        = "/banka.bank.v1.BankService/ListLoanRequests"
-	BankService_DecideLoanRequest_FullMethodName       = "/banka.bank.v1.BankService/DecideLoanRequest"
-	BankService_ListLoans_FullMethodName               = "/banka.bank.v1.BankService/ListLoans"
-	BankService_GetLoan_FullMethodName                 = "/banka.bank.v1.BankService/GetLoan"
-	BankService_RunInstallmentJob_FullMethodName       = "/banka.bank.v1.BankService/RunInstallmentJob"
-	BankService_RunVariableRateJob_FullMethodName      = "/banka.bank.v1.BankService/RunVariableRateJob"
-	BankService_RunMaintenanceFeeJob_FullMethodName    = "/banka.bank.v1.BankService/RunMaintenanceFeeJob"
-	BankService_RunSpentResetJob_FullMethodName        = "/banka.bank.v1.BankService/RunSpentResetJob"
+	BankService_CreateCompany_FullMethodName             = "/banka.bank.v1.BankService/CreateCompany"
+	BankService_ListCompanies_FullMethodName             = "/banka.bank.v1.BankService/ListCompanies"
+	BankService_GetCompany_FullMethodName                = "/banka.bank.v1.BankService/GetCompany"
+	BankService_UpdateCompany_FullMethodName             = "/banka.bank.v1.BankService/UpdateCompany"
+	BankService_CreateAccount_FullMethodName             = "/banka.bank.v1.BankService/CreateAccount"
+	BankService_ListAccounts_FullMethodName              = "/banka.bank.v1.BankService/ListAccounts"
+	BankService_GetAccount_FullMethodName                = "/banka.bank.v1.BankService/GetAccount"
+	BankService_UpdateAccountLimits_FullMethodName       = "/banka.bank.v1.BankService/UpdateAccountLimits"
+	BankService_UpdateAccountName_FullMethodName         = "/banka.bank.v1.BankService/UpdateAccountName"
+	BankService_SetAccountStatus_FullMethodName          = "/banka.bank.v1.BankService/SetAccountStatus"
+	BankService_GetSystemAccount_FullMethodName          = "/banka.bank.v1.BankService/GetSystemAccount"
+	BankService_SettleTrade_FullMethodName               = "/banka.bank.v1.BankService/SettleTrade"
+	BankService_SettleCapitalGainsTax_FullMethodName     = "/banka.bank.v1.BankService/SettleCapitalGainsTax"
+	BankService_SettleDividend_FullMethodName            = "/banka.bank.v1.BankService/SettleDividend"
+	BankService_SettleForexFill_FullMethodName           = "/banka.bank.v1.BankService/SettleForexFill"
+	BankService_ReserveFunds_FullMethodName              = "/banka.bank.v1.BankService/ReserveFunds"
+	BankService_ReleaseFunds_FullMethodName              = "/banka.bank.v1.BankService/ReleaseFunds"
+	BankService_CommitReservedFunds_FullMethodName       = "/banka.bank.v1.BankService/CommitReservedFunds"
+	BankService_TransferBetweenClients_FullMethodName    = "/banka.bank.v1.BankService/TransferBetweenClients"
+	BankService_CreateFundAccount_FullMethodName         = "/banka.bank.v1.BankService/CreateFundAccount"
+	BankService_CreatePayment_FullMethodName             = "/banka.bank.v1.BankService/CreatePayment"
+	BankService_CreateTransfer_FullMethodName            = "/banka.bank.v1.BankService/CreateTransfer"
+	BankService_QuoteExchange_FullMethodName             = "/banka.bank.v1.BankService/QuoteExchange"
+	BankService_ListTransactions_FullMethodName          = "/banka.bank.v1.BankService/ListTransactions"
+	BankService_CreatePaymentRecipient_FullMethodName    = "/banka.bank.v1.BankService/CreatePaymentRecipient"
+	BankService_ListPaymentRecipients_FullMethodName     = "/banka.bank.v1.BankService/ListPaymentRecipients"
+	BankService_UpdatePaymentRecipient_FullMethodName    = "/banka.bank.v1.BankService/UpdatePaymentRecipient"
+	BankService_DeletePaymentRecipient_FullMethodName    = "/banka.bank.v1.BankService/DeletePaymentRecipient"
+	BankService_SchedulePayment_FullMethodName           = "/banka.bank.v1.BankService/SchedulePayment"
+	BankService_ListScheduledPayments_FullMethodName     = "/banka.bank.v1.BankService/ListScheduledPayments"
+	BankService_CancelScheduledPayment_FullMethodName    = "/banka.bank.v1.BankService/CancelScheduledPayment"
+	BankService_RunDueScheduledPayments_FullMethodName   = "/banka.bank.v1.BankService/RunDueScheduledPayments"
+	BankService_CreateCard_FullMethodName                = "/banka.bank.v1.BankService/CreateCard"
+	BankService_ListCards_FullMethodName                 = "/banka.bank.v1.BankService/ListCards"
+	BankService_SetCardStatus_FullMethodName             = "/banka.bank.v1.BankService/SetCardStatus"
+	BankService_UpdateCardLimit_FullMethodName           = "/banka.bank.v1.BankService/UpdateCardLimit"
+	BankService_CreateAuthorizedPerson_FullMethodName    = "/banka.bank.v1.BankService/CreateAuthorizedPerson"
+	BankService_ListAuthorizedPersons_FullMethodName     = "/banka.bank.v1.BankService/ListAuthorizedPersons"
+	BankService_SubmitLoanRequest_FullMethodName         = "/banka.bank.v1.BankService/SubmitLoanRequest"
+	BankService_ListLoanRequests_FullMethodName          = "/banka.bank.v1.BankService/ListLoanRequests"
+	BankService_DecideLoanRequest_FullMethodName         = "/banka.bank.v1.BankService/DecideLoanRequest"
+	BankService_ListLoans_FullMethodName                 = "/banka.bank.v1.BankService/ListLoans"
+	BankService_GetLoan_FullMethodName                   = "/banka.bank.v1.BankService/GetLoan"
+	BankService_RunInstallmentJob_FullMethodName         = "/banka.bank.v1.BankService/RunInstallmentJob"
+	BankService_RunVariableRateJob_FullMethodName        = "/banka.bank.v1.BankService/RunVariableRateJob"
+	BankService_RunMaintenanceFeeJob_FullMethodName      = "/banka.bank.v1.BankService/RunMaintenanceFeeJob"
+	BankService_RunSpentResetJob_FullMethodName          = "/banka.bank.v1.BankService/RunSpentResetJob"
+	BankService_QuoteForexForward_FullMethodName         = "/banka.bank.v1.BankService/QuoteForexForward"
+	BankService_CreateForexForward_FullMethodName        = "/banka.bank.v1.BankService/CreateForexForward"
+	BankService_ListForexForwards_FullMethodName         = "/banka.bank.v1.BankService/ListForexForwards"
+	BankService_CancelForexForward_FullMethodName        = "/banka.bank.v1.BankService/CancelForexForward"
+	BankService_GetForexForwardSpreads_FullMethodName    = "/banka.bank.v1.BankService/GetForexForwardSpreads"
+	BankService_SetForexForwardSpread_FullMethodName     = "/banka.bank.v1.BankService/SetForexForwardSpread"
+	BankService_RunForexForwardSettlement_FullMethodName = "/banka.bank.v1.BankService/RunForexForwardSettlement"
 )
 
 // BankServiceClient is the client API for BankService service.
@@ -212,6 +219,26 @@ type BankServiceClient interface {
 	// RunSpentResetJob zeroes the daily/monthly spent counters that are due
 	// to roll over. Normally driven by the scheduler service; admin-only.
 	RunSpentResetJob(ctx context.Context, in *RunSpentResetJobRequest, opts ...grpc.CallOption) (*RunSpentResetJobResponse, error)
+	// QuoteForexForward returns a side-effect-free preview of a prospective
+	// forward: the locked-in ForwardRate (= SpotAsk × (1 + days/365 ×
+	// spread)) plus the reserved obligation amount and commission.
+	QuoteForexForward(ctx context.Context, in *QuoteForexForwardRequest, opts ...grpc.CallOption) (*ForexForwardQuote, error)
+	// CreateForexForward concludes a forward: locks the rate, reserves the
+	// RSD obligation on the client's RSD account, charges the commission,
+	// and persists the contract as 'active'.
+	CreateForexForward(ctx context.Context, in *CreateForexForwardRequest, opts ...grpc.CallOption) (*ForexForward, error)
+	// ListForexForwards returns the caller's forward contracts.
+	ListForexForwards(ctx context.Context, in *ListForexForwardsRequest, opts ...grpc.CallOption) (*ListForexForwardsResponse, error)
+	// CancelForexForward cancels a still-'active' contract and releases the
+	// reservation.
+	CancelForexForward(ctx context.Context, in *CancelForexForwardRequest, opts ...grpc.CallOption) (*ForexForward, error)
+	// GetForexForwardSpreads returns every configured pair's SpreadFactor.
+	GetForexForwardSpreads(ctx context.Context, in *GetForexForwardSpreadsRequest, opts ...grpc.CallOption) (*GetForexForwardSpreadsResponse, error)
+	// SetForexForwardSpread upserts a pair's SpreadFactor. Supervisor-only.
+	SetForexForwardSpread(ctx context.Context, in *SetForexForwardSpreadRequest, opts ...grpc.CallOption) (*ForexForwardSpread, error)
+	// RunForexForwardSettlement settles every active forward whose
+	// settlement date has arrived. Internal — driven by the scheduler.
+	RunForexForwardSettlement(ctx context.Context, in *RunForexForwardSettlementRequest, opts ...grpc.CallOption) (*RunForexForwardSettlementResponse, error)
 }
 
 type bankServiceClient struct {
@@ -692,6 +719,76 @@ func (c *bankServiceClient) RunSpentResetJob(ctx context.Context, in *RunSpentRe
 	return out, nil
 }
 
+func (c *bankServiceClient) QuoteForexForward(ctx context.Context, in *QuoteForexForwardRequest, opts ...grpc.CallOption) (*ForexForwardQuote, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(ForexForwardQuote)
+	err := c.cc.Invoke(ctx, BankService_QuoteForexForward_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *bankServiceClient) CreateForexForward(ctx context.Context, in *CreateForexForwardRequest, opts ...grpc.CallOption) (*ForexForward, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(ForexForward)
+	err := c.cc.Invoke(ctx, BankService_CreateForexForward_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *bankServiceClient) ListForexForwards(ctx context.Context, in *ListForexForwardsRequest, opts ...grpc.CallOption) (*ListForexForwardsResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(ListForexForwardsResponse)
+	err := c.cc.Invoke(ctx, BankService_ListForexForwards_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *bankServiceClient) CancelForexForward(ctx context.Context, in *CancelForexForwardRequest, opts ...grpc.CallOption) (*ForexForward, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(ForexForward)
+	err := c.cc.Invoke(ctx, BankService_CancelForexForward_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *bankServiceClient) GetForexForwardSpreads(ctx context.Context, in *GetForexForwardSpreadsRequest, opts ...grpc.CallOption) (*GetForexForwardSpreadsResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(GetForexForwardSpreadsResponse)
+	err := c.cc.Invoke(ctx, BankService_GetForexForwardSpreads_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *bankServiceClient) SetForexForwardSpread(ctx context.Context, in *SetForexForwardSpreadRequest, opts ...grpc.CallOption) (*ForexForwardSpread, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(ForexForwardSpread)
+	err := c.cc.Invoke(ctx, BankService_SetForexForwardSpread_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *bankServiceClient) RunForexForwardSettlement(ctx context.Context, in *RunForexForwardSettlementRequest, opts ...grpc.CallOption) (*RunForexForwardSettlementResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(RunForexForwardSettlementResponse)
+	err := c.cc.Invoke(ctx, BankService_RunForexForwardSettlement_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
 // BankServiceServer is the server API for BankService service.
 // All implementations should embed UnimplementedBankServiceServer
 // for forward compatibility.
@@ -835,6 +932,26 @@ type BankServiceServer interface {
 	// RunSpentResetJob zeroes the daily/monthly spent counters that are due
 	// to roll over. Normally driven by the scheduler service; admin-only.
 	RunSpentResetJob(context.Context, *RunSpentResetJobRequest) (*RunSpentResetJobResponse, error)
+	// QuoteForexForward returns a side-effect-free preview of a prospective
+	// forward: the locked-in ForwardRate (= SpotAsk × (1 + days/365 ×
+	// spread)) plus the reserved obligation amount and commission.
+	QuoteForexForward(context.Context, *QuoteForexForwardRequest) (*ForexForwardQuote, error)
+	// CreateForexForward concludes a forward: locks the rate, reserves the
+	// RSD obligation on the client's RSD account, charges the commission,
+	// and persists the contract as 'active'.
+	CreateForexForward(context.Context, *CreateForexForwardRequest) (*ForexForward, error)
+	// ListForexForwards returns the caller's forward contracts.
+	ListForexForwards(context.Context, *ListForexForwardsRequest) (*ListForexForwardsResponse, error)
+	// CancelForexForward cancels a still-'active' contract and releases the
+	// reservation.
+	CancelForexForward(context.Context, *CancelForexForwardRequest) (*ForexForward, error)
+	// GetForexForwardSpreads returns every configured pair's SpreadFactor.
+	GetForexForwardSpreads(context.Context, *GetForexForwardSpreadsRequest) (*GetForexForwardSpreadsResponse, error)
+	// SetForexForwardSpread upserts a pair's SpreadFactor. Supervisor-only.
+	SetForexForwardSpread(context.Context, *SetForexForwardSpreadRequest) (*ForexForwardSpread, error)
+	// RunForexForwardSettlement settles every active forward whose
+	// settlement date has arrived. Internal — driven by the scheduler.
+	RunForexForwardSettlement(context.Context, *RunForexForwardSettlementRequest) (*RunForexForwardSettlementResponse, error)
 }
 
 // UnimplementedBankServiceServer should be embedded to have
@@ -984,6 +1101,27 @@ func (UnimplementedBankServiceServer) RunMaintenanceFeeJob(context.Context, *Run
 }
 func (UnimplementedBankServiceServer) RunSpentResetJob(context.Context, *RunSpentResetJobRequest) (*RunSpentResetJobResponse, error) {
 	return nil, status.Error(codes.Unimplemented, "method RunSpentResetJob not implemented")
+}
+func (UnimplementedBankServiceServer) QuoteForexForward(context.Context, *QuoteForexForwardRequest) (*ForexForwardQuote, error) {
+	return nil, status.Error(codes.Unimplemented, "method QuoteForexForward not implemented")
+}
+func (UnimplementedBankServiceServer) CreateForexForward(context.Context, *CreateForexForwardRequest) (*ForexForward, error) {
+	return nil, status.Error(codes.Unimplemented, "method CreateForexForward not implemented")
+}
+func (UnimplementedBankServiceServer) ListForexForwards(context.Context, *ListForexForwardsRequest) (*ListForexForwardsResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method ListForexForwards not implemented")
+}
+func (UnimplementedBankServiceServer) CancelForexForward(context.Context, *CancelForexForwardRequest) (*ForexForward, error) {
+	return nil, status.Error(codes.Unimplemented, "method CancelForexForward not implemented")
+}
+func (UnimplementedBankServiceServer) GetForexForwardSpreads(context.Context, *GetForexForwardSpreadsRequest) (*GetForexForwardSpreadsResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method GetForexForwardSpreads not implemented")
+}
+func (UnimplementedBankServiceServer) SetForexForwardSpread(context.Context, *SetForexForwardSpreadRequest) (*ForexForwardSpread, error) {
+	return nil, status.Error(codes.Unimplemented, "method SetForexForwardSpread not implemented")
+}
+func (UnimplementedBankServiceServer) RunForexForwardSettlement(context.Context, *RunForexForwardSettlementRequest) (*RunForexForwardSettlementResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method RunForexForwardSettlement not implemented")
 }
 func (UnimplementedBankServiceServer) testEmbeddedByValue() {}
 
@@ -1851,6 +1989,132 @@ func _BankService_RunSpentResetJob_Handler(srv interface{}, ctx context.Context,
 	return interceptor(ctx, in, info, handler)
 }
 
+func _BankService_QuoteForexForward_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(QuoteForexForwardRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(BankServiceServer).QuoteForexForward(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: BankService_QuoteForexForward_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(BankServiceServer).QuoteForexForward(ctx, req.(*QuoteForexForwardRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _BankService_CreateForexForward_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(CreateForexForwardRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(BankServiceServer).CreateForexForward(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: BankService_CreateForexForward_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(BankServiceServer).CreateForexForward(ctx, req.(*CreateForexForwardRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _BankService_ListForexForwards_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(ListForexForwardsRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(BankServiceServer).ListForexForwards(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: BankService_ListForexForwards_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(BankServiceServer).ListForexForwards(ctx, req.(*ListForexForwardsRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _BankService_CancelForexForward_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(CancelForexForwardRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(BankServiceServer).CancelForexForward(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: BankService_CancelForexForward_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(BankServiceServer).CancelForexForward(ctx, req.(*CancelForexForwardRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _BankService_GetForexForwardSpreads_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(GetForexForwardSpreadsRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(BankServiceServer).GetForexForwardSpreads(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: BankService_GetForexForwardSpreads_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(BankServiceServer).GetForexForwardSpreads(ctx, req.(*GetForexForwardSpreadsRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _BankService_SetForexForwardSpread_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(SetForexForwardSpreadRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(BankServiceServer).SetForexForwardSpread(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: BankService_SetForexForwardSpread_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(BankServiceServer).SetForexForwardSpread(ctx, req.(*SetForexForwardSpreadRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _BankService_RunForexForwardSettlement_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(RunForexForwardSettlementRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(BankServiceServer).RunForexForwardSettlement(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: BankService_RunForexForwardSettlement_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(BankServiceServer).RunForexForwardSettlement(ctx, req.(*RunForexForwardSettlementRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
 // BankService_ServiceDesc is the grpc.ServiceDesc for BankService service.
 // It's only intended for direct use with grpc.RegisterService,
 // and not to be introspected or modified (even as a copy)
@@ -2045,6 +2309,34 @@ var BankService_ServiceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "RunSpentResetJob",
 			Handler:    _BankService_RunSpentResetJob_Handler,
+		},
+		{
+			MethodName: "QuoteForexForward",
+			Handler:    _BankService_QuoteForexForward_Handler,
+		},
+		{
+			MethodName: "CreateForexForward",
+			Handler:    _BankService_CreateForexForward_Handler,
+		},
+		{
+			MethodName: "ListForexForwards",
+			Handler:    _BankService_ListForexForwards_Handler,
+		},
+		{
+			MethodName: "CancelForexForward",
+			Handler:    _BankService_CancelForexForward_Handler,
+		},
+		{
+			MethodName: "GetForexForwardSpreads",
+			Handler:    _BankService_GetForexForwardSpreads_Handler,
+		},
+		{
+			MethodName: "SetForexForwardSpread",
+			Handler:    _BankService_SetForexForwardSpread_Handler,
+		},
+		{
+			MethodName: "RunForexForwardSettlement",
+			Handler:    _BankService_RunForexForwardSettlement_Handler,
 		},
 	},
 	Streams:  []grpc.StreamDesc{},

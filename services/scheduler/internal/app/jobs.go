@@ -46,6 +46,8 @@ func (a *App) buildJobs() []job {
 			a.interval("bank-maintenance-fee", config.Duration("MAINTENANCE_FEE_JOB_INTERVAL", 24*time.Hour), false, a.bankMaintenance),
 			a.interval("bank-spent-reset", config.Duration("SPENT_RESET_JOB_INTERVAL", time.Hour), false, a.bankSpentReset),
 			a.interval("bank-scheduled-payments", config.Duration("SCHEDULED_PAYMENT_TICK", 5*time.Minute), true, a.bankScheduledPayments),
+			// Forex forwards settle on their settlement date — sweep daily.
+			a.daily("bank-forex-forward-settlement", 0, 10, a.bankForexForwardSettlement),
 		)
 	}
 	if a.trading != nil {
@@ -209,6 +211,17 @@ func (a *App) bankScheduledPayments(ctx context.Context) error {
 	}
 	if r.GetProcessed() > 0 {
 		a.log.Info("scheduled payments ran", "processed", r.GetProcessed(), "succeeded", r.GetSucceeded(), "failed", r.GetFailed())
+	}
+	return nil
+}
+
+func (a *App) bankForexForwardSettlement(ctx context.Context) error {
+	r, err := a.bank.RunForexForwardSettlement(ctx, &bankpb.RunForexForwardSettlementRequest{})
+	if err != nil {
+		return err
+	}
+	if r.GetProcessed() > 0 {
+		a.log.Info("forex forward settlement ran", "processed", r.GetProcessed(), "settled", r.GetSettled(), "failed", r.GetFailed())
 	}
 	return nil
 }
