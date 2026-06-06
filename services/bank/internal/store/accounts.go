@@ -9,6 +9,7 @@ import (
 	"github.com/jackc/pgx/v5"
 
 	"github.com/RAF-SI-2025/Banka-3-Backend/pkg/apperr"
+	"github.com/RAF-SI-2025/Banka-3-Backend/pkg/postgres"
 	"github.com/RAF-SI-2025/Banka-3-Backend/services/bank/internal/domain"
 )
 
@@ -61,7 +62,8 @@ func (s *Store) CreateAccount(ctx context.Context, a *domain.Account) (*domain.A
             $12::numeric, $13::numeric
         )
         returning ` + accountColumns
-	out, err := scanAccount(s.Pool.QueryRow(ctx, q,
+	out, err := scanAccount(s.DB.QueryRow(
+		ctx, q,
 		a.Number, a.Name, a.OwnerClientID, a.CompanyID, a.CreatedByEmployeeID,
 		string(a.Kind), string(a.Subtype), string(a.Currency), string(a.Status),
 		a.Balance, a.MaintenanceFee, a.DailyLimit, a.MonthlyLimit,
@@ -80,7 +82,7 @@ func (s *Store) CreateAccount(ctx context.Context, a *domain.Account) (*domain.A
 
 func (s *Store) GetAccountByID(ctx context.Context, id string) (*domain.Account, error) {
 	const q = `select ` + accountColumns + ` from "bank".accounts where id = $1`
-	out, err := scanAccount(s.Pool.QueryRow(ctx, q, id))
+	out, err := scanAccount(s.DB.QueryRow(postgres.WithRead(ctx), q, id))
 	if err != nil {
 		if noRows(err) {
 			return nil, apperr.NotFound("account not found")
@@ -93,7 +95,7 @@ func (s *Store) GetAccountByID(ctx context.Context, id string) (*domain.Account,
 func (s *Store) GetSystemAccount(ctx context.Context, currency domain.Currency) (*domain.Account, error) {
 	const q = `select ` + accountColumns + ` from "bank".accounts
               where kind = 'system' and currency = $1`
-	out, err := scanAccount(s.Pool.QueryRow(ctx, q, string(currency)))
+	out, err := scanAccount(s.DB.QueryRow(ctx, q, string(currency)))
 	if err != nil {
 		if noRows(err) {
 			return nil, apperr.NotFound("system account not found for currency " + string(currency))
@@ -109,7 +111,7 @@ func (s *Store) GetSystemAccount(ctx context.Context, currency domain.Currency) 
 func (s *Store) GetForexBookAccount(ctx context.Context, currency domain.Currency) (*domain.Account, error) {
 	const q = `select ` + accountColumns + ` from "bank".accounts
               where kind = 'forex_book' and currency = $1`
-	out, err := scanAccount(s.Pool.QueryRow(ctx, q, string(currency)))
+	out, err := scanAccount(s.DB.QueryRow(ctx, q, string(currency)))
 	if err != nil {
 		if noRows(err) {
 			return nil, apperr.NotFound("forex book account not found for currency " + string(currency))
@@ -124,7 +126,7 @@ func (s *Store) GetForexBookAccount(ctx context.Context, currency domain.Currenc
 func (s *Store) GetStateTaxAccount(ctx context.Context) (*domain.Account, error) {
 	const q = `select ` + accountColumns + ` from "bank".accounts
               where kind = 'state_tax' and currency = 'RSD'`
-	out, err := scanAccount(s.Pool.QueryRow(ctx, q))
+	out, err := scanAccount(s.DB.QueryRow(ctx, q))
 	if err != nil {
 		if noRows(err) {
 			return nil, apperr.NotFound("state tax account not found")
@@ -143,7 +145,7 @@ func (s *Store) UpdateAccountLimits(ctx context.Context, id, daily, monthly stri
             updated_at = now()
         where id = $1
         returning ` + accountColumns
-	out, err := scanAccount(s.Pool.QueryRow(ctx, q, id, daily, monthly))
+	out, err := scanAccount(s.DB.QueryRow(ctx, q, id, daily, monthly))
 	if err != nil {
 		if noRows(err) {
 			return nil, apperr.NotFound("account not found")
@@ -161,7 +163,7 @@ func (s *Store) UpdateAccountName(ctx context.Context, id, name string) (*domain
         update "bank".accounts set name = $2, updated_at = now()
         where id = $1
         returning ` + accountColumns
-	out, err := scanAccount(s.Pool.QueryRow(ctx, q, id, name))
+	out, err := scanAccount(s.DB.QueryRow(ctx, q, id, name))
 	if err != nil {
 		if noRows(err) {
 			return nil, apperr.NotFound("account not found")
@@ -186,7 +188,7 @@ func (s *Store) AccountNameTakenByOwner(ctx context.Context, ownerClientID, name
               and status <> 'closed'
         )`
 	var taken bool
-	if err := s.Pool.QueryRow(ctx, q, ownerClientID, name, excludeID).Scan(&taken); err != nil {
+	if err := s.DB.QueryRow(ctx, q, ownerClientID, name, excludeID).Scan(&taken); err != nil {
 		return false, apperr.Internal("check name uniqueness", err)
 	}
 	return taken, nil
@@ -197,7 +199,7 @@ func (s *Store) SetAccountStatus(ctx context.Context, id string, status domain.A
         update "bank".accounts set status = $2, updated_at = now()
         where id = $1
         returning ` + accountColumns
-	out, err := scanAccount(s.Pool.QueryRow(ctx, q, id, string(status)))
+	out, err := scanAccount(s.DB.QueryRow(ctx, q, id, string(status)))
 	if err != nil {
 		if noRows(err) {
 			return nil, apperr.NotFound("account not found")
@@ -218,7 +220,7 @@ func (s *Store) ListAccountsDueForMaintenance(ctx context.Context, cutoff time.T
                 and maintenance_fee > 0
                 and (last_maintenance_debit is null or last_maintenance_debit <= $1)
               order by created_at`
-	rows, err := s.Pool.Query(ctx, q, cutoff)
+	rows, err := s.DB.Query(ctx, q, cutoff)
 	if err != nil {
 		return nil, apperr.Internal("list maintenance-due", err)
 	}
@@ -285,7 +287,7 @@ func (s *Store) ListAccounts(ctx context.Context, f domain.AccountFilter, page, 
 	}
 
 	var total int64
-	if err := s.Pool.QueryRow(ctx, `select count(*) from "bank".accounts`+where, args...).Scan(&total); err != nil {
+	if err := s.DB.QueryRow(postgres.WithRead(ctx), `select count(*) from "bank".accounts`+where, args...).Scan(&total); err != nil {
 		return nil, 0, apperr.Internal("count accounts", err)
 	}
 
@@ -294,7 +296,7 @@ func (s *Store) ListAccounts(ctx context.Context, f domain.AccountFilter, page, 
 	listQ := `select ` + accountColumns + ` from "bank".accounts` + where +
 		fmt.Sprintf(" order by created_at desc limit $%d offset $%d", len(args)+1, len(args)+2)
 
-	rows, err := s.reader().Query(ctx, listQ, listArgs...)
+	rows, err := s.DB.Query(postgres.WithRead(ctx), listQ, listArgs...)
 	if err != nil {
 		return nil, 0, apperr.Internal("list accounts", err)
 	}
@@ -327,7 +329,7 @@ func (s *Store) ListAccounts(ctx context.Context, f domain.AccountFilter, page, 
 // rollover backdate the reset columns directly rather than inject a
 // clock here.
 func (s *Store) ResetSpentCounters(ctx context.Context) (daily, monthly int64, err error) {
-	tx, err := s.Pool.Begin(ctx)
+	tx, err := s.DB.Begin(ctx)
 	if err != nil {
 		return 0, 0, apperr.Internal("begin spent-reset tx", err)
 	}

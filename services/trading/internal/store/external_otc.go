@@ -6,6 +6,7 @@ import (
 	"time"
 
 	"github.com/RAF-SI-2025/Banka-3-Backend/pkg/apperr"
+	"github.com/RAF-SI-2025/Banka-3-Backend/pkg/postgres"
 	"github.com/RAF-SI-2025/Banka-3-Backend/services/trading/internal/domain"
 	"github.com/jackc/pgx/v5"
 )
@@ -74,7 +75,8 @@ func (s *Store) InsertExternalOTCThread(ctx context.Context, tx pgx.Tx, t *domai
             $15, $16::numeric, $17::numeric, $18, $19,
             $20, $21
         ) returning ` + externalOTCThreadCols
-	row := s.execer(tx).QueryRow(ctx, q,
+	row := s.execer(tx).QueryRow(
+		ctx, q,
 		string(t.Direction),
 		t.RemoteBankCode, t.RemoteThreadID, t.RemoteUserRef,
 		t.RemoteDisplayName, t.RemoteAccountRef,
@@ -97,7 +99,7 @@ func (s *Store) InsertExternalOTCThread(ctx context.Context, tx pgx.Tx, t *domai
 // GetExternalOTCThread returns one thread by local id.
 func (s *Store) GetExternalOTCThread(ctx context.Context, id string) (*domain.ExternalOTCThread, error) {
 	const q = `select ` + externalOTCThreadCols + ` from "trading".external_otc_threads where id = $1`
-	out, err := scanExternalOTCThread(s.Pool.QueryRow(ctx, q, id))
+	out, err := scanExternalOTCThread(s.DB.QueryRow(ctx, q, id))
 	if err != nil {
 		if noRows(err) {
 			return nil, apperr.NotFound("eksterna ponuda ne postoji")
@@ -122,7 +124,7 @@ func (s *Store) GetExternalOTCThreadByRemote(ctx context.Context, tx pgx.Tx, ban
 	if tx != nil {
 		row = tx.QueryRow(ctx, qLock, bankCode, remoteThreadID)
 	} else {
-		row = s.Pool.QueryRow(ctx, qRead, bankCode, remoteThreadID)
+		row = s.DB.QueryRow(ctx, qRead, bankCode, remoteThreadID)
 	}
 	out, err := scanExternalOTCThread(row)
 	if err != nil {
@@ -165,7 +167,7 @@ func (s *Store) ListExternalOTCThreads(ctx context.Context, f ExternalOTCThreadF
 	      from "trading".external_otc_threads
 	      where ` + strings.Join(conds, " and ") + `
 	      order by updated_at desc`
-	rows, err := s.Pool.Query(ctx, q, args...)
+	rows, err := s.DB.Query(postgres.WithRead(ctx), q, args...)
 	if err != nil {
 		return nil, apperr.Internal("list external otc threads", err)
 	}
@@ -305,7 +307,8 @@ func (s *Store) InsertExternalOTCIteration(ctx context.Context, tx pgx.Tx, it *d
             thread_id, proposed_by_side, quantity, price_per_unit, premium, settlement_date
         ) values ($1, $2, $3, $4::numeric, $5::numeric, $6)
         returning ` + externalOTCIterationCols
-	row := s.execer(tx).QueryRow(ctx, q,
+	row := s.execer(tx).QueryRow(
+		ctx, q,
 		it.ThreadID, string(it.ProposedBySide),
 		it.Quantity, it.PricePerUnit, it.Premium, it.SettlementDate,
 	)
@@ -322,7 +325,7 @@ func (s *Store) ListExternalOTCIterations(ctx context.Context, threadID string) 
 	const q = `select ` + externalOTCIterationCols + `
 	           from "trading".external_otc_iterations
 	           where thread_id = $1 order by created_at`
-	rows, err := s.Pool.Query(ctx, q, threadID)
+	rows, err := s.DB.Query(postgres.WithRead(ctx), q, threadID)
 	if err != nil {
 		return nil, apperr.Internal("list external otc iterations", err)
 	}
@@ -413,7 +416,8 @@ func (s *Store) InsertExternalOTCContract(ctx context.Context, tx pgx.Tx, c *dom
         on conflict (thread_id) do update
             set updated_at = "trading".external_otc_contracts.updated_at
         returning ` + externalOTCContractCols
-	row := tx.QueryRow(ctx, q,
+	row := tx.QueryRow(
+		ctx, q,
 		c.ThreadID, string(c.Direction),
 		c.RemoteBankCode, c.RemoteThreadID, c.RemoteUserRef,
 		c.RemoteDisplayName, c.RemoteAccountRef,
@@ -433,7 +437,7 @@ func (s *Store) InsertExternalOTCContract(ctx context.Context, tx pgx.Tx, c *dom
 // GetExternalOTCContract returns one contract by local id.
 func (s *Store) GetExternalOTCContract(ctx context.Context, id string) (*domain.ExternalOTCContract, error) {
 	const q = `select ` + externalOTCContractCols + ` from "trading".external_otc_contracts where id = $1`
-	out, err := scanExternalOTCContract(s.Pool.QueryRow(ctx, q, id))
+	out, err := scanExternalOTCContract(s.DB.QueryRow(ctx, q, id))
 	if err != nil {
 		if noRows(err) {
 			return nil, apperr.NotFound("eksterni ugovor ne postoji")
@@ -448,7 +452,7 @@ func (s *Store) GetExternalOTCContract(ctx context.Context, id string) (*domain.
 func (s *Store) GetExternalOTCContractByThread(ctx context.Context, threadID string) (*domain.ExternalOTCContract, error) {
 	const q = `select ` + externalOTCContractCols + `
 	           from "trading".external_otc_contracts where thread_id = $1`
-	out, err := scanExternalOTCContract(s.Pool.QueryRow(ctx, q, threadID))
+	out, err := scanExternalOTCContract(s.DB.QueryRow(ctx, q, threadID))
 	if err != nil {
 		if noRows(err) {
 			return nil, apperr.NotFound("ugovor nije sklopljen")
@@ -480,7 +484,7 @@ func (s *Store) ListExternalOTCContracts(ctx context.Context, localUserID, statu
 	      from "trading".external_otc_contracts
 	      where ` + strings.Join(conds, " and ") + `
 	      order by updated_at desc`
-	rows, err := s.Pool.Query(ctx, q, args...)
+	rows, err := s.DB.Query(postgres.WithRead(ctx), q, args...)
 	if err != nil {
 		return nil, apperr.Internal("list external otc contracts", err)
 	}
@@ -550,5 +554,5 @@ func (s *Store) execer(tx pgx.Tx) interface {
 	if tx != nil {
 		return tx
 	}
-	return s.Pool
+	return s.DB
 }

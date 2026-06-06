@@ -17,7 +17,7 @@ import (
 	"github.com/RAF-SI-2025/Banka-3-Backend/pkg/email"
 	"github.com/RAF-SI-2025/Banka-3-Backend/pkg/grpcserver"
 	"github.com/RAF-SI-2025/Banka-3-Backend/pkg/logger"
-	"github.com/RAF-SI-2025/Banka-3-Backend/pkg/observability"
+	"github.com/RAF-SI-2025/Banka-3-Backend/pkg/otelinit"
 	"github.com/RAF-SI-2025/Banka-3-Backend/pkg/postgres"
 	"github.com/RAF-SI-2025/Banka-3-Backend/pkg/probes"
 	pkgredis "github.com/RAF-SI-2025/Banka-3-Backend/pkg/redis"
@@ -29,7 +29,6 @@ import (
 	"github.com/RAF-SI-2025/Banka-3-Backend/services/trading/internal/server"
 	"github.com/RAF-SI-2025/Banka-3-Backend/services/trading/internal/service"
 	"github.com/RAF-SI-2025/Banka-3-Backend/services/trading/internal/store"
-	"github.com/jackc/pgx/v5/pgxpool"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials/insecure"
 
@@ -44,20 +43,24 @@ func Run() error {
 	ctx, cancel := shutdown.Context()
 	defer cancel()
 
-	pool, err := postgres.Open(ctx, config.MustString("DATABASE_URL"))
+	prov, err := otelinit.Init(ctx, "trading")
+	if err != nil {
+		return fmt.Errorf("otelinit: %w", err)
+	}
+	defer func() { _ = prov.Shutdown(context.Background()) }()
+
+	// OpenPair dials the primary (DATABASE_URL → banka-pg-pooler-rw) and,
+	// when set, a hot-standby read pool (DATABASE_READ_URL →
+	// banka-pg-pooler-ro). SELECTs marked postgres.WithRead(ctx) (list/
+	// get-catalog/report reads) route to the standby; writes,
+	// transactions, the SAGA orchestrator, execution-worker, cron and
+	// idempotency reads stay on the primary.
+	db, err := postgres.OpenPair(ctx, config.MustString("DATABASE_URL"), config.String("DATABASE_READ_URL", ""))
 	if err != nil {
 		return fmt.Errorf("postgres: %w", err)
 	}
-	defer pool.Close()
-
-	// BonusReadReplicaRouting (#287) — optional hot-standby pool.
-	var readPool *pgxpool.Pool
-	if readURL := config.String("DATABASE_READ_URL", ""); readURL != "" {
-		readPool, err = postgres.Open(ctx, readURL)
-		if err != nil {
-			return fmt.Errorf("postgres replica: %w", err)
-		}
-		defer readPool.Close()
+	defer db.Close()
+	if db.RO != nil {
 		log.Info("read replica routing enabled")
 	}
 
@@ -73,8 +76,7 @@ func Run() error {
 		belgrade = time.UTC
 	}
 
-	st := store.New(pool)
-	st.ReadPool = readPool
+	st := store.New(db)
 	svc := service.New(st, service.Config{
 		Belgrade:                belgrade,
 		FXCommission:            config.String("FX_COMMISSION", "0.005"),
@@ -98,7 +100,10 @@ func Run() error {
 	// by the agent-limit check and the capital-gains tax math. The
 	// service tolerates a nil Rates field on a minimal dev stack.
 	if exAddr := config.String("EXCHANGE_GRPC_ADDR", ""); exAddr != "" {
-		conn, err := grpc.NewClient(exAddr, grpc.WithTransportCredentials(insecure.NewCredentials()))
+		conn, err := grpc.NewClient(
+			exAddr, grpc.WithTransportCredentials(insecure.NewCredentials()),
+			grpc.WithStatsHandler(prov.GRPCClientHandler()),
+		)
 		if err != nil {
 			return fmt.Errorf("dial exchange: %w", err)
 		}
@@ -115,7 +120,10 @@ func Run() error {
 	// empty and the OTC notifier drops its lookups.
 	var userClient userpb.UserServiceClient
 	if userAddr := config.String("USER_GRPC_ADDR", ""); userAddr != "" {
-		conn, err := grpc.NewClient(userAddr, grpc.WithTransportCredentials(insecure.NewCredentials()))
+		conn, err := grpc.NewClient(
+			userAddr, grpc.WithTransportCredentials(insecure.NewCredentials()),
+			grpc.WithStatsHandler(prov.GRPCClientHandler()),
+		)
 		if err != nil {
 			return fmt.Errorf("dial user: %w", err)
 		}
@@ -132,7 +140,10 @@ func Run() error {
 	// keep working.
 	var emailSender email.Sender
 	if notifAddr := config.String("NOTIFICATION_GRPC_ADDR", ""); notifAddr != "" {
-		conn, err := grpc.NewClient(notifAddr, grpc.WithTransportCredentials(insecure.NewCredentials()))
+		conn, err := grpc.NewClient(
+			notifAddr, grpc.WithTransportCredentials(insecure.NewCredentials()),
+			grpc.WithStatsHandler(prov.GRPCClientHandler()),
+		)
 		if err != nil {
 			return fmt.Errorf("dial notification: %w", err)
 		}
@@ -154,7 +165,10 @@ func Run() error {
 	// move money between user account and bank house account. Without
 	// it, fills fail. Skip wiring on a dev stack that doesn't run bank.
 	if bankAddr := config.String("BANK_GRPC_ADDR", ""); bankAddr != "" {
-		conn, err := grpc.NewClient(bankAddr, grpc.WithTransportCredentials(insecure.NewCredentials()))
+		conn, err := grpc.NewClient(
+			bankAddr, grpc.WithTransportCredentials(insecure.NewCredentials()),
+			grpc.WithStatsHandler(prov.GRPCClientHandler()),
+		)
 		if err != nil {
 			return fmt.Errorf("dial bank: %w", err)
 		}
@@ -241,15 +255,18 @@ func Run() error {
 	service.RegisterSagas(sagaReg, svc)
 
 	probeSrv := probes.New(fmt.Sprintf(":%d", config.Int("PROBE_PORT", 8081)))
-	probeSrv.Register("postgres", func(ctx context.Context) error { return postgres.Ping(ctx, pool) })
+	probeSrv.Register("postgres", func(ctx context.Context) error { return db.Ping(ctx) })
 	probeSrv.Register("redis", func(ctx context.Context) error { return pkgredis.Ping(ctx, rdb) })
-	probeSrv.MountMetrics(observability.New("trading").MetricsHandler())
 
 	grpcAddr := fmt.Sprintf(":%d", config.Int("GRPC_PORT", 50051))
+	metricsAddr := fmt.Sprintf(":%d", config.Int("METRICS_PORT", 9090))
 
 	g, gctx := errgroup.WithContext(ctx)
 	g.Go(func() error {
 		return probeSrv.ListenAndServe(gctx)
+	})
+	g.Go(func() error {
+		return prov.RunMetricsServer(gctx, metricsAddr)
 	})
 	g.Go(func() error {
 		return grpcserver.Run(gctx, log, grpcAddr, func(s *grpc.Server) {
@@ -259,77 +276,83 @@ func Run() error {
 			tradingpb.RegisterExternalOTCServiceServer(s, srv)
 			// Celina 5 — user-initiated cross-bank cash payments.
 			tradingpb.RegisterCrossBankPaymentServiceServer(s, srv)
-		})
+		}, grpcserver.WithStatsHandler(prov.GRPCServerHandler()))
 	})
 
-	// Spec p.38: agents' used_limit resets at 23:59 (Europe/Belgrade).
-	// The supervisor RPC exposes the same operation for manual reruns
-	// during dev; this loop fires it daily.
-	g.Go(func() error {
-		return runDailyAt(gctx, log, "actuary-used-limit-reset", belgrade, 23, 59, runActuaryDailyReset(svc))
-	})
-
-	// Spec p.55-56 partial-fill worker.
+	// Execution cadence interval is read regardless of whether this
+	// process runs the in-process worker: the service's per-order cadence
+	// math (RunExecutionTick) uses it whether the tick is driven by the
+	// in-process loop or by the scheduler's RunExecutionTick RPC.
 	tick := config.Duration("EXECUTION_TICK_INTERVAL", 10*time.Second)
 	svc.Cfg.ExecutionTickInterval = tick
-	g.Go(func() error {
-		return runExecutionWorker(gctx, log, svc, tick)
-	})
 
-	// Spec p.62 capital-gains tax — last day of each month at 23:55
-	// (Europe/Belgrade). Supervisor-triggered runs via the RunTax RPC
-	// share the same code path.
-	g.Go(func() error {
-		return runMonthlyTaxCron(gctx, log, svc, belgrade)
-	})
+	// In-process background workers + crons. JOBS_ENABLED (default true)
+	// gates the whole set: when the deployment runs the scheduler service,
+	// trading is started with JOBS_ENABLED=false and the scheduler drives
+	// these via the Run* RPCs instead — trading then becomes a stateless,
+	// horizontally-scalable request handler.
+	if config.Bool("JOBS_ENABLED", true) {
+		// Spec p.38: agents' used_limit resets at 23:59 (Europe/Belgrade).
+		g.Go(func() error {
+			return runDailyAt(gctx, log, "actuary-used-limit-reset", belgrade, 23, 59, runActuaryDailyReset(svc))
+		})
 
-	// Spec p.43 Black-Scholes option chain refresh. Daily; first tick
-	// fires immediately so a fresh container has options without delay.
-	optInterval := config.Duration("OPTIONS_REFRESH_INTERVAL", 24*time.Hour)
-	g.Go(func() error {
-		return runOptionsRefresh(gctx, log, svc, optInterval)
-	})
+		// Spec p.55-56 partial-fill worker.
+		g.Go(func() error {
+			return runExecutionWorker(gctx, log, svc, tick)
+		})
 
-	// Alpha Vantage refresh (spec p.40, p.42). 6h default cadence keeps
-	// us inside the free tier's 25/day quota with room for a manual
-	// rerun via SIGHUP-style restart. No-op when MarketData is nil.
-	mdInterval := config.Duration("MARKET_DATA_REFRESH_INTERVAL", 6*time.Hour)
-	g.Go(func() error {
-		return runMarketDataRefresh(gctx, log, svc, mdInterval)
-	})
+		// Spec p.62 capital-gains tax — last day of each month at 23:55
+		// (Europe/Belgrade). Supervisor-triggered runs via the RunTax RPC
+		// share the same code path.
+		g.Go(func() error {
+			return runMonthlyTaxCron(gctx, log, svc, belgrade)
+		})
 
-	// One-shot stock-history backfill (spec p.40). When an Alpha
-	// Vantage key is configured this pulls real daily history at
-	// startup so the listing-detail chart isn't limited to the keyless
-	// synthetic seed; the 6h live refresh above keeps today's point
-	// fresh thereafter. No-op when MarketData / History is nil.
-	g.Go(func() error {
-		return runStockHistoryBackfill(gctx, log, svc)
-	})
+		// Spec p.43 Black-Scholes option chain refresh. Daily; first tick
+		// fires immediately so a fresh container has options without delay.
+		optInterval := config.Duration("OPTIONS_REFRESH_INTERVAL", 24*time.Hour)
+		g.Go(func() error {
+			return runOptionsRefresh(gctx, log, svc, optInterval)
+		})
 
-	// c4 SAGA recovery worker — scans trading.saga_executions for rows
-	// parked by a transient error (or a crashed worker) and resumes
-	// them. The orchestrator's advisory lock keeps this from racing
-	// foreground saga drives.
-	sagaTick := config.Duration("SAGA_RECOVERY_TICK", 30*time.Second)
-	g.Go(func() error {
-		return runSagaRecoveryWorker(gctx, log, svc, sagaTick)
-	})
+		// Alpha Vantage refresh (spec p.40, p.42). 6h default cadence keeps
+		// us inside the free tier's 25/day quota. No-op when MarketData is nil.
+		mdInterval := config.Duration("MARKET_DATA_REFRESH_INTERVAL", 6*time.Hour)
+		g.Go(func() error {
+			return runMarketDataRefresh(gctx, log, svc, mdInterval)
+		})
 
-	// c4 OTC contract expiry sweep (spec p.69). 5min default cadence;
-	// the cron is idempotent and the work per tick is bounded by the
-	// number of contracts past settlement_date, so re-running shorter
-	// is fine but unnecessary.
-	otcExpiryTick := config.Duration("OTC_EXPIRY_TICK", 5*time.Minute)
-	g.Go(func() error {
-		return runOTCExpirySweep(gctx, log, svc, otcExpiryTick)
-	})
+		// One-shot stock-history backfill (spec p.40). When an Alpha
+		// Vantage key is configured this pulls real daily history at
+		// startup. No-op when MarketData / History is nil.
+		g.Go(func() error {
+			return runStockHistoryBackfill(gctx, log, svc)
+		})
 
-	// Fund performance snapshot cron (spec p.74). One snapshot per
-	// active fund per day at 23:50 Europe/Belgrade. Feeds the FE chart.
-	g.Go(func() error {
-		return runFundPerformanceCron(gctx, log, svc, belgrade)
-	})
+		// c4 SAGA recovery worker — resumes sagas parked by a transient
+		// error (or a crashed worker). The orchestrator's advisory lock
+		// keeps this from racing foreground saga drives.
+		sagaTick := config.Duration("SAGA_RECOVERY_TICK", 30*time.Second)
+		g.Go(func() error {
+			return runSagaRecoveryWorker(gctx, log, svc, sagaTick)
+		})
+
+		// c4 OTC contract expiry sweep (spec p.69). 5min default cadence;
+		// idempotent and bounded per tick.
+		otcExpiryTick := config.Duration("OTC_EXPIRY_TICK", 5*time.Minute)
+		g.Go(func() error {
+			return runOTCExpirySweep(gctx, log, svc, otcExpiryTick)
+		})
+
+		// Fund performance snapshot cron (spec p.74). One snapshot per
+		// active fund per day at 23:50 Europe/Belgrade. Feeds the FE chart.
+		g.Go(func() error {
+			return runFundPerformanceCron(gctx, log, svc, belgrade)
+		})
+	} else {
+		log.Info("JOBS_ENABLED=false; in-process workers/crons disabled (driven by scheduler service)")
+	}
 
 	probeSrv.MarkReady()
 	log.Info("trading service ready", "grpc", grpcAddr)

@@ -160,6 +160,72 @@
         ]
       }
     },
+    "/api/v1/accounts/run-maintenance-fee-job": {
+      "post": {
+        "summary": "RunMaintenanceFeeJob debits the monthly maintenance fee from every\naccount due for it. Normally driven by the scheduler service; exposed\nas an RPC so ops can fire it on demand. Admin-only.",
+        "operationId": "BankService_RunMaintenanceFeeJob",
+        "responses": {
+          "200": {
+            "description": "A successful response.",
+            "schema": {
+              "$ref": "#/definitions/v1RunMaintenanceFeeJobResponse"
+            }
+          },
+          "default": {
+            "description": "An unexpected error response.",
+            "schema": {
+              "$ref": "#/definitions/rpcStatus"
+            }
+          }
+        },
+        "parameters": [
+          {
+            "name": "body",
+            "in": "body",
+            "required": true,
+            "schema": {
+              "$ref": "#/definitions/v1RunMaintenanceFeeJobRequest"
+            }
+          }
+        ],
+        "tags": [
+          "BankService"
+        ]
+      }
+    },
+    "/api/v1/accounts/run-spent-reset-job": {
+      "post": {
+        "summary": "RunSpentResetJob zeroes the daily/monthly spent counters that are due\nto roll over. Normally driven by the scheduler service; admin-only.",
+        "operationId": "BankService_RunSpentResetJob",
+        "responses": {
+          "200": {
+            "description": "A successful response.",
+            "schema": {
+              "$ref": "#/definitions/v1RunSpentResetJobResponse"
+            }
+          },
+          "default": {
+            "description": "An unexpected error response.",
+            "schema": {
+              "$ref": "#/definitions/rpcStatus"
+            }
+          }
+        },
+        "parameters": [
+          {
+            "name": "body",
+            "in": "body",
+            "required": true,
+            "schema": {
+              "$ref": "#/definitions/v1RunSpentResetJobRequest"
+            }
+          }
+        ],
+        "tags": [
+          "BankService"
+        ]
+      }
+    },
     "/api/v1/accounts/{id}": {
       "get": {
         "operationId": "BankService_GetAccount",
@@ -1626,6 +1692,39 @@
         ]
       }
     },
+    "/api/v1/exchange/rates/refresh": {
+      "post": {
+        "summary": "RefreshFXRates does one fetch+upsert pass of the external FX feed.\nNormally driven by the scheduler service; exposed so ops can fire it\non demand. Requires ExchangeWrite (or admin).",
+        "operationId": "ExchangeService_RefreshFXRates",
+        "responses": {
+          "200": {
+            "description": "A successful response.",
+            "schema": {
+              "$ref": "#/definitions/v1RefreshFXRatesResponse"
+            }
+          },
+          "default": {
+            "description": "An unexpected error response.",
+            "schema": {
+              "$ref": "#/definitions/rpcStatus"
+            }
+          }
+        },
+        "parameters": [
+          {
+            "name": "body",
+            "in": "body",
+            "required": true,
+            "schema": {
+              "$ref": "#/definitions/v1RefreshFXRatesRequest"
+            }
+          }
+        ],
+        "tags": [
+          "ExchangeService"
+        ]
+      }
+    },
     "/api/v1/exchanges": {
       "get": {
         "operationId": "TradingService_ListExchanges",
@@ -1853,6 +1952,39 @@
             "in": "query",
             "required": false,
             "type": "string"
+          }
+        ],
+        "tags": [
+          "TradingService"
+        ]
+      }
+    },
+    "/api/v1/funds/run-performance-snapshot": {
+      "post": {
+        "summary": "RunFundPerformanceSnapshot writes one perf snapshot per active fund.\nAdmin-only.",
+        "operationId": "TradingService_RunFundPerformanceSnapshot",
+        "responses": {
+          "200": {
+            "description": "A successful response.",
+            "schema": {
+              "$ref": "#/definitions/v1RunFundPerformanceSnapshotResponse"
+            }
+          },
+          "default": {
+            "description": "An unexpected error response.",
+            "schema": {
+              "$ref": "#/definitions/rpcStatus"
+            }
+          }
+        },
+        "parameters": [
+          {
+            "name": "body",
+            "in": "body",
+            "required": true,
+            "schema": {
+              "$ref": "#/definitions/v1RunFundPerformanceSnapshotRequest"
+            }
           }
         ],
         "tags": [
@@ -2564,6 +2696,72 @@
         ]
       }
     },
+    "/api/v1/market-data/run-history-backfill": {
+      "post": {
+        "summary": "RunStockHistoryBackfill backfills daily-close history. Admin-only.",
+        "operationId": "TradingService_RunStockHistoryBackfill",
+        "responses": {
+          "200": {
+            "description": "A successful response.",
+            "schema": {
+              "$ref": "#/definitions/v1RunStockHistoryBackfillResponse"
+            }
+          },
+          "default": {
+            "description": "An unexpected error response.",
+            "schema": {
+              "$ref": "#/definitions/rpcStatus"
+            }
+          }
+        },
+        "parameters": [
+          {
+            "name": "body",
+            "in": "body",
+            "required": true,
+            "schema": {
+              "$ref": "#/definitions/v1RunStockHistoryBackfillRequest"
+            }
+          }
+        ],
+        "tags": [
+          "TradingService"
+        ]
+      }
+    },
+    "/api/v1/market-data/run-refresh": {
+      "post": {
+        "summary": "RunMarketDataRefresh refreshes upstream stock + forex quotes. Admin-only.",
+        "operationId": "TradingService_RunMarketDataRefresh",
+        "responses": {
+          "200": {
+            "description": "A successful response.",
+            "schema": {
+              "$ref": "#/definitions/v1RunMarketDataRefreshResponse"
+            }
+          },
+          "default": {
+            "description": "An unexpected error response.",
+            "schema": {
+              "$ref": "#/definitions/rpcStatus"
+            }
+          }
+        },
+        "parameters": [
+          {
+            "name": "body",
+            "in": "body",
+            "required": true,
+            "schema": {
+              "$ref": "#/definitions/v1RunMarketDataRefreshRequest"
+            }
+          }
+        ],
+        "tags": [
+          "TradingService"
+        ]
+      }
+    },
     "/api/v1/menjacnica/quote": {
       "post": {
         "summary": "QuoteExchange returns the converted-amount preview for a\nmenjačnica or FX payment, including commission. The FE uses this\nto render the transfer-confirmation screen before the user clicks\nPotvrdi.",
@@ -2594,6 +2792,39 @@
         ],
         "tags": [
           "BankService"
+        ]
+      }
+    },
+    "/api/v1/options/run-refresh": {
+      "post": {
+        "summary": "RunOptionsRefresh regenerates Black-Scholes option chains. Admin-only.",
+        "operationId": "TradingService_RunOptionsRefresh",
+        "responses": {
+          "200": {
+            "description": "A successful response.",
+            "schema": {
+              "$ref": "#/definitions/v1RunOptionsRefreshResponse"
+            }
+          },
+          "default": {
+            "description": "An unexpected error response.",
+            "schema": {
+              "$ref": "#/definitions/rpcStatus"
+            }
+          }
+        },
+        "parameters": [
+          {
+            "name": "body",
+            "in": "body",
+            "required": true,
+            "schema": {
+              "$ref": "#/definitions/v1RunOptionsRefreshRequest"
+            }
+          }
+        ],
+        "tags": [
+          "TradingService"
         ]
       }
     },
@@ -3582,6 +3813,39 @@
             "required": true,
             "schema": {
               "$ref": "#/definitions/TradingServiceWithdrawOTCOfferBody"
+            }
+          }
+        ],
+        "tags": [
+          "TradingService"
+        ]
+      }
+    },
+    "/api/v1/otc/run-expiry-sweep": {
+      "post": {
+        "summary": "RunOTCExpirySweep expires OTC contracts past settlement. Admin-only.",
+        "operationId": "TradingService_RunOTCExpirySweep",
+        "responses": {
+          "200": {
+            "description": "A successful response.",
+            "schema": {
+              "$ref": "#/definitions/v1RunOTCExpirySweepResponse"
+            }
+          },
+          "default": {
+            "description": "An unexpected error response.",
+            "schema": {
+              "$ref": "#/definitions/rpcStatus"
+            }
+          }
+        },
+        "parameters": [
+          {
+            "name": "body",
+            "in": "body",
+            "required": true,
+            "schema": {
+              "$ref": "#/definitions/v1RunOTCExpirySweepRequest"
             }
           }
         ],
@@ -8247,6 +8511,19 @@
       },
       "description": "RealizedPnLRow is one closing-sell row, decorated with the security\nticker for display. tax_amount_rsd is 15% of max(profit_rsd, 0) per\nspec p.62 (losses don't generate tax under the simple model)."
     },
+    "v1RefreshFXRatesRequest": {
+      "type": "object"
+    },
+    "v1RefreshFXRatesResponse": {
+      "type": "object",
+      "properties": {
+        "written": {
+          "type": "integer",
+          "format": "int32",
+          "description": "written is the number of (currency→RSD) rate rows upserted."
+        }
+      }
+    },
     "v1RefreshRequest": {
       "type": "object",
       "properties": {
@@ -8303,6 +8580,18 @@
         }
       }
     },
+    "v1RunFundPerformanceSnapshotRequest": {
+      "type": "object"
+    },
+    "v1RunFundPerformanceSnapshotResponse": {
+      "type": "object",
+      "properties": {
+        "funds": {
+          "type": "integer",
+          "format": "int32"
+        }
+      }
+    },
     "v1RunInstallmentJobRequest": {
       "type": "object",
       "properties": {
@@ -8326,6 +8615,138 @@
         "overdue": {
           "type": "integer",
           "format": "int32"
+        }
+      }
+    },
+    "v1RunMaintenanceFeeJobRequest": {
+      "type": "object",
+      "properties": {
+        "asOf": {
+          "type": "string",
+          "description": "as_of lets the caller process a specific date (YYYY-MM-DD) for\ntesting. Empty → now."
+        }
+      }
+    },
+    "v1RunMaintenanceFeeJobResponse": {
+      "type": "object",
+      "properties": {
+        "processed": {
+          "type": "integer",
+          "format": "int32"
+        },
+        "charged": {
+          "type": "integer",
+          "format": "int32"
+        },
+        "skipped": {
+          "type": "integer",
+          "format": "int32"
+        }
+      }
+    },
+    "v1RunMarketDataRefreshRequest": {
+      "type": "object"
+    },
+    "v1RunMarketDataRefreshResponse": {
+      "type": "object",
+      "properties": {
+        "stocksUpdated": {
+          "type": "integer",
+          "format": "int32"
+        },
+        "forexUpdated": {
+          "type": "integer",
+          "format": "int32"
+        },
+        "skipped": {
+          "type": "integer",
+          "format": "int32"
+        },
+        "upstreamErrors": {
+          "type": "integer",
+          "format": "int32"
+        },
+        "upstreamThrottled": {
+          "type": "boolean"
+        }
+      }
+    },
+    "v1RunOTCExpirySweepRequest": {
+      "type": "object"
+    },
+    "v1RunOTCExpirySweepResponse": {
+      "type": "object",
+      "properties": {
+        "contractsExpired": {
+          "type": "integer",
+          "format": "int32"
+        },
+        "sharesReleased": {
+          "type": "integer",
+          "format": "int32"
+        }
+      }
+    },
+    "v1RunOptionsRefreshRequest": {
+      "type": "object"
+    },
+    "v1RunOptionsRefreshResponse": {
+      "type": "object",
+      "properties": {
+        "underlyingsProcessed": {
+          "type": "integer",
+          "format": "int32"
+        },
+        "optionsUpserted": {
+          "type": "integer",
+          "format": "int32"
+        },
+        "skipped": {
+          "type": "integer",
+          "format": "int32"
+        }
+      }
+    },
+    "v1RunSpentResetJobRequest": {
+      "type": "object"
+    },
+    "v1RunSpentResetJobResponse": {
+      "type": "object",
+      "properties": {
+        "daily": {
+          "type": "string",
+          "format": "int64"
+        },
+        "monthly": {
+          "type": "string",
+          "format": "int64"
+        }
+      }
+    },
+    "v1RunStockHistoryBackfillRequest": {
+      "type": "object"
+    },
+    "v1RunStockHistoryBackfillResponse": {
+      "type": "object",
+      "properties": {
+        "symbolsBackfilled": {
+          "type": "integer",
+          "format": "int32"
+        },
+        "rowsWritten": {
+          "type": "integer",
+          "format": "int32"
+        },
+        "skipped": {
+          "type": "integer",
+          "format": "int32"
+        },
+        "upstreamErrors": {
+          "type": "integer",
+          "format": "int32"
+        },
+        "upstreamThrottled": {
+          "type": "boolean"
         }
       }
     },

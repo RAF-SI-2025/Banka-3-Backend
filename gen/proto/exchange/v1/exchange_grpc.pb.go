@@ -19,9 +19,10 @@ import (
 const _ = grpc.SupportPackageIsVersion9
 
 const (
-	ExchangeService_UpsertRate_FullMethodName = "/banka.exchange.v1.ExchangeService/UpsertRate"
-	ExchangeService_ListRates_FullMethodName  = "/banka.exchange.v1.ExchangeService/ListRates"
-	ExchangeService_Quote_FullMethodName      = "/banka.exchange.v1.ExchangeService/Quote"
+	ExchangeService_UpsertRate_FullMethodName     = "/banka.exchange.v1.ExchangeService/UpsertRate"
+	ExchangeService_ListRates_FullMethodName      = "/banka.exchange.v1.ExchangeService/ListRates"
+	ExchangeService_Quote_FullMethodName          = "/banka.exchange.v1.ExchangeService/Quote"
+	ExchangeService_RefreshFXRates_FullMethodName = "/banka.exchange.v1.ExchangeService/RefreshFXRates"
 )
 
 // ExchangeServiceClient is the client API for ExchangeService service.
@@ -45,6 +46,10 @@ type ExchangeServiceClient interface {
 	// are expected to be other services, not end users. (External quotes
 	// come from ListRates so the FE can render the menjačnica board.)
 	Quote(ctx context.Context, in *QuoteRequest, opts ...grpc.CallOption) (*Rate, error)
+	// RefreshFXRates does one fetch+upsert pass of the external FX feed.
+	// Normally driven by the scheduler service; exposed so ops can fire it
+	// on demand. Requires ExchangeWrite (or admin).
+	RefreshFXRates(ctx context.Context, in *RefreshFXRatesRequest, opts ...grpc.CallOption) (*RefreshFXRatesResponse, error)
 }
 
 type exchangeServiceClient struct {
@@ -85,6 +90,16 @@ func (c *exchangeServiceClient) Quote(ctx context.Context, in *QuoteRequest, opt
 	return out, nil
 }
 
+func (c *exchangeServiceClient) RefreshFXRates(ctx context.Context, in *RefreshFXRatesRequest, opts ...grpc.CallOption) (*RefreshFXRatesResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(RefreshFXRatesResponse)
+	err := c.cc.Invoke(ctx, ExchangeService_RefreshFXRates_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
 // ExchangeServiceServer is the server API for ExchangeService service.
 // All implementations should embed UnimplementedExchangeServiceServer
 // for forward compatibility.
@@ -106,6 +121,10 @@ type ExchangeServiceServer interface {
 	// are expected to be other services, not end users. (External quotes
 	// come from ListRates so the FE can render the menjačnica board.)
 	Quote(context.Context, *QuoteRequest) (*Rate, error)
+	// RefreshFXRates does one fetch+upsert pass of the external FX feed.
+	// Normally driven by the scheduler service; exposed so ops can fire it
+	// on demand. Requires ExchangeWrite (or admin).
+	RefreshFXRates(context.Context, *RefreshFXRatesRequest) (*RefreshFXRatesResponse, error)
 }
 
 // UnimplementedExchangeServiceServer should be embedded to have
@@ -123,6 +142,9 @@ func (UnimplementedExchangeServiceServer) ListRates(context.Context, *ListRatesR
 }
 func (UnimplementedExchangeServiceServer) Quote(context.Context, *QuoteRequest) (*Rate, error) {
 	return nil, status.Error(codes.Unimplemented, "method Quote not implemented")
+}
+func (UnimplementedExchangeServiceServer) RefreshFXRates(context.Context, *RefreshFXRatesRequest) (*RefreshFXRatesResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method RefreshFXRates not implemented")
 }
 func (UnimplementedExchangeServiceServer) testEmbeddedByValue() {}
 
@@ -198,6 +220,24 @@ func _ExchangeService_Quote_Handler(srv interface{}, ctx context.Context, dec fu
 	return interceptor(ctx, in, info, handler)
 }
 
+func _ExchangeService_RefreshFXRates_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(RefreshFXRatesRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(ExchangeServiceServer).RefreshFXRates(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: ExchangeService_RefreshFXRates_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(ExchangeServiceServer).RefreshFXRates(ctx, req.(*RefreshFXRatesRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
 // ExchangeService_ServiceDesc is the grpc.ServiceDesc for ExchangeService service.
 // It's only intended for direct use with grpc.RegisterService,
 // and not to be introspected or modified (even as a copy)
@@ -216,6 +256,10 @@ var ExchangeService_ServiceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "Quote",
 			Handler:    _ExchangeService_Quote_Handler,
+		},
+		{
+			MethodName: "RefreshFXRates",
+			Handler:    _ExchangeService_RefreshFXRates_Handler,
 		},
 	},
 	Streams:  []grpc.StreamDesc{},

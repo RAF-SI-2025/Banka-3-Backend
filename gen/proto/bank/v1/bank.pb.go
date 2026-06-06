@@ -6061,11 +6061,205 @@ func (x *RunVariableRateJobResponse) GetUpdated() int32 {
 	return 0
 }
 
+type RunMaintenanceFeeJobRequest struct {
+	state protoimpl.MessageState `protogen:"open.v1"`
+	// as_of lets the caller process a specific date (YYYY-MM-DD) for
+	// testing. Empty → now.
+	AsOf          string `protobuf:"bytes,1,opt,name=as_of,json=asOf,proto3" json:"as_of,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *RunMaintenanceFeeJobRequest) Reset() {
+	*x = RunMaintenanceFeeJobRequest{}
+	mi := &file_bank_v1_bank_proto_msgTypes[69]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *RunMaintenanceFeeJobRequest) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*RunMaintenanceFeeJobRequest) ProtoMessage() {}
+
+func (x *RunMaintenanceFeeJobRequest) ProtoReflect() protoreflect.Message {
+	mi := &file_bank_v1_bank_proto_msgTypes[69]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use RunMaintenanceFeeJobRequest.ProtoReflect.Descriptor instead.
+func (*RunMaintenanceFeeJobRequest) Descriptor() ([]byte, []int) {
+	return file_bank_v1_bank_proto_rawDescGZIP(), []int{69}
+}
+
+func (x *RunMaintenanceFeeJobRequest) GetAsOf() string {
+	if x != nil {
+		return x.AsOf
+	}
+	return ""
+}
+
+type RunMaintenanceFeeJobResponse struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	Processed     int32                  `protobuf:"varint,1,opt,name=processed,proto3" json:"processed,omitempty"`
+	Charged       int32                  `protobuf:"varint,2,opt,name=charged,proto3" json:"charged,omitempty"`
+	Skipped       int32                  `protobuf:"varint,3,opt,name=skipped,proto3" json:"skipped,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *RunMaintenanceFeeJobResponse) Reset() {
+	*x = RunMaintenanceFeeJobResponse{}
+	mi := &file_bank_v1_bank_proto_msgTypes[70]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *RunMaintenanceFeeJobResponse) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*RunMaintenanceFeeJobResponse) ProtoMessage() {}
+
+func (x *RunMaintenanceFeeJobResponse) ProtoReflect() protoreflect.Message {
+	mi := &file_bank_v1_bank_proto_msgTypes[70]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use RunMaintenanceFeeJobResponse.ProtoReflect.Descriptor instead.
+func (*RunMaintenanceFeeJobResponse) Descriptor() ([]byte, []int) {
+	return file_bank_v1_bank_proto_rawDescGZIP(), []int{70}
+}
+
+func (x *RunMaintenanceFeeJobResponse) GetProcessed() int32 {
+	if x != nil {
+		return x.Processed
+	}
+	return 0
+}
+
+func (x *RunMaintenanceFeeJobResponse) GetCharged() int32 {
+	if x != nil {
+		return x.Charged
+	}
+	return 0
+}
+
+func (x *RunMaintenanceFeeJobResponse) GetSkipped() int32 {
+	if x != nil {
+		return x.Skipped
+	}
+	return 0
+}
+
+type RunSpentResetJobRequest struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *RunSpentResetJobRequest) Reset() {
+	*x = RunSpentResetJobRequest{}
+	mi := &file_bank_v1_bank_proto_msgTypes[71]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *RunSpentResetJobRequest) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*RunSpentResetJobRequest) ProtoMessage() {}
+
+func (x *RunSpentResetJobRequest) ProtoReflect() protoreflect.Message {
+	mi := &file_bank_v1_bank_proto_msgTypes[71]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use RunSpentResetJobRequest.ProtoReflect.Descriptor instead.
+func (*RunSpentResetJobRequest) Descriptor() ([]byte, []int) {
+	return file_bank_v1_bank_proto_rawDescGZIP(), []int{71}
+}
+
+type RunSpentResetJobResponse struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	Daily         int64                  `protobuf:"varint,1,opt,name=daily,proto3" json:"daily,omitempty"`
+	Monthly       int64                  `protobuf:"varint,2,opt,name=monthly,proto3" json:"monthly,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *RunSpentResetJobResponse) Reset() {
+	*x = RunSpentResetJobResponse{}
+	mi := &file_bank_v1_bank_proto_msgTypes[72]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *RunSpentResetJobResponse) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*RunSpentResetJobResponse) ProtoMessage() {}
+
+func (x *RunSpentResetJobResponse) ProtoReflect() protoreflect.Message {
+	mi := &file_bank_v1_bank_proto_msgTypes[72]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use RunSpentResetJobResponse.ProtoReflect.Descriptor instead.
+func (*RunSpentResetJobResponse) Descriptor() ([]byte, []int) {
+	return file_bank_v1_bank_proto_rawDescGZIP(), []int{72}
+}
+
+func (x *RunSpentResetJobResponse) GetDaily() int64 {
+	if x != nil {
+		return x.Daily
+	}
+	return 0
+}
+
+func (x *RunSpentResetJobResponse) GetMonthly() int64 {
+	if x != nil {
+		return x.Monthly
+	}
+	return 0
+}
+
 var File_bank_v1_bank_proto protoreflect.FileDescriptor
 
 const file_bank_v1_bank_proto_rawDesc = "" +
 	"\n" +
-	"\x12bank/v1/bank.proto\x12\rbanka.bank.v1\x1a\x1cgoogle/api/annotations.proto\x1a\x1bgoogle/protobuf/empty.proto\x1a\x1fgoogle/protobuf/timestamp.proto\x1a\x1bbuf/validate/validate.proto\"\xc2\x02\n" +
+	"\x12bank/v1/bank.proto\x12\rbanka.bank.v1\x1a\x1bbuf/validate/validate.proto\x1a\x1cgoogle/api/annotations.proto\x1a\x1bgoogle/protobuf/empty.proto\x1a\x1fgoogle/protobuf/timestamp.proto\"\xc2\x02\n" +
 	"\aCompany\x12\x0e\n" +
 	"\x02id\x18\x01 \x01(\tR\x02id\x12\x12\n" +
 	"\x04name\x18\x02 \x01(\tR\x04name\x12\x1f\n" +
@@ -6552,7 +6746,17 @@ const file_bank_v1_bank_proto_rawDesc = "" +
 	"\aoverdue\x18\x03 \x01(\x05R\aoverdue\"\x1b\n" +
 	"\x19RunVariableRateJobRequest\"6\n" +
 	"\x1aRunVariableRateJobResponse\x12\x18\n" +
-	"\aupdated\x18\x01 \x01(\x05R\aupdated*\xb4\x01\n" +
+	"\aupdated\x18\x01 \x01(\x05R\aupdated\"Q\n" +
+	"\x1bRunMaintenanceFeeJobRequest\x122\n" +
+	"\x05as_of\x18\x01 \x01(\tB\x1d\xbaH\x1a\xd8\x01\x01r\x152\x13^\\d{4}-\\d{2}-\\d{2}$R\x04asOf\"p\n" +
+	"\x1cRunMaintenanceFeeJobResponse\x12\x1c\n" +
+	"\tprocessed\x18\x01 \x01(\x05R\tprocessed\x12\x18\n" +
+	"\acharged\x18\x02 \x01(\x05R\acharged\x12\x18\n" +
+	"\askipped\x18\x03 \x01(\x05R\askipped\"\x19\n" +
+	"\x17RunSpentResetJobRequest\"J\n" +
+	"\x18RunSpentResetJobResponse\x12\x14\n" +
+	"\x05daily\x18\x01 \x01(\x03R\x05daily\x12\x18\n" +
+	"\amonthly\x18\x02 \x01(\x03R\amonthly*\xb4\x01\n" +
 	"\bCurrency\x12\x18\n" +
 	"\x14CURRENCY_UNSPECIFIED\x10\x00\x12\x10\n" +
 	"\fCURRENCY_RSD\x10\x01\x12\x10\n" +
@@ -6659,7 +6863,7 @@ const file_bank_v1_bank_proto_rawDesc = "" +
 	"\x1eINSTALLMENT_STATUS_UNSPECIFIED\x10\x00\x12\x1b\n" +
 	"\x17INSTALLMENT_STATUS_PAID\x10\x01\x12\x1d\n" +
 	"\x19INSTALLMENT_STATUS_UNPAID\x10\x02\x12\x1e\n" +
-	"\x1aINSTALLMENT_STATUS_OVERDUE\x10\x032\x91%\n" +
+	"\x1aINSTALLMENT_STATUS_OVERDUE\x10\x032\xcf'\n" +
 	"\vBankService\x12j\n" +
 	"\rCreateCompany\x12#.banka.bank.v1.CreateCompanyRequest\x1a\x16.banka.bank.v1.Company\"\x1c\x82\xd3\xe4\x93\x02\x16:\x01*\"\x11/api/v1/companies\x12u\n" +
 	"\rListCompanies\x12#.banka.bank.v1.ListCompaniesRequest\x1a$.banka.bank.v1.ListCompaniesResponse\"\x19\x82\xd3\xe4\x93\x02\x13\x12\x11/api/v1/companies\x12f\n" +
@@ -6703,7 +6907,9 @@ const file_bank_v1_bank_proto_rawDesc = "" +
 	"\tListLoans\x12\x1f.banka.bank.v1.ListLoansRequest\x1a .banka.bank.v1.ListLoansResponse\"\x15\x82\xd3\xe4\x93\x02\x0f\x12\r/api/v1/loans\x12i\n" +
 	"\aGetLoan\x12\x1d.banka.bank.v1.GetLoanRequest\x1a#.banka.bank.v1.LoanWithInstallments\"\x1a\x82\xd3\xe4\x93\x02\x14\x12\x12/api/v1/loans/{id}\x12\x94\x01\n" +
 	"\x11RunInstallmentJob\x12'.banka.bank.v1.RunInstallmentJobRequest\x1a(.banka.bank.v1.RunInstallmentJobResponse\",\x82\xd3\xe4\x93\x02&:\x01*\"!/api/v1/loans/run-installment-job\x12\x99\x01\n" +
-	"\x12RunVariableRateJob\x12(.banka.bank.v1.RunVariableRateJobRequest\x1a).banka.bank.v1.RunVariableRateJobResponse\".\x82\xd3\xe4\x93\x02(:\x01*\"#/api/v1/loans/run-variable-rate-jobB\xb5\x01\n" +
+	"\x12RunVariableRateJob\x12(.banka.bank.v1.RunVariableRateJobRequest\x1a).banka.bank.v1.RunVariableRateJobResponse\".\x82\xd3\xe4\x93\x02(:\x01*\"#/api/v1/loans/run-variable-rate-job\x12\xa4\x01\n" +
+	"\x14RunMaintenanceFeeJob\x12*.banka.bank.v1.RunMaintenanceFeeJobRequest\x1a+.banka.bank.v1.RunMaintenanceFeeJobResponse\"3\x82\xd3\xe4\x93\x02-:\x01*\"(/api/v1/accounts/run-maintenance-fee-job\x12\x94\x01\n" +
+	"\x10RunSpentResetJob\x12&.banka.bank.v1.RunSpentResetJobRequest\x1a'.banka.bank.v1.RunSpentResetJobResponse\"/\x82\xd3\xe4\x93\x02):\x01*\"$/api/v1/accounts/run-spent-reset-jobB\xb5\x01\n" +
 	"\x11com.banka.bank.v1B\tBankProtoP\x01Z?github.com/RAF-SI-2025/Banka-3-Backend/gen/proto/bank/v1;bankv1\xa2\x02\x03BBX\xaa\x02\rBanka.Bank.V1\xca\x02\rBanka\\Bank\\V1\xe2\x02\x19Banka\\Bank\\V1\\GPBMetadata\xea\x02\x0fBanka::Bank::V1b\x06proto3"
 
 var (
@@ -6719,7 +6925,7 @@ func file_bank_v1_bank_proto_rawDescGZIP() []byte {
 }
 
 var file_bank_v1_bank_proto_enumTypes = make([]protoimpl.EnumInfo, 15)
-var file_bank_v1_bank_proto_msgTypes = make([]protoimpl.MessageInfo, 69)
+var file_bank_v1_bank_proto_msgTypes = make([]protoimpl.MessageInfo, 73)
 var file_bank_v1_bank_proto_goTypes = []any{
 	(Currency)(0),                          // 0: banka.bank.v1.Currency
 	(AccountKind)(0),                       // 1: banka.bank.v1.AccountKind
@@ -6805,19 +7011,23 @@ var file_bank_v1_bank_proto_goTypes = []any{
 	(*RunInstallmentJobResponse)(nil),      // 81: banka.bank.v1.RunInstallmentJobResponse
 	(*RunVariableRateJobRequest)(nil),      // 82: banka.bank.v1.RunVariableRateJobRequest
 	(*RunVariableRateJobResponse)(nil),     // 83: banka.bank.v1.RunVariableRateJobResponse
-	(*timestamppb.Timestamp)(nil),          // 84: google.protobuf.Timestamp
-	(*emptypb.Empty)(nil),                  // 85: google.protobuf.Empty
+	(*RunMaintenanceFeeJobRequest)(nil),    // 84: banka.bank.v1.RunMaintenanceFeeJobRequest
+	(*RunMaintenanceFeeJobResponse)(nil),   // 85: banka.bank.v1.RunMaintenanceFeeJobResponse
+	(*RunSpentResetJobRequest)(nil),        // 86: banka.bank.v1.RunSpentResetJobRequest
+	(*RunSpentResetJobResponse)(nil),       // 87: banka.bank.v1.RunSpentResetJobResponse
+	(*timestamppb.Timestamp)(nil),          // 88: google.protobuf.Timestamp
+	(*emptypb.Empty)(nil),                  // 89: google.protobuf.Empty
 }
 var file_bank_v1_bank_proto_depIdxs = []int32{
-	84,  // 0: banka.bank.v1.Company.created_at:type_name -> google.protobuf.Timestamp
-	84,  // 1: banka.bank.v1.Company.updated_at:type_name -> google.protobuf.Timestamp
+	88,  // 0: banka.bank.v1.Company.created_at:type_name -> google.protobuf.Timestamp
+	88,  // 1: banka.bank.v1.Company.updated_at:type_name -> google.protobuf.Timestamp
 	1,   // 2: banka.bank.v1.Account.kind:type_name -> banka.bank.v1.AccountKind
 	2,   // 3: banka.bank.v1.Account.subtype:type_name -> banka.bank.v1.AccountSubtype
 	0,   // 4: banka.bank.v1.Account.currency:type_name -> banka.bank.v1.Currency
 	3,   // 5: banka.bank.v1.Account.status:type_name -> banka.bank.v1.AccountStatus
-	84,  // 6: banka.bank.v1.Account.created_at:type_name -> google.protobuf.Timestamp
-	84,  // 7: banka.bank.v1.Account.expires_at:type_name -> google.protobuf.Timestamp
-	84,  // 8: banka.bank.v1.Account.updated_at:type_name -> google.protobuf.Timestamp
+	88,  // 6: banka.bank.v1.Account.created_at:type_name -> google.protobuf.Timestamp
+	88,  // 7: banka.bank.v1.Account.expires_at:type_name -> google.protobuf.Timestamp
+	88,  // 8: banka.bank.v1.Account.updated_at:type_name -> google.protobuf.Timestamp
 	15,  // 9: banka.bank.v1.ListCompaniesResponse.companies:type_name -> banka.bank.v1.Company
 	1,   // 10: banka.bank.v1.CreateAccountRequest.kind:type_name -> banka.bank.v1.AccountKind
 	2,   // 11: banka.bank.v1.CreateAccountRequest.subtype:type_name -> banka.bank.v1.AccountSubtype
@@ -6841,27 +7051,27 @@ var file_bank_v1_bank_proto_depIdxs = []int32{
 	45,  // 29: banka.bank.v1.TransferBetweenClientsResponse.transactions:type_name -> banka.bank.v1.Transaction
 	5,   // 30: banka.bank.v1.Transaction.kind:type_name -> banka.bank.v1.TransactionKind
 	4,   // 31: banka.bank.v1.Transaction.status:type_name -> banka.bank.v1.TransactionStatus
-	84,  // 32: banka.bank.v1.Transaction.created_at:type_name -> google.protobuf.Timestamp
+	88,  // 32: banka.bank.v1.Transaction.created_at:type_name -> google.protobuf.Timestamp
 	45,  // 33: banka.bank.v1.PaymentResult.transactions:type_name -> banka.bank.v1.Transaction
 	4,   // 34: banka.bank.v1.PaymentResult.status:type_name -> banka.bank.v1.TransactionStatus
 	0,   // 35: banka.bank.v1.QuoteExchangeRequest.from:type_name -> banka.bank.v1.Currency
 	0,   // 36: banka.bank.v1.QuoteExchangeRequest.to:type_name -> banka.bank.v1.Currency
-	84,  // 37: banka.bank.v1.ListTransactionsRequest.from:type_name -> google.protobuf.Timestamp
-	84,  // 38: banka.bank.v1.ListTransactionsRequest.to:type_name -> google.protobuf.Timestamp
+	88,  // 37: banka.bank.v1.ListTransactionsRequest.from:type_name -> google.protobuf.Timestamp
+	88,  // 38: banka.bank.v1.ListTransactionsRequest.to:type_name -> google.protobuf.Timestamp
 	45,  // 39: banka.bank.v1.ListTransactionsResponse.transactions:type_name -> banka.bank.v1.Transaction
-	84,  // 40: banka.bank.v1.PaymentRecipient.created_at:type_name -> google.protobuf.Timestamp
+	88,  // 40: banka.bank.v1.PaymentRecipient.created_at:type_name -> google.protobuf.Timestamp
 	53,  // 41: banka.bank.v1.ListPaymentRecipientsResponse.recipients:type_name -> banka.bank.v1.PaymentRecipient
 	6,   // 42: banka.bank.v1.Card.brand:type_name -> banka.bank.v1.CardBrand
 	7,   // 43: banka.bank.v1.Card.status:type_name -> banka.bank.v1.CardStatus
-	84,  // 44: banka.bank.v1.Card.expires_at:type_name -> google.protobuf.Timestamp
-	84,  // 45: banka.bank.v1.Card.created_at:type_name -> google.protobuf.Timestamp
-	84,  // 46: banka.bank.v1.Card.updated_at:type_name -> google.protobuf.Timestamp
+	88,  // 44: banka.bank.v1.Card.expires_at:type_name -> google.protobuf.Timestamp
+	88,  // 45: banka.bank.v1.Card.created_at:type_name -> google.protobuf.Timestamp
+	88,  // 46: banka.bank.v1.Card.updated_at:type_name -> google.protobuf.Timestamp
 	6,   // 47: banka.bank.v1.CreateCardRequest.brand:type_name -> banka.bank.v1.CardBrand
 	59,  // 48: banka.bank.v1.ListCardsResponse.cards:type_name -> banka.bank.v1.Card
 	7,   // 49: banka.bank.v1.SetCardStatusRequest.status:type_name -> banka.bank.v1.CardStatus
 	8,   // 50: banka.bank.v1.AuthorizedPerson.gender:type_name -> banka.bank.v1.Gender
-	84,  // 51: banka.bank.v1.AuthorizedPerson.created_at:type_name -> google.protobuf.Timestamp
-	84,  // 52: banka.bank.v1.AuthorizedPerson.updated_at:type_name -> google.protobuf.Timestamp
+	88,  // 51: banka.bank.v1.AuthorizedPerson.created_at:type_name -> google.protobuf.Timestamp
+	88,  // 52: banka.bank.v1.AuthorizedPerson.updated_at:type_name -> google.protobuf.Timestamp
 	8,   // 53: banka.bank.v1.CreateAuthorizedPersonRequest.gender:type_name -> banka.bank.v1.Gender
 	65,  // 54: banka.bank.v1.ListAuthorizedPersonsResponse.authorized_persons:type_name -> banka.bank.v1.AuthorizedPerson
 	9,   // 55: banka.bank.v1.LoanRequest.loan_type:type_name -> banka.bank.v1.LoanType
@@ -6869,15 +7079,15 @@ var file_bank_v1_bank_proto_depIdxs = []int32{
 	0,   // 57: banka.bank.v1.LoanRequest.currency:type_name -> banka.bank.v1.Currency
 	11,  // 58: banka.bank.v1.LoanRequest.employment_status:type_name -> banka.bank.v1.EmploymentStatus
 	12,  // 59: banka.bank.v1.LoanRequest.status:type_name -> banka.bank.v1.LoanRequestStatus
-	84,  // 60: banka.bank.v1.LoanRequest.decided_at:type_name -> google.protobuf.Timestamp
-	84,  // 61: banka.bank.v1.LoanRequest.created_at:type_name -> google.protobuf.Timestamp
+	88,  // 60: banka.bank.v1.LoanRequest.decided_at:type_name -> google.protobuf.Timestamp
+	88,  // 61: banka.bank.v1.LoanRequest.created_at:type_name -> google.protobuf.Timestamp
 	9,   // 62: banka.bank.v1.Loan.loan_type:type_name -> banka.bank.v1.LoanType
 	10,  // 63: banka.bank.v1.Loan.interest_type:type_name -> banka.bank.v1.InterestType
 	0,   // 64: banka.bank.v1.Loan.currency:type_name -> banka.bank.v1.Currency
 	13,  // 65: banka.bank.v1.Loan.status:type_name -> banka.bank.v1.LoanStatus
-	84,  // 66: banka.bank.v1.Loan.contracted_at:type_name -> google.protobuf.Timestamp
+	88,  // 66: banka.bank.v1.Loan.contracted_at:type_name -> google.protobuf.Timestamp
 	0,   // 67: banka.bank.v1.LoanInstallment.currency:type_name -> banka.bank.v1.Currency
-	84,  // 68: banka.bank.v1.LoanInstallment.actual_paid_at:type_name -> google.protobuf.Timestamp
+	88,  // 68: banka.bank.v1.LoanInstallment.actual_paid_at:type_name -> google.protobuf.Timestamp
 	14,  // 69: banka.bank.v1.LoanInstallment.status:type_name -> banka.bank.v1.InstallmentStatus
 	70,  // 70: banka.bank.v1.LoanWithInstallments.loan:type_name -> banka.bank.v1.Loan
 	71,  // 71: banka.bank.v1.LoanWithInstallments.installments:type_name -> banka.bank.v1.LoanInstallment
@@ -6931,48 +7141,52 @@ var file_bank_v1_bank_proto_depIdxs = []int32{
 	79,  // 119: banka.bank.v1.BankService.GetLoan:input_type -> banka.bank.v1.GetLoanRequest
 	80,  // 120: banka.bank.v1.BankService.RunInstallmentJob:input_type -> banka.bank.v1.RunInstallmentJobRequest
 	82,  // 121: banka.bank.v1.BankService.RunVariableRateJob:input_type -> banka.bank.v1.RunVariableRateJobRequest
-	15,  // 122: banka.bank.v1.BankService.CreateCompany:output_type -> banka.bank.v1.Company
-	19,  // 123: banka.bank.v1.BankService.ListCompanies:output_type -> banka.bank.v1.ListCompaniesResponse
-	15,  // 124: banka.bank.v1.BankService.GetCompany:output_type -> banka.bank.v1.Company
-	15,  // 125: banka.bank.v1.BankService.UpdateCompany:output_type -> banka.bank.v1.Company
-	16,  // 126: banka.bank.v1.BankService.CreateAccount:output_type -> banka.bank.v1.Account
-	24,  // 127: banka.bank.v1.BankService.ListAccounts:output_type -> banka.bank.v1.ListAccountsResponse
-	16,  // 128: banka.bank.v1.BankService.GetAccount:output_type -> banka.bank.v1.Account
-	16,  // 129: banka.bank.v1.BankService.UpdateAccountLimits:output_type -> banka.bank.v1.Account
-	16,  // 130: banka.bank.v1.BankService.UpdateAccountName:output_type -> banka.bank.v1.Account
-	16,  // 131: banka.bank.v1.BankService.SetAccountStatus:output_type -> banka.bank.v1.Account
-	16,  // 132: banka.bank.v1.BankService.GetSystemAccount:output_type -> banka.bank.v1.Account
-	32,  // 133: banka.bank.v1.BankService.SettleTrade:output_type -> banka.bank.v1.SettleTradeResponse
-	34,  // 134: banka.bank.v1.BankService.SettleCapitalGainsTax:output_type -> banka.bank.v1.SettleCapitalGainsTaxResponse
-	36,  // 135: banka.bank.v1.BankService.SettleForexFill:output_type -> banka.bank.v1.SettleForexFillResponse
-	38,  // 136: banka.bank.v1.BankService.ReserveFunds:output_type -> banka.bank.v1.ReserveFundsResponse
-	40,  // 137: banka.bank.v1.BankService.ReleaseFunds:output_type -> banka.bank.v1.ReleaseFundsResponse
-	42,  // 138: banka.bank.v1.BankService.CommitReservedFunds:output_type -> banka.bank.v1.CommitReservedFundsResponse
-	44,  // 139: banka.bank.v1.BankService.TransferBetweenClients:output_type -> banka.bank.v1.TransferBetweenClientsResponse
-	16,  // 140: banka.bank.v1.BankService.CreateFundAccount:output_type -> banka.bank.v1.Account
-	48,  // 141: banka.bank.v1.BankService.CreatePayment:output_type -> banka.bank.v1.PaymentResult
-	48,  // 142: banka.bank.v1.BankService.CreateTransfer:output_type -> banka.bank.v1.PaymentResult
-	50,  // 143: banka.bank.v1.BankService.QuoteExchange:output_type -> banka.bank.v1.QuoteExchangeResponse
-	52,  // 144: banka.bank.v1.BankService.ListTransactions:output_type -> banka.bank.v1.ListTransactionsResponse
-	53,  // 145: banka.bank.v1.BankService.CreatePaymentRecipient:output_type -> banka.bank.v1.PaymentRecipient
-	56,  // 146: banka.bank.v1.BankService.ListPaymentRecipients:output_type -> banka.bank.v1.ListPaymentRecipientsResponse
-	53,  // 147: banka.bank.v1.BankService.UpdatePaymentRecipient:output_type -> banka.bank.v1.PaymentRecipient
-	85,  // 148: banka.bank.v1.BankService.DeletePaymentRecipient:output_type -> google.protobuf.Empty
-	59,  // 149: banka.bank.v1.BankService.CreateCard:output_type -> banka.bank.v1.Card
-	62,  // 150: banka.bank.v1.BankService.ListCards:output_type -> banka.bank.v1.ListCardsResponse
-	59,  // 151: banka.bank.v1.BankService.SetCardStatus:output_type -> banka.bank.v1.Card
-	59,  // 152: banka.bank.v1.BankService.UpdateCardLimit:output_type -> banka.bank.v1.Card
-	65,  // 153: banka.bank.v1.BankService.CreateAuthorizedPerson:output_type -> banka.bank.v1.AuthorizedPerson
-	68,  // 154: banka.bank.v1.BankService.ListAuthorizedPersons:output_type -> banka.bank.v1.ListAuthorizedPersonsResponse
-	69,  // 155: banka.bank.v1.BankService.SubmitLoanRequest:output_type -> banka.bank.v1.LoanRequest
-	75,  // 156: banka.bank.v1.BankService.ListLoanRequests:output_type -> banka.bank.v1.ListLoanRequestsResponse
-	69,  // 157: banka.bank.v1.BankService.DecideLoanRequest:output_type -> banka.bank.v1.LoanRequest
-	78,  // 158: banka.bank.v1.BankService.ListLoans:output_type -> banka.bank.v1.ListLoansResponse
-	72,  // 159: banka.bank.v1.BankService.GetLoan:output_type -> banka.bank.v1.LoanWithInstallments
-	81,  // 160: banka.bank.v1.BankService.RunInstallmentJob:output_type -> banka.bank.v1.RunInstallmentJobResponse
-	83,  // 161: banka.bank.v1.BankService.RunVariableRateJob:output_type -> banka.bank.v1.RunVariableRateJobResponse
-	122, // [122:162] is the sub-list for method output_type
-	82,  // [82:122] is the sub-list for method input_type
+	84,  // 122: banka.bank.v1.BankService.RunMaintenanceFeeJob:input_type -> banka.bank.v1.RunMaintenanceFeeJobRequest
+	86,  // 123: banka.bank.v1.BankService.RunSpentResetJob:input_type -> banka.bank.v1.RunSpentResetJobRequest
+	15,  // 124: banka.bank.v1.BankService.CreateCompany:output_type -> banka.bank.v1.Company
+	19,  // 125: banka.bank.v1.BankService.ListCompanies:output_type -> banka.bank.v1.ListCompaniesResponse
+	15,  // 126: banka.bank.v1.BankService.GetCompany:output_type -> banka.bank.v1.Company
+	15,  // 127: banka.bank.v1.BankService.UpdateCompany:output_type -> banka.bank.v1.Company
+	16,  // 128: banka.bank.v1.BankService.CreateAccount:output_type -> banka.bank.v1.Account
+	24,  // 129: banka.bank.v1.BankService.ListAccounts:output_type -> banka.bank.v1.ListAccountsResponse
+	16,  // 130: banka.bank.v1.BankService.GetAccount:output_type -> banka.bank.v1.Account
+	16,  // 131: banka.bank.v1.BankService.UpdateAccountLimits:output_type -> banka.bank.v1.Account
+	16,  // 132: banka.bank.v1.BankService.UpdateAccountName:output_type -> banka.bank.v1.Account
+	16,  // 133: banka.bank.v1.BankService.SetAccountStatus:output_type -> banka.bank.v1.Account
+	16,  // 134: banka.bank.v1.BankService.GetSystemAccount:output_type -> banka.bank.v1.Account
+	32,  // 135: banka.bank.v1.BankService.SettleTrade:output_type -> banka.bank.v1.SettleTradeResponse
+	34,  // 136: banka.bank.v1.BankService.SettleCapitalGainsTax:output_type -> banka.bank.v1.SettleCapitalGainsTaxResponse
+	36,  // 137: banka.bank.v1.BankService.SettleForexFill:output_type -> banka.bank.v1.SettleForexFillResponse
+	38,  // 138: banka.bank.v1.BankService.ReserveFunds:output_type -> banka.bank.v1.ReserveFundsResponse
+	40,  // 139: banka.bank.v1.BankService.ReleaseFunds:output_type -> banka.bank.v1.ReleaseFundsResponse
+	42,  // 140: banka.bank.v1.BankService.CommitReservedFunds:output_type -> banka.bank.v1.CommitReservedFundsResponse
+	44,  // 141: banka.bank.v1.BankService.TransferBetweenClients:output_type -> banka.bank.v1.TransferBetweenClientsResponse
+	16,  // 142: banka.bank.v1.BankService.CreateFundAccount:output_type -> banka.bank.v1.Account
+	48,  // 143: banka.bank.v1.BankService.CreatePayment:output_type -> banka.bank.v1.PaymentResult
+	48,  // 144: banka.bank.v1.BankService.CreateTransfer:output_type -> banka.bank.v1.PaymentResult
+	50,  // 145: banka.bank.v1.BankService.QuoteExchange:output_type -> banka.bank.v1.QuoteExchangeResponse
+	52,  // 146: banka.bank.v1.BankService.ListTransactions:output_type -> banka.bank.v1.ListTransactionsResponse
+	53,  // 147: banka.bank.v1.BankService.CreatePaymentRecipient:output_type -> banka.bank.v1.PaymentRecipient
+	56,  // 148: banka.bank.v1.BankService.ListPaymentRecipients:output_type -> banka.bank.v1.ListPaymentRecipientsResponse
+	53,  // 149: banka.bank.v1.BankService.UpdatePaymentRecipient:output_type -> banka.bank.v1.PaymentRecipient
+	89,  // 150: banka.bank.v1.BankService.DeletePaymentRecipient:output_type -> google.protobuf.Empty
+	59,  // 151: banka.bank.v1.BankService.CreateCard:output_type -> banka.bank.v1.Card
+	62,  // 152: banka.bank.v1.BankService.ListCards:output_type -> banka.bank.v1.ListCardsResponse
+	59,  // 153: banka.bank.v1.BankService.SetCardStatus:output_type -> banka.bank.v1.Card
+	59,  // 154: banka.bank.v1.BankService.UpdateCardLimit:output_type -> banka.bank.v1.Card
+	65,  // 155: banka.bank.v1.BankService.CreateAuthorizedPerson:output_type -> banka.bank.v1.AuthorizedPerson
+	68,  // 156: banka.bank.v1.BankService.ListAuthorizedPersons:output_type -> banka.bank.v1.ListAuthorizedPersonsResponse
+	69,  // 157: banka.bank.v1.BankService.SubmitLoanRequest:output_type -> banka.bank.v1.LoanRequest
+	75,  // 158: banka.bank.v1.BankService.ListLoanRequests:output_type -> banka.bank.v1.ListLoanRequestsResponse
+	69,  // 159: banka.bank.v1.BankService.DecideLoanRequest:output_type -> banka.bank.v1.LoanRequest
+	78,  // 160: banka.bank.v1.BankService.ListLoans:output_type -> banka.bank.v1.ListLoansResponse
+	72,  // 161: banka.bank.v1.BankService.GetLoan:output_type -> banka.bank.v1.LoanWithInstallments
+	81,  // 162: banka.bank.v1.BankService.RunInstallmentJob:output_type -> banka.bank.v1.RunInstallmentJobResponse
+	83,  // 163: banka.bank.v1.BankService.RunVariableRateJob:output_type -> banka.bank.v1.RunVariableRateJobResponse
+	85,  // 164: banka.bank.v1.BankService.RunMaintenanceFeeJob:output_type -> banka.bank.v1.RunMaintenanceFeeJobResponse
+	87,  // 165: banka.bank.v1.BankService.RunSpentResetJob:output_type -> banka.bank.v1.RunSpentResetJobResponse
+	124, // [124:166] is the sub-list for method output_type
+	82,  // [82:124] is the sub-list for method input_type
 	82,  // [82:82] is the sub-list for extension type_name
 	82,  // [82:82] is the sub-list for extension extendee
 	0,   // [0:82] is the sub-list for field type_name
@@ -6989,7 +7203,7 @@ func file_bank_v1_bank_proto_init() {
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
 			RawDescriptor: unsafe.Slice(unsafe.StringData(file_bank_v1_bank_proto_rawDesc), len(file_bank_v1_bank_proto_rawDesc)),
 			NumEnums:      15,
-			NumMessages:   69,
+			NumMessages:   73,
 			NumExtensions: 0,
 			NumServices:   1,
 		},

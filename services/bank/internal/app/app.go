@@ -16,7 +16,7 @@ import (
 	"github.com/RAF-SI-2025/Banka-3-Backend/pkg/email"
 	"github.com/RAF-SI-2025/Banka-3-Backend/pkg/grpcserver"
 	"github.com/RAF-SI-2025/Banka-3-Backend/pkg/logger"
-	"github.com/RAF-SI-2025/Banka-3-Backend/pkg/observability"
+	"github.com/RAF-SI-2025/Banka-3-Backend/pkg/otelinit"
 	"github.com/RAF-SI-2025/Banka-3-Backend/pkg/postgres"
 	"github.com/RAF-SI-2025/Banka-3-Backend/pkg/probes"
 	pkgredis "github.com/RAF-SI-2025/Banka-3-Backend/pkg/redis"
@@ -24,7 +24,6 @@ import (
 	"github.com/RAF-SI-2025/Banka-3-Backend/services/bank/internal/server"
 	"github.com/RAF-SI-2025/Banka-3-Backend/services/bank/internal/service"
 	"github.com/RAF-SI-2025/Banka-3-Backend/services/bank/internal/store"
-	"github.com/jackc/pgx/v5/pgxpool"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials/insecure"
 
@@ -39,25 +38,25 @@ func Run() error {
 	ctx, cancel := shutdown.Context()
 	defer cancel()
 
-	pool, err := postgres.Open(ctx, config.MustString("DATABASE_URL"))
+	prov, err := otelinit.Init(ctx, "bank")
+	if err != nil {
+		return fmt.Errorf("otelinit: %w", err)
+	}
+	defer func() { _ = prov.Shutdown(context.Background()) }()
+
+	// OpenPair dials the primary (DATABASE_URL → banka-pg-pooler-rw) and,
+	// when set, a hot-standby read pool (DATABASE_READ_URL →
+	// banka-pg-pooler-ro). SELECTs marked postgres.WithRead(ctx) (list/
+	// get/report/catalog reads) route to the standby; writes,
+	// transactions, idempotency/2PC guards and cron reads stay on the
+	// primary.
+	db, err := postgres.OpenPair(ctx, config.MustString("DATABASE_URL"), config.String("DATABASE_READ_URL", ""))
 	if err != nil {
 		return fmt.Errorf("postgres: %w", err)
 	}
-	defer pool.Close()
-
-	// BonusReadReplicaRouting (#287) — optional second pool against a
-	// hot standby. When DATABASE_READ_URL is set, SELECTs marked
-	// "safe under streaming-replica lag" (list/get reports, catalog
-	// pages, etc.) route to this pool via Store.reader(); writes and
-	// read-after-write paths stay on the primary.
-	var readPool *pgxpool.Pool
-	if readURL := config.String("DATABASE_READ_URL", ""); readURL != "" {
-		readPool, err = postgres.Open(ctx, readURL)
-		if err != nil {
-			return fmt.Errorf("postgres replica: %w", err)
-		}
-		defer readPool.Close()
-		log.Info("read replica routing enabled", "dsn", readURL)
+	defer db.Close()
+	if db.RO != nil {
+		log.Info("read replica routing enabled")
 	}
 
 	rdb, err := pkgredis.Open(ctx, config.MustString("REDIS_ADDR"), config.String("REDIS_PASSWORD", ""))
@@ -66,8 +65,7 @@ func Run() error {
 	}
 	defer rdb.Close()
 
-	st := store.New(pool)
-	st.ReadPool = readPool
+	st := store.New(db)
 	svc := service.New(st, service.Config{
 		BankCode:     config.String("BANK_CODE", "333"),
 		Branch:       config.String("BANK_BRANCH", "0001"),
@@ -88,7 +86,10 @@ func Run() error {
 	svc.Clock = adj
 
 	if exAddr := config.String("EXCHANGE_GRPC_ADDR", ""); exAddr != "" {
-		conn, err := grpc.NewClient(exAddr, grpc.WithTransportCredentials(insecure.NewCredentials()))
+		conn, err := grpc.NewClient(
+			exAddr, grpc.WithTransportCredentials(insecure.NewCredentials()),
+			grpc.WithStatsHandler(prov.GRPCClientHandler()),
+		)
 		if err != nil {
 			return fmt.Errorf("dial exchange: %w", err)
 		}
@@ -102,7 +103,10 @@ func Run() error {
 	// USER_GRPC_ADDR isn't set the bank still boots; notifications are
 	// no-ops (logged only).
 	if userAddr := config.String("USER_GRPC_ADDR", ""); userAddr != "" {
-		conn, err := grpc.NewClient(userAddr, grpc.WithTransportCredentials(insecure.NewCredentials()))
+		conn, err := grpc.NewClient(
+			userAddr, grpc.WithTransportCredentials(insecure.NewCredentials()),
+			grpc.WithStatsHandler(prov.GRPCClientHandler()),
+		)
 		if err != nil {
 			return fmt.Errorf("dial user: %w", err)
 		}
@@ -117,7 +121,10 @@ func Run() error {
 	// tests keep working. Templating continues to live in bank-svc —
 	// notification-svc is currently a thin SMTP-credentials owner.
 	if notifAddr := config.String("NOTIFICATION_GRPC_ADDR", ""); notifAddr != "" {
-		conn, err := grpc.NewClient(notifAddr, grpc.WithTransportCredentials(insecure.NewCredentials()))
+		conn, err := grpc.NewClient(
+			notifAddr, grpc.WithTransportCredentials(insecure.NewCredentials()),
+			grpc.WithStatsHandler(prov.GRPCClientHandler()),
+		)
 		if err != nil {
 			return fmt.Errorf("dial notification: %w", err)
 		}
@@ -151,15 +158,18 @@ func Run() error {
 	spentResetInterval := config.Duration("SPENT_RESET_JOB_INTERVAL", time.Hour)
 
 	probeSrv := probes.New(fmt.Sprintf(":%d", config.Int("PROBE_PORT", 8081)))
-	probeSrv.Register("postgres", func(ctx context.Context) error { return postgres.Ping(ctx, pool) })
+	probeSrv.Register("postgres", func(ctx context.Context) error { return db.Ping(ctx) })
 	probeSrv.Register("redis", func(ctx context.Context) error { return pkgredis.Ping(ctx, rdb) })
-	probeSrv.MountMetrics(observability.New("bank").MetricsHandler())
 
 	grpcAddr := fmt.Sprintf(":%d", config.Int("GRPC_PORT", 50051))
+	metricsAddr := fmt.Sprintf(":%d", config.Int("METRICS_PORT", 9090))
 
 	g, gctx := errgroup.WithContext(ctx)
 	g.Go(func() error {
 		return probeSrv.ListenAndServe(gctx)
+	})
+	g.Go(func() error {
+		return prov.RunMetricsServer(gctx, metricsAddr)
 	})
 	g.Go(func() error {
 		return grpcserver.Run(gctx, log, grpcAddr, func(s *grpc.Server) {
@@ -167,31 +177,41 @@ func Run() error {
 			bankpb.RegisterBankServiceServer(s, srv)
 			// Celina 5 — inter-bank 2PC primitive shares the same Server.
 			bankpb.RegisterInterbankProtocolServiceServer(s, srv)
-		})
+		}, grpcserver.WithStatsHandler(prov.GRPCServerHandler()))
 	})
 
 	// Background jobs: daily installment collection + monthly variable-
-	// rate refresh. Both are bypassed (interval == 0) by default in
-	// tests; configure via INSTALLMENT_JOB_INTERVAL / VARIABLE_RATE_JOB_INTERVAL.
-	if installmentInterval > 0 {
-		g.Go(func() error {
-			return runJobLoop(gctx, log, "installments", installmentInterval, svc.RunInstallmentJobAuto)
-		})
-	}
-	if variableRateInterval > 0 {
-		g.Go(func() error {
-			return runJobLoop(gctx, log, "variable-rate", variableRateInterval, svc.RunVariableRateJobAuto)
-		})
-	}
-	if maintenanceFeeInterval > 0 {
-		g.Go(func() error {
-			return runJobLoop(gctx, log, "maintenance-fee", maintenanceFeeInterval, svc.RunMaintenanceFeeJobAuto)
-		})
-	}
-	if spentResetInterval > 0 {
-		g.Go(func() error {
-			return runJobLoop(gctx, log, "spent-reset", spentResetInterval, svc.RunSpentResetJobAuto)
-		})
+	// rate refresh + maintenance-fee + spent-counter reset. Each is
+	// bypassed (interval == 0) by default in tests; configure via
+	// INSTALLMENT_JOB_INTERVAL / VARIABLE_RATE_JOB_INTERVAL / etc.
+	//
+	// JOBS_ENABLED (default true) gates the whole set: when the deployment
+	// runs the scheduler service, bank is started with JOBS_ENABLED=false
+	// and the scheduler drives these via RPC instead — bank then becomes a
+	// stateless, horizontally-scalable request handler.
+	if config.Bool("JOBS_ENABLED", true) {
+		if installmentInterval > 0 {
+			g.Go(func() error {
+				return runJobLoop(gctx, log, "installments", installmentInterval, svc.RunInstallmentJobAuto)
+			})
+		}
+		if variableRateInterval > 0 {
+			g.Go(func() error {
+				return runJobLoop(gctx, log, "variable-rate", variableRateInterval, svc.RunVariableRateJobAuto)
+			})
+		}
+		if maintenanceFeeInterval > 0 {
+			g.Go(func() error {
+				return runJobLoop(gctx, log, "maintenance-fee", maintenanceFeeInterval, svc.RunMaintenanceFeeJobAuto)
+			})
+		}
+		if spentResetInterval > 0 {
+			g.Go(func() error {
+				return runJobLoop(gctx, log, "spent-reset", spentResetInterval, svc.RunSpentResetJobAuto)
+			})
+		}
+	} else {
+		log.Info("JOBS_ENABLED=false; in-process background jobs disabled (driven by scheduler service)")
 	}
 
 	probeSrv.MarkReady()

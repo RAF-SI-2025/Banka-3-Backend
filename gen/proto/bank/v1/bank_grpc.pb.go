@@ -60,6 +60,8 @@ const (
 	BankService_GetLoan_FullMethodName                = "/banka.bank.v1.BankService/GetLoan"
 	BankService_RunInstallmentJob_FullMethodName      = "/banka.bank.v1.BankService/RunInstallmentJob"
 	BankService_RunVariableRateJob_FullMethodName     = "/banka.bank.v1.BankService/RunVariableRateJob"
+	BankService_RunMaintenanceFeeJob_FullMethodName   = "/banka.bank.v1.BankService/RunMaintenanceFeeJob"
+	BankService_RunSpentResetJob_FullMethodName       = "/banka.bank.v1.BankService/RunSpentResetJob"
 )
 
 // BankServiceClient is the client API for BankService service.
@@ -183,6 +185,13 @@ type BankServiceClient interface {
 	// RunVariableRateJob refreshes the random pomeraj for every active
 	// variable-rate loan and recomputes its installment amount. Admin-only.
 	RunVariableRateJob(ctx context.Context, in *RunVariableRateJobRequest, opts ...grpc.CallOption) (*RunVariableRateJobResponse, error)
+	// RunMaintenanceFeeJob debits the monthly maintenance fee from every
+	// account due for it. Normally driven by the scheduler service; exposed
+	// as an RPC so ops can fire it on demand. Admin-only.
+	RunMaintenanceFeeJob(ctx context.Context, in *RunMaintenanceFeeJobRequest, opts ...grpc.CallOption) (*RunMaintenanceFeeJobResponse, error)
+	// RunSpentResetJob zeroes the daily/monthly spent counters that are due
+	// to roll over. Normally driven by the scheduler service; admin-only.
+	RunSpentResetJob(ctx context.Context, in *RunSpentResetJobRequest, opts ...grpc.CallOption) (*RunSpentResetJobResponse, error)
 }
 
 type bankServiceClient struct {
@@ -593,6 +602,26 @@ func (c *bankServiceClient) RunVariableRateJob(ctx context.Context, in *RunVaria
 	return out, nil
 }
 
+func (c *bankServiceClient) RunMaintenanceFeeJob(ctx context.Context, in *RunMaintenanceFeeJobRequest, opts ...grpc.CallOption) (*RunMaintenanceFeeJobResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(RunMaintenanceFeeJobResponse)
+	err := c.cc.Invoke(ctx, BankService_RunMaintenanceFeeJob_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *bankServiceClient) RunSpentResetJob(ctx context.Context, in *RunSpentResetJobRequest, opts ...grpc.CallOption) (*RunSpentResetJobResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(RunSpentResetJobResponse)
+	err := c.cc.Invoke(ctx, BankService_RunSpentResetJob_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
 // BankServiceServer is the server API for BankService service.
 // All implementations should embed UnimplementedBankServiceServer
 // for forward compatibility.
@@ -714,6 +743,13 @@ type BankServiceServer interface {
 	// RunVariableRateJob refreshes the random pomeraj for every active
 	// variable-rate loan and recomputes its installment amount. Admin-only.
 	RunVariableRateJob(context.Context, *RunVariableRateJobRequest) (*RunVariableRateJobResponse, error)
+	// RunMaintenanceFeeJob debits the monthly maintenance fee from every
+	// account due for it. Normally driven by the scheduler service; exposed
+	// as an RPC so ops can fire it on demand. Admin-only.
+	RunMaintenanceFeeJob(context.Context, *RunMaintenanceFeeJobRequest) (*RunMaintenanceFeeJobResponse, error)
+	// RunSpentResetJob zeroes the daily/monthly spent counters that are due
+	// to roll over. Normally driven by the scheduler service; admin-only.
+	RunSpentResetJob(context.Context, *RunSpentResetJobRequest) (*RunSpentResetJobResponse, error)
 }
 
 // UnimplementedBankServiceServer should be embedded to have
@@ -842,6 +878,12 @@ func (UnimplementedBankServiceServer) RunInstallmentJob(context.Context, *RunIns
 }
 func (UnimplementedBankServiceServer) RunVariableRateJob(context.Context, *RunVariableRateJobRequest) (*RunVariableRateJobResponse, error) {
 	return nil, status.Error(codes.Unimplemented, "method RunVariableRateJob not implemented")
+}
+func (UnimplementedBankServiceServer) RunMaintenanceFeeJob(context.Context, *RunMaintenanceFeeJobRequest) (*RunMaintenanceFeeJobResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method RunMaintenanceFeeJob not implemented")
+}
+func (UnimplementedBankServiceServer) RunSpentResetJob(context.Context, *RunSpentResetJobRequest) (*RunSpentResetJobResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method RunSpentResetJob not implemented")
 }
 func (UnimplementedBankServiceServer) testEmbeddedByValue() {}
 
@@ -1583,6 +1625,42 @@ func _BankService_RunVariableRateJob_Handler(srv interface{}, ctx context.Contex
 	return interceptor(ctx, in, info, handler)
 }
 
+func _BankService_RunMaintenanceFeeJob_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(RunMaintenanceFeeJobRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(BankServiceServer).RunMaintenanceFeeJob(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: BankService_RunMaintenanceFeeJob_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(BankServiceServer).RunMaintenanceFeeJob(ctx, req.(*RunMaintenanceFeeJobRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _BankService_RunSpentResetJob_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(RunSpentResetJobRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(BankServiceServer).RunSpentResetJob(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: BankService_RunSpentResetJob_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(BankServiceServer).RunSpentResetJob(ctx, req.(*RunSpentResetJobRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
 // BankService_ServiceDesc is the grpc.ServiceDesc for BankService service.
 // It's only intended for direct use with grpc.RegisterService,
 // and not to be introspected or modified (even as a copy)
@@ -1749,6 +1827,14 @@ var BankService_ServiceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "RunVariableRateJob",
 			Handler:    _BankService_RunVariableRateJob_Handler,
+		},
+		{
+			MethodName: "RunMaintenanceFeeJob",
+			Handler:    _BankService_RunMaintenanceFeeJob_Handler,
+		},
+		{
+			MethodName: "RunSpentResetJob",
+			Handler:    _BankService_RunSpentResetJob_Handler,
 		},
 	},
 	Streams:  []grpc.StreamDesc{},

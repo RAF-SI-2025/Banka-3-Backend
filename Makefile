@@ -154,19 +154,6 @@ influxdb: ## Bring up the InfluxDB market-data side-channel (BonusInfluxDB). Tra
 influxdb-down: ## Stop the InfluxDB service (keeps the volume)
 	$(COMPOSE) --profile influxdb stop influxdb
 
-.PHONY: observability
-observability: ## Bring up the Prometheus + Grafana + Alertmanager observability stack (in addition to whatever services are already running)
-	$(COMPOSE) --profile observability up -d --build prometheus grafana alertmanager discord_notifier
-	@echo ""
-	@echo "  Grafana:       http://localhost:$${GRAFANA_PORT:-3001} (admin/admin)"
-	@echo "  Prometheus:    http://localhost:$${PROMETHEUS_PORT:-9090}"
-	@echo "  Alertmanager:  http://localhost:$${ALERTMANAGER_PORT:-9093}"
-
-.PHONY: observability-down
-observability-down: ## Tear down the observability stack (keeps app services running)
-	$(COMPOSE) --profile observability stop prometheus grafana alertmanager discord_notifier
-	$(COMPOSE) --profile observability rm -f prometheus grafana alertmanager discord_notifier
-
 .PHONY: interbank-down
 interbank-down: ## Tear down both stacks
 	$(MAKE) down-partner

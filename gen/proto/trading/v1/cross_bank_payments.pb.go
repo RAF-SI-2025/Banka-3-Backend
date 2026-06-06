@@ -377,7 +377,7 @@ var File_trading_v1_cross_bank_payments_proto protoreflect.FileDescriptor
 
 const file_trading_v1_cross_bank_payments_proto_rawDesc = "" +
 	"\n" +
-	"$trading/v1/cross_bank_payments.proto\x12\x10banka.trading.v1\x1a\x1cgoogle/api/annotations.proto\x1a\x1fgoogle/protobuf/timestamp.proto\x1a\x1bbuf/validate/validate.proto\x1a\x18trading/v1/trading.proto\"\xf7\x02\n" +
+	"$trading/v1/cross_bank_payments.proto\x12\x10banka.trading.v1\x1a\x1bbuf/validate/validate.proto\x1a\x1cgoogle/api/annotations.proto\x1a\x1fgoogle/protobuf/timestamp.proto\x1a\x18trading/v1/trading.proto\"\xf7\x02\n" +
 	"\x1dSubmitCrossBankPaymentRequest\x120\n" +
 	"\x0fidempotency_key\x18\x01 \x01(\tB\a\xbaH\x04r\x02\x10\x01R\x0eidempotencyKey\x124\n" +
 	"\x11source_account_id\x18\x02 \x01(\tB\b\xbaH\x05r\x03\xb0\x01\x01R\x0fsourceAccountId\x121\n" +

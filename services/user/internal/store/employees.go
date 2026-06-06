@@ -6,6 +6,7 @@ import (
 	"strings"
 
 	"github.com/RAF-SI-2025/Banka-3-Backend/pkg/apperr"
+	"github.com/RAF-SI-2025/Banka-3-Backend/pkg/postgres"
 	"github.com/RAF-SI-2025/Banka-3-Backend/services/user/internal/domain"
 )
 
@@ -41,7 +42,8 @@ func (s *Store) CreateEmployee(ctx context.Context, e *domain.Employee) (*domain
         values ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12)
         returning ` + employeeColumns
 
-	row := s.Pool.QueryRow(ctx, q,
+	row := s.DB.QueryRow(
+		ctx, q,
 		e.Email, e.Username, e.FirstName, e.LastName, e.DateOfBirth,
 		string(e.Gender), e.Phone, e.Address, e.Position, e.Department, e.Active, e.Permissions,
 	)
@@ -58,7 +60,7 @@ func (s *Store) CreateEmployee(ctx context.Context, e *domain.Employee) (*domain
 // GetEmployeeByID returns the employee or NotFound.
 func (s *Store) GetEmployeeByID(ctx context.Context, id string) (*domain.Employee, error) {
 	const q = `select ` + employeeColumns + ` from "user".employees where id = $1`
-	out, err := scanEmployee(s.Pool.QueryRow(ctx, q, id))
+	out, err := scanEmployee(s.DB.QueryRow(postgres.WithRead(ctx), q, id))
 	if err != nil {
 		if noRows(err) {
 			return nil, apperr.NotFound("employee not found")
@@ -71,7 +73,7 @@ func (s *Store) GetEmployeeByID(ctx context.Context, id string) (*domain.Employe
 // GetEmployeeByEmail returns the employee or NotFound.
 func (s *Store) GetEmployeeByEmail(ctx context.Context, email string) (*domain.Employee, error) {
 	const q = `select ` + employeeColumns + ` from "user".employees where lower(email) = lower($1)`
-	out, err := scanEmployee(s.Pool.QueryRow(ctx, q, email))
+	out, err := scanEmployee(s.DB.QueryRow(ctx, q, email))
 	if err != nil {
 		if noRows(err) {
 			return nil, apperr.NotFound("employee not found")
@@ -92,7 +94,8 @@ func (s *Store) UpdateEmployeeProfile(ctx context.Context, e *domain.Employee) (
         where id = $1
         returning ` + employeeColumns
 
-	row := s.Pool.QueryRow(ctx, q,
+	row := s.DB.QueryRow(
+		ctx, q,
 		e.ID, e.Email, e.Username, e.FirstName, e.LastName, e.DateOfBirth,
 		string(e.Gender), e.Phone, e.Address, e.Position, e.Department,
 	)
@@ -115,7 +118,7 @@ func (s *Store) SetEmployeePasswordHash(ctx context.Context, id, hash string) er
 	const q = `
         update "user".employees set password_hash = $2, session_version = session_version + 1
         where id = $1`
-	tag, err := s.Pool.Exec(ctx, q, id, hash)
+	tag, err := s.DB.Exec(ctx, q, id, hash)
 	if err != nil {
 		return apperr.Internal("set password", err)
 	}
@@ -133,7 +136,7 @@ func (s *Store) SetEmployeeActive(ctx context.Context, id string, active bool) (
         where id = $1
         returning ` + employeeColumns
 
-	out, err := scanEmployee(s.Pool.QueryRow(ctx, q, id, active))
+	out, err := scanEmployee(s.DB.QueryRow(ctx, q, id, active))
 	if err != nil {
 		if noRows(err) {
 			return nil, apperr.NotFound("employee not found")
@@ -153,7 +156,7 @@ func (s *Store) SetEmployeePermissions(ctx context.Context, id string, perms []s
         where id = $1
         returning ` + employeeColumns
 
-	out, err := scanEmployee(s.Pool.QueryRow(ctx, q, id, perms))
+	out, err := scanEmployee(s.DB.QueryRow(ctx, q, id, perms))
 	if err != nil {
 		if noRows(err) {
 			return nil, apperr.NotFound("employee not found")
@@ -171,7 +174,7 @@ func (s *Store) IncrementEmployeeSessionVersion(ctx context.Context, id string) 
         where id = $1
         returning session_version`
 	var v int64
-	if err := s.Pool.QueryRow(ctx, q, id).Scan(&v); err != nil {
+	if err := s.DB.QueryRow(ctx, q, id).Scan(&v); err != nil {
 		if noRows(err) {
 			return 0, apperr.NotFound("employee not found")
 		}
@@ -215,7 +218,7 @@ func (s *Store) ListEmployees(ctx context.Context, f domain.EmployeeFilter, page
 
 	countQ := `select count(*) from "user".employees` + where
 	var total int64
-	if err := s.Pool.QueryRow(ctx, countQ, args...).Scan(&total); err != nil {
+	if err := s.DB.QueryRow(postgres.WithRead(ctx), countQ, args...).Scan(&total); err != nil {
 		return nil, 0, apperr.Internal("count employees", err)
 	}
 
@@ -224,7 +227,7 @@ func (s *Store) ListEmployees(ctx context.Context, f domain.EmployeeFilter, page
 	listQ := `select ` + employeeColumns + ` from "user".employees` + where +
 		fmt.Sprintf(" order by last_name, first_name limit $%d offset $%d", len(args)+1, len(args)+2)
 
-	rows, err := s.reader().Query(ctx, listQ, listArgs...)
+	rows, err := s.DB.Query(postgres.WithRead(ctx), listQ, listArgs...)
 	if err != nil {
 		return nil, 0, apperr.Internal("list employees", err)
 	}

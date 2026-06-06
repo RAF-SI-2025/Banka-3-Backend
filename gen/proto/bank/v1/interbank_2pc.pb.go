@@ -886,7 +886,7 @@ var File_bank_v1_interbank_2pc_proto protoreflect.FileDescriptor
 
 const file_bank_v1_interbank_2pc_proto_rawDesc = "" +
 	"\n" +
-	"\x1bbank/v1/interbank_2pc.proto\x12\rbanka.bank.v1\x1a\x1bbuf/validate/validate.proto\x1a\x1fgoogle/protobuf/timestamp.proto\x1a\x12bank/v1/bank.proto\"\xf9\x03\n" +
+	"\x1bbank/v1/interbank_2pc.proto\x12\rbanka.bank.v1\x1a\x12bank/v1/bank.proto\x1a\x1bbuf/validate/validate.proto\x1a\x1fgoogle/protobuf/timestamp.proto\"\xf9\x03\n" +
 	"\x15PreparePaymentRequest\x12;\n" +
 	"\x15sender_routing_number\x18\x01 \x01(\x05B\a\xbaH\x04\x1a\x02 \x00R\x13senderRoutingNumber\x12.\n" +
 	"\x0etransaction_id\x18\x02 \x01(\tB\a\xbaH\x04r\x02\x10\x01R\rtransactionId\x12R\n" +

@@ -6,29 +6,20 @@ package store
 import (
 	"errors"
 
+	"github.com/RAF-SI-2025/Banka-3-Backend/pkg/postgres"
 	"github.com/jackc/pgx/v5"
-	"github.com/jackc/pgx/v5/pgxpool"
 )
 
-// Store wraps a pgx pool with helpers shared across the per-aggregate
-// query files in this package.
+// Store wraps a routed *postgres.DB with helpers shared across the
+// per-aggregate query files in this package. Writes and transactions
+// land on the primary; reads marked postgres.WithRead(ctx) route to the
+// read replica.
 type Store struct {
-	Pool *pgxpool.Pool
-	// ReadPool routes SELECTs to a hot standby when set; nil means
-	// reads go to the primary. BonusReadReplicaRouting / PR #287.
-	ReadPool *pgxpool.Pool
+	DB *postgres.DB
 }
 
-// New returns a Store using pool.
-func New(pool *pgxpool.Pool) *Store { return &Store{Pool: pool} }
-
-// reader returns the read pool when configured, primary otherwise.
-func (s *Store) reader() *pgxpool.Pool {
-	if s.ReadPool != nil {
-		return s.ReadPool
-	}
-	return s.Pool
-}
+// New returns a Store using db.
+func New(db *postgres.DB) *Store { return &Store{DB: db} }
 
 // isUniqueViolation reports whether err is a Postgres unique-violation.
 func isUniqueViolation(err error) bool {

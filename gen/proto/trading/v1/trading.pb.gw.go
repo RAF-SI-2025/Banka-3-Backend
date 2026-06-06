@@ -2007,6 +2007,141 @@ func local_request_TradingService_GetBankProfitTimeseries_0(ctx context.Context,
 	return msg, metadata, err
 }
 
+func request_TradingService_RunOTCExpirySweep_0(ctx context.Context, marshaler runtime.Marshaler, client TradingServiceClient, req *http.Request, pathParams map[string]string) (proto.Message, runtime.ServerMetadata, error) {
+	var (
+		protoReq RunOTCExpirySweepRequest
+		metadata runtime.ServerMetadata
+	)
+	if err := marshaler.NewDecoder(req.Body).Decode(&protoReq); err != nil && !errors.Is(err, io.EOF) {
+		return nil, metadata, status.Errorf(codes.InvalidArgument, "%v", err)
+	}
+	if req.Body != nil {
+		_, _ = io.Copy(io.Discard, req.Body)
+	}
+	msg, err := client.RunOTCExpirySweep(ctx, &protoReq, grpc.Header(&metadata.HeaderMD), grpc.Trailer(&metadata.TrailerMD))
+	return msg, metadata, err
+}
+
+func local_request_TradingService_RunOTCExpirySweep_0(ctx context.Context, marshaler runtime.Marshaler, server TradingServiceServer, req *http.Request, pathParams map[string]string) (proto.Message, runtime.ServerMetadata, error) {
+	var (
+		protoReq RunOTCExpirySweepRequest
+		metadata runtime.ServerMetadata
+	)
+	if err := marshaler.NewDecoder(req.Body).Decode(&protoReq); err != nil && !errors.Is(err, io.EOF) {
+		return nil, metadata, status.Errorf(codes.InvalidArgument, "%v", err)
+	}
+	msg, err := server.RunOTCExpirySweep(ctx, &protoReq)
+	return msg, metadata, err
+}
+
+func request_TradingService_RunOptionsRefresh_0(ctx context.Context, marshaler runtime.Marshaler, client TradingServiceClient, req *http.Request, pathParams map[string]string) (proto.Message, runtime.ServerMetadata, error) {
+	var (
+		protoReq RunOptionsRefreshRequest
+		metadata runtime.ServerMetadata
+	)
+	if err := marshaler.NewDecoder(req.Body).Decode(&protoReq); err != nil && !errors.Is(err, io.EOF) {
+		return nil, metadata, status.Errorf(codes.InvalidArgument, "%v", err)
+	}
+	if req.Body != nil {
+		_, _ = io.Copy(io.Discard, req.Body)
+	}
+	msg, err := client.RunOptionsRefresh(ctx, &protoReq, grpc.Header(&metadata.HeaderMD), grpc.Trailer(&metadata.TrailerMD))
+	return msg, metadata, err
+}
+
+func local_request_TradingService_RunOptionsRefresh_0(ctx context.Context, marshaler runtime.Marshaler, server TradingServiceServer, req *http.Request, pathParams map[string]string) (proto.Message, runtime.ServerMetadata, error) {
+	var (
+		protoReq RunOptionsRefreshRequest
+		metadata runtime.ServerMetadata
+	)
+	if err := marshaler.NewDecoder(req.Body).Decode(&protoReq); err != nil && !errors.Is(err, io.EOF) {
+		return nil, metadata, status.Errorf(codes.InvalidArgument, "%v", err)
+	}
+	msg, err := server.RunOptionsRefresh(ctx, &protoReq)
+	return msg, metadata, err
+}
+
+func request_TradingService_RunMarketDataRefresh_0(ctx context.Context, marshaler runtime.Marshaler, client TradingServiceClient, req *http.Request, pathParams map[string]string) (proto.Message, runtime.ServerMetadata, error) {
+	var (
+		protoReq RunMarketDataRefreshRequest
+		metadata runtime.ServerMetadata
+	)
+	if err := marshaler.NewDecoder(req.Body).Decode(&protoReq); err != nil && !errors.Is(err, io.EOF) {
+		return nil, metadata, status.Errorf(codes.InvalidArgument, "%v", err)
+	}
+	if req.Body != nil {
+		_, _ = io.Copy(io.Discard, req.Body)
+	}
+	msg, err := client.RunMarketDataRefresh(ctx, &protoReq, grpc.Header(&metadata.HeaderMD), grpc.Trailer(&metadata.TrailerMD))
+	return msg, metadata, err
+}
+
+func local_request_TradingService_RunMarketDataRefresh_0(ctx context.Context, marshaler runtime.Marshaler, server TradingServiceServer, req *http.Request, pathParams map[string]string) (proto.Message, runtime.ServerMetadata, error) {
+	var (
+		protoReq RunMarketDataRefreshRequest
+		metadata runtime.ServerMetadata
+	)
+	if err := marshaler.NewDecoder(req.Body).Decode(&protoReq); err != nil && !errors.Is(err, io.EOF) {
+		return nil, metadata, status.Errorf(codes.InvalidArgument, "%v", err)
+	}
+	msg, err := server.RunMarketDataRefresh(ctx, &protoReq)
+	return msg, metadata, err
+}
+
+func request_TradingService_RunStockHistoryBackfill_0(ctx context.Context, marshaler runtime.Marshaler, client TradingServiceClient, req *http.Request, pathParams map[string]string) (proto.Message, runtime.ServerMetadata, error) {
+	var (
+		protoReq RunStockHistoryBackfillRequest
+		metadata runtime.ServerMetadata
+	)
+	if err := marshaler.NewDecoder(req.Body).Decode(&protoReq); err != nil && !errors.Is(err, io.EOF) {
+		return nil, metadata, status.Errorf(codes.InvalidArgument, "%v", err)
+	}
+	if req.Body != nil {
+		_, _ = io.Copy(io.Discard, req.Body)
+	}
+	msg, err := client.RunStockHistoryBackfill(ctx, &protoReq, grpc.Header(&metadata.HeaderMD), grpc.Trailer(&metadata.TrailerMD))
+	return msg, metadata, err
+}
+
+func local_request_TradingService_RunStockHistoryBackfill_0(ctx context.Context, marshaler runtime.Marshaler, server TradingServiceServer, req *http.Request, pathParams map[string]string) (proto.Message, runtime.ServerMetadata, error) {
+	var (
+		protoReq RunStockHistoryBackfillRequest
+		metadata runtime.ServerMetadata
+	)
+	if err := marshaler.NewDecoder(req.Body).Decode(&protoReq); err != nil && !errors.Is(err, io.EOF) {
+		return nil, metadata, status.Errorf(codes.InvalidArgument, "%v", err)
+	}
+	msg, err := server.RunStockHistoryBackfill(ctx, &protoReq)
+	return msg, metadata, err
+}
+
+func request_TradingService_RunFundPerformanceSnapshot_0(ctx context.Context, marshaler runtime.Marshaler, client TradingServiceClient, req *http.Request, pathParams map[string]string) (proto.Message, runtime.ServerMetadata, error) {
+	var (
+		protoReq RunFundPerformanceSnapshotRequest
+		metadata runtime.ServerMetadata
+	)
+	if err := marshaler.NewDecoder(req.Body).Decode(&protoReq); err != nil && !errors.Is(err, io.EOF) {
+		return nil, metadata, status.Errorf(codes.InvalidArgument, "%v", err)
+	}
+	if req.Body != nil {
+		_, _ = io.Copy(io.Discard, req.Body)
+	}
+	msg, err := client.RunFundPerformanceSnapshot(ctx, &protoReq, grpc.Header(&metadata.HeaderMD), grpc.Trailer(&metadata.TrailerMD))
+	return msg, metadata, err
+}
+
+func local_request_TradingService_RunFundPerformanceSnapshot_0(ctx context.Context, marshaler runtime.Marshaler, server TradingServiceServer, req *http.Request, pathParams map[string]string) (proto.Message, runtime.ServerMetadata, error) {
+	var (
+		protoReq RunFundPerformanceSnapshotRequest
+		metadata runtime.ServerMetadata
+	)
+	if err := marshaler.NewDecoder(req.Body).Decode(&protoReq); err != nil && !errors.Is(err, io.EOF) {
+		return nil, metadata, status.Errorf(codes.InvalidArgument, "%v", err)
+	}
+	msg, err := server.RunFundPerformanceSnapshot(ctx, &protoReq)
+	return msg, metadata, err
+}
+
 // RegisterTradingServiceHandlerServer registers the http handlers for service TradingService to "mux".
 // UnaryRPC     :call TradingServiceServer directly.
 // StreamingRPC :currently unsupported pending https://github.com/grpc/grpc-go/issues/906.
@@ -3033,6 +3168,106 @@ func RegisterTradingServiceHandlerServer(ctx context.Context, mux *runtime.Serve
 		}
 		forward_TradingService_GetBankProfitTimeseries_0(annotatedContext, mux, outboundMarshaler, w, req, resp, mux.GetForwardResponseOptions()...)
 	})
+	mux.Handle(http.MethodPost, pattern_TradingService_RunOTCExpirySweep_0, func(w http.ResponseWriter, req *http.Request, pathParams map[string]string) {
+		ctx, cancel := context.WithCancel(req.Context())
+		defer cancel()
+		var stream runtime.ServerTransportStream
+		ctx = grpc.NewContextWithServerTransportStream(ctx, &stream)
+		inboundMarshaler, outboundMarshaler := runtime.MarshalerForRequest(mux, req)
+		annotatedContext, err := runtime.AnnotateIncomingContext(ctx, mux, req, "/banka.trading.v1.TradingService/RunOTCExpirySweep", runtime.WithHTTPPathPattern("/api/v1/otc/run-expiry-sweep"))
+		if err != nil {
+			runtime.HTTPError(ctx, mux, outboundMarshaler, w, req, err)
+			return
+		}
+		resp, md, err := local_request_TradingService_RunOTCExpirySweep_0(annotatedContext, inboundMarshaler, server, req, pathParams)
+		md.HeaderMD, md.TrailerMD = metadata.Join(md.HeaderMD, stream.Header()), metadata.Join(md.TrailerMD, stream.Trailer())
+		annotatedContext = runtime.NewServerMetadataContext(annotatedContext, md)
+		if err != nil {
+			runtime.HTTPError(annotatedContext, mux, outboundMarshaler, w, req, err)
+			return
+		}
+		forward_TradingService_RunOTCExpirySweep_0(annotatedContext, mux, outboundMarshaler, w, req, resp, mux.GetForwardResponseOptions()...)
+	})
+	mux.Handle(http.MethodPost, pattern_TradingService_RunOptionsRefresh_0, func(w http.ResponseWriter, req *http.Request, pathParams map[string]string) {
+		ctx, cancel := context.WithCancel(req.Context())
+		defer cancel()
+		var stream runtime.ServerTransportStream
+		ctx = grpc.NewContextWithServerTransportStream(ctx, &stream)
+		inboundMarshaler, outboundMarshaler := runtime.MarshalerForRequest(mux, req)
+		annotatedContext, err := runtime.AnnotateIncomingContext(ctx, mux, req, "/banka.trading.v1.TradingService/RunOptionsRefresh", runtime.WithHTTPPathPattern("/api/v1/options/run-refresh"))
+		if err != nil {
+			runtime.HTTPError(ctx, mux, outboundMarshaler, w, req, err)
+			return
+		}
+		resp, md, err := local_request_TradingService_RunOptionsRefresh_0(annotatedContext, inboundMarshaler, server, req, pathParams)
+		md.HeaderMD, md.TrailerMD = metadata.Join(md.HeaderMD, stream.Header()), metadata.Join(md.TrailerMD, stream.Trailer())
+		annotatedContext = runtime.NewServerMetadataContext(annotatedContext, md)
+		if err != nil {
+			runtime.HTTPError(annotatedContext, mux, outboundMarshaler, w, req, err)
+			return
+		}
+		forward_TradingService_RunOptionsRefresh_0(annotatedContext, mux, outboundMarshaler, w, req, resp, mux.GetForwardResponseOptions()...)
+	})
+	mux.Handle(http.MethodPost, pattern_TradingService_RunMarketDataRefresh_0, func(w http.ResponseWriter, req *http.Request, pathParams map[string]string) {
+		ctx, cancel := context.WithCancel(req.Context())
+		defer cancel()
+		var stream runtime.ServerTransportStream
+		ctx = grpc.NewContextWithServerTransportStream(ctx, &stream)
+		inboundMarshaler, outboundMarshaler := runtime.MarshalerForRequest(mux, req)
+		annotatedContext, err := runtime.AnnotateIncomingContext(ctx, mux, req, "/banka.trading.v1.TradingService/RunMarketDataRefresh", runtime.WithHTTPPathPattern("/api/v1/market-data/run-refresh"))
+		if err != nil {
+			runtime.HTTPError(ctx, mux, outboundMarshaler, w, req, err)
+			return
+		}
+		resp, md, err := local_request_TradingService_RunMarketDataRefresh_0(annotatedContext, inboundMarshaler, server, req, pathParams)
+		md.HeaderMD, md.TrailerMD = metadata.Join(md.HeaderMD, stream.Header()), metadata.Join(md.TrailerMD, stream.Trailer())
+		annotatedContext = runtime.NewServerMetadataContext(annotatedContext, md)
+		if err != nil {
+			runtime.HTTPError(annotatedContext, mux, outboundMarshaler, w, req, err)
+			return
+		}
+		forward_TradingService_RunMarketDataRefresh_0(annotatedContext, mux, outboundMarshaler, w, req, resp, mux.GetForwardResponseOptions()...)
+	})
+	mux.Handle(http.MethodPost, pattern_TradingService_RunStockHistoryBackfill_0, func(w http.ResponseWriter, req *http.Request, pathParams map[string]string) {
+		ctx, cancel := context.WithCancel(req.Context())
+		defer cancel()
+		var stream runtime.ServerTransportStream
+		ctx = grpc.NewContextWithServerTransportStream(ctx, &stream)
+		inboundMarshaler, outboundMarshaler := runtime.MarshalerForRequest(mux, req)
+		annotatedContext, err := runtime.AnnotateIncomingContext(ctx, mux, req, "/banka.trading.v1.TradingService/RunStockHistoryBackfill", runtime.WithHTTPPathPattern("/api/v1/market-data/run-history-backfill"))
+		if err != nil {
+			runtime.HTTPError(ctx, mux, outboundMarshaler, w, req, err)
+			return
+		}
+		resp, md, err := local_request_TradingService_RunStockHistoryBackfill_0(annotatedContext, inboundMarshaler, server, req, pathParams)
+		md.HeaderMD, md.TrailerMD = metadata.Join(md.HeaderMD, stream.Header()), metadata.Join(md.TrailerMD, stream.Trailer())
+		annotatedContext = runtime.NewServerMetadataContext(annotatedContext, md)
+		if err != nil {
+			runtime.HTTPError(annotatedContext, mux, outboundMarshaler, w, req, err)
+			return
+		}
+		forward_TradingService_RunStockHistoryBackfill_0(annotatedContext, mux, outboundMarshaler, w, req, resp, mux.GetForwardResponseOptions()...)
+	})
+	mux.Handle(http.MethodPost, pattern_TradingService_RunFundPerformanceSnapshot_0, func(w http.ResponseWriter, req *http.Request, pathParams map[string]string) {
+		ctx, cancel := context.WithCancel(req.Context())
+		defer cancel()
+		var stream runtime.ServerTransportStream
+		ctx = grpc.NewContextWithServerTransportStream(ctx, &stream)
+		inboundMarshaler, outboundMarshaler := runtime.MarshalerForRequest(mux, req)
+		annotatedContext, err := runtime.AnnotateIncomingContext(ctx, mux, req, "/banka.trading.v1.TradingService/RunFundPerformanceSnapshot", runtime.WithHTTPPathPattern("/api/v1/funds/run-performance-snapshot"))
+		if err != nil {
+			runtime.HTTPError(ctx, mux, outboundMarshaler, w, req, err)
+			return
+		}
+		resp, md, err := local_request_TradingService_RunFundPerformanceSnapshot_0(annotatedContext, inboundMarshaler, server, req, pathParams)
+		md.HeaderMD, md.TrailerMD = metadata.Join(md.HeaderMD, stream.Header()), metadata.Join(md.TrailerMD, stream.Trailer())
+		annotatedContext = runtime.NewServerMetadataContext(annotatedContext, md)
+		if err != nil {
+			runtime.HTTPError(annotatedContext, mux, outboundMarshaler, w, req, err)
+			return
+		}
+		forward_TradingService_RunFundPerformanceSnapshot_0(annotatedContext, mux, outboundMarshaler, w, req, resp, mux.GetForwardResponseOptions()...)
+	})
 
 	return nil
 }
@@ -3940,113 +4175,208 @@ func RegisterTradingServiceHandlerClient(ctx context.Context, mux *runtime.Serve
 		}
 		forward_TradingService_GetBankProfitTimeseries_0(annotatedContext, mux, outboundMarshaler, w, req, resp, mux.GetForwardResponseOptions()...)
 	})
+	mux.Handle(http.MethodPost, pattern_TradingService_RunOTCExpirySweep_0, func(w http.ResponseWriter, req *http.Request, pathParams map[string]string) {
+		ctx, cancel := context.WithCancel(req.Context())
+		defer cancel()
+		inboundMarshaler, outboundMarshaler := runtime.MarshalerForRequest(mux, req)
+		annotatedContext, err := runtime.AnnotateContext(ctx, mux, req, "/banka.trading.v1.TradingService/RunOTCExpirySweep", runtime.WithHTTPPathPattern("/api/v1/otc/run-expiry-sweep"))
+		if err != nil {
+			runtime.HTTPError(ctx, mux, outboundMarshaler, w, req, err)
+			return
+		}
+		resp, md, err := request_TradingService_RunOTCExpirySweep_0(annotatedContext, inboundMarshaler, client, req, pathParams)
+		annotatedContext = runtime.NewServerMetadataContext(annotatedContext, md)
+		if err != nil {
+			runtime.HTTPError(annotatedContext, mux, outboundMarshaler, w, req, err)
+			return
+		}
+		forward_TradingService_RunOTCExpirySweep_0(annotatedContext, mux, outboundMarshaler, w, req, resp, mux.GetForwardResponseOptions()...)
+	})
+	mux.Handle(http.MethodPost, pattern_TradingService_RunOptionsRefresh_0, func(w http.ResponseWriter, req *http.Request, pathParams map[string]string) {
+		ctx, cancel := context.WithCancel(req.Context())
+		defer cancel()
+		inboundMarshaler, outboundMarshaler := runtime.MarshalerForRequest(mux, req)
+		annotatedContext, err := runtime.AnnotateContext(ctx, mux, req, "/banka.trading.v1.TradingService/RunOptionsRefresh", runtime.WithHTTPPathPattern("/api/v1/options/run-refresh"))
+		if err != nil {
+			runtime.HTTPError(ctx, mux, outboundMarshaler, w, req, err)
+			return
+		}
+		resp, md, err := request_TradingService_RunOptionsRefresh_0(annotatedContext, inboundMarshaler, client, req, pathParams)
+		annotatedContext = runtime.NewServerMetadataContext(annotatedContext, md)
+		if err != nil {
+			runtime.HTTPError(annotatedContext, mux, outboundMarshaler, w, req, err)
+			return
+		}
+		forward_TradingService_RunOptionsRefresh_0(annotatedContext, mux, outboundMarshaler, w, req, resp, mux.GetForwardResponseOptions()...)
+	})
+	mux.Handle(http.MethodPost, pattern_TradingService_RunMarketDataRefresh_0, func(w http.ResponseWriter, req *http.Request, pathParams map[string]string) {
+		ctx, cancel := context.WithCancel(req.Context())
+		defer cancel()
+		inboundMarshaler, outboundMarshaler := runtime.MarshalerForRequest(mux, req)
+		annotatedContext, err := runtime.AnnotateContext(ctx, mux, req, "/banka.trading.v1.TradingService/RunMarketDataRefresh", runtime.WithHTTPPathPattern("/api/v1/market-data/run-refresh"))
+		if err != nil {
+			runtime.HTTPError(ctx, mux, outboundMarshaler, w, req, err)
+			return
+		}
+		resp, md, err := request_TradingService_RunMarketDataRefresh_0(annotatedContext, inboundMarshaler, client, req, pathParams)
+		annotatedContext = runtime.NewServerMetadataContext(annotatedContext, md)
+		if err != nil {
+			runtime.HTTPError(annotatedContext, mux, outboundMarshaler, w, req, err)
+			return
+		}
+		forward_TradingService_RunMarketDataRefresh_0(annotatedContext, mux, outboundMarshaler, w, req, resp, mux.GetForwardResponseOptions()...)
+	})
+	mux.Handle(http.MethodPost, pattern_TradingService_RunStockHistoryBackfill_0, func(w http.ResponseWriter, req *http.Request, pathParams map[string]string) {
+		ctx, cancel := context.WithCancel(req.Context())
+		defer cancel()
+		inboundMarshaler, outboundMarshaler := runtime.MarshalerForRequest(mux, req)
+		annotatedContext, err := runtime.AnnotateContext(ctx, mux, req, "/banka.trading.v1.TradingService/RunStockHistoryBackfill", runtime.WithHTTPPathPattern("/api/v1/market-data/run-history-backfill"))
+		if err != nil {
+			runtime.HTTPError(ctx, mux, outboundMarshaler, w, req, err)
+			return
+		}
+		resp, md, err := request_TradingService_RunStockHistoryBackfill_0(annotatedContext, inboundMarshaler, client, req, pathParams)
+		annotatedContext = runtime.NewServerMetadataContext(annotatedContext, md)
+		if err != nil {
+			runtime.HTTPError(annotatedContext, mux, outboundMarshaler, w, req, err)
+			return
+		}
+		forward_TradingService_RunStockHistoryBackfill_0(annotatedContext, mux, outboundMarshaler, w, req, resp, mux.GetForwardResponseOptions()...)
+	})
+	mux.Handle(http.MethodPost, pattern_TradingService_RunFundPerformanceSnapshot_0, func(w http.ResponseWriter, req *http.Request, pathParams map[string]string) {
+		ctx, cancel := context.WithCancel(req.Context())
+		defer cancel()
+		inboundMarshaler, outboundMarshaler := runtime.MarshalerForRequest(mux, req)
+		annotatedContext, err := runtime.AnnotateContext(ctx, mux, req, "/banka.trading.v1.TradingService/RunFundPerformanceSnapshot", runtime.WithHTTPPathPattern("/api/v1/funds/run-performance-snapshot"))
+		if err != nil {
+			runtime.HTTPError(ctx, mux, outboundMarshaler, w, req, err)
+			return
+		}
+		resp, md, err := request_TradingService_RunFundPerformanceSnapshot_0(annotatedContext, inboundMarshaler, client, req, pathParams)
+		annotatedContext = runtime.NewServerMetadataContext(annotatedContext, md)
+		if err != nil {
+			runtime.HTTPError(annotatedContext, mux, outboundMarshaler, w, req, err)
+			return
+		}
+		forward_TradingService_RunFundPerformanceSnapshot_0(annotatedContext, mux, outboundMarshaler, w, req, resp, mux.GetForwardResponseOptions()...)
+	})
 	return nil
 }
 
 var (
-	pattern_TradingService_GetActuaryInfo_0          = runtime.MustPattern(runtime.NewPattern(1, []int{2, 0, 2, 1, 2, 2, 1, 0, 4, 1, 5, 3}, []string{"api", "v1", "actuaries", "employee_id"}, ""))
-	pattern_TradingService_ListActuaries_0           = runtime.MustPattern(runtime.NewPattern(1, []int{2, 0, 2, 1, 2, 2}, []string{"api", "v1", "actuaries"}, ""))
-	pattern_TradingService_UpsertActuaryInfo_0       = runtime.MustPattern(runtime.NewPattern(1, []int{2, 0, 2, 1, 2, 2, 1, 0, 4, 1, 5, 3}, []string{"api", "v1", "actuaries", "employee_id"}, ""))
-	pattern_TradingService_UpdateActuaryLimit_0      = runtime.MustPattern(runtime.NewPattern(1, []int{2, 0, 2, 1, 2, 2, 1, 0, 4, 1, 5, 3, 2, 4}, []string{"api", "v1", "actuaries", "employee_id", "limit"}, ""))
-	pattern_TradingService_ResetActuaryUsedLimit_0   = runtime.MustPattern(runtime.NewPattern(1, []int{2, 0, 2, 1, 2, 2, 1, 0, 4, 1, 5, 3, 2, 4, 2, 5}, []string{"api", "v1", "actuaries", "employee_id", "used-limit", "reset"}, ""))
-	pattern_TradingService_SetActuaryNeedApproval_0  = runtime.MustPattern(runtime.NewPattern(1, []int{2, 0, 2, 1, 2, 2, 1, 0, 4, 1, 5, 3, 2, 4}, []string{"api", "v1", "actuaries", "employee_id", "need-approval"}, ""))
-	pattern_TradingService_RunDailyResetActuaries_0  = runtime.MustPattern(runtime.NewPattern(1, []int{2, 0, 2, 1, 2, 2, 2, 3}, []string{"api", "v1", "actuaries", "reset-job"}, ""))
-	pattern_TradingService_ListExchanges_0           = runtime.MustPattern(runtime.NewPattern(1, []int{2, 0, 2, 1, 2, 2}, []string{"api", "v1", "exchanges"}, ""))
-	pattern_TradingService_UpsertExchange_0          = runtime.MustPattern(runtime.NewPattern(1, []int{2, 0, 2, 1, 2, 2, 1, 0, 4, 1, 5, 3}, []string{"api", "v1", "exchanges", "mic"}, ""))
-	pattern_TradingService_SetExchangeOverride_0     = runtime.MustPattern(runtime.NewPattern(1, []int{2, 0, 2, 1, 2, 2, 1, 0, 4, 1, 5, 3, 2, 4}, []string{"api", "v1", "exchanges", "mic", "override"}, ""))
-	pattern_TradingService_UpsertSecurity_0          = runtime.MustPattern(runtime.NewPattern(1, []int{2, 0, 2, 1, 2, 2}, []string{"api", "v1", "securities"}, ""))
-	pattern_TradingService_ListSecurities_0          = runtime.MustPattern(runtime.NewPattern(1, []int{2, 0, 2, 1, 2, 2}, []string{"api", "v1", "securities"}, ""))
-	pattern_TradingService_GetSecurity_0             = runtime.MustPattern(runtime.NewPattern(1, []int{2, 0, 2, 1, 2, 2, 1, 0, 4, 1, 5, 3}, []string{"api", "v1", "securities", "id"}, ""))
-	pattern_TradingService_UpsertListing_0           = runtime.MustPattern(runtime.NewPattern(1, []int{2, 0, 2, 1, 2, 2}, []string{"api", "v1", "listings"}, ""))
-	pattern_TradingService_ListListings_0            = runtime.MustPattern(runtime.NewPattern(1, []int{2, 0, 2, 1, 2, 2}, []string{"api", "v1", "listings"}, ""))
-	pattern_TradingService_GetListing_0              = runtime.MustPattern(runtime.NewPattern(1, []int{2, 0, 2, 1, 2, 2, 1, 0, 4, 1, 5, 3}, []string{"api", "v1", "listings", "id"}, ""))
-	pattern_TradingService_GetOptionChain_0          = runtime.MustPattern(runtime.NewPattern(1, []int{2, 0, 2, 1, 2, 2, 1, 0, 4, 1, 5, 3, 2, 4}, []string{"api", "v1", "securities", "stock_id", "option-chain"}, ""))
-	pattern_TradingService_GetListingDailyHistory_0  = runtime.MustPattern(runtime.NewPattern(1, []int{2, 0, 2, 1, 2, 2, 1, 0, 4, 1, 5, 3, 2, 4}, []string{"api", "v1", "listings", "listing_id", "history"}, ""))
-	pattern_TradingService_CreateOrder_0             = runtime.MustPattern(runtime.NewPattern(1, []int{2, 0, 2, 1, 2, 2}, []string{"api", "v1", "orders"}, ""))
-	pattern_TradingService_ListOrders_0              = runtime.MustPattern(runtime.NewPattern(1, []int{2, 0, 2, 1, 2, 2}, []string{"api", "v1", "orders"}, ""))
-	pattern_TradingService_GetOrder_0                = runtime.MustPattern(runtime.NewPattern(1, []int{2, 0, 2, 1, 2, 2, 1, 0, 4, 1, 5, 3}, []string{"api", "v1", "orders", "id"}, ""))
-	pattern_TradingService_ApproveOrder_0            = runtime.MustPattern(runtime.NewPattern(1, []int{2, 0, 2, 1, 2, 2, 1, 0, 4, 1, 5, 3, 2, 4}, []string{"api", "v1", "orders", "id", "approve"}, ""))
-	pattern_TradingService_DeclineOrder_0            = runtime.MustPattern(runtime.NewPattern(1, []int{2, 0, 2, 1, 2, 2, 1, 0, 4, 1, 5, 3, 2, 4}, []string{"api", "v1", "orders", "id", "decline"}, ""))
-	pattern_TradingService_CancelOrder_0             = runtime.MustPattern(runtime.NewPattern(1, []int{2, 0, 2, 1, 2, 2, 1, 0, 4, 1, 5, 3, 2, 4}, []string{"api", "v1", "orders", "id", "cancel"}, ""))
-	pattern_TradingService_ListHoldings_0            = runtime.MustPattern(runtime.NewPattern(1, []int{2, 0, 2, 1, 2, 2}, []string{"api", "v1", "portfolio"}, ""))
-	pattern_TradingService_SetPublicCount_0          = runtime.MustPattern(runtime.NewPattern(1, []int{2, 0, 2, 1, 2, 2, 1, 0, 4, 1, 5, 3, 2, 4}, []string{"api", "v1", "portfolio", "id", "public-count"}, ""))
-	pattern_TradingService_ExerciseOption_0          = runtime.MustPattern(runtime.NewPattern(1, []int{2, 0, 2, 1, 2, 2, 1, 0, 4, 1, 5, 3, 2, 4}, []string{"api", "v1", "portfolio", "holding_id", "exercise"}, ""))
-	pattern_TradingService_ListTaxPositions_0        = runtime.MustPattern(runtime.NewPattern(1, []int{2, 0, 2, 1, 2, 2, 2, 3}, []string{"api", "v1", "tax", "positions"}, ""))
-	pattern_TradingService_RunTax_0                  = runtime.MustPattern(runtime.NewPattern(1, []int{2, 0, 2, 1, 2, 2, 2, 3}, []string{"api", "v1", "tax", "run"}, ""))
-	pattern_TradingService_ListRealizedPnL_0         = runtime.MustPattern(runtime.NewPattern(1, []int{2, 0, 2, 1, 2, 2, 2, 3}, []string{"api", "v1", "tax", "realized"}, ""))
-	pattern_TradingService_ListPublicHoldings_0      = runtime.MustPattern(runtime.NewPattern(1, []int{2, 0, 2, 1, 2, 2, 2, 3}, []string{"api", "v1", "otc", "discovery"}, ""))
-	pattern_TradingService_CreateOTCOffer_0          = runtime.MustPattern(runtime.NewPattern(1, []int{2, 0, 2, 1, 2, 2, 2, 3}, []string{"api", "v1", "otc", "offers"}, ""))
-	pattern_TradingService_CounterOfferOTC_0         = runtime.MustPattern(runtime.NewPattern(1, []int{2, 0, 2, 1, 2, 2, 2, 3, 1, 0, 4, 1, 5, 4, 2, 5}, []string{"api", "v1", "otc", "offers", "thread_id", "counter"}, ""))
-	pattern_TradingService_WithdrawOTCOffer_0        = runtime.MustPattern(runtime.NewPattern(1, []int{2, 0, 2, 1, 2, 2, 2, 3, 1, 0, 4, 1, 5, 4, 2, 5}, []string{"api", "v1", "otc", "offers", "thread_id", "withdraw"}, ""))
-	pattern_TradingService_ListOTCThreads_0          = runtime.MustPattern(runtime.NewPattern(1, []int{2, 0, 2, 1, 2, 2, 2, 3}, []string{"api", "v1", "otc", "offers"}, ""))
-	pattern_TradingService_GetOTCThread_0            = runtime.MustPattern(runtime.NewPattern(1, []int{2, 0, 2, 1, 2, 2, 2, 3, 1, 0, 4, 1, 5, 4}, []string{"api", "v1", "otc", "offers", "thread_id"}, ""))
-	pattern_TradingService_AcceptOTCOffer_0          = runtime.MustPattern(runtime.NewPattern(1, []int{2, 0, 2, 1, 2, 2, 2, 3, 1, 0, 4, 1, 5, 4, 2, 5}, []string{"api", "v1", "otc", "offers", "thread_id", "accept"}, ""))
-	pattern_TradingService_ListOTCContracts_0        = runtime.MustPattern(runtime.NewPattern(1, []int{2, 0, 2, 1, 2, 2, 2, 3}, []string{"api", "v1", "otc", "contracts"}, ""))
-	pattern_TradingService_GetOTCContract_0          = runtime.MustPattern(runtime.NewPattern(1, []int{2, 0, 2, 1, 2, 2, 2, 3, 1, 0, 4, 1, 5, 4}, []string{"api", "v1", "otc", "contracts", "id"}, ""))
-	pattern_TradingService_ExerciseOTCContract_0     = runtime.MustPattern(runtime.NewPattern(1, []int{2, 0, 2, 1, 2, 2, 2, 3, 1, 0, 4, 1, 5, 4, 2, 5}, []string{"api", "v1", "otc", "contracts", "id", "exercise"}, ""))
-	pattern_TradingService_ListFunds_0               = runtime.MustPattern(runtime.NewPattern(1, []int{2, 0, 2, 1, 2, 2}, []string{"api", "v1", "funds"}, ""))
-	pattern_TradingService_GetFund_0                 = runtime.MustPattern(runtime.NewPattern(1, []int{2, 0, 2, 1, 2, 2, 1, 0, 4, 1, 5, 3}, []string{"api", "v1", "funds", "id"}, ""))
-	pattern_TradingService_CreateFund_0              = runtime.MustPattern(runtime.NewPattern(1, []int{2, 0, 2, 1, 2, 2}, []string{"api", "v1", "funds"}, ""))
-	pattern_TradingService_InvestInFund_0            = runtime.MustPattern(runtime.NewPattern(1, []int{2, 0, 2, 1, 2, 2, 1, 0, 4, 1, 5, 3, 2, 4}, []string{"api", "v1", "funds", "id", "invest"}, ""))
-	pattern_TradingService_WithdrawFromFund_0        = runtime.MustPattern(runtime.NewPattern(1, []int{2, 0, 2, 1, 2, 2, 1, 0, 4, 1, 5, 3, 2, 4}, []string{"api", "v1", "funds", "id", "withdraw"}, ""))
-	pattern_TradingService_ListFundPositions_0       = runtime.MustPattern(runtime.NewPattern(1, []int{2, 0, 2, 1, 2, 2, 2, 3}, []string{"api", "v1", "funds", "positions"}, ""))
-	pattern_TradingService_GetFundPerformance_0      = runtime.MustPattern(runtime.NewPattern(1, []int{2, 0, 2, 1, 2, 2, 1, 0, 4, 1, 5, 3, 2, 4}, []string{"api", "v1", "funds", "id", "performance"}, ""))
-	pattern_TradingService_ListFundTransactions_0    = runtime.MustPattern(runtime.NewPattern(1, []int{2, 0, 2, 1, 2, 2, 1, 0, 4, 1, 5, 3, 2, 4}, []string{"api", "v1", "funds", "id", "transactions"}, ""))
-	pattern_TradingService_ListActuaryPerformances_0 = runtime.MustPattern(runtime.NewPattern(1, []int{2, 0, 2, 1, 2, 2, 2, 3}, []string{"api", "v1", "profit", "actuaries"}, ""))
-	pattern_TradingService_ListBankFundPositions_0   = runtime.MustPattern(runtime.NewPattern(1, []int{2, 0, 2, 1, 2, 2, 2, 3}, []string{"api", "v1", "profit", "funds"}, ""))
-	pattern_TradingService_GetBankProfitTimeseries_0 = runtime.MustPattern(runtime.NewPattern(1, []int{2, 0, 2, 1, 2, 2, 2, 3}, []string{"api", "v1", "profit", "timeseries"}, ""))
+	pattern_TradingService_GetActuaryInfo_0             = runtime.MustPattern(runtime.NewPattern(1, []int{2, 0, 2, 1, 2, 2, 1, 0, 4, 1, 5, 3}, []string{"api", "v1", "actuaries", "employee_id"}, ""))
+	pattern_TradingService_ListActuaries_0              = runtime.MustPattern(runtime.NewPattern(1, []int{2, 0, 2, 1, 2, 2}, []string{"api", "v1", "actuaries"}, ""))
+	pattern_TradingService_UpsertActuaryInfo_0          = runtime.MustPattern(runtime.NewPattern(1, []int{2, 0, 2, 1, 2, 2, 1, 0, 4, 1, 5, 3}, []string{"api", "v1", "actuaries", "employee_id"}, ""))
+	pattern_TradingService_UpdateActuaryLimit_0         = runtime.MustPattern(runtime.NewPattern(1, []int{2, 0, 2, 1, 2, 2, 1, 0, 4, 1, 5, 3, 2, 4}, []string{"api", "v1", "actuaries", "employee_id", "limit"}, ""))
+	pattern_TradingService_ResetActuaryUsedLimit_0      = runtime.MustPattern(runtime.NewPattern(1, []int{2, 0, 2, 1, 2, 2, 1, 0, 4, 1, 5, 3, 2, 4, 2, 5}, []string{"api", "v1", "actuaries", "employee_id", "used-limit", "reset"}, ""))
+	pattern_TradingService_SetActuaryNeedApproval_0     = runtime.MustPattern(runtime.NewPattern(1, []int{2, 0, 2, 1, 2, 2, 1, 0, 4, 1, 5, 3, 2, 4}, []string{"api", "v1", "actuaries", "employee_id", "need-approval"}, ""))
+	pattern_TradingService_RunDailyResetActuaries_0     = runtime.MustPattern(runtime.NewPattern(1, []int{2, 0, 2, 1, 2, 2, 2, 3}, []string{"api", "v1", "actuaries", "reset-job"}, ""))
+	pattern_TradingService_ListExchanges_0              = runtime.MustPattern(runtime.NewPattern(1, []int{2, 0, 2, 1, 2, 2}, []string{"api", "v1", "exchanges"}, ""))
+	pattern_TradingService_UpsertExchange_0             = runtime.MustPattern(runtime.NewPattern(1, []int{2, 0, 2, 1, 2, 2, 1, 0, 4, 1, 5, 3}, []string{"api", "v1", "exchanges", "mic"}, ""))
+	pattern_TradingService_SetExchangeOverride_0        = runtime.MustPattern(runtime.NewPattern(1, []int{2, 0, 2, 1, 2, 2, 1, 0, 4, 1, 5, 3, 2, 4}, []string{"api", "v1", "exchanges", "mic", "override"}, ""))
+	pattern_TradingService_UpsertSecurity_0             = runtime.MustPattern(runtime.NewPattern(1, []int{2, 0, 2, 1, 2, 2}, []string{"api", "v1", "securities"}, ""))
+	pattern_TradingService_ListSecurities_0             = runtime.MustPattern(runtime.NewPattern(1, []int{2, 0, 2, 1, 2, 2}, []string{"api", "v1", "securities"}, ""))
+	pattern_TradingService_GetSecurity_0                = runtime.MustPattern(runtime.NewPattern(1, []int{2, 0, 2, 1, 2, 2, 1, 0, 4, 1, 5, 3}, []string{"api", "v1", "securities", "id"}, ""))
+	pattern_TradingService_UpsertListing_0              = runtime.MustPattern(runtime.NewPattern(1, []int{2, 0, 2, 1, 2, 2}, []string{"api", "v1", "listings"}, ""))
+	pattern_TradingService_ListListings_0               = runtime.MustPattern(runtime.NewPattern(1, []int{2, 0, 2, 1, 2, 2}, []string{"api", "v1", "listings"}, ""))
+	pattern_TradingService_GetListing_0                 = runtime.MustPattern(runtime.NewPattern(1, []int{2, 0, 2, 1, 2, 2, 1, 0, 4, 1, 5, 3}, []string{"api", "v1", "listings", "id"}, ""))
+	pattern_TradingService_GetOptionChain_0             = runtime.MustPattern(runtime.NewPattern(1, []int{2, 0, 2, 1, 2, 2, 1, 0, 4, 1, 5, 3, 2, 4}, []string{"api", "v1", "securities", "stock_id", "option-chain"}, ""))
+	pattern_TradingService_GetListingDailyHistory_0     = runtime.MustPattern(runtime.NewPattern(1, []int{2, 0, 2, 1, 2, 2, 1, 0, 4, 1, 5, 3, 2, 4}, []string{"api", "v1", "listings", "listing_id", "history"}, ""))
+	pattern_TradingService_CreateOrder_0                = runtime.MustPattern(runtime.NewPattern(1, []int{2, 0, 2, 1, 2, 2}, []string{"api", "v1", "orders"}, ""))
+	pattern_TradingService_ListOrders_0                 = runtime.MustPattern(runtime.NewPattern(1, []int{2, 0, 2, 1, 2, 2}, []string{"api", "v1", "orders"}, ""))
+	pattern_TradingService_GetOrder_0                   = runtime.MustPattern(runtime.NewPattern(1, []int{2, 0, 2, 1, 2, 2, 1, 0, 4, 1, 5, 3}, []string{"api", "v1", "orders", "id"}, ""))
+	pattern_TradingService_ApproveOrder_0               = runtime.MustPattern(runtime.NewPattern(1, []int{2, 0, 2, 1, 2, 2, 1, 0, 4, 1, 5, 3, 2, 4}, []string{"api", "v1", "orders", "id", "approve"}, ""))
+	pattern_TradingService_DeclineOrder_0               = runtime.MustPattern(runtime.NewPattern(1, []int{2, 0, 2, 1, 2, 2, 1, 0, 4, 1, 5, 3, 2, 4}, []string{"api", "v1", "orders", "id", "decline"}, ""))
+	pattern_TradingService_CancelOrder_0                = runtime.MustPattern(runtime.NewPattern(1, []int{2, 0, 2, 1, 2, 2, 1, 0, 4, 1, 5, 3, 2, 4}, []string{"api", "v1", "orders", "id", "cancel"}, ""))
+	pattern_TradingService_ListHoldings_0               = runtime.MustPattern(runtime.NewPattern(1, []int{2, 0, 2, 1, 2, 2}, []string{"api", "v1", "portfolio"}, ""))
+	pattern_TradingService_SetPublicCount_0             = runtime.MustPattern(runtime.NewPattern(1, []int{2, 0, 2, 1, 2, 2, 1, 0, 4, 1, 5, 3, 2, 4}, []string{"api", "v1", "portfolio", "id", "public-count"}, ""))
+	pattern_TradingService_ExerciseOption_0             = runtime.MustPattern(runtime.NewPattern(1, []int{2, 0, 2, 1, 2, 2, 1, 0, 4, 1, 5, 3, 2, 4}, []string{"api", "v1", "portfolio", "holding_id", "exercise"}, ""))
+	pattern_TradingService_ListTaxPositions_0           = runtime.MustPattern(runtime.NewPattern(1, []int{2, 0, 2, 1, 2, 2, 2, 3}, []string{"api", "v1", "tax", "positions"}, ""))
+	pattern_TradingService_RunTax_0                     = runtime.MustPattern(runtime.NewPattern(1, []int{2, 0, 2, 1, 2, 2, 2, 3}, []string{"api", "v1", "tax", "run"}, ""))
+	pattern_TradingService_ListRealizedPnL_0            = runtime.MustPattern(runtime.NewPattern(1, []int{2, 0, 2, 1, 2, 2, 2, 3}, []string{"api", "v1", "tax", "realized"}, ""))
+	pattern_TradingService_ListPublicHoldings_0         = runtime.MustPattern(runtime.NewPattern(1, []int{2, 0, 2, 1, 2, 2, 2, 3}, []string{"api", "v1", "otc", "discovery"}, ""))
+	pattern_TradingService_CreateOTCOffer_0             = runtime.MustPattern(runtime.NewPattern(1, []int{2, 0, 2, 1, 2, 2, 2, 3}, []string{"api", "v1", "otc", "offers"}, ""))
+	pattern_TradingService_CounterOfferOTC_0            = runtime.MustPattern(runtime.NewPattern(1, []int{2, 0, 2, 1, 2, 2, 2, 3, 1, 0, 4, 1, 5, 4, 2, 5}, []string{"api", "v1", "otc", "offers", "thread_id", "counter"}, ""))
+	pattern_TradingService_WithdrawOTCOffer_0           = runtime.MustPattern(runtime.NewPattern(1, []int{2, 0, 2, 1, 2, 2, 2, 3, 1, 0, 4, 1, 5, 4, 2, 5}, []string{"api", "v1", "otc", "offers", "thread_id", "withdraw"}, ""))
+	pattern_TradingService_ListOTCThreads_0             = runtime.MustPattern(runtime.NewPattern(1, []int{2, 0, 2, 1, 2, 2, 2, 3}, []string{"api", "v1", "otc", "offers"}, ""))
+	pattern_TradingService_GetOTCThread_0               = runtime.MustPattern(runtime.NewPattern(1, []int{2, 0, 2, 1, 2, 2, 2, 3, 1, 0, 4, 1, 5, 4}, []string{"api", "v1", "otc", "offers", "thread_id"}, ""))
+	pattern_TradingService_AcceptOTCOffer_0             = runtime.MustPattern(runtime.NewPattern(1, []int{2, 0, 2, 1, 2, 2, 2, 3, 1, 0, 4, 1, 5, 4, 2, 5}, []string{"api", "v1", "otc", "offers", "thread_id", "accept"}, ""))
+	pattern_TradingService_ListOTCContracts_0           = runtime.MustPattern(runtime.NewPattern(1, []int{2, 0, 2, 1, 2, 2, 2, 3}, []string{"api", "v1", "otc", "contracts"}, ""))
+	pattern_TradingService_GetOTCContract_0             = runtime.MustPattern(runtime.NewPattern(1, []int{2, 0, 2, 1, 2, 2, 2, 3, 1, 0, 4, 1, 5, 4}, []string{"api", "v1", "otc", "contracts", "id"}, ""))
+	pattern_TradingService_ExerciseOTCContract_0        = runtime.MustPattern(runtime.NewPattern(1, []int{2, 0, 2, 1, 2, 2, 2, 3, 1, 0, 4, 1, 5, 4, 2, 5}, []string{"api", "v1", "otc", "contracts", "id", "exercise"}, ""))
+	pattern_TradingService_ListFunds_0                  = runtime.MustPattern(runtime.NewPattern(1, []int{2, 0, 2, 1, 2, 2}, []string{"api", "v1", "funds"}, ""))
+	pattern_TradingService_GetFund_0                    = runtime.MustPattern(runtime.NewPattern(1, []int{2, 0, 2, 1, 2, 2, 1, 0, 4, 1, 5, 3}, []string{"api", "v1", "funds", "id"}, ""))
+	pattern_TradingService_CreateFund_0                 = runtime.MustPattern(runtime.NewPattern(1, []int{2, 0, 2, 1, 2, 2}, []string{"api", "v1", "funds"}, ""))
+	pattern_TradingService_InvestInFund_0               = runtime.MustPattern(runtime.NewPattern(1, []int{2, 0, 2, 1, 2, 2, 1, 0, 4, 1, 5, 3, 2, 4}, []string{"api", "v1", "funds", "id", "invest"}, ""))
+	pattern_TradingService_WithdrawFromFund_0           = runtime.MustPattern(runtime.NewPattern(1, []int{2, 0, 2, 1, 2, 2, 1, 0, 4, 1, 5, 3, 2, 4}, []string{"api", "v1", "funds", "id", "withdraw"}, ""))
+	pattern_TradingService_ListFundPositions_0          = runtime.MustPattern(runtime.NewPattern(1, []int{2, 0, 2, 1, 2, 2, 2, 3}, []string{"api", "v1", "funds", "positions"}, ""))
+	pattern_TradingService_GetFundPerformance_0         = runtime.MustPattern(runtime.NewPattern(1, []int{2, 0, 2, 1, 2, 2, 1, 0, 4, 1, 5, 3, 2, 4}, []string{"api", "v1", "funds", "id", "performance"}, ""))
+	pattern_TradingService_ListFundTransactions_0       = runtime.MustPattern(runtime.NewPattern(1, []int{2, 0, 2, 1, 2, 2, 1, 0, 4, 1, 5, 3, 2, 4}, []string{"api", "v1", "funds", "id", "transactions"}, ""))
+	pattern_TradingService_ListActuaryPerformances_0    = runtime.MustPattern(runtime.NewPattern(1, []int{2, 0, 2, 1, 2, 2, 2, 3}, []string{"api", "v1", "profit", "actuaries"}, ""))
+	pattern_TradingService_ListBankFundPositions_0      = runtime.MustPattern(runtime.NewPattern(1, []int{2, 0, 2, 1, 2, 2, 2, 3}, []string{"api", "v1", "profit", "funds"}, ""))
+	pattern_TradingService_GetBankProfitTimeseries_0    = runtime.MustPattern(runtime.NewPattern(1, []int{2, 0, 2, 1, 2, 2, 2, 3}, []string{"api", "v1", "profit", "timeseries"}, ""))
+	pattern_TradingService_RunOTCExpirySweep_0          = runtime.MustPattern(runtime.NewPattern(1, []int{2, 0, 2, 1, 2, 2, 2, 3}, []string{"api", "v1", "otc", "run-expiry-sweep"}, ""))
+	pattern_TradingService_RunOptionsRefresh_0          = runtime.MustPattern(runtime.NewPattern(1, []int{2, 0, 2, 1, 2, 2, 2, 3}, []string{"api", "v1", "options", "run-refresh"}, ""))
+	pattern_TradingService_RunMarketDataRefresh_0       = runtime.MustPattern(runtime.NewPattern(1, []int{2, 0, 2, 1, 2, 2, 2, 3}, []string{"api", "v1", "market-data", "run-refresh"}, ""))
+	pattern_TradingService_RunStockHistoryBackfill_0    = runtime.MustPattern(runtime.NewPattern(1, []int{2, 0, 2, 1, 2, 2, 2, 3}, []string{"api", "v1", "market-data", "run-history-backfill"}, ""))
+	pattern_TradingService_RunFundPerformanceSnapshot_0 = runtime.MustPattern(runtime.NewPattern(1, []int{2, 0, 2, 1, 2, 2, 2, 3}, []string{"api", "v1", "funds", "run-performance-snapshot"}, ""))
 )
 
 var (
-	forward_TradingService_GetActuaryInfo_0          = runtime.ForwardResponseMessage
-	forward_TradingService_ListActuaries_0           = runtime.ForwardResponseMessage
-	forward_TradingService_UpsertActuaryInfo_0       = runtime.ForwardResponseMessage
-	forward_TradingService_UpdateActuaryLimit_0      = runtime.ForwardResponseMessage
-	forward_TradingService_ResetActuaryUsedLimit_0   = runtime.ForwardResponseMessage
-	forward_TradingService_SetActuaryNeedApproval_0  = runtime.ForwardResponseMessage
-	forward_TradingService_RunDailyResetActuaries_0  = runtime.ForwardResponseMessage
-	forward_TradingService_ListExchanges_0           = runtime.ForwardResponseMessage
-	forward_TradingService_UpsertExchange_0          = runtime.ForwardResponseMessage
-	forward_TradingService_SetExchangeOverride_0     = runtime.ForwardResponseMessage
-	forward_TradingService_UpsertSecurity_0          = runtime.ForwardResponseMessage
-	forward_TradingService_ListSecurities_0          = runtime.ForwardResponseMessage
-	forward_TradingService_GetSecurity_0             = runtime.ForwardResponseMessage
-	forward_TradingService_UpsertListing_0           = runtime.ForwardResponseMessage
-	forward_TradingService_ListListings_0            = runtime.ForwardResponseMessage
-	forward_TradingService_GetListing_0              = runtime.ForwardResponseMessage
-	forward_TradingService_GetOptionChain_0          = runtime.ForwardResponseMessage
-	forward_TradingService_GetListingDailyHistory_0  = runtime.ForwardResponseMessage
-	forward_TradingService_CreateOrder_0             = runtime.ForwardResponseMessage
-	forward_TradingService_ListOrders_0              = runtime.ForwardResponseMessage
-	forward_TradingService_GetOrder_0                = runtime.ForwardResponseMessage
-	forward_TradingService_ApproveOrder_0            = runtime.ForwardResponseMessage
-	forward_TradingService_DeclineOrder_0            = runtime.ForwardResponseMessage
-	forward_TradingService_CancelOrder_0             = runtime.ForwardResponseMessage
-	forward_TradingService_ListHoldings_0            = runtime.ForwardResponseMessage
-	forward_TradingService_SetPublicCount_0          = runtime.ForwardResponseMessage
-	forward_TradingService_ExerciseOption_0          = runtime.ForwardResponseMessage
-	forward_TradingService_ListTaxPositions_0        = runtime.ForwardResponseMessage
-	forward_TradingService_RunTax_0                  = runtime.ForwardResponseMessage
-	forward_TradingService_ListRealizedPnL_0         = runtime.ForwardResponseMessage
-	forward_TradingService_ListPublicHoldings_0      = runtime.ForwardResponseMessage
-	forward_TradingService_CreateOTCOffer_0          = runtime.ForwardResponseMessage
-	forward_TradingService_CounterOfferOTC_0         = runtime.ForwardResponseMessage
-	forward_TradingService_WithdrawOTCOffer_0        = runtime.ForwardResponseMessage
-	forward_TradingService_ListOTCThreads_0          = runtime.ForwardResponseMessage
-	forward_TradingService_GetOTCThread_0            = runtime.ForwardResponseMessage
-	forward_TradingService_AcceptOTCOffer_0          = runtime.ForwardResponseMessage
-	forward_TradingService_ListOTCContracts_0        = runtime.ForwardResponseMessage
-	forward_TradingService_GetOTCContract_0          = runtime.ForwardResponseMessage
-	forward_TradingService_ExerciseOTCContract_0     = runtime.ForwardResponseMessage
-	forward_TradingService_ListFunds_0               = runtime.ForwardResponseMessage
-	forward_TradingService_GetFund_0                 = runtime.ForwardResponseMessage
-	forward_TradingService_CreateFund_0              = runtime.ForwardResponseMessage
-	forward_TradingService_InvestInFund_0            = runtime.ForwardResponseMessage
-	forward_TradingService_WithdrawFromFund_0        = runtime.ForwardResponseMessage
-	forward_TradingService_ListFundPositions_0       = runtime.ForwardResponseMessage
-	forward_TradingService_GetFundPerformance_0      = runtime.ForwardResponseMessage
-	forward_TradingService_ListFundTransactions_0    = runtime.ForwardResponseMessage
-	forward_TradingService_ListActuaryPerformances_0 = runtime.ForwardResponseMessage
-	forward_TradingService_ListBankFundPositions_0   = runtime.ForwardResponseMessage
-	forward_TradingService_GetBankProfitTimeseries_0 = runtime.ForwardResponseMessage
+	forward_TradingService_GetActuaryInfo_0             = runtime.ForwardResponseMessage
+	forward_TradingService_ListActuaries_0              = runtime.ForwardResponseMessage
+	forward_TradingService_UpsertActuaryInfo_0          = runtime.ForwardResponseMessage
+	forward_TradingService_UpdateActuaryLimit_0         = runtime.ForwardResponseMessage
+	forward_TradingService_ResetActuaryUsedLimit_0      = runtime.ForwardResponseMessage
+	forward_TradingService_SetActuaryNeedApproval_0     = runtime.ForwardResponseMessage
+	forward_TradingService_RunDailyResetActuaries_0     = runtime.ForwardResponseMessage
+	forward_TradingService_ListExchanges_0              = runtime.ForwardResponseMessage
+	forward_TradingService_UpsertExchange_0             = runtime.ForwardResponseMessage
+	forward_TradingService_SetExchangeOverride_0        = runtime.ForwardResponseMessage
+	forward_TradingService_UpsertSecurity_0             = runtime.ForwardResponseMessage
+	forward_TradingService_ListSecurities_0             = runtime.ForwardResponseMessage
+	forward_TradingService_GetSecurity_0                = runtime.ForwardResponseMessage
+	forward_TradingService_UpsertListing_0              = runtime.ForwardResponseMessage
+	forward_TradingService_ListListings_0               = runtime.ForwardResponseMessage
+	forward_TradingService_GetListing_0                 = runtime.ForwardResponseMessage
+	forward_TradingService_GetOptionChain_0             = runtime.ForwardResponseMessage
+	forward_TradingService_GetListingDailyHistory_0     = runtime.ForwardResponseMessage
+	forward_TradingService_CreateOrder_0                = runtime.ForwardResponseMessage
+	forward_TradingService_ListOrders_0                 = runtime.ForwardResponseMessage
+	forward_TradingService_GetOrder_0                   = runtime.ForwardResponseMessage
+	forward_TradingService_ApproveOrder_0               = runtime.ForwardResponseMessage
+	forward_TradingService_DeclineOrder_0               = runtime.ForwardResponseMessage
+	forward_TradingService_CancelOrder_0                = runtime.ForwardResponseMessage
+	forward_TradingService_ListHoldings_0               = runtime.ForwardResponseMessage
+	forward_TradingService_SetPublicCount_0             = runtime.ForwardResponseMessage
+	forward_TradingService_ExerciseOption_0             = runtime.ForwardResponseMessage
+	forward_TradingService_ListTaxPositions_0           = runtime.ForwardResponseMessage
+	forward_TradingService_RunTax_0                     = runtime.ForwardResponseMessage
+	forward_TradingService_ListRealizedPnL_0            = runtime.ForwardResponseMessage
+	forward_TradingService_ListPublicHoldings_0         = runtime.ForwardResponseMessage
+	forward_TradingService_CreateOTCOffer_0             = runtime.ForwardResponseMessage
+	forward_TradingService_CounterOfferOTC_0            = runtime.ForwardResponseMessage
+	forward_TradingService_WithdrawOTCOffer_0           = runtime.ForwardResponseMessage
+	forward_TradingService_ListOTCThreads_0             = runtime.ForwardResponseMessage
+	forward_TradingService_GetOTCThread_0               = runtime.ForwardResponseMessage
+	forward_TradingService_AcceptOTCOffer_0             = runtime.ForwardResponseMessage
+	forward_TradingService_ListOTCContracts_0           = runtime.ForwardResponseMessage
+	forward_TradingService_GetOTCContract_0             = runtime.ForwardResponseMessage
+	forward_TradingService_ExerciseOTCContract_0        = runtime.ForwardResponseMessage
+	forward_TradingService_ListFunds_0                  = runtime.ForwardResponseMessage
+	forward_TradingService_GetFund_0                    = runtime.ForwardResponseMessage
+	forward_TradingService_CreateFund_0                 = runtime.ForwardResponseMessage
+	forward_TradingService_InvestInFund_0               = runtime.ForwardResponseMessage
+	forward_TradingService_WithdrawFromFund_0           = runtime.ForwardResponseMessage
+	forward_TradingService_ListFundPositions_0          = runtime.ForwardResponseMessage
+	forward_TradingService_GetFundPerformance_0         = runtime.ForwardResponseMessage
+	forward_TradingService_ListFundTransactions_0       = runtime.ForwardResponseMessage
+	forward_TradingService_ListActuaryPerformances_0    = runtime.ForwardResponseMessage
+	forward_TradingService_ListBankFundPositions_0      = runtime.ForwardResponseMessage
+	forward_TradingService_GetBankProfitTimeseries_0    = runtime.ForwardResponseMessage
+	forward_TradingService_RunOTCExpirySweep_0          = runtime.ForwardResponseMessage
+	forward_TradingService_RunOptionsRefresh_0          = runtime.ForwardResponseMessage
+	forward_TradingService_RunMarketDataRefresh_0       = runtime.ForwardResponseMessage
+	forward_TradingService_RunStockHistoryBackfill_0    = runtime.ForwardResponseMessage
+	forward_TradingService_RunFundPerformanceSnapshot_0 = runtime.ForwardResponseMessage
 )

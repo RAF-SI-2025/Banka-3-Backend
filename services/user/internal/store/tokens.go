@@ -17,7 +17,7 @@ func (s *Store) CreateRefreshToken(ctx context.Context, kind domain.UserKind, us
 	const q = `
         insert into "user".refresh_tokens (user_id, user_kind, token_hash, expires_at)
         values ($1, $2, $3, $4)`
-	if _, err := s.Pool.Exec(ctx, q, userID, string(kind), hash, expiresAt); err != nil {
+	if _, err := s.DB.Exec(ctx, q, userID, string(kind), hash, expiresAt); err != nil {
 		return apperr.Internal("create refresh token", err)
 	}
 	return nil
@@ -30,7 +30,7 @@ func (s *Store) LookupRefreshToken(ctx context.Context, hash string) (domain.Use
         select user_kind, user_id from "user".refresh_tokens
         where token_hash = $1 and revoked_at is null and expires_at > now()`
 	var kind, userID string
-	if err := s.Pool.QueryRow(ctx, q, hash).Scan(&kind, &userID); err != nil {
+	if err := s.DB.QueryRow(ctx, q, hash).Scan(&kind, &userID); err != nil {
 		if noRows(err) {
 			return "", "", apperr.Unauthenticated("invalid or expired refresh token")
 		}
@@ -42,7 +42,7 @@ func (s *Store) LookupRefreshToken(ctx context.Context, hash string) (domain.Use
 // RevokeRefreshToken marks one token revoked.
 func (s *Store) RevokeRefreshToken(ctx context.Context, hash string) error {
 	const q = `update "user".refresh_tokens set revoked_at = now() where token_hash = $1`
-	if _, err := s.Pool.Exec(ctx, q, hash); err != nil {
+	if _, err := s.DB.Exec(ctx, q, hash); err != nil {
 		return apperr.Internal("revoke refresh", err)
 	}
 	return nil
@@ -54,7 +54,7 @@ func (s *Store) RevokeAllRefreshTokens(ctx context.Context, kind domain.UserKind
 	const q = `
         update "user".refresh_tokens set revoked_at = now()
         where user_kind = $1 and user_id = $2 and revoked_at is null`
-	if _, err := s.Pool.Exec(ctx, q, string(kind), userID); err != nil {
+	if _, err := s.DB.Exec(ctx, q, string(kind), userID); err != nil {
 		return apperr.Internal("revoke all refresh", err)
 	}
 	return nil
@@ -68,7 +68,7 @@ func (s *Store) CreateActivationToken(ctx context.Context, employeeID, hash stri
 	const q = `
         insert into "user".activation_tokens (employee_id, token_hash, expires_at)
         values ($1, $2, $3)`
-	if _, err := s.Pool.Exec(ctx, q, employeeID, hash, expiresAt); err != nil {
+	if _, err := s.DB.Exec(ctx, q, employeeID, hash, expiresAt); err != nil {
 		return apperr.Internal("create activation", err)
 	}
 	return nil
@@ -87,7 +87,7 @@ func (s *Store) LookupActivationToken(ctx context.Context, hash string) (string,
 		usedAtV    *time.Time
 		expiresAtV time.Time
 	)
-	if err := s.Pool.QueryRow(ctx, q, hash).Scan(&employeeID, &usedAt, &expiresAt); err != nil {
+	if err := s.DB.QueryRow(ctx, q, hash).Scan(&employeeID, &usedAt, &expiresAt); err != nil {
 		if noRows(err) {
 			return "", apperr.NotFound("activation token not found")
 		}
@@ -109,7 +109,7 @@ func (s *Store) LookupActivationToken(ctx context.Context, hash string) (string,
 // MarkActivationTokenUsed sets used_at = now().
 func (s *Store) MarkActivationTokenUsed(ctx context.Context, hash string) error {
 	const q = `update "user".activation_tokens set used_at = now() where token_hash = $1`
-	if _, err := s.Pool.Exec(ctx, q, hash); err != nil {
+	if _, err := s.DB.Exec(ctx, q, hash); err != nil {
 		return apperr.Internal("mark activation used", err)
 	}
 	return nil
@@ -121,7 +121,7 @@ func (s *Store) InvalidateActivationTokens(ctx context.Context, employeeID strin
 	const q = `
         update "user".activation_tokens set used_at = now()
         where employee_id = $1 and used_at is null`
-	if _, err := s.Pool.Exec(ctx, q, employeeID); err != nil {
+	if _, err := s.DB.Exec(ctx, q, employeeID); err != nil {
 		return apperr.Internal("invalidate activation", err)
 	}
 	return nil
@@ -135,7 +135,7 @@ func (s *Store) CreatePasswordResetToken(ctx context.Context, kind domain.UserKi
 	const q = `
         insert into "user".password_reset_tokens (user_id, user_kind, token_hash, expires_at)
         values ($1, $2, $3, $4)`
-	if _, err := s.Pool.Exec(ctx, q, userID, string(kind), hash, expiresAt); err != nil {
+	if _, err := s.DB.Exec(ctx, q, userID, string(kind), hash, expiresAt); err != nil {
 		return apperr.Internal("create reset", err)
 	}
 	return nil
@@ -150,7 +150,7 @@ func (s *Store) LookupPasswordResetToken(ctx context.Context, hash string) (doma
 	var kind, userID string
 	var usedAt *time.Time
 	var expiresAt time.Time
-	if err := s.Pool.QueryRow(ctx, q, hash).Scan(&kind, &userID, &usedAt, &expiresAt); err != nil {
+	if err := s.DB.QueryRow(ctx, q, hash).Scan(&kind, &userID, &usedAt, &expiresAt); err != nil {
 		if noRows(err) {
 			return "", "", apperr.NotFound("reset token not found")
 		}
@@ -167,7 +167,7 @@ func (s *Store) LookupPasswordResetToken(ctx context.Context, hash string) (doma
 
 func (s *Store) MarkPasswordResetTokenUsed(ctx context.Context, hash string) error {
 	const q = `update "user".password_reset_tokens set used_at = now() where token_hash = $1`
-	if _, err := s.Pool.Exec(ctx, q, hash); err != nil {
+	if _, err := s.DB.Exec(ctx, q, hash); err != nil {
 		return apperr.Internal("mark reset used", err)
 	}
 	return nil

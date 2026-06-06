@@ -5,6 +5,7 @@ import (
 	"time"
 
 	"github.com/RAF-SI-2025/Banka-3-Backend/pkg/apperr"
+	"github.com/RAF-SI-2025/Banka-3-Backend/pkg/postgres"
 	"github.com/RAF-SI-2025/Banka-3-Backend/services/trading/internal/domain"
 	"github.com/jackc/pgx/v5"
 )
@@ -25,7 +26,8 @@ func (s *Store) InsertPendingExecution(ctx context.Context, tx pgx.Tx, e *domain
             (order_id, quantity, price_per_unit, total_amount, commission_amt, status)
         values ($1, $2, $3::numeric, $4::numeric, $5::numeric, 'pending')
         returning ` + executionCols
-	row := tx.QueryRow(ctx, q,
+	row := tx.QueryRow(
+		ctx, q,
 		e.OrderID, e.Quantity, e.PricePerUnit, e.TotalAmount, e.CommissionAmt,
 	)
 	out, err := scanExecution(row)
@@ -63,7 +65,7 @@ func (s *Store) RecordResumeFailure(ctx context.Context, execID, errMsg string) 
         where id = $1
         returning attempts`
 	var attempts int32
-	if err := s.Pool.QueryRow(ctx, q, execID, errMsg).Scan(&attempts); err != nil {
+	if err := s.DB.QueryRow(ctx, q, execID, errMsg).Scan(&attempts); err != nil {
 		return 0, apperr.Internal("record resume failure", err)
 	}
 	return attempts, nil
@@ -97,7 +99,7 @@ func (s *Store) GetPendingExecutionForOrder(ctx context.Context, orderID string)
 	      where order_id = $1 and status = 'pending'
 	      order by executed_at asc
 	      limit 1`
-	out, err := scanExecution(s.Pool.QueryRow(ctx, q, orderID))
+	out, err := scanExecution(s.DB.QueryRow(ctx, q, orderID))
 	if err != nil {
 		if noRows(err) {
 			return nil, nil
@@ -124,7 +126,7 @@ func (s *Store) ListOrderIDsWithPendingExecutions(ctx context.Context, limit int
         where status = 'pending'
         order by order_id::text
         limit $1`
-	rows, err := s.Pool.Query(ctx, q, limit)
+	rows, err := s.DB.Query(ctx, q, limit)
 	if err != nil {
 		return nil, apperr.Internal("list pending exec orders", err)
 	}
@@ -192,7 +194,7 @@ func (s *Store) ListExecutions(ctx context.Context, orderID string) ([]*domain.O
 	q := `select ` + executionCols + ` from "trading".order_executions
 	      where order_id = $1 and status = 'settled'
 	      order by executed_at`
-	rows, err := s.Pool.Query(ctx, q, orderID)
+	rows, err := s.DB.Query(postgres.WithRead(ctx), q, orderID)
 	if err != nil {
 		return nil, apperr.Internal("list executions", err)
 	}
@@ -230,7 +232,7 @@ func (s *Store) LatestExecutionAt(ctx context.Context, orderID string) (time.Tim
         from "trading".order_executions
         where order_id = $1 and status = 'settled'`
 	var t *time.Time
-	if err := s.Pool.QueryRow(ctx, q, orderID).Scan(&t); err != nil {
+	if err := s.DB.QueryRow(ctx, q, orderID).Scan(&t); err != nil {
 		return time.Time{}, false, apperr.Internal("latest execution", err)
 	}
 	if t == nil {

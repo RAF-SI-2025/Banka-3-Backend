@@ -6,6 +6,7 @@ import (
 	"time"
 
 	"github.com/RAF-SI-2025/Banka-3-Backend/pkg/apperr"
+	"github.com/RAF-SI-2025/Banka-3-Backend/pkg/postgres"
 	"github.com/RAF-SI-2025/Banka-3-Backend/services/trading/internal/domain"
 	"github.com/jackc/pgx/v5"
 )
@@ -33,7 +34,8 @@ func (s *Store) InsertRealizedGain(ctx context.Context, tx pgx.Tx, g *domain.Rea
                 $7::numeric, $8::numeric, $9,
                 $10::numeric, $11::numeric)
         returning ` + realizedGainCols
-	row := tx.QueryRow(ctx, q,
+	row := tx.QueryRow(
+		ctx, q,
 		g.UserID, string(g.UserKind), g.SecurityID, g.FundID, g.AccountID, g.Quantity,
 		g.CostBasisAmt, g.ProceedsAmt, string(g.Currency),
 		g.GainNative, g.GainRSD,
@@ -83,7 +85,7 @@ func (s *Store) ListRealizedGains(ctx context.Context, f RealizedGainFilter) ([]
 		where = " where " + strings.Join(conds, " and ")
 	}
 	q := `select ` + realizedGainCols + ` from "trading".realized_gains` + where + ` order by realized_at desc`
-	rows, err := s.Pool.Query(ctx, q, args...)
+	rows, err := s.DB.Query(postgres.WithRead(ctx), q, args...)
 	if err != nil {
 		return nil, apperr.Internal("list realized gains", err)
 	}
@@ -143,7 +145,7 @@ func (s *Store) ListTaxAggregates(ctx context.Context, kind domain.UserKind) ([]
         having coalesce(sum(case when not taxed and gain_rsd > 0 then gain_rsd else 0 end), 0) <> 0
             or coalesce(sum(case when taxed and gain_rsd > 0 and taxed_at >= date_trunc('year', now()) then gain_rsd else 0 end), 0) <> 0
         order by user_id`
-	rows, err := s.Pool.Query(ctx, q, string(kind))
+	rows, err := s.DB.Query(ctx, q, string(kind))
 	if err != nil {
 		return nil, apperr.Internal("list tax aggregates", err)
 	}
@@ -173,7 +175,7 @@ func (s *Store) ListUnpaidGainsForUser(ctx context.Context, userID string, kind 
         from "trading".realized_gains
         where user_id = $1 and user_kind = $2 and not taxed
         order by realized_at asc`
-	rows, err := s.Pool.Query(ctx, q, userID, string(kind))
+	rows, err := s.DB.Query(ctx, q, userID, string(kind))
 	if err != nil {
 		return nil, apperr.Internal("list unpaid gains", err)
 	}
@@ -225,7 +227,7 @@ func (s *Store) ListActuaryPerformances(ctx context.Context, typeFilter string) 
         group by ai.employee_id, ai.type
         order by coalesce(sum(case when rg.gain_rsd > 0 then rg.gain_rsd else 0 end), 0) desc,
                  ai.employee_id`
-	rows, err := s.Pool.Query(ctx, q, typeFilter)
+	rows, err := s.DB.Query(postgres.WithRead(ctx), q, typeFilter)
 	if err != nil {
 		return nil, apperr.Internal("list actuary performances", err)
 	}
@@ -268,7 +270,7 @@ type BankProfitBucket struct {
 func (s *Store) LatestEmployeeRealizedAt(ctx context.Context) (time.Time, bool, error) {
 	const q = `select max(realized_at) from "trading".realized_gains where user_kind = 'employee'`
 	var t *time.Time
-	if err := s.Pool.QueryRow(ctx, q).Scan(&t); err != nil {
+	if err := s.DB.QueryRow(postgres.WithRead(ctx), q).Scan(&t); err != nil {
 		return time.Time{}, false, apperr.Internal("latest employee realized_at", err)
 	}
 	if t == nil {
@@ -305,7 +307,7 @@ func (s *Store) BankProfitTimeseries(ctx context.Context, bucket string, from, t
                cnt::bigint
         from b
         order by period_start asc`
-	rows, err := s.Pool.Query(ctx, q, bucket, from, to)
+	rows, err := s.DB.Query(postgres.WithRead(ctx), q, bucket, from, to)
 	if err != nil {
 		return nil, apperr.Internal("bank profit timeseries", err)
 	}

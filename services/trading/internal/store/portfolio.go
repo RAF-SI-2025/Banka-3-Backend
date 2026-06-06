@@ -5,6 +5,7 @@ import (
 	"strings"
 
 	"github.com/RAF-SI-2025/Banka-3-Backend/pkg/apperr"
+	"github.com/RAF-SI-2025/Banka-3-Backend/pkg/postgres"
 	"github.com/RAF-SI-2025/Banka-3-Backend/services/trading/internal/domain"
 	"github.com/jackc/pgx/v5"
 )
@@ -131,7 +132,7 @@ func (s *Store) ListHoldings(ctx context.Context, f HoldingFilter) ([]*domain.Ho
 	}
 	where := " where " + strings.Join(conds, " and ")
 	q := `select ` + holdingCols + ` from "trading".portfolio_holdings` + where + ` order by updated_at desc`
-	rows, err := s.Pool.Query(ctx, q, args...)
+	rows, err := s.DB.Query(postgres.WithRead(ctx), q, args...)
 	if err != nil {
 		return nil, apperr.Internal("list holdings", err)
 	}
@@ -155,7 +156,7 @@ func (s *Store) SetPublicCount(ctx context.Context, holdingID string, count int3
         set public_count = $2, updated_at = now()
         where id = $1
         returning ` + holdingCols
-	row := s.Pool.QueryRow(ctx, q, holdingID, count)
+	row := s.DB.QueryRow(ctx, q, holdingID, count)
 	out, err := scanHolding(row)
 	if err != nil {
 		if noRows(err) {
@@ -169,7 +170,7 @@ func (s *Store) SetPublicCount(ctx context.Context, holdingID string, count int3
 // GetHoldingByID for the SetPublicCount auth check.
 func (s *Store) GetHoldingByID(ctx context.Context, id string) (*domain.Holding, error) {
 	q := `select ` + holdingCols + ` from "trading".portfolio_holdings where id = $1`
-	out, err := scanHolding(s.Pool.QueryRow(ctx, q, id))
+	out, err := scanHolding(s.DB.QueryRow(ctx, q, id))
 	if err != nil {
 		if noRows(err) {
 			return nil, apperr.NotFound("holding ne postoji")

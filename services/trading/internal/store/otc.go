@@ -6,6 +6,7 @@ import (
 	"time"
 
 	"github.com/RAF-SI-2025/Banka-3-Backend/pkg/apperr"
+	"github.com/RAF-SI-2025/Banka-3-Backend/pkg/postgres"
 	"github.com/RAF-SI-2025/Banka-3-Backend/services/trading/internal/domain"
 	"github.com/jackc/pgx/v5"
 )
@@ -62,11 +63,12 @@ func (s *Store) InsertOTCOffer(ctx context.Context, tx pgx.Tx, o *domain.OTCOffe
         ) returning ` + otcOfferCols
 	var execer interface {
 		QueryRow(ctx context.Context, sql string, args ...any) pgx.Row
-	} = s.Pool
+	} = s.DB
 	if tx != nil {
 		execer = tx
 	}
-	row := execer.QueryRow(ctx, q,
+	row := execer.QueryRow(
+		ctx, q,
 		o.ThreadID, o.SecurityID, o.SellerHoldingID,
 		o.BuyerID, string(o.BuyerKind), o.BuyerAccountID,
 		o.SellerID, string(o.SellerKind), o.SellerAccountID,
@@ -93,7 +95,7 @@ func (s *Store) InsertOTCOffer(ctx context.Context, tx pgx.Tx, o *domain.OTCOffe
 // GetOTCOffer returns one iteration by id.
 func (s *Store) GetOTCOffer(ctx context.Context, id string) (*domain.OTCOffer, error) {
 	const q = `select ` + otcOfferCols + ` from "trading".otc_offers where id = $1`
-	out, err := scanOTCOffer(s.Pool.QueryRow(ctx, q, id))
+	out, err := scanOTCOffer(s.DB.QueryRow(ctx, q, id))
 	if err != nil {
 		if noRows(err) {
 			return nil, apperr.NotFound("ponuda ne postoji")
@@ -119,7 +121,7 @@ func (s *Store) GetOpenOTCOfferByThread(ctx context.Context, tx pgx.Tx, threadID
 	if tx != nil {
 		row = tx.QueryRow(ctx, qLock, threadID)
 	} else {
-		row = s.Pool.QueryRow(ctx, qRead, threadID)
+		row = s.DB.QueryRow(ctx, qRead, threadID)
 	}
 	out, err := scanOTCOffer(row)
 	if err != nil {
@@ -135,7 +137,7 @@ func (s *Store) GetOpenOTCOfferByThread(ctx context.Context, tx pgx.Tx, threadID
 func (s *Store) ListOTCThread(ctx context.Context, threadID string) ([]*domain.OTCOffer, error) {
 	const q = `select ` + otcOfferCols + ` from "trading".otc_offers
 	           where thread_id = $1 order by created_at`
-	rows, err := s.Pool.Query(ctx, q, threadID)
+	rows, err := s.DB.Query(postgres.WithRead(ctx), q, threadID)
 	if err != nil {
 		return nil, apperr.Internal("list otc thread", err)
 	}
@@ -195,7 +197,7 @@ func (s *Store) ListLatestOTCOffers(ctx context.Context, f OTCThreadFilter) ([]*
         join latest l on l.tid = o.thread_id and l.ts = o.created_at
         where ` + strings.Join(conds, " and ") + `
         order by o.updated_at desc`
-	rows, err := s.Pool.Query(ctx, q, args...)
+	rows, err := s.DB.Query(postgres.WithRead(ctx), q, args...)
 	if err != nil {
 		return nil, apperr.Internal("list otc threads", err)
 	}
@@ -319,7 +321,8 @@ func (s *Store) InsertOTCContract(ctx context.Context, tx pgx.Tx, c *domain.OTCC
         ) on conflict (thread_id) do update
             set updated_at = "trading".otc_contracts.updated_at
         returning ` + otcContractCols
-	row := tx.QueryRow(ctx, q,
+	row := tx.QueryRow(
+		ctx, q,
 		c.ThreadID, c.SecurityID, c.SellerHoldingID,
 		c.BuyerID, string(c.BuyerKind), c.BuyerAccountID,
 		c.SellerID, string(c.SellerKind), c.SellerAccountID,
@@ -347,7 +350,7 @@ func (s *Store) DeleteOTCContractByThread(ctx context.Context, tx pgx.Tx, thread
 // GetOTCContract returns one contract by id.
 func (s *Store) GetOTCContract(ctx context.Context, id string) (*domain.OTCContract, error) {
 	const q = `select ` + otcContractCols + ` from "trading".otc_contracts where id = $1`
-	out, err := scanOTCContract(s.Pool.QueryRow(ctx, q, id))
+	out, err := scanOTCContract(s.DB.QueryRow(ctx, q, id))
 	if err != nil {
 		if noRows(err) {
 			return nil, apperr.NotFound("ugovor ne postoji")
@@ -360,7 +363,7 @@ func (s *Store) GetOTCContract(ctx context.Context, id string) (*domain.OTCContr
 // GetOTCContractByThread returns the contract on a thread or NotFound.
 func (s *Store) GetOTCContractByThread(ctx context.Context, threadID string) (*domain.OTCContract, error) {
 	const q = `select ` + otcContractCols + ` from "trading".otc_contracts where thread_id = $1`
-	out, err := scanOTCContract(s.Pool.QueryRow(ctx, q, threadID))
+	out, err := scanOTCContract(s.DB.QueryRow(ctx, q, threadID))
 	if err != nil {
 		if noRows(err) {
 			return nil, apperr.NotFound("ugovor ne postoji")
@@ -424,7 +427,7 @@ func (s *Store) ListOTCContracts(ctx context.Context, f OTCContractFilter) ([]*d
 		add("(buyer_kind = ? or seller_kind = ?)", string(f.PartyKind), string(f.PartyKind))
 	}
 	q := `select ` + otcContractCols + ` from "trading".otc_contracts where ` + strings.Join(conds, " and ") + ` order by created_at desc`
-	rows, err := s.Pool.Query(ctx, q, args...)
+	rows, err := s.DB.Query(postgres.WithRead(ctx), q, args...)
 	if err != nil {
 		return nil, apperr.Internal("list otc contracts", err)
 	}
@@ -446,7 +449,7 @@ func (s *Store) ListExpiredOTCContracts(ctx context.Context, today time.Time) ([
 	const q = `select ` + otcContractCols + ` from "trading".otc_contracts
 	           where status = 'active' and settlement_date < $1
 	           order by settlement_date`
-	rows, err := s.Pool.Query(ctx, q, today)
+	rows, err := s.DB.Query(ctx, q, today)
 	if err != nil {
 		return nil, apperr.Internal("list expired otc contracts", err)
 	}
@@ -470,7 +473,7 @@ func (s *Store) ListPublicHoldings(ctx context.Context, excludeUserID string) ([
 	           where public_count > reserved_count
 	             and user_id <> $1
 	           order by updated_at desc`
-	rows, err := s.Pool.Query(ctx, q, excludeUserID)
+	rows, err := s.DB.Query(postgres.WithRead(ctx), q, excludeUserID)
 	if err != nil {
 		return nil, apperr.Internal("list public holdings", err)
 	}

@@ -20,58 +20,65 @@ import (
 const _ = grpc.SupportPackageIsVersion9
 
 const (
-	TradingService_GetActuaryInfo_FullMethodName           = "/banka.trading.v1.TradingService/GetActuaryInfo"
-	TradingService_ListActuaries_FullMethodName            = "/banka.trading.v1.TradingService/ListActuaries"
-	TradingService_UpsertActuaryInfo_FullMethodName        = "/banka.trading.v1.TradingService/UpsertActuaryInfo"
-	TradingService_UpdateActuaryLimit_FullMethodName       = "/banka.trading.v1.TradingService/UpdateActuaryLimit"
-	TradingService_ResetActuaryUsedLimit_FullMethodName    = "/banka.trading.v1.TradingService/ResetActuaryUsedLimit"
-	TradingService_SetActuaryNeedApproval_FullMethodName   = "/banka.trading.v1.TradingService/SetActuaryNeedApproval"
-	TradingService_RunDailyResetActuaries_FullMethodName   = "/banka.trading.v1.TradingService/RunDailyResetActuaries"
-	TradingService_ListExchanges_FullMethodName            = "/banka.trading.v1.TradingService/ListExchanges"
-	TradingService_UpsertExchange_FullMethodName           = "/banka.trading.v1.TradingService/UpsertExchange"
-	TradingService_SetExchangeOverride_FullMethodName      = "/banka.trading.v1.TradingService/SetExchangeOverride"
-	TradingService_UpsertSecurity_FullMethodName           = "/banka.trading.v1.TradingService/UpsertSecurity"
-	TradingService_ListSecurities_FullMethodName           = "/banka.trading.v1.TradingService/ListSecurities"
-	TradingService_GetSecurity_FullMethodName              = "/banka.trading.v1.TradingService/GetSecurity"
-	TradingService_UpsertListing_FullMethodName            = "/banka.trading.v1.TradingService/UpsertListing"
-	TradingService_ListListings_FullMethodName             = "/banka.trading.v1.TradingService/ListListings"
-	TradingService_GetListing_FullMethodName               = "/banka.trading.v1.TradingService/GetListing"
-	TradingService_GetOptionChain_FullMethodName           = "/banka.trading.v1.TradingService/GetOptionChain"
-	TradingService_GetListingDailyHistory_FullMethodName   = "/banka.trading.v1.TradingService/GetListingDailyHistory"
-	TradingService_CreateOrder_FullMethodName              = "/banka.trading.v1.TradingService/CreateOrder"
-	TradingService_ListOrders_FullMethodName               = "/banka.trading.v1.TradingService/ListOrders"
-	TradingService_GetOrder_FullMethodName                 = "/banka.trading.v1.TradingService/GetOrder"
-	TradingService_ApproveOrder_FullMethodName             = "/banka.trading.v1.TradingService/ApproveOrder"
-	TradingService_DeclineOrder_FullMethodName             = "/banka.trading.v1.TradingService/DeclineOrder"
-	TradingService_CancelOrder_FullMethodName              = "/banka.trading.v1.TradingService/CancelOrder"
-	TradingService_ListHoldings_FullMethodName             = "/banka.trading.v1.TradingService/ListHoldings"
-	TradingService_SetPublicCount_FullMethodName           = "/banka.trading.v1.TradingService/SetPublicCount"
-	TradingService_ExerciseOption_FullMethodName           = "/banka.trading.v1.TradingService/ExerciseOption"
-	TradingService_ListTaxPositions_FullMethodName         = "/banka.trading.v1.TradingService/ListTaxPositions"
-	TradingService_RunTax_FullMethodName                   = "/banka.trading.v1.TradingService/RunTax"
-	TradingService_ListRealizedPnL_FullMethodName          = "/banka.trading.v1.TradingService/ListRealizedPnL"
-	TradingService_ListPublicHoldings_FullMethodName       = "/banka.trading.v1.TradingService/ListPublicHoldings"
-	TradingService_CreateOTCOffer_FullMethodName           = "/banka.trading.v1.TradingService/CreateOTCOffer"
-	TradingService_CounterOfferOTC_FullMethodName          = "/banka.trading.v1.TradingService/CounterOfferOTC"
-	TradingService_WithdrawOTCOffer_FullMethodName         = "/banka.trading.v1.TradingService/WithdrawOTCOffer"
-	TradingService_ListOTCThreads_FullMethodName           = "/banka.trading.v1.TradingService/ListOTCThreads"
-	TradingService_GetOTCThread_FullMethodName             = "/banka.trading.v1.TradingService/GetOTCThread"
-	TradingService_AcceptOTCOffer_FullMethodName           = "/banka.trading.v1.TradingService/AcceptOTCOffer"
-	TradingService_ListOTCContracts_FullMethodName         = "/banka.trading.v1.TradingService/ListOTCContracts"
-	TradingService_GetOTCContract_FullMethodName           = "/banka.trading.v1.TradingService/GetOTCContract"
-	TradingService_ExerciseOTCContract_FullMethodName      = "/banka.trading.v1.TradingService/ExerciseOTCContract"
-	TradingService_ListFunds_FullMethodName                = "/banka.trading.v1.TradingService/ListFunds"
-	TradingService_GetFund_FullMethodName                  = "/banka.trading.v1.TradingService/GetFund"
-	TradingService_CreateFund_FullMethodName               = "/banka.trading.v1.TradingService/CreateFund"
-	TradingService_InvestInFund_FullMethodName             = "/banka.trading.v1.TradingService/InvestInFund"
-	TradingService_WithdrawFromFund_FullMethodName         = "/banka.trading.v1.TradingService/WithdrawFromFund"
-	TradingService_ListFundPositions_FullMethodName        = "/banka.trading.v1.TradingService/ListFundPositions"
-	TradingService_GetFundPerformance_FullMethodName       = "/banka.trading.v1.TradingService/GetFundPerformance"
-	TradingService_ListFundTransactions_FullMethodName     = "/banka.trading.v1.TradingService/ListFundTransactions"
-	TradingService_ListActuaryPerformances_FullMethodName  = "/banka.trading.v1.TradingService/ListActuaryPerformances"
-	TradingService_ListBankFundPositions_FullMethodName    = "/banka.trading.v1.TradingService/ListBankFundPositions"
-	TradingService_GetBankProfitTimeseries_FullMethodName  = "/banka.trading.v1.TradingService/GetBankProfitTimeseries"
-	TradingService_ReassignSupervisorAssets_FullMethodName = "/banka.trading.v1.TradingService/ReassignSupervisorAssets"
+	TradingService_GetActuaryInfo_FullMethodName             = "/banka.trading.v1.TradingService/GetActuaryInfo"
+	TradingService_ListActuaries_FullMethodName              = "/banka.trading.v1.TradingService/ListActuaries"
+	TradingService_UpsertActuaryInfo_FullMethodName          = "/banka.trading.v1.TradingService/UpsertActuaryInfo"
+	TradingService_UpdateActuaryLimit_FullMethodName         = "/banka.trading.v1.TradingService/UpdateActuaryLimit"
+	TradingService_ResetActuaryUsedLimit_FullMethodName      = "/banka.trading.v1.TradingService/ResetActuaryUsedLimit"
+	TradingService_SetActuaryNeedApproval_FullMethodName     = "/banka.trading.v1.TradingService/SetActuaryNeedApproval"
+	TradingService_RunDailyResetActuaries_FullMethodName     = "/banka.trading.v1.TradingService/RunDailyResetActuaries"
+	TradingService_ListExchanges_FullMethodName              = "/banka.trading.v1.TradingService/ListExchanges"
+	TradingService_UpsertExchange_FullMethodName             = "/banka.trading.v1.TradingService/UpsertExchange"
+	TradingService_SetExchangeOverride_FullMethodName        = "/banka.trading.v1.TradingService/SetExchangeOverride"
+	TradingService_UpsertSecurity_FullMethodName             = "/banka.trading.v1.TradingService/UpsertSecurity"
+	TradingService_ListSecurities_FullMethodName             = "/banka.trading.v1.TradingService/ListSecurities"
+	TradingService_GetSecurity_FullMethodName                = "/banka.trading.v1.TradingService/GetSecurity"
+	TradingService_UpsertListing_FullMethodName              = "/banka.trading.v1.TradingService/UpsertListing"
+	TradingService_ListListings_FullMethodName               = "/banka.trading.v1.TradingService/ListListings"
+	TradingService_GetListing_FullMethodName                 = "/banka.trading.v1.TradingService/GetListing"
+	TradingService_GetOptionChain_FullMethodName             = "/banka.trading.v1.TradingService/GetOptionChain"
+	TradingService_GetListingDailyHistory_FullMethodName     = "/banka.trading.v1.TradingService/GetListingDailyHistory"
+	TradingService_CreateOrder_FullMethodName                = "/banka.trading.v1.TradingService/CreateOrder"
+	TradingService_ListOrders_FullMethodName                 = "/banka.trading.v1.TradingService/ListOrders"
+	TradingService_GetOrder_FullMethodName                   = "/banka.trading.v1.TradingService/GetOrder"
+	TradingService_ApproveOrder_FullMethodName               = "/banka.trading.v1.TradingService/ApproveOrder"
+	TradingService_DeclineOrder_FullMethodName               = "/banka.trading.v1.TradingService/DeclineOrder"
+	TradingService_CancelOrder_FullMethodName                = "/banka.trading.v1.TradingService/CancelOrder"
+	TradingService_ListHoldings_FullMethodName               = "/banka.trading.v1.TradingService/ListHoldings"
+	TradingService_SetPublicCount_FullMethodName             = "/banka.trading.v1.TradingService/SetPublicCount"
+	TradingService_ExerciseOption_FullMethodName             = "/banka.trading.v1.TradingService/ExerciseOption"
+	TradingService_ListTaxPositions_FullMethodName           = "/banka.trading.v1.TradingService/ListTaxPositions"
+	TradingService_RunTax_FullMethodName                     = "/banka.trading.v1.TradingService/RunTax"
+	TradingService_ListRealizedPnL_FullMethodName            = "/banka.trading.v1.TradingService/ListRealizedPnL"
+	TradingService_ListPublicHoldings_FullMethodName         = "/banka.trading.v1.TradingService/ListPublicHoldings"
+	TradingService_CreateOTCOffer_FullMethodName             = "/banka.trading.v1.TradingService/CreateOTCOffer"
+	TradingService_CounterOfferOTC_FullMethodName            = "/banka.trading.v1.TradingService/CounterOfferOTC"
+	TradingService_WithdrawOTCOffer_FullMethodName           = "/banka.trading.v1.TradingService/WithdrawOTCOffer"
+	TradingService_ListOTCThreads_FullMethodName             = "/banka.trading.v1.TradingService/ListOTCThreads"
+	TradingService_GetOTCThread_FullMethodName               = "/banka.trading.v1.TradingService/GetOTCThread"
+	TradingService_AcceptOTCOffer_FullMethodName             = "/banka.trading.v1.TradingService/AcceptOTCOffer"
+	TradingService_ListOTCContracts_FullMethodName           = "/banka.trading.v1.TradingService/ListOTCContracts"
+	TradingService_GetOTCContract_FullMethodName             = "/banka.trading.v1.TradingService/GetOTCContract"
+	TradingService_ExerciseOTCContract_FullMethodName        = "/banka.trading.v1.TradingService/ExerciseOTCContract"
+	TradingService_ListFunds_FullMethodName                  = "/banka.trading.v1.TradingService/ListFunds"
+	TradingService_GetFund_FullMethodName                    = "/banka.trading.v1.TradingService/GetFund"
+	TradingService_CreateFund_FullMethodName                 = "/banka.trading.v1.TradingService/CreateFund"
+	TradingService_InvestInFund_FullMethodName               = "/banka.trading.v1.TradingService/InvestInFund"
+	TradingService_WithdrawFromFund_FullMethodName           = "/banka.trading.v1.TradingService/WithdrawFromFund"
+	TradingService_ListFundPositions_FullMethodName          = "/banka.trading.v1.TradingService/ListFundPositions"
+	TradingService_GetFundPerformance_FullMethodName         = "/banka.trading.v1.TradingService/GetFundPerformance"
+	TradingService_ListFundTransactions_FullMethodName       = "/banka.trading.v1.TradingService/ListFundTransactions"
+	TradingService_ListActuaryPerformances_FullMethodName    = "/banka.trading.v1.TradingService/ListActuaryPerformances"
+	TradingService_ListBankFundPositions_FullMethodName      = "/banka.trading.v1.TradingService/ListBankFundPositions"
+	TradingService_GetBankProfitTimeseries_FullMethodName    = "/banka.trading.v1.TradingService/GetBankProfitTimeseries"
+	TradingService_ReassignSupervisorAssets_FullMethodName   = "/banka.trading.v1.TradingService/ReassignSupervisorAssets"
+	TradingService_RunExecutionTick_FullMethodName           = "/banka.trading.v1.TradingService/RunExecutionTick"
+	TradingService_RunSagaRecoveryTick_FullMethodName        = "/banka.trading.v1.TradingService/RunSagaRecoveryTick"
+	TradingService_RunOTCExpirySweep_FullMethodName          = "/banka.trading.v1.TradingService/RunOTCExpirySweep"
+	TradingService_RunOptionsRefresh_FullMethodName          = "/banka.trading.v1.TradingService/RunOptionsRefresh"
+	TradingService_RunMarketDataRefresh_FullMethodName       = "/banka.trading.v1.TradingService/RunMarketDataRefresh"
+	TradingService_RunStockHistoryBackfill_FullMethodName    = "/banka.trading.v1.TradingService/RunStockHistoryBackfill"
+	TradingService_RunFundPerformanceSnapshot_FullMethodName = "/banka.trading.v1.TradingService/RunFundPerformanceSnapshot"
 )
 
 // TradingServiceClient is the client API for TradingService service.
@@ -213,6 +220,23 @@ type TradingServiceClient interface {
 	// their managed funds. Idempotent: a fund already managed by
 	// `to_user_id` is a no-op.
 	ReassignSupervisorAssets(ctx context.Context, in *ReassignSupervisorAssetsRequest, opts ...grpc.CallOption) (*ReassignSupervisorAssetsResponse, error)
+	// RunExecutionTick runs one partial-fill pass over every active order.
+	// Internal-only (no http) — driven by the scheduler on a fast cadence.
+	RunExecutionTick(ctx context.Context, in *RunExecutionTickRequest, opts ...grpc.CallOption) (*RunExecutionTickResponse, error)
+	// RunSagaRecoveryTick resumes every saga due for recovery. Internal-
+	// only — driven by the scheduler on a fast cadence.
+	RunSagaRecoveryTick(ctx context.Context, in *RunSagaRecoveryTickRequest, opts ...grpc.CallOption) (*RunSagaRecoveryTickResponse, error)
+	// RunOTCExpirySweep expires OTC contracts past settlement. Admin-only.
+	RunOTCExpirySweep(ctx context.Context, in *RunOTCExpirySweepRequest, opts ...grpc.CallOption) (*RunOTCExpirySweepResponse, error)
+	// RunOptionsRefresh regenerates Black-Scholes option chains. Admin-only.
+	RunOptionsRefresh(ctx context.Context, in *RunOptionsRefreshRequest, opts ...grpc.CallOption) (*RunOptionsRefreshResponse, error)
+	// RunMarketDataRefresh refreshes upstream stock + forex quotes. Admin-only.
+	RunMarketDataRefresh(ctx context.Context, in *RunMarketDataRefreshRequest, opts ...grpc.CallOption) (*RunMarketDataRefreshResponse, error)
+	// RunStockHistoryBackfill backfills daily-close history. Admin-only.
+	RunStockHistoryBackfill(ctx context.Context, in *RunStockHistoryBackfillRequest, opts ...grpc.CallOption) (*RunStockHistoryBackfillResponse, error)
+	// RunFundPerformanceSnapshot writes one perf snapshot per active fund.
+	// Admin-only.
+	RunFundPerformanceSnapshot(ctx context.Context, in *RunFundPerformanceSnapshotRequest, opts ...grpc.CallOption) (*RunFundPerformanceSnapshotResponse, error)
 }
 
 type tradingServiceClient struct {
@@ -743,6 +767,76 @@ func (c *tradingServiceClient) ReassignSupervisorAssets(ctx context.Context, in 
 	return out, nil
 }
 
+func (c *tradingServiceClient) RunExecutionTick(ctx context.Context, in *RunExecutionTickRequest, opts ...grpc.CallOption) (*RunExecutionTickResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(RunExecutionTickResponse)
+	err := c.cc.Invoke(ctx, TradingService_RunExecutionTick_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *tradingServiceClient) RunSagaRecoveryTick(ctx context.Context, in *RunSagaRecoveryTickRequest, opts ...grpc.CallOption) (*RunSagaRecoveryTickResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(RunSagaRecoveryTickResponse)
+	err := c.cc.Invoke(ctx, TradingService_RunSagaRecoveryTick_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *tradingServiceClient) RunOTCExpirySweep(ctx context.Context, in *RunOTCExpirySweepRequest, opts ...grpc.CallOption) (*RunOTCExpirySweepResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(RunOTCExpirySweepResponse)
+	err := c.cc.Invoke(ctx, TradingService_RunOTCExpirySweep_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *tradingServiceClient) RunOptionsRefresh(ctx context.Context, in *RunOptionsRefreshRequest, opts ...grpc.CallOption) (*RunOptionsRefreshResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(RunOptionsRefreshResponse)
+	err := c.cc.Invoke(ctx, TradingService_RunOptionsRefresh_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *tradingServiceClient) RunMarketDataRefresh(ctx context.Context, in *RunMarketDataRefreshRequest, opts ...grpc.CallOption) (*RunMarketDataRefreshResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(RunMarketDataRefreshResponse)
+	err := c.cc.Invoke(ctx, TradingService_RunMarketDataRefresh_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *tradingServiceClient) RunStockHistoryBackfill(ctx context.Context, in *RunStockHistoryBackfillRequest, opts ...grpc.CallOption) (*RunStockHistoryBackfillResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(RunStockHistoryBackfillResponse)
+	err := c.cc.Invoke(ctx, TradingService_RunStockHistoryBackfill_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *tradingServiceClient) RunFundPerformanceSnapshot(ctx context.Context, in *RunFundPerformanceSnapshotRequest, opts ...grpc.CallOption) (*RunFundPerformanceSnapshotResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(RunFundPerformanceSnapshotResponse)
+	err := c.cc.Invoke(ctx, TradingService_RunFundPerformanceSnapshot_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
 // TradingServiceServer is the server API for TradingService service.
 // All implementations should embed UnimplementedTradingServiceServer
 // for forward compatibility.
@@ -882,6 +976,23 @@ type TradingServiceServer interface {
 	// their managed funds. Idempotent: a fund already managed by
 	// `to_user_id` is a no-op.
 	ReassignSupervisorAssets(context.Context, *ReassignSupervisorAssetsRequest) (*ReassignSupervisorAssetsResponse, error)
+	// RunExecutionTick runs one partial-fill pass over every active order.
+	// Internal-only (no http) — driven by the scheduler on a fast cadence.
+	RunExecutionTick(context.Context, *RunExecutionTickRequest) (*RunExecutionTickResponse, error)
+	// RunSagaRecoveryTick resumes every saga due for recovery. Internal-
+	// only — driven by the scheduler on a fast cadence.
+	RunSagaRecoveryTick(context.Context, *RunSagaRecoveryTickRequest) (*RunSagaRecoveryTickResponse, error)
+	// RunOTCExpirySweep expires OTC contracts past settlement. Admin-only.
+	RunOTCExpirySweep(context.Context, *RunOTCExpirySweepRequest) (*RunOTCExpirySweepResponse, error)
+	// RunOptionsRefresh regenerates Black-Scholes option chains. Admin-only.
+	RunOptionsRefresh(context.Context, *RunOptionsRefreshRequest) (*RunOptionsRefreshResponse, error)
+	// RunMarketDataRefresh refreshes upstream stock + forex quotes. Admin-only.
+	RunMarketDataRefresh(context.Context, *RunMarketDataRefreshRequest) (*RunMarketDataRefreshResponse, error)
+	// RunStockHistoryBackfill backfills daily-close history. Admin-only.
+	RunStockHistoryBackfill(context.Context, *RunStockHistoryBackfillRequest) (*RunStockHistoryBackfillResponse, error)
+	// RunFundPerformanceSnapshot writes one perf snapshot per active fund.
+	// Admin-only.
+	RunFundPerformanceSnapshot(context.Context, *RunFundPerformanceSnapshotRequest) (*RunFundPerformanceSnapshotResponse, error)
 }
 
 // UnimplementedTradingServiceServer should be embedded to have
@@ -1046,6 +1157,27 @@ func (UnimplementedTradingServiceServer) GetBankProfitTimeseries(context.Context
 }
 func (UnimplementedTradingServiceServer) ReassignSupervisorAssets(context.Context, *ReassignSupervisorAssetsRequest) (*ReassignSupervisorAssetsResponse, error) {
 	return nil, status.Error(codes.Unimplemented, "method ReassignSupervisorAssets not implemented")
+}
+func (UnimplementedTradingServiceServer) RunExecutionTick(context.Context, *RunExecutionTickRequest) (*RunExecutionTickResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method RunExecutionTick not implemented")
+}
+func (UnimplementedTradingServiceServer) RunSagaRecoveryTick(context.Context, *RunSagaRecoveryTickRequest) (*RunSagaRecoveryTickResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method RunSagaRecoveryTick not implemented")
+}
+func (UnimplementedTradingServiceServer) RunOTCExpirySweep(context.Context, *RunOTCExpirySweepRequest) (*RunOTCExpirySweepResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method RunOTCExpirySweep not implemented")
+}
+func (UnimplementedTradingServiceServer) RunOptionsRefresh(context.Context, *RunOptionsRefreshRequest) (*RunOptionsRefreshResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method RunOptionsRefresh not implemented")
+}
+func (UnimplementedTradingServiceServer) RunMarketDataRefresh(context.Context, *RunMarketDataRefreshRequest) (*RunMarketDataRefreshResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method RunMarketDataRefresh not implemented")
+}
+func (UnimplementedTradingServiceServer) RunStockHistoryBackfill(context.Context, *RunStockHistoryBackfillRequest) (*RunStockHistoryBackfillResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method RunStockHistoryBackfill not implemented")
+}
+func (UnimplementedTradingServiceServer) RunFundPerformanceSnapshot(context.Context, *RunFundPerformanceSnapshotRequest) (*RunFundPerformanceSnapshotResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method RunFundPerformanceSnapshot not implemented")
 }
 func (UnimplementedTradingServiceServer) testEmbeddedByValue() {}
 
@@ -2003,6 +2135,132 @@ func _TradingService_ReassignSupervisorAssets_Handler(srv interface{}, ctx conte
 	return interceptor(ctx, in, info, handler)
 }
 
+func _TradingService_RunExecutionTick_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(RunExecutionTickRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(TradingServiceServer).RunExecutionTick(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: TradingService_RunExecutionTick_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(TradingServiceServer).RunExecutionTick(ctx, req.(*RunExecutionTickRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _TradingService_RunSagaRecoveryTick_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(RunSagaRecoveryTickRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(TradingServiceServer).RunSagaRecoveryTick(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: TradingService_RunSagaRecoveryTick_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(TradingServiceServer).RunSagaRecoveryTick(ctx, req.(*RunSagaRecoveryTickRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _TradingService_RunOTCExpirySweep_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(RunOTCExpirySweepRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(TradingServiceServer).RunOTCExpirySweep(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: TradingService_RunOTCExpirySweep_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(TradingServiceServer).RunOTCExpirySweep(ctx, req.(*RunOTCExpirySweepRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _TradingService_RunOptionsRefresh_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(RunOptionsRefreshRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(TradingServiceServer).RunOptionsRefresh(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: TradingService_RunOptionsRefresh_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(TradingServiceServer).RunOptionsRefresh(ctx, req.(*RunOptionsRefreshRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _TradingService_RunMarketDataRefresh_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(RunMarketDataRefreshRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(TradingServiceServer).RunMarketDataRefresh(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: TradingService_RunMarketDataRefresh_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(TradingServiceServer).RunMarketDataRefresh(ctx, req.(*RunMarketDataRefreshRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _TradingService_RunStockHistoryBackfill_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(RunStockHistoryBackfillRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(TradingServiceServer).RunStockHistoryBackfill(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: TradingService_RunStockHistoryBackfill_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(TradingServiceServer).RunStockHistoryBackfill(ctx, req.(*RunStockHistoryBackfillRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _TradingService_RunFundPerformanceSnapshot_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(RunFundPerformanceSnapshotRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(TradingServiceServer).RunFundPerformanceSnapshot(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: TradingService_RunFundPerformanceSnapshot_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(TradingServiceServer).RunFundPerformanceSnapshot(ctx, req.(*RunFundPerformanceSnapshotRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
 // TradingService_ServiceDesc is the grpc.ServiceDesc for TradingService service.
 // It's only intended for direct use with grpc.RegisterService,
 // and not to be introspected or modified (even as a copy)
@@ -2217,6 +2475,34 @@ var TradingService_ServiceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "ReassignSupervisorAssets",
 			Handler:    _TradingService_ReassignSupervisorAssets_Handler,
+		},
+		{
+			MethodName: "RunExecutionTick",
+			Handler:    _TradingService_RunExecutionTick_Handler,
+		},
+		{
+			MethodName: "RunSagaRecoveryTick",
+			Handler:    _TradingService_RunSagaRecoveryTick_Handler,
+		},
+		{
+			MethodName: "RunOTCExpirySweep",
+			Handler:    _TradingService_RunOTCExpirySweep_Handler,
+		},
+		{
+			MethodName: "RunOptionsRefresh",
+			Handler:    _TradingService_RunOptionsRefresh_Handler,
+		},
+		{
+			MethodName: "RunMarketDataRefresh",
+			Handler:    _TradingService_RunMarketDataRefresh_Handler,
+		},
+		{
+			MethodName: "RunStockHistoryBackfill",
+			Handler:    _TradingService_RunStockHistoryBackfill_Handler,
+		},
+		{
+			MethodName: "RunFundPerformanceSnapshot",
+			Handler:    _TradingService_RunFundPerformanceSnapshot_Handler,
 		},
 	},
 	Streams:  []grpc.StreamDesc{},

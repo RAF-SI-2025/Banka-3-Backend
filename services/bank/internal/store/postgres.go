@@ -4,32 +4,21 @@ package store
 import (
 	"errors"
 
+	"github.com/RAF-SI-2025/Banka-3-Backend/pkg/postgres"
 	"github.com/jackc/pgx/v5"
-	"github.com/jackc/pgx/v5/pgxpool"
 )
 
 type Store struct {
-	Pool *pgxpool.Pool
-	// ReadPool routes read-only queries (SELECT … FROM …) to a hot
-	// standby when set. Repos pick the read pool via Store.reader().
-	// Defaults to the primary so call sites that haven't been
-	// migrated stay correct. BonusReadReplicaRouting / PR #287.
-	ReadPool *pgxpool.Pool
+	// DB routes writes/transactions to the primary and reads marked
+	// postgres.WithRead(ctx) to the read replica. Hot paths
+	// (account/balance lookups inside a transfer, idempotency guards,
+	// 2PC and cron reads) deliberately stay unmarked so they hit the
+	// primary — async streaming replication can lag a just-committed
+	// write. See pkg/postgres for the routing contract.
+	DB *postgres.DB
 }
 
-func New(pool *pgxpool.Pool) *Store { return &Store{Pool: pool} }
-
-// reader returns the read pool when configured, primary otherwise.
-// Use in SELECTs that don't need read-after-write consistency. Hot
-// paths (account/balance lookups inside a transfer, …) MUST stay on
-// the primary because async streaming replication can lag the
-// committing write.
-func (s *Store) reader() *pgxpool.Pool {
-	if s.ReadPool != nil {
-		return s.ReadPool
-	}
-	return s.Pool
-}
+func New(db *postgres.DB) *Store { return &Store{DB: db} }
 
 // IsUniqueViolation reports whether err is a Postgres unique-constraint
 // violation. Exported so the service layer can detect conflict-on-retry

@@ -55,7 +55,7 @@ func (s *Store) InsertReservation(ctx context.Context, tx pgx.Tx, r *domain.Rese
 // this as the empty case.
 func (s *Store) GetReservationByOpID(ctx context.Context, opID string) (*domain.Reservation, error) {
 	const q = `select ` + reservationCols + ` from "bank".reservations where op_id = $1`
-	out, err := scanReservation(s.Pool.QueryRow(ctx, q, opID))
+	out, err := scanReservation(s.DB.QueryRow(ctx, q, opID))
 	if err != nil {
 		if noRows(err) {
 			return nil, apperr.NotFound("reservation not found")

@@ -6,28 +6,20 @@ import (
 	"errors"
 
 	"github.com/RAF-SI-2025/Banka-3-Backend/pkg/apperr"
+	"github.com/RAF-SI-2025/Banka-3-Backend/pkg/postgres"
 	"github.com/jackc/pgx/v5"
-	"github.com/jackc/pgx/v5/pgxpool"
 )
 
-// Store wraps the pgx pool. Each *.go file in this package groups
-// queries by aggregate (actuaries, exchanges, …).
+// Store wraps a routed *postgres.DB. Each *.go file in this package
+// groups queries by aggregate (actuaries, exchanges, …). Writes and
+// transactions land on the primary; reads marked postgres.WithRead(ctx)
+// route to the read replica. Flow/worker/saga/idempotency/cron/gate
+// reads deliberately stay unmarked (primary) to avoid replica lag.
 type Store struct {
-	Pool *pgxpool.Pool
-	// ReadPool routes SELECTs to a hot standby when set.
-	// BonusReadReplicaRouting / PR #287.
-	ReadPool *pgxpool.Pool
+	DB *postgres.DB
 }
 
-func New(pool *pgxpool.Pool) *Store { return &Store{Pool: pool} }
-
-// reader returns the read pool when configured, primary otherwise.
-func (s *Store) reader() *pgxpool.Pool {
-	if s.ReadPool != nil {
-		return s.ReadPool
-	}
-	return s.Pool
-}
+func New(db *postgres.DB) *Store { return &Store{DB: db} }
 
 // noRows reports whether err wraps pgx.ErrNoRows.
 func noRows(err error) bool { return errors.Is(err, pgx.ErrNoRows) }
@@ -99,7 +91,7 @@ func intArg(n int) string {
 // ExecuteAtomic runs fn inside a single pgx transaction; commits on
 // nil return, rolls back on error.
 func (s *Store) ExecuteAtomic(ctx context.Context, fn func(pgx.Tx) error) error {
-	tx, err := s.Pool.BeginTx(ctx, pgx.TxOptions{})
+	tx, err := s.DB.BeginTx(ctx, pgx.TxOptions{})
 	if err != nil {
 		return apperr.Internal("begin tx", err)
 	}

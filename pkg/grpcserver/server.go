@@ -17,15 +17,34 @@ import (
 	authmw "github.com/RAF-SI-2025/Banka-3-Backend/pkg/auth"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/codes"
+	"google.golang.org/grpc/stats"
 	"google.golang.org/grpc/status"
 	"google.golang.org/protobuf/proto"
 )
+
+// Option configures Run.
+type Option func(*config)
+
+type config struct {
+	statsHandler stats.Handler
+}
+
+// WithStatsHandler attaches a grpc stats.Handler — pass
+// otelinit.Provider.GRPCServerHandler() here for OTel traces + metrics.
+// Adding the handler also makes the server propagate incoming W3C
+// traceparent into the request context for downstream calls.
+func WithStatsHandler(h stats.Handler) Option { return func(c *config) { c.statsHandler = h } }
 
 // Run starts a gRPC server bound to addr. register is called with the
 // server before listen so the caller can register services and
 // reflection. Run blocks until ctx is cancelled, then performs a graceful
 // stop with a 30s timeout.
-func Run(ctx context.Context, log *slog.Logger, addr string, register func(*grpc.Server)) error {
+func Run(ctx context.Context, log *slog.Logger, addr string, register func(*grpc.Server), opts ...Option) error {
+	cfg := config{}
+	for _, o := range opts {
+		o(&cfg)
+	}
+
 	lis, err := net.Listen("tcp", addr)
 	if err != nil {
 		return fmt.Errorf("listen %s: %w", addr, err)
@@ -36,7 +55,7 @@ func Run(ctx context.Context, log *slog.Logger, addr string, register func(*grpc
 		return fmt.Errorf("init protovalidate: %w", err)
 	}
 
-	srv := grpc.NewServer(
+	serverOpts := []grpc.ServerOption{
 		grpc.ChainUnaryInterceptor(
 			recoveryInterceptor(log),
 			loggingInterceptor(log),
@@ -51,7 +70,11 @@ func Run(ctx context.Context, log *slog.Logger, addr string, register func(*grpc
 			errorMapInterceptor(),
 			validationInterceptor(validator),
 		),
-	)
+	}
+	if cfg.statsHandler != nil {
+		serverOpts = append(serverOpts, grpc.StatsHandler(cfg.statsHandler))
+	}
+	srv := grpc.NewServer(serverOpts...)
 	register(srv)
 
 	errCh := make(chan error, 1)

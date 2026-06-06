@@ -4,6 +4,7 @@ import (
 	"context"
 
 	"github.com/RAF-SI-2025/Banka-3-Backend/pkg/apperr"
+	"github.com/RAF-SI-2025/Banka-3-Backend/pkg/postgres"
 	"github.com/RAF-SI-2025/Banka-3-Backend/services/bank/internal/domain"
 )
 
@@ -32,7 +33,8 @@ func (s *Store) CreateAuthorizedPerson(ctx context.Context, p *domain.Authorized
              email, phone, address)
         values ($1,$2,$3,$4,$5,$6,$7,$8)
         returning ` + authorizedPersonColumns
-	out, err := scanAuthorizedPerson(s.Pool.QueryRow(ctx, q,
+	out, err := scanAuthorizedPerson(s.DB.QueryRow(
+		ctx, q,
 		p.CompanyID, p.FirstName, p.LastName, p.DateOfBirth, string(p.Gender),
 		p.Email, p.Phone, p.Address,
 	))
@@ -44,7 +46,7 @@ func (s *Store) CreateAuthorizedPerson(ctx context.Context, p *domain.Authorized
 
 func (s *Store) GetAuthorizedPersonByID(ctx context.Context, id string) (*domain.AuthorizedPerson, error) {
 	const q = `select ` + authorizedPersonColumns + ` from "bank".authorized_persons where id = $1`
-	out, err := scanAuthorizedPerson(s.Pool.QueryRow(ctx, q, id))
+	out, err := scanAuthorizedPerson(s.DB.QueryRow(postgres.WithRead(ctx), q, id))
 	if err != nil {
 		if noRows(err) {
 			return nil, apperr.NotFound("ovlašćeno lice ne postoji")
@@ -56,7 +58,7 @@ func (s *Store) GetAuthorizedPersonByID(ctx context.Context, id string) (*domain
 
 func (s *Store) ListAuthorizedPersonsByCompany(ctx context.Context, companyID string) ([]*domain.AuthorizedPerson, error) {
 	const q = `select ` + authorizedPersonColumns + ` from "bank".authorized_persons where company_id = $1 order by last_name, first_name`
-	rows, err := s.Pool.Query(ctx, q, companyID)
+	rows, err := s.DB.Query(postgres.WithRead(ctx), q, companyID)
 	if err != nil {
 		return nil, apperr.Internal("list authorized persons", err)
 	}

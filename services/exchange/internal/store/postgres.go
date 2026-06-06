@@ -6,26 +6,18 @@ import (
 	"errors"
 
 	"github.com/RAF-SI-2025/Banka-3-Backend/pkg/apperr"
+	"github.com/RAF-SI-2025/Banka-3-Backend/pkg/postgres"
 	"github.com/RAF-SI-2025/Banka-3-Backend/services/exchange/internal/domain"
 	"github.com/jackc/pgx/v5"
-	"github.com/jackc/pgx/v5/pgxpool"
 )
 
 type Store struct {
-	Pool *pgxpool.Pool
-	// ReadPool routes SELECTs to a hot standby when set.
-	// BonusReadReplicaRouting / PR #287.
-	ReadPool *pgxpool.Pool
+	// DB routes writes/transactions to the primary and reads marked
+	// postgres.WithRead(ctx) to the read replica. See pkg/postgres.
+	DB *postgres.DB
 }
 
-func New(pool *pgxpool.Pool) *Store { return &Store{Pool: pool} }
-
-func (s *Store) reader() *pgxpool.Pool {
-	if s.ReadPool != nil {
-		return s.ReadPool
-	}
-	return s.Pool
-}
+func New(db *postgres.DB) *Store { return &Store{DB: db} }
 
 func noRows(err error) bool { return errors.Is(err, pgx.ErrNoRows) }
 
@@ -40,7 +32,7 @@ func (s *Store) UpsertRate(ctx context.Context, r *domain.Rate) (*domain.Rate, e
           set bid = excluded.bid, ask = excluded.ask, updated_at = now()
         returning "from", "to", bid::text, ask::text, updated_at`
 
-	out, err := scanRate(s.Pool.QueryRow(ctx, q, string(r.From), string(r.To), r.Bid, r.Ask))
+	out, err := scanRate(s.DB.QueryRow(ctx, q, string(r.From), string(r.To), r.Bid, r.Ask))
 	if err != nil {
 		// numeric check-violation is the most likely failure here
 		// (negative bid, ask < bid). Surface as Validation so the gateway
@@ -60,7 +52,7 @@ func (s *Store) GetRate(ctx context.Context, from, to domain.Currency) (*domain.
         select "from", "to", bid::text, ask::text, updated_at
         from "exchange".fx_rates
         where "from" = $1 and "to" = $2`
-	out, err := scanRate(s.Pool.QueryRow(ctx, q, string(from), string(to)))
+	out, err := scanRate(s.DB.QueryRow(postgres.WithRead(ctx), q, string(from), string(to)))
 	if err != nil {
 		if noRows(err) {
 			return nil, apperr.NotFound("fx rate not found")
@@ -81,7 +73,7 @@ func (s *Store) ListRates(ctx context.Context, from domain.Currency) ([]*domain.
 	}
 	q += ` order by "from", "to"`
 
-	rows, err := s.reader().Query(ctx, q, args...)
+	rows, err := s.DB.Query(postgres.WithRead(ctx), q, args...)
 	if err != nil {
 		return nil, apperr.Internal("list fx rates", err)
 	}

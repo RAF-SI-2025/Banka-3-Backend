@@ -381,6 +381,87 @@ func (x *QuoteRequest) GetTo() Currency {
 	return Currency_CURRENCY_UNSPECIFIED
 }
 
+type RefreshFXRatesRequest struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *RefreshFXRatesRequest) Reset() {
+	*x = RefreshFXRatesRequest{}
+	mi := &file_exchange_v1_exchange_proto_msgTypes[5]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *RefreshFXRatesRequest) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*RefreshFXRatesRequest) ProtoMessage() {}
+
+func (x *RefreshFXRatesRequest) ProtoReflect() protoreflect.Message {
+	mi := &file_exchange_v1_exchange_proto_msgTypes[5]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use RefreshFXRatesRequest.ProtoReflect.Descriptor instead.
+func (*RefreshFXRatesRequest) Descriptor() ([]byte, []int) {
+	return file_exchange_v1_exchange_proto_rawDescGZIP(), []int{5}
+}
+
+type RefreshFXRatesResponse struct {
+	state protoimpl.MessageState `protogen:"open.v1"`
+	// written is the number of (currency→RSD) rate rows upserted.
+	Written       int32 `protobuf:"varint,1,opt,name=written,proto3" json:"written,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *RefreshFXRatesResponse) Reset() {
+	*x = RefreshFXRatesResponse{}
+	mi := &file_exchange_v1_exchange_proto_msgTypes[6]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *RefreshFXRatesResponse) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*RefreshFXRatesResponse) ProtoMessage() {}
+
+func (x *RefreshFXRatesResponse) ProtoReflect() protoreflect.Message {
+	mi := &file_exchange_v1_exchange_proto_msgTypes[6]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use RefreshFXRatesResponse.ProtoReflect.Descriptor instead.
+func (*RefreshFXRatesResponse) Descriptor() ([]byte, []int) {
+	return file_exchange_v1_exchange_proto_rawDescGZIP(), []int{6}
+}
+
+func (x *RefreshFXRatesResponse) GetWritten() int32 {
+	if x != nil {
+		return x.Written
+	}
+	return 0
+}
+
 var File_exchange_v1_exchange_proto protoreflect.FileDescriptor
 
 const file_exchange_v1_exchange_proto_rawDesc = "" +
@@ -404,7 +485,10 @@ const file_exchange_v1_exchange_proto_rawDesc = "" +
 	"\x05rates\x18\x01 \x03(\v2\x17.banka.exchange.v1.RateR\x05rates\"l\n" +
 	"\fQuoteRequest\x12/\n" +
 	"\x04from\x18\x01 \x01(\x0e2\x1b.banka.exchange.v1.CurrencyR\x04from\x12+\n" +
-	"\x02to\x18\x02 \x01(\x0e2\x1b.banka.exchange.v1.CurrencyR\x02to*\xb4\x01\n" +
+	"\x02to\x18\x02 \x01(\x0e2\x1b.banka.exchange.v1.CurrencyR\x02to\"\x17\n" +
+	"\x15RefreshFXRatesRequest\"2\n" +
+	"\x16RefreshFXRatesResponse\x12\x18\n" +
+	"\awritten\x18\x01 \x01(\x05R\awritten*\xb4\x01\n" +
 	"\bCurrency\x12\x18\n" +
 	"\x14CURRENCY_UNSPECIFIED\x10\x00\x12\x10\n" +
 	"\fCURRENCY_RSD\x10\x01\x12\x10\n" +
@@ -414,12 +498,13 @@ const file_exchange_v1_exchange_proto_rawDesc = "" +
 	"\fCURRENCY_GBP\x10\x05\x12\x10\n" +
 	"\fCURRENCY_JPY\x10\x06\x12\x10\n" +
 	"\fCURRENCY_CAD\x10\a\x12\x10\n" +
-	"\fCURRENCY_AUD\x10\b2\xbc\x02\n" +
+	"\fCURRENCY_AUD\x10\b2\xcf\x03\n" +
 	"\x0fExchangeService\x12n\n" +
 	"\n" +
 	"UpsertRate\x12$.banka.exchange.v1.UpsertRateRequest\x1a\x17.banka.exchange.v1.Rate\"!\x82\xd3\xe4\x93\x02\x1b:\x01*\x1a\x16/api/v1/exchange/rates\x12v\n" +
 	"\tListRates\x12#.banka.exchange.v1.ListRatesRequest\x1a$.banka.exchange.v1.ListRatesResponse\"\x1e\x82\xd3\xe4\x93\x02\x18\x12\x16/api/v1/exchange/rates\x12A\n" +
-	"\x05Quote\x12\x1f.banka.exchange.v1.QuoteRequest\x1a\x17.banka.exchange.v1.RateB\xd5\x01\n" +
+	"\x05Quote\x12\x1f.banka.exchange.v1.QuoteRequest\x1a\x17.banka.exchange.v1.Rate\x12\x90\x01\n" +
+	"\x0eRefreshFXRates\x12(.banka.exchange.v1.RefreshFXRatesRequest\x1a).banka.exchange.v1.RefreshFXRatesResponse\")\x82\xd3\xe4\x93\x02#:\x01*\"\x1e/api/v1/exchange/rates/refreshB\xd5\x01\n" +
 	"\x15com.banka.exchange.v1B\rExchangeProtoP\x01ZGgithub.com/RAF-SI-2025/Banka-3-Backend/gen/proto/exchange/v1;exchangev1\xa2\x02\x03BEX\xaa\x02\x11Banka.Exchange.V1\xca\x02\x11Banka\\Exchange\\V1\xe2\x02\x1dBanka\\Exchange\\V1\\GPBMetadata\xea\x02\x13Banka::Exchange::V1b\x06proto3"
 
 var (
@@ -435,20 +520,22 @@ func file_exchange_v1_exchange_proto_rawDescGZIP() []byte {
 }
 
 var file_exchange_v1_exchange_proto_enumTypes = make([]protoimpl.EnumInfo, 1)
-var file_exchange_v1_exchange_proto_msgTypes = make([]protoimpl.MessageInfo, 5)
+var file_exchange_v1_exchange_proto_msgTypes = make([]protoimpl.MessageInfo, 7)
 var file_exchange_v1_exchange_proto_goTypes = []any{
-	(Currency)(0),                 // 0: banka.exchange.v1.Currency
-	(*Rate)(nil),                  // 1: banka.exchange.v1.Rate
-	(*UpsertRateRequest)(nil),     // 2: banka.exchange.v1.UpsertRateRequest
-	(*ListRatesRequest)(nil),      // 3: banka.exchange.v1.ListRatesRequest
-	(*ListRatesResponse)(nil),     // 4: banka.exchange.v1.ListRatesResponse
-	(*QuoteRequest)(nil),          // 5: banka.exchange.v1.QuoteRequest
-	(*timestamppb.Timestamp)(nil), // 6: google.protobuf.Timestamp
+	(Currency)(0),                  // 0: banka.exchange.v1.Currency
+	(*Rate)(nil),                   // 1: banka.exchange.v1.Rate
+	(*UpsertRateRequest)(nil),      // 2: banka.exchange.v1.UpsertRateRequest
+	(*ListRatesRequest)(nil),       // 3: banka.exchange.v1.ListRatesRequest
+	(*ListRatesResponse)(nil),      // 4: banka.exchange.v1.ListRatesResponse
+	(*QuoteRequest)(nil),           // 5: banka.exchange.v1.QuoteRequest
+	(*RefreshFXRatesRequest)(nil),  // 6: banka.exchange.v1.RefreshFXRatesRequest
+	(*RefreshFXRatesResponse)(nil), // 7: banka.exchange.v1.RefreshFXRatesResponse
+	(*timestamppb.Timestamp)(nil),  // 8: google.protobuf.Timestamp
 }
 var file_exchange_v1_exchange_proto_depIdxs = []int32{
 	0,  // 0: banka.exchange.v1.Rate.from:type_name -> banka.exchange.v1.Currency
 	0,  // 1: banka.exchange.v1.Rate.to:type_name -> banka.exchange.v1.Currency
-	6,  // 2: banka.exchange.v1.Rate.updated_at:type_name -> google.protobuf.Timestamp
+	8,  // 2: banka.exchange.v1.Rate.updated_at:type_name -> google.protobuf.Timestamp
 	0,  // 3: banka.exchange.v1.UpsertRateRequest.from:type_name -> banka.exchange.v1.Currency
 	0,  // 4: banka.exchange.v1.UpsertRateRequest.to:type_name -> banka.exchange.v1.Currency
 	0,  // 5: banka.exchange.v1.ListRatesRequest.from:type_name -> banka.exchange.v1.Currency
@@ -458,11 +545,13 @@ var file_exchange_v1_exchange_proto_depIdxs = []int32{
 	2,  // 9: banka.exchange.v1.ExchangeService.UpsertRate:input_type -> banka.exchange.v1.UpsertRateRequest
 	3,  // 10: banka.exchange.v1.ExchangeService.ListRates:input_type -> banka.exchange.v1.ListRatesRequest
 	5,  // 11: banka.exchange.v1.ExchangeService.Quote:input_type -> banka.exchange.v1.QuoteRequest
-	1,  // 12: banka.exchange.v1.ExchangeService.UpsertRate:output_type -> banka.exchange.v1.Rate
-	4,  // 13: banka.exchange.v1.ExchangeService.ListRates:output_type -> banka.exchange.v1.ListRatesResponse
-	1,  // 14: banka.exchange.v1.ExchangeService.Quote:output_type -> banka.exchange.v1.Rate
-	12, // [12:15] is the sub-list for method output_type
-	9,  // [9:12] is the sub-list for method input_type
+	6,  // 12: banka.exchange.v1.ExchangeService.RefreshFXRates:input_type -> banka.exchange.v1.RefreshFXRatesRequest
+	1,  // 13: banka.exchange.v1.ExchangeService.UpsertRate:output_type -> banka.exchange.v1.Rate
+	4,  // 14: banka.exchange.v1.ExchangeService.ListRates:output_type -> banka.exchange.v1.ListRatesResponse
+	1,  // 15: banka.exchange.v1.ExchangeService.Quote:output_type -> banka.exchange.v1.Rate
+	7,  // 16: banka.exchange.v1.ExchangeService.RefreshFXRates:output_type -> banka.exchange.v1.RefreshFXRatesResponse
+	13, // [13:17] is the sub-list for method output_type
+	9,  // [9:13] is the sub-list for method input_type
 	9,  // [9:9] is the sub-list for extension type_name
 	9,  // [9:9] is the sub-list for extension extendee
 	0,  // [0:9] is the sub-list for field type_name
@@ -479,7 +568,7 @@ func file_exchange_v1_exchange_proto_init() {
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
 			RawDescriptor: unsafe.Slice(unsafe.StringData(file_exchange_v1_exchange_proto_rawDesc), len(file_exchange_v1_exchange_proto_rawDesc)),
 			NumEnums:      1,
-			NumMessages:   5,
+			NumMessages:   7,
 			NumExtensions: 0,
 			NumServices:   1,
 		},
