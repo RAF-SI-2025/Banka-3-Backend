@@ -371,8 +371,8 @@ func (s *Service) RunForexForwardSettlement(ctx context.Context) (*ForexForwardS
 		res.Processed++
 		execErr := s.settleForexForward(ctx, f)
 		at := s.now()
-		switch {
-		case execErr == nil:
+		switch execErr {
+		case nil:
 			if merr := s.Store.MarkForexForwardSettled(ctx, f.ID, at); merr != nil {
 				s.Log.WarnContext(ctx, "forex forward mark-settled failed", "id", f.ID, "err", merr.Error())
 				continue
