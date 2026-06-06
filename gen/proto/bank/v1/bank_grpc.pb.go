@@ -20,48 +20,52 @@ import (
 const _ = grpc.SupportPackageIsVersion9
 
 const (
-	BankService_CreateCompany_FullMethodName          = "/banka.bank.v1.BankService/CreateCompany"
-	BankService_ListCompanies_FullMethodName          = "/banka.bank.v1.BankService/ListCompanies"
-	BankService_GetCompany_FullMethodName             = "/banka.bank.v1.BankService/GetCompany"
-	BankService_UpdateCompany_FullMethodName          = "/banka.bank.v1.BankService/UpdateCompany"
-	BankService_CreateAccount_FullMethodName          = "/banka.bank.v1.BankService/CreateAccount"
-	BankService_ListAccounts_FullMethodName           = "/banka.bank.v1.BankService/ListAccounts"
-	BankService_GetAccount_FullMethodName             = "/banka.bank.v1.BankService/GetAccount"
-	BankService_UpdateAccountLimits_FullMethodName    = "/banka.bank.v1.BankService/UpdateAccountLimits"
-	BankService_UpdateAccountName_FullMethodName      = "/banka.bank.v1.BankService/UpdateAccountName"
-	BankService_SetAccountStatus_FullMethodName       = "/banka.bank.v1.BankService/SetAccountStatus"
-	BankService_GetSystemAccount_FullMethodName       = "/banka.bank.v1.BankService/GetSystemAccount"
-	BankService_SettleTrade_FullMethodName            = "/banka.bank.v1.BankService/SettleTrade"
-	BankService_SettleCapitalGainsTax_FullMethodName  = "/banka.bank.v1.BankService/SettleCapitalGainsTax"
-	BankService_SettleForexFill_FullMethodName        = "/banka.bank.v1.BankService/SettleForexFill"
-	BankService_ReserveFunds_FullMethodName           = "/banka.bank.v1.BankService/ReserveFunds"
-	BankService_ReleaseFunds_FullMethodName           = "/banka.bank.v1.BankService/ReleaseFunds"
-	BankService_CommitReservedFunds_FullMethodName    = "/banka.bank.v1.BankService/CommitReservedFunds"
-	BankService_TransferBetweenClients_FullMethodName = "/banka.bank.v1.BankService/TransferBetweenClients"
-	BankService_CreateFundAccount_FullMethodName      = "/banka.bank.v1.BankService/CreateFundAccount"
-	BankService_CreatePayment_FullMethodName          = "/banka.bank.v1.BankService/CreatePayment"
-	BankService_CreateTransfer_FullMethodName         = "/banka.bank.v1.BankService/CreateTransfer"
-	BankService_QuoteExchange_FullMethodName          = "/banka.bank.v1.BankService/QuoteExchange"
-	BankService_ListTransactions_FullMethodName       = "/banka.bank.v1.BankService/ListTransactions"
-	BankService_CreatePaymentRecipient_FullMethodName = "/banka.bank.v1.BankService/CreatePaymentRecipient"
-	BankService_ListPaymentRecipients_FullMethodName  = "/banka.bank.v1.BankService/ListPaymentRecipients"
-	BankService_UpdatePaymentRecipient_FullMethodName = "/banka.bank.v1.BankService/UpdatePaymentRecipient"
-	BankService_DeletePaymentRecipient_FullMethodName = "/banka.bank.v1.BankService/DeletePaymentRecipient"
-	BankService_CreateCard_FullMethodName             = "/banka.bank.v1.BankService/CreateCard"
-	BankService_ListCards_FullMethodName              = "/banka.bank.v1.BankService/ListCards"
-	BankService_SetCardStatus_FullMethodName          = "/banka.bank.v1.BankService/SetCardStatus"
-	BankService_UpdateCardLimit_FullMethodName        = "/banka.bank.v1.BankService/UpdateCardLimit"
-	BankService_CreateAuthorizedPerson_FullMethodName = "/banka.bank.v1.BankService/CreateAuthorizedPerson"
-	BankService_ListAuthorizedPersons_FullMethodName  = "/banka.bank.v1.BankService/ListAuthorizedPersons"
-	BankService_SubmitLoanRequest_FullMethodName      = "/banka.bank.v1.BankService/SubmitLoanRequest"
-	BankService_ListLoanRequests_FullMethodName       = "/banka.bank.v1.BankService/ListLoanRequests"
-	BankService_DecideLoanRequest_FullMethodName      = "/banka.bank.v1.BankService/DecideLoanRequest"
-	BankService_ListLoans_FullMethodName              = "/banka.bank.v1.BankService/ListLoans"
-	BankService_GetLoan_FullMethodName                = "/banka.bank.v1.BankService/GetLoan"
-	BankService_RunInstallmentJob_FullMethodName      = "/banka.bank.v1.BankService/RunInstallmentJob"
-	BankService_RunVariableRateJob_FullMethodName     = "/banka.bank.v1.BankService/RunVariableRateJob"
-	BankService_RunMaintenanceFeeJob_FullMethodName   = "/banka.bank.v1.BankService/RunMaintenanceFeeJob"
-	BankService_RunSpentResetJob_FullMethodName       = "/banka.bank.v1.BankService/RunSpentResetJob"
+	BankService_CreateCompany_FullMethodName           = "/banka.bank.v1.BankService/CreateCompany"
+	BankService_ListCompanies_FullMethodName           = "/banka.bank.v1.BankService/ListCompanies"
+	BankService_GetCompany_FullMethodName              = "/banka.bank.v1.BankService/GetCompany"
+	BankService_UpdateCompany_FullMethodName           = "/banka.bank.v1.BankService/UpdateCompany"
+	BankService_CreateAccount_FullMethodName           = "/banka.bank.v1.BankService/CreateAccount"
+	BankService_ListAccounts_FullMethodName            = "/banka.bank.v1.BankService/ListAccounts"
+	BankService_GetAccount_FullMethodName              = "/banka.bank.v1.BankService/GetAccount"
+	BankService_UpdateAccountLimits_FullMethodName     = "/banka.bank.v1.BankService/UpdateAccountLimits"
+	BankService_UpdateAccountName_FullMethodName       = "/banka.bank.v1.BankService/UpdateAccountName"
+	BankService_SetAccountStatus_FullMethodName        = "/banka.bank.v1.BankService/SetAccountStatus"
+	BankService_GetSystemAccount_FullMethodName        = "/banka.bank.v1.BankService/GetSystemAccount"
+	BankService_SettleTrade_FullMethodName             = "/banka.bank.v1.BankService/SettleTrade"
+	BankService_SettleCapitalGainsTax_FullMethodName   = "/banka.bank.v1.BankService/SettleCapitalGainsTax"
+	BankService_SettleForexFill_FullMethodName         = "/banka.bank.v1.BankService/SettleForexFill"
+	BankService_ReserveFunds_FullMethodName            = "/banka.bank.v1.BankService/ReserveFunds"
+	BankService_ReleaseFunds_FullMethodName            = "/banka.bank.v1.BankService/ReleaseFunds"
+	BankService_CommitReservedFunds_FullMethodName     = "/banka.bank.v1.BankService/CommitReservedFunds"
+	BankService_TransferBetweenClients_FullMethodName  = "/banka.bank.v1.BankService/TransferBetweenClients"
+	BankService_CreateFundAccount_FullMethodName       = "/banka.bank.v1.BankService/CreateFundAccount"
+	BankService_CreatePayment_FullMethodName           = "/banka.bank.v1.BankService/CreatePayment"
+	BankService_CreateTransfer_FullMethodName          = "/banka.bank.v1.BankService/CreateTransfer"
+	BankService_QuoteExchange_FullMethodName           = "/banka.bank.v1.BankService/QuoteExchange"
+	BankService_ListTransactions_FullMethodName        = "/banka.bank.v1.BankService/ListTransactions"
+	BankService_CreatePaymentRecipient_FullMethodName  = "/banka.bank.v1.BankService/CreatePaymentRecipient"
+	BankService_ListPaymentRecipients_FullMethodName   = "/banka.bank.v1.BankService/ListPaymentRecipients"
+	BankService_UpdatePaymentRecipient_FullMethodName  = "/banka.bank.v1.BankService/UpdatePaymentRecipient"
+	BankService_DeletePaymentRecipient_FullMethodName  = "/banka.bank.v1.BankService/DeletePaymentRecipient"
+	BankService_SchedulePayment_FullMethodName         = "/banka.bank.v1.BankService/SchedulePayment"
+	BankService_ListScheduledPayments_FullMethodName   = "/banka.bank.v1.BankService/ListScheduledPayments"
+	BankService_CancelScheduledPayment_FullMethodName  = "/banka.bank.v1.BankService/CancelScheduledPayment"
+	BankService_RunDueScheduledPayments_FullMethodName = "/banka.bank.v1.BankService/RunDueScheduledPayments"
+	BankService_CreateCard_FullMethodName              = "/banka.bank.v1.BankService/CreateCard"
+	BankService_ListCards_FullMethodName               = "/banka.bank.v1.BankService/ListCards"
+	BankService_SetCardStatus_FullMethodName           = "/banka.bank.v1.BankService/SetCardStatus"
+	BankService_UpdateCardLimit_FullMethodName         = "/banka.bank.v1.BankService/UpdateCardLimit"
+	BankService_CreateAuthorizedPerson_FullMethodName  = "/banka.bank.v1.BankService/CreateAuthorizedPerson"
+	BankService_ListAuthorizedPersons_FullMethodName   = "/banka.bank.v1.BankService/ListAuthorizedPersons"
+	BankService_SubmitLoanRequest_FullMethodName       = "/banka.bank.v1.BankService/SubmitLoanRequest"
+	BankService_ListLoanRequests_FullMethodName        = "/banka.bank.v1.BankService/ListLoanRequests"
+	BankService_DecideLoanRequest_FullMethodName       = "/banka.bank.v1.BankService/DecideLoanRequest"
+	BankService_ListLoans_FullMethodName               = "/banka.bank.v1.BankService/ListLoans"
+	BankService_GetLoan_FullMethodName                 = "/banka.bank.v1.BankService/GetLoan"
+	BankService_RunInstallmentJob_FullMethodName       = "/banka.bank.v1.BankService/RunInstallmentJob"
+	BankService_RunVariableRateJob_FullMethodName      = "/banka.bank.v1.BankService/RunVariableRateJob"
+	BankService_RunMaintenanceFeeJob_FullMethodName    = "/banka.bank.v1.BankService/RunMaintenanceFeeJob"
+	BankService_RunSpentResetJob_FullMethodName        = "/banka.bank.v1.BankService/RunSpentResetJob"
 )
 
 // BankServiceClient is the client API for BankService service.
@@ -164,6 +168,13 @@ type BankServiceClient interface {
 	ListPaymentRecipients(ctx context.Context, in *ListPaymentRecipientsRequest, opts ...grpc.CallOption) (*ListPaymentRecipientsResponse, error)
 	UpdatePaymentRecipient(ctx context.Context, in *UpdatePaymentRecipientRequest, opts ...grpc.CallOption) (*PaymentRecipient, error)
 	DeletePaymentRecipient(ctx context.Context, in *DeletePaymentRecipientRequest, opts ...grpc.CallOption) (*emptypb.Empty, error)
+	SchedulePayment(ctx context.Context, in *SchedulePaymentRequest, opts ...grpc.CallOption) (*ScheduledPayment, error)
+	ListScheduledPayments(ctx context.Context, in *ListScheduledPaymentsRequest, opts ...grpc.CallOption) (*ListScheduledPaymentsResponse, error)
+	CancelScheduledPayment(ctx context.Context, in *CancelScheduledPaymentRequest, opts ...grpc.CallOption) (*ScheduledPayment, error)
+	// RunDueScheduledPayments attempts execution of every scheduled
+	// payment whose date has arrived. Normally driven by the scheduler
+	// service; admin-only. Internal — no http annotation.
+	RunDueScheduledPayments(ctx context.Context, in *RunDueScheduledPaymentsRequest, opts ...grpc.CallOption) (*RunDueScheduledPaymentsResponse, error)
 	CreateCard(ctx context.Context, in *CreateCardRequest, opts ...grpc.CallOption) (*Card, error)
 	ListCards(ctx context.Context, in *ListCardsRequest, opts ...grpc.CallOption) (*ListCardsResponse, error)
 	SetCardStatus(ctx context.Context, in *SetCardStatusRequest, opts ...grpc.CallOption) (*Card, error)
@@ -472,6 +483,46 @@ func (c *bankServiceClient) DeletePaymentRecipient(ctx context.Context, in *Dele
 	return out, nil
 }
 
+func (c *bankServiceClient) SchedulePayment(ctx context.Context, in *SchedulePaymentRequest, opts ...grpc.CallOption) (*ScheduledPayment, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(ScheduledPayment)
+	err := c.cc.Invoke(ctx, BankService_SchedulePayment_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *bankServiceClient) ListScheduledPayments(ctx context.Context, in *ListScheduledPaymentsRequest, opts ...grpc.CallOption) (*ListScheduledPaymentsResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(ListScheduledPaymentsResponse)
+	err := c.cc.Invoke(ctx, BankService_ListScheduledPayments_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *bankServiceClient) CancelScheduledPayment(ctx context.Context, in *CancelScheduledPaymentRequest, opts ...grpc.CallOption) (*ScheduledPayment, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(ScheduledPayment)
+	err := c.cc.Invoke(ctx, BankService_CancelScheduledPayment_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *bankServiceClient) RunDueScheduledPayments(ctx context.Context, in *RunDueScheduledPaymentsRequest, opts ...grpc.CallOption) (*RunDueScheduledPaymentsResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(RunDueScheduledPaymentsResponse)
+	err := c.cc.Invoke(ctx, BankService_RunDueScheduledPayments_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
 func (c *bankServiceClient) CreateCard(ctx context.Context, in *CreateCardRequest, opts ...grpc.CallOption) (*Card, error) {
 	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
 	out := new(Card)
@@ -722,6 +773,13 @@ type BankServiceServer interface {
 	ListPaymentRecipients(context.Context, *ListPaymentRecipientsRequest) (*ListPaymentRecipientsResponse, error)
 	UpdatePaymentRecipient(context.Context, *UpdatePaymentRecipientRequest) (*PaymentRecipient, error)
 	DeletePaymentRecipient(context.Context, *DeletePaymentRecipientRequest) (*emptypb.Empty, error)
+	SchedulePayment(context.Context, *SchedulePaymentRequest) (*ScheduledPayment, error)
+	ListScheduledPayments(context.Context, *ListScheduledPaymentsRequest) (*ListScheduledPaymentsResponse, error)
+	CancelScheduledPayment(context.Context, *CancelScheduledPaymentRequest) (*ScheduledPayment, error)
+	// RunDueScheduledPayments attempts execution of every scheduled
+	// payment whose date has arrived. Normally driven by the scheduler
+	// service; admin-only. Internal — no http annotation.
+	RunDueScheduledPayments(context.Context, *RunDueScheduledPaymentsRequest) (*RunDueScheduledPaymentsResponse, error)
 	CreateCard(context.Context, *CreateCardRequest) (*Card, error)
 	ListCards(context.Context, *ListCardsRequest) (*ListCardsResponse, error)
 	SetCardStatus(context.Context, *SetCardStatusRequest) (*Card, error)
@@ -839,6 +897,18 @@ func (UnimplementedBankServiceServer) UpdatePaymentRecipient(context.Context, *U
 }
 func (UnimplementedBankServiceServer) DeletePaymentRecipient(context.Context, *DeletePaymentRecipientRequest) (*emptypb.Empty, error) {
 	return nil, status.Error(codes.Unimplemented, "method DeletePaymentRecipient not implemented")
+}
+func (UnimplementedBankServiceServer) SchedulePayment(context.Context, *SchedulePaymentRequest) (*ScheduledPayment, error) {
+	return nil, status.Error(codes.Unimplemented, "method SchedulePayment not implemented")
+}
+func (UnimplementedBankServiceServer) ListScheduledPayments(context.Context, *ListScheduledPaymentsRequest) (*ListScheduledPaymentsResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method ListScheduledPayments not implemented")
+}
+func (UnimplementedBankServiceServer) CancelScheduledPayment(context.Context, *CancelScheduledPaymentRequest) (*ScheduledPayment, error) {
+	return nil, status.Error(codes.Unimplemented, "method CancelScheduledPayment not implemented")
+}
+func (UnimplementedBankServiceServer) RunDueScheduledPayments(context.Context, *RunDueScheduledPaymentsRequest) (*RunDueScheduledPaymentsResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method RunDueScheduledPayments not implemented")
 }
 func (UnimplementedBankServiceServer) CreateCard(context.Context, *CreateCardRequest) (*Card, error) {
 	return nil, status.Error(codes.Unimplemented, "method CreateCard not implemented")
@@ -1391,6 +1461,78 @@ func _BankService_DeletePaymentRecipient_Handler(srv interface{}, ctx context.Co
 	return interceptor(ctx, in, info, handler)
 }
 
+func _BankService_SchedulePayment_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(SchedulePaymentRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(BankServiceServer).SchedulePayment(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: BankService_SchedulePayment_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(BankServiceServer).SchedulePayment(ctx, req.(*SchedulePaymentRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _BankService_ListScheduledPayments_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(ListScheduledPaymentsRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(BankServiceServer).ListScheduledPayments(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: BankService_ListScheduledPayments_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(BankServiceServer).ListScheduledPayments(ctx, req.(*ListScheduledPaymentsRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _BankService_CancelScheduledPayment_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(CancelScheduledPaymentRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(BankServiceServer).CancelScheduledPayment(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: BankService_CancelScheduledPayment_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(BankServiceServer).CancelScheduledPayment(ctx, req.(*CancelScheduledPaymentRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _BankService_RunDueScheduledPayments_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(RunDueScheduledPaymentsRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(BankServiceServer).RunDueScheduledPayments(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: BankService_RunDueScheduledPayments_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(BankServiceServer).RunDueScheduledPayments(ctx, req.(*RunDueScheduledPaymentsRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
 func _BankService_CreateCard_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
 	in := new(CreateCardRequest)
 	if err := dec(in); err != nil {
@@ -1775,6 +1917,22 @@ var BankService_ServiceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "DeletePaymentRecipient",
 			Handler:    _BankService_DeletePaymentRecipient_Handler,
+		},
+		{
+			MethodName: "SchedulePayment",
+			Handler:    _BankService_SchedulePayment_Handler,
+		},
+		{
+			MethodName: "ListScheduledPayments",
+			Handler:    _BankService_ListScheduledPayments_Handler,
+		},
+		{
+			MethodName: "CancelScheduledPayment",
+			Handler:    _BankService_CancelScheduledPayment_Handler,
+		},
+		{
+			MethodName: "RunDueScheduledPayments",
+			Handler:    _BankService_RunDueScheduledPayments_Handler,
 		},
 		{
 			MethodName: "CreateCard",

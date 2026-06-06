@@ -4822,6 +4822,88 @@
         ]
       }
     },
+    "/api/v1/scheduled-payments": {
+      "get": {
+        "operationId": "BankService_ListScheduledPayments",
+        "responses": {
+          "200": {
+            "description": "A successful response.",
+            "schema": {
+              "$ref": "#/definitions/v1ListScheduledPaymentsResponse"
+            }
+          },
+          "default": {
+            "description": "An unexpected error response.",
+            "schema": {
+              "$ref": "#/definitions/rpcStatus"
+            }
+          }
+        },
+        "tags": [
+          "BankService"
+        ]
+      },
+      "post": {
+        "operationId": "BankService_SchedulePayment",
+        "responses": {
+          "200": {
+            "description": "A successful response.",
+            "schema": {
+              "$ref": "#/definitions/v1ScheduledPayment"
+            }
+          },
+          "default": {
+            "description": "An unexpected error response.",
+            "schema": {
+              "$ref": "#/definitions/rpcStatus"
+            }
+          }
+        },
+        "parameters": [
+          {
+            "name": "body",
+            "in": "body",
+            "required": true,
+            "schema": {
+              "$ref": "#/definitions/v1SchedulePaymentRequest"
+            }
+          }
+        ],
+        "tags": [
+          "BankService"
+        ]
+      }
+    },
+    "/api/v1/scheduled-payments/{id}": {
+      "delete": {
+        "operationId": "BankService_CancelScheduledPayment",
+        "responses": {
+          "200": {
+            "description": "A successful response.",
+            "schema": {
+              "$ref": "#/definitions/v1ScheduledPayment"
+            }
+          },
+          "default": {
+            "description": "An unexpected error response.",
+            "schema": {
+              "$ref": "#/definitions/rpcStatus"
+            }
+          }
+        },
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "type": "string"
+          }
+        ],
+        "tags": [
+          "BankService"
+        ]
+      }
+    },
     "/api/v1/securities": {
       "get": {
         "operationId": "TradingService_ListSecurities",
@@ -8424,6 +8506,18 @@
         }
       }
     },
+    "v1ListScheduledPaymentsResponse": {
+      "type": "object",
+      "properties": {
+        "scheduledPayments": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "$ref": "#/definitions/v1ScheduledPayment"
+          }
+        }
+      }
+    },
     "v1ListSecuritiesResponse": {
       "type": "object",
       "properties": {
@@ -9892,6 +9986,107 @@
           "format": "int32"
         }
       }
+    },
+    "v1SchedulePaymentRequest": {
+      "type": "object",
+      "properties": {
+        "fromAccountId": {
+          "type": "string"
+        },
+        "toAccountNumber": {
+          "type": "string"
+        },
+        "amount": {
+          "type": "string"
+        },
+        "recipientName": {
+          "type": "string"
+        },
+        "paymentCode": {
+          "type": "string"
+        },
+        "referenceNumber": {
+          "type": "string"
+        },
+        "model": {
+          "type": "string"
+        },
+        "purpose": {
+          "type": "string"
+        },
+        "scheduledDate": {
+          "type": "string",
+          "format": "date-time",
+          "description": "Future date the payment should execute on. Server rejects a\nnon-future value (spec: \"Sistem proverava da li je datum u\nbudućnosti\")."
+        }
+      }
+    },
+    "v1ScheduledPayment": {
+      "type": "object",
+      "properties": {
+        "id": {
+          "type": "string"
+        },
+        "clientId": {
+          "type": "string"
+        },
+        "fromAccountId": {
+          "type": "string"
+        },
+        "toAccountNumber": {
+          "type": "string"
+        },
+        "amount": {
+          "type": "string"
+        },
+        "currency": {
+          "$ref": "#/definitions/bankaBankV1Currency"
+        },
+        "recipientName": {
+          "type": "string"
+        },
+        "paymentCode": {
+          "type": "string"
+        },
+        "purpose": {
+          "type": "string"
+        },
+        "model": {
+          "type": "string"
+        },
+        "referenceNumber": {
+          "type": "string"
+        },
+        "scheduledDate": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "status": {
+          "$ref": "#/definitions/v1ScheduledPaymentStatus"
+        },
+        "failureReason": {
+          "type": "string"
+        },
+        "createdAt": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "executedAt": {
+          "type": "string",
+          "format": "date-time"
+        }
+      }
+    },
+    "v1ScheduledPaymentStatus": {
+      "type": "string",
+      "enum": [
+        "SCHEDULED_PAYMENT_STATUS_UNSPECIFIED",
+        "SCHEDULED_PAYMENT_STATUS_SCHEDULED",
+        "SCHEDULED_PAYMENT_STATUS_COMPLETED",
+        "SCHEDULED_PAYMENT_STATUS_FAILED",
+        "SCHEDULED_PAYMENT_STATUS_CANCELLED"
+      ],
+      "default": "SCHEDULED_PAYMENT_STATUS_UNSPECIFIED"
     },
     "v1Security": {
       "type": "object",

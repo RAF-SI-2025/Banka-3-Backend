@@ -45,6 +45,7 @@ func (a *App) buildJobs() []job {
 			a.interval("bank-variable-rate", config.Duration("VARIABLE_RATE_JOB_INTERVAL", 30*24*time.Hour), false, a.bankVariableRate),
 			a.interval("bank-maintenance-fee", config.Duration("MAINTENANCE_FEE_JOB_INTERVAL", 24*time.Hour), false, a.bankMaintenance),
 			a.interval("bank-spent-reset", config.Duration("SPENT_RESET_JOB_INTERVAL", time.Hour), false, a.bankSpentReset),
+			a.interval("bank-scheduled-payments", config.Duration("SCHEDULED_PAYMENT_TICK", 5*time.Minute), true, a.bankScheduledPayments),
 		)
 	}
 	if a.trading != nil {
@@ -194,6 +195,17 @@ func (a *App) bankSpentReset(ctx context.Context) error {
 	}
 	if r.GetDaily() > 0 || r.GetMonthly() > 0 {
 		a.log.Info("spent-reset ran", "daily", r.GetDaily(), "monthly", r.GetMonthly())
+	}
+	return nil
+}
+
+func (a *App) bankScheduledPayments(ctx context.Context) error {
+	r, err := a.bank.RunDueScheduledPayments(ctx, &bankpb.RunDueScheduledPaymentsRequest{})
+	if err != nil {
+		return err
+	}
+	if r.GetProcessed() > 0 {
+		a.log.Info("scheduled payments ran", "processed", r.GetProcessed(), "succeeded", r.GetSucceeded(), "failed", r.GetFailed())
 	}
 	return nil
 }
