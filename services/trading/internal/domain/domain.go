@@ -710,6 +710,52 @@ type PriceAlert struct {
 	TriggeredAt *time.Time
 }
 
+// RecurringMode discriminates how a recurring order ("Trajni nalog" /
+// DCA — todoSpec C3 S47-S53) sizes each scheduled BUY. Values match the
+// recurring_orders.mode check constraint.
+type RecurringMode string
+
+const (
+	// RecurringByAmount sizes each BUY so its RSD notional matches
+	// AmountRSD (S47); the cron derives the share quantity from the
+	// security's current RSD-equivalent price at execution time.
+	RecurringByAmount RecurringMode = "BYAMOUNT"
+	// RecurringByQuantity buys a fixed share Quantity each cycle (S48).
+	RecurringByQuantity RecurringMode = "BYQUANTITY"
+)
+
+// Valid reports whether m is a recognised recurring mode.
+func (m RecurringMode) Valid() bool {
+	return m == RecurringByAmount || m == RecurringByQuantity
+}
+
+// RecurringOrder is a scheduled, repeating Market BUY of a security
+// ("Trajni nalog" / dollar-cost-averaging — todoSpec C3 S47-S53). On
+// each NextRun a cron creates one Market BUY order (for AmountRSD worth
+// of shares, or a fixed Quantity) and advances NextRun by the Cadence.
+// Pausing sets Active=false; cancelling deactivates the row permanently.
+// Direction is always 'BUY' in the current scope (DCA accumulation).
+type RecurringOrder struct {
+	ID         string
+	UserID     string
+	UserKind   UserKind
+	SecurityID string
+	Direction  Direction
+	Mode       RecurringMode
+	// AmountRSD is the per-cycle RSD notional for BYAMOUNT orders;
+	// empty for BYQUANTITY.
+	AmountRSD string
+	// Quantity is the per-cycle share count for BYQUANTITY orders;
+	// 0 for BYAMOUNT.
+	Quantity  int32
+	AccountID string
+	Cadence   string
+	NextRun   time.Time
+	Active    bool
+	CreatedAt time.Time
+	UpdatedAt time.Time
+}
+
 // Watchlist is a user-owned, named collection of securities the user
 // wants to keep an eye on (todoSpec C3 S35-S39). A user can have many
 // (S36). Items hang off the list and cascade-delete with it.

@@ -4582,6 +4582,169 @@
         ]
       }
     },
+    "/api/v1/recurring-orders": {
+      "get": {
+        "summary": "ListRecurringOrders returns the caller's own recurring orders\n(active + paused).",
+        "operationId": "TradingService_ListRecurringOrders",
+        "responses": {
+          "200": {
+            "description": "A successful response.",
+            "schema": {
+              "$ref": "#/definitions/v1ListRecurringOrdersResponse"
+            }
+          },
+          "default": {
+            "description": "An unexpected error response.",
+            "schema": {
+              "$ref": "#/definitions/rpcStatus"
+            }
+          }
+        },
+        "tags": [
+          "TradingService"
+        ]
+      },
+      "post": {
+        "summary": "CreateRecurringOrder schedules a recurring Market BUY for the caller\n(S47/S48). Active=true with NextRun set to the next execution date.",
+        "operationId": "TradingService_CreateRecurringOrder",
+        "responses": {
+          "200": {
+            "description": "A successful response.",
+            "schema": {
+              "$ref": "#/definitions/v1RecurringOrder"
+            }
+          },
+          "default": {
+            "description": "An unexpected error response.",
+            "schema": {
+              "$ref": "#/definitions/rpcStatus"
+            }
+          }
+        },
+        "parameters": [
+          {
+            "name": "body",
+            "in": "body",
+            "required": true,
+            "schema": {
+              "$ref": "#/definitions/v1CreateRecurringOrderRequest"
+            }
+          }
+        ],
+        "tags": [
+          "TradingService"
+        ]
+      }
+    },
+    "/api/v1/recurring-orders/{id}": {
+      "delete": {
+        "summary": "CancelRecurringOrder deletes a recurring order permanently (S52).",
+        "operationId": "TradingService_CancelRecurringOrder",
+        "responses": {
+          "200": {
+            "description": "A successful response.",
+            "schema": {
+              "$ref": "#/definitions/v1CancelRecurringOrderResponse"
+            }
+          },
+          "default": {
+            "description": "An unexpected error response.",
+            "schema": {
+              "$ref": "#/definitions/rpcStatus"
+            }
+          }
+        },
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "type": "string"
+          }
+        ],
+        "tags": [
+          "TradingService"
+        ]
+      }
+    },
+    "/api/v1/recurring-orders/{id}/pause": {
+      "post": {
+        "summary": "PauseRecurringOrder flips Active=false so the cron skips it (S51).",
+        "operationId": "TradingService_PauseRecurringOrder",
+        "responses": {
+          "200": {
+            "description": "A successful response.",
+            "schema": {
+              "$ref": "#/definitions/v1RecurringOrder"
+            }
+          },
+          "default": {
+            "description": "An unexpected error response.",
+            "schema": {
+              "$ref": "#/definitions/rpcStatus"
+            }
+          }
+        },
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "type": "string"
+          },
+          {
+            "name": "body",
+            "in": "body",
+            "required": true,
+            "schema": {
+              "$ref": "#/definitions/TradingServicePauseRecurringOrderBody"
+            }
+          }
+        ],
+        "tags": [
+          "TradingService"
+        ]
+      }
+    },
+    "/api/v1/recurring-orders/{id}/resume": {
+      "post": {
+        "summary": "ResumeRecurringOrder flips Active=true so the cron picks it back up.",
+        "operationId": "TradingService_ResumeRecurringOrder",
+        "responses": {
+          "200": {
+            "description": "A successful response.",
+            "schema": {
+              "$ref": "#/definitions/v1RecurringOrder"
+            }
+          },
+          "default": {
+            "description": "An unexpected error response.",
+            "schema": {
+              "$ref": "#/definitions/rpcStatus"
+            }
+          }
+        },
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "type": "string"
+          },
+          {
+            "name": "body",
+            "in": "body",
+            "required": true,
+            "schema": {
+              "$ref": "#/definitions/TradingServiceResumeRecurringOrderBody"
+            }
+          }
+        ],
+        "tags": [
+          "TradingService"
+        ]
+      }
+    },
     "/api/v1/securities": {
       "get": {
         "operationId": "TradingService_ListSecurities",
@@ -5436,7 +5599,13 @@
         }
       }
     },
+    "TradingServicePauseRecurringOrderBody": {
+      "type": "object"
+    },
     "TradingServiceResetActuaryUsedLimitBody": {
+      "type": "object"
+    },
+    "TradingServiceResumeRecurringOrderBody": {
       "type": "object"
     },
     "TradingServiceSetActuaryNeedApprovalBody": {
@@ -6076,6 +6245,9 @@
       },
       "description": "BankProfitBucket is one calendar period. profit_rsd uses the same\nper-row loss clamp as the actuary leaderboard (Σ greatest(gain_rsd,\n0) on realized_gains where user_kind='employee'), so Σ profit_rsd\nacross every bucket of the full history reconciles with\nΣ ListActuaryPerformances.profit_rsd. trading_rsd + fund_rsd\npartition profit_rsd by source (realized_gains.security_id set vs\nfund_id set). cumulative_rsd is the running total from the first\nbucket in the response."
     },
+    "v1CancelRecurringOrderResponse": {
+      "type": "object"
+    },
     "v1Card": {
       "type": "object",
       "properties": {
@@ -6618,6 +6790,36 @@
         },
         "condition": {
           "$ref": "#/definitions/v1PriceAlertCondition"
+        }
+      }
+    },
+    "v1CreateRecurringOrderRequest": {
+      "type": "object",
+      "properties": {
+        "securityId": {
+          "type": "string"
+        },
+        "mode": {
+          "$ref": "#/definitions/v1RecurringMode"
+        },
+        "amountRsd": {
+          "type": "string",
+          "description": "amount_rsd is required for BYAMOUNT, quantity for BYQUANTITY; the\nservice validates the mode-specific field."
+        },
+        "quantity": {
+          "type": "integer",
+          "format": "int32"
+        },
+        "accountId": {
+          "type": "string"
+        },
+        "cadence": {
+          "type": "string",
+          "description": "cadence is one of DAILY / WEEKLY / MONTHLY."
+        },
+        "startDate": {
+          "type": "string",
+          "description": "start_date optionally anchors the first NextRun (RFC3339). When\nempty the first run is one cadence interval from now."
         }
       }
     },
@@ -8133,6 +8335,18 @@
         }
       }
     },
+    "v1ListRecurringOrdersResponse": {
+      "type": "object",
+      "properties": {
+        "recurringOrders": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "$ref": "#/definitions/v1RecurringOrder"
+          }
+        }
+      }
+    },
     "v1ListSecuritiesResponse": {
       "type": "object",
       "properties": {
@@ -9197,6 +9411,71 @@
         }
       },
       "description": "RealizedPnLRow is one closing-sell row, decorated with the security\nticker for display. tax_amount_rsd is 15% of max(profit_rsd, 0) per\nspec p.62 (losses don't generate tax under the simple model)."
+    },
+    "v1RecurringMode": {
+      "type": "string",
+      "enum": [
+        "RECURRING_MODE_UNSPECIFIED",
+        "RECURRING_MODE_BYAMOUNT",
+        "RECURRING_MODE_BYQUANTITY"
+      ],
+      "default": "RECURRING_MODE_UNSPECIFIED",
+      "description": "RecurringMode discriminates how each scheduled BUY is sized.\n\n - RECURRING_MODE_BYAMOUNT: BYAMOUNT sizes each BUY so its RSD notional matches amount_rsd; the\ncron derives the share quantity at execution time (S47).\n - RECURRING_MODE_BYQUANTITY: BYQUANTITY buys a fixed share quantity each cycle (S48)."
+    },
+    "v1RecurringOrder": {
+      "type": "object",
+      "properties": {
+        "id": {
+          "type": "string"
+        },
+        "userId": {
+          "type": "string"
+        },
+        "userKind": {
+          "$ref": "#/definitions/bankaTradingV1UserKind"
+        },
+        "securityId": {
+          "type": "string"
+        },
+        "direction": {
+          "$ref": "#/definitions/v1Direction",
+          "title": "always BUY in the current scope"
+        },
+        "mode": {
+          "$ref": "#/definitions/v1RecurringMode"
+        },
+        "amountRsd": {
+          "type": "string",
+          "title": "decimal RSD notional (BYAMOUNT); empty otherwise"
+        },
+        "quantity": {
+          "type": "integer",
+          "format": "int32",
+          "title": "fixed share count (BYQUANTITY); 0 otherwise"
+        },
+        "accountId": {
+          "type": "string"
+        },
+        "cadence": {
+          "type": "string",
+          "description": "cadence is one of DAILY / WEEKLY / MONTHLY (pkg/schedule.Cadence)."
+        },
+        "nextRun": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "active": {
+          "type": "boolean"
+        },
+        "createdAt": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "updatedAt": {
+          "type": "string",
+          "format": "date-time"
+        }
+      }
     },
     "v1RefreshFXRatesRequest": {
       "type": "object"
