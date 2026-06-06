@@ -86,10 +86,9 @@ func (s *Service) DeletePriceAlert(ctx context.Context, id string) error {
 // silent (S29). Returns the number triggered.
 //
 // Notification is best-effort: a delivery failure never blocks the
-// deactivation (the alert is one-shot regardless). Email is sent only
-// when an address is resolvable; on this stack the trading service has
-// no user-email resolver wired, so the sweep delivers the in-app
-// notification and skips email (see report).
+// deactivation (the alert is one-shot regardless). Both the in-app row
+// and an email leg are delivered; the email is sent only when the alert
+// owner's address resolves, otherwise the sweep delivers in-app only.
 func (s *Service) RunPriceAlertSweep(ctx context.Context) (int, error) {
 	alerts, err := s.Store.ListActivePriceAlerts(ctx)
 	if err != nil {
@@ -162,5 +161,11 @@ func (s *Service) firePriceAlert(ctx context.Context, a *domain.PriceAlert, curr
 		ticker, dir, a.Threshold, currentPrice)
 	if err := s.Notifier.InApp(ctx, a.UserID, a.UserKind, "price_alert", title, body); err != nil {
 		s.Log.Warn("price alert: in-app notify failed", "alert_id", a.ID, "err", err.Error())
+	}
+	// Email leg: same copy to the owner's address when it resolves.
+	if to := s.recipientEmail(ctx, a.UserID, a.UserKind); to != "" {
+		if err := s.Notifier.Email(ctx, to, title, body); err != nil {
+			s.Log.Warn("price alert: email notify failed", "alert_id", a.ID, "err", err.Error())
+		}
 	}
 }
