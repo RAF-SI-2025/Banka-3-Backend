@@ -240,6 +240,39 @@ type BankReservations interface {
 	// Used cosmetically by GetFund to decorate the fund's RSD liquidity
 	// account number for the FE detail page.
 	AccountNumber(ctx context.Context, accountID string) (string, error)
+	// SettleDividend credits the destination account by `amount` worth of
+	// `currency` from the bank's per-currency house account (the
+	// quarterly dividend payout, todoSpec C3 S54-S59). Idempotent on
+	// OpID. Bank converts (commission-free) when the destination account
+	// is in a different currency (S56).
+	SettleDividend(ctx context.Context, in DividendSettleInput) (string, error)
+	// ListClientAccounts returns the holder's bank accounts, optionally
+	// filtered to one currency. Used by the dividend cron's account-
+	// routing fallback (S55/S56) to find a default-currency or RSD
+	// account when the original purchase account is gone. Returns active
+	// personal accounts only.
+	ListClientAccounts(ctx context.Context, ownerID string, currency domain.Currency) ([]BankAccount, error)
+}
+
+// DividendSettleInput mirrors bank.SettleDividend.
+type DividendSettleInput struct {
+	AccountID string
+	Amount    string
+	Currency  domain.Currency
+	OpID      string
+	Purpose   string
+	// InitiatorClientID/Kind let the bank stamp the holder as the
+	// transaction initiator so the credit shows on the client's own
+	// statement (same BE-16 pattern as the tax path).
+	InitiatorClientID   string
+	InitiatorClientKind domain.UserKind
+}
+
+// BankAccount is the trading-service view of a bank account row — just
+// the fields the dividend account-routing fallback needs.
+type BankAccount struct {
+	ID       string
+	Currency domain.Currency
 }
 
 // ReserveInput mirrors the bank.ReserveFunds RPC fields the SAGA needs.

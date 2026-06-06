@@ -120,6 +120,15 @@ service BankService {
   // with admin metadata.
   rpc SettleCapitalGainsTax(SettleCapitalGainsTaxRequest) returns (SettleCapitalGainsTaxResponse);
 
+  // SettleDividend credits `account_id` by `amount` (in `currency`,
+  // the security's listing currency) sourced from the bank's
+  // per-currency house account — the quarterly dividend payout (todoSpec
+  // C3 S54-S59). When the destination account is in a different currency
+  // the menjačnica engine converts commission-free so RSD-only holders
+  // still get paid (S56). Idempotent on `op_id`. Internal RPC — no http
+  // annotation, callers authenticate with admin metadata.
+  rpc SettleDividend(SettleDividendRequest) returns (SettleDividendResponse);
+
   // SettleForexFill atomically settles the two paired cash legs of a
   // forex pair fill (spec p.42). Each leg moves the bank's per-currency
   // forex_book account against the per-currency menjačnica house. The
@@ -673,6 +682,27 @@ message SettleCapitalGainsTaxRequest {
 }
 
 message SettleCapitalGainsTaxResponse {
+  string op_id = 1;
+  repeated Transaction transactions = 2;
+}
+
+// SettleDividendRequest credits `account_id` by `amount` worth of
+// `currency` from the bank's per-currency house account (the quarterly
+// dividend payout, todoSpec C3 S54-S59). `amount` is the gross dividend
+// in the security's listing currency; bank converts (commission-free)
+// when the destination account is in a different currency.
+message SettleDividendRequest {
+  string account_id = 1 [(buf.validate.field).string.uuid = true];
+  string amount = 2 [(buf.validate.field).string.min_len = 1];
+  Currency currency = 3 [(buf.validate.field).enum = {
+    defined_only: true
+    not_in: [0]
+  }];
+  string op_id = 4 [(buf.validate.field).string.uuid = true];
+  string purpose = 5;
+}
+
+message SettleDividendResponse {
   string op_id = 1;
   repeated Transaction transactions = 2;
 }

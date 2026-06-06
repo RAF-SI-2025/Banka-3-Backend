@@ -33,6 +33,7 @@ const (
 	BankService_GetSystemAccount_FullMethodName        = "/banka.bank.v1.BankService/GetSystemAccount"
 	BankService_SettleTrade_FullMethodName             = "/banka.bank.v1.BankService/SettleTrade"
 	BankService_SettleCapitalGainsTax_FullMethodName   = "/banka.bank.v1.BankService/SettleCapitalGainsTax"
+	BankService_SettleDividend_FullMethodName          = "/banka.bank.v1.BankService/SettleDividend"
 	BankService_SettleForexFill_FullMethodName         = "/banka.bank.v1.BankService/SettleForexFill"
 	BankService_ReserveFunds_FullMethodName            = "/banka.bank.v1.BankService/ReserveFunds"
 	BankService_ReleaseFunds_FullMethodName            = "/banka.bank.v1.BankService/ReleaseFunds"
@@ -116,6 +117,14 @@ type BankServiceClient interface {
 	// on `op_id`. Internal RPC — no http annotation, callers authenticate
 	// with admin metadata.
 	SettleCapitalGainsTax(ctx context.Context, in *SettleCapitalGainsTaxRequest, opts ...grpc.CallOption) (*SettleCapitalGainsTaxResponse, error)
+	// SettleDividend credits `account_id` by `amount` (in `currency`,
+	// the security's listing currency) sourced from the bank's
+	// per-currency house account — the quarterly dividend payout (todoSpec
+	// C3 S54-S59). When the destination account is in a different currency
+	// the menjačnica engine converts commission-free so RSD-only holders
+	// still get paid (S56). Idempotent on `op_id`. Internal RPC — no http
+	// annotation, callers authenticate with admin metadata.
+	SettleDividend(ctx context.Context, in *SettleDividendRequest, opts ...grpc.CallOption) (*SettleDividendResponse, error)
 	// SettleForexFill atomically settles the two paired cash legs of a
 	// forex pair fill (spec p.42). Each leg moves the bank's per-currency
 	// forex_book account against the per-currency menjačnica house. The
@@ -337,6 +346,16 @@ func (c *bankServiceClient) SettleCapitalGainsTax(ctx context.Context, in *Settl
 	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
 	out := new(SettleCapitalGainsTaxResponse)
 	err := c.cc.Invoke(ctx, BankService_SettleCapitalGainsTax_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *bankServiceClient) SettleDividend(ctx context.Context, in *SettleDividendRequest, opts ...grpc.CallOption) (*SettleDividendResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(SettleDividendResponse)
+	err := c.cc.Invoke(ctx, BankService_SettleDividend_FullMethodName, in, out, cOpts...)
 	if err != nil {
 		return nil, err
 	}
@@ -721,6 +740,14 @@ type BankServiceServer interface {
 	// on `op_id`. Internal RPC — no http annotation, callers authenticate
 	// with admin metadata.
 	SettleCapitalGainsTax(context.Context, *SettleCapitalGainsTaxRequest) (*SettleCapitalGainsTaxResponse, error)
+	// SettleDividend credits `account_id` by `amount` (in `currency`,
+	// the security's listing currency) sourced from the bank's
+	// per-currency house account — the quarterly dividend payout (todoSpec
+	// C3 S54-S59). When the destination account is in a different currency
+	// the menjačnica engine converts commission-free so RSD-only holders
+	// still get paid (S56). Idempotent on `op_id`. Internal RPC — no http
+	// annotation, callers authenticate with admin metadata.
+	SettleDividend(context.Context, *SettleDividendRequest) (*SettleDividendResponse, error)
 	// SettleForexFill atomically settles the two paired cash legs of a
 	// forex pair fill (spec p.42). Each leg moves the bank's per-currency
 	// forex_book account against the per-currency menjačnica house. The
@@ -855,6 +882,9 @@ func (UnimplementedBankServiceServer) SettleTrade(context.Context, *SettleTradeR
 }
 func (UnimplementedBankServiceServer) SettleCapitalGainsTax(context.Context, *SettleCapitalGainsTaxRequest) (*SettleCapitalGainsTaxResponse, error) {
 	return nil, status.Error(codes.Unimplemented, "method SettleCapitalGainsTax not implemented")
+}
+func (UnimplementedBankServiceServer) SettleDividend(context.Context, *SettleDividendRequest) (*SettleDividendResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method SettleDividend not implemented")
 }
 func (UnimplementedBankServiceServer) SettleForexFill(context.Context, *SettleForexFillRequest) (*SettleForexFillResponse, error) {
 	return nil, status.Error(codes.Unimplemented, "method SettleForexFill not implemented")
@@ -1205,6 +1235,24 @@ func _BankService_SettleCapitalGainsTax_Handler(srv interface{}, ctx context.Con
 	}
 	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
 		return srv.(BankServiceServer).SettleCapitalGainsTax(ctx, req.(*SettleCapitalGainsTaxRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _BankService_SettleDividend_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(SettleDividendRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(BankServiceServer).SettleDividend(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: BankService_SettleDividend_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(BankServiceServer).SettleDividend(ctx, req.(*SettleDividendRequest))
 	}
 	return interceptor(ctx, in, info, handler)
 }
@@ -1861,6 +1909,10 @@ var BankService_ServiceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "SettleCapitalGainsTax",
 			Handler:    _BankService_SettleCapitalGainsTax_Handler,
+		},
+		{
+			MethodName: "SettleDividend",
+			Handler:    _BankService_SettleDividend_Handler,
 		},
 		{
 			MethodName: "SettleForexFill",

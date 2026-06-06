@@ -33,6 +33,14 @@ const (
 	// inbound legs do the opposite. The interbank_protocol_transactions
 	// row carries the partner's transaction_id and the leg's op_id.
 	TxKindInterbankPayment TransactionKind = "interbank_payment"
+
+	// TxKindDividend tags the quarterly dividend payout leg (todoSpec
+	// C3 S54-S59). The trading dividend cron credits each holder's
+	// account from the bank's per-currency house account; when the
+	// destination account is in a different currency the menjačnica
+	// engine converts (commission-free) so RSD-only holders still get
+	// paid (S56).
+	TxKindDividend TransactionKind = "dividend"
 )
 
 // ReservationState pins the bank.reservations row lifecycle (c4).

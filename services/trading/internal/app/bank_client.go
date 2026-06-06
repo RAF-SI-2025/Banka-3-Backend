@@ -132,6 +132,62 @@ func (a *bankSettlerAdapter) SettleTax(ctx context.Context, in service.TaxSettle
 	return resp.GetOpId(), nil
 }
 
+// SettleDividend bridges service.BankReservations.SettleDividend to
+// bank.SettleDividend. The dividend cron credits each holder's account
+// from the bank's per-currency house account. When the cron forwards a
+// client initiator (the holder), stamp it as the bank-side origin so the
+// credit shows on the client's own statement (same BE-16 pattern as the
+// tax path); otherwise present the bare admin sentinel.
+func (a *bankSettlerAdapter) SettleDividend(ctx context.Context, in service.DividendSettleInput) (string, error) {
+	if in.InitiatorClientID != "" {
+		ctx = withBankAdminOrigin(ctx, auth.Principal{
+			UserID:   in.InitiatorClientID,
+			UserKind: bankUserKindFromTrading(in.InitiatorClientKind),
+		})
+	} else {
+		ctx = withBankAdmin(ctx)
+	}
+	resp, err := a.c.SettleDividend(ctx, &bankpb.SettleDividendRequest{
+		AccountId: in.AccountID,
+		Amount:    in.Amount,
+		Currency:  currencyToBankProto(in.Currency),
+		OpId:      in.OpID,
+		Purpose:   in.Purpose,
+	})
+	if err != nil {
+		return "", fmt.Errorf("bank.SettleDividend: %w", err)
+	}
+	return resp.GetOpId(), nil
+}
+
+// ListClientAccounts lists a holder's active personal accounts via
+// bank.ListAccounts, optionally filtered to one currency. Used by the
+// dividend cron's account-routing fallback (S55/S56). Admin-sentinel
+// principal so the read is admitted regardless of owner.
+func (a *bankSettlerAdapter) ListClientAccounts(ctx context.Context, ownerID string, currency domain.Currency) ([]service.BankAccount, error) {
+	ctx = withBankAdmin(ctx)
+	req := &bankpb.ListAccountsRequest{
+		OwnerClientId: ownerID,
+		Status:        bankpb.AccountStatus_ACCOUNT_STATUS_ACTIVE,
+		PageSize:      200,
+	}
+	if currency != "" {
+		req.Currency = currencyToBankProto(currency)
+	}
+	resp, err := a.c.ListAccounts(ctx, req)
+	if err != nil {
+		return nil, fmt.Errorf("bank.ListAccounts: %w", err)
+	}
+	out := make([]service.BankAccount, 0, len(resp.GetAccounts()))
+	for _, acc := range resp.GetAccounts() {
+		out = append(out, service.BankAccount{
+			ID:       acc.GetId(),
+			Currency: currencyFromBankProto(acc.GetCurrency()),
+		})
+	}
+	return out, nil
+}
+
 // AccountAvailable reads the source account's currency + available
 // balance via bank.GetAccount. Uses the admin-sentinel principal so the
 // bank's canSeeAccount check admits the read regardless of who owns
