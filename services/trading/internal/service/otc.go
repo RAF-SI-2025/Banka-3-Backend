@@ -37,6 +37,8 @@ package service
 
 import (
 	"context"
+	"math/big"
+	"sort"
 	"strings"
 	"time"
 
@@ -130,6 +132,193 @@ func (s *Service) ListPublicHoldings(ctx context.Context, tickerFilter string) (
 		out = append(out, row)
 	}
 	return out, nil
+}
+
+// =====================================================================
+// Matching engine (todoSpec "OTC matching engine")
+// =====================================================================
+
+// defaultOTCTolerancePct is the symmetric tolerance band (in percent)
+// applied around the buyer's requested price when none is supplied.
+// todoSpec example: "predlaže 5% iznad i ispod tražene cene".
+const defaultOTCTolerancePct = 5.0
+
+// SuggestOTCMatchInput is the validated suggestion request.
+type SuggestOTCMatchInput struct {
+	SecurityID   string
+	Quantity     int32
+	Price        string
+	TolerancePct float64
+}
+
+// OTCMatchSuggestion is one candidate seller holding compatible with the
+// buyer's request: the same security, a unit (ask) price within the
+// tolerance band, and inventory that can fully or partially satisfy.
+type OTCMatchSuggestion struct {
+	Holding           *domain.Holding
+	Security          *domain.Security
+	SellerDisplayName string
+	UnitPrice         string
+	AvailableCount    int32
+	SuggestedQuantity int32
+	FullySatisfies    bool
+	PriceDeltaPct     float64
+}
+
+// SuggestOTCMatches surfaces the public seller holdings the caller (a
+// prospective buyer) could open an OTC offer against: same security,
+// unit price within the tolerance band around the requested price, and
+// available inventory > 0. Read-only — no offer is created here.
+//
+// Reuses the same visibility rules as the discovery board (own rows
+// excluded, same-kind peers only per spec p.79, stocks/futures only).
+// Results are sorted by best price for the buyer (cheapest first), then
+// by largest available inventory.
+func (s *Service) SuggestOTCMatches(ctx context.Context, in SuggestOTCMatchInput) ([]*OTCMatchSuggestion, float64, error) {
+	p, err := s.requirePrincipal(ctx)
+	if err != nil {
+		return nil, 0, err
+	}
+	if err := requireOTCTrader(p); err != nil {
+		return nil, 0, err
+	}
+	if in.Quantity <= 0 {
+		return nil, 0, apperr.Validation("količina mora biti pozitivna")
+	}
+	wantPrice, err := money.Parse(in.Price)
+	if err != nil || !money.IsPositive(wantPrice) {
+		return nil, 0, apperr.Validation("price nije validan iznos")
+	}
+	tol := in.TolerancePct
+	if tol <= 0 {
+		tol = defaultOTCTolerancePct
+	}
+
+	peerKind, err := otcPeerKind(p)
+	if err != nil {
+		return nil, 0, err
+	}
+
+	rows, err := s.Store.ListPublicHoldings(ctx, p.UserID)
+	if err != nil {
+		return nil, 0, err
+	}
+
+	lo, hi := tolerancePriceBand(wantPrice, tol)
+
+	out := make([]*OTCMatchSuggestion, 0, len(rows))
+	for _, h := range rows {
+		if h.SecurityID != in.SecurityID {
+			continue
+		}
+		if peerKind != "" && h.UserKind != peerKind {
+			continue
+		}
+		available := h.PublicCount - h.ReservedCount
+		if available <= 0 {
+			continue
+		}
+		sec, err := s.Store.GetSecurity(ctx, h.SecurityID)
+		if err != nil {
+			s.Log.Warn("otc suggestion security lookup failed",
+				"holding_id", h.ID, "err", err.Error())
+			continue
+		}
+		if sec.Type != domain.SecurityStock && sec.Type != domain.SecurityFuture {
+			continue
+		}
+		listing, err := s.Store.GetListingBySecurityID(ctx, sec.ID)
+		if err != nil {
+			continue // no priceable listing → can't band-match
+		}
+		unit, err := money.Parse(listing.Price)
+		if err != nil || !money.IsPositive(unit) {
+			continue
+		}
+		if !priceInBand(unit, lo, hi) {
+			continue
+		}
+		sug := &OTCMatchSuggestion{
+			Holding:           h,
+			Security:          sec,
+			UnitPrice:         money.FormatAmount(unit),
+			AvailableCount:    available,
+			SuggestedQuantity: minInt32(available, in.Quantity),
+			FullySatisfies:    available >= in.Quantity,
+			PriceDeltaPct:     priceDeltaPct(unit, wantPrice),
+		}
+		if h.UserKind == domain.KindEmployee {
+			sug.SellerDisplayName = s.Cfg.BankName
+		} else if s.Users != nil {
+			if name, err := s.Users.DisplayName(ctx, h.UserID, h.UserKind); err == nil {
+				sug.SellerDisplayName = name
+			}
+		}
+		out = append(out, sug)
+	}
+
+	// Sort cheapest-first (best price for the buyer); tie-break on larger
+	// available inventory so a fully-satisfying seller floats above a
+	// partial one at the same price.
+	sortOTCSuggestions(out)
+	return out, tol, nil
+}
+
+// tolerancePriceBand returns the inclusive [lo, hi] price band for a
+// desired price and a percent tolerance: lo = price*(1 - tol/100),
+// hi = price*(1 + tol/100).
+func tolerancePriceBand(price *big.Rat, tolPct float64) (lo, hi *big.Rat) {
+	tol := new(big.Rat).Quo(ratFromFloat(tolPct), big.NewRat(100, 1))
+	one := big.NewRat(1, 1)
+	lo = money.Mul(price, new(big.Rat).Sub(one, tol))
+	hi = money.Mul(price, new(big.Rat).Add(one, tol))
+	return lo, hi
+}
+
+// priceInBand reports whether unit is within the inclusive [lo, hi] band.
+func priceInBand(unit, lo, hi *big.Rat) bool {
+	return unit.Cmp(lo) >= 0 && unit.Cmp(hi) <= 0
+}
+
+// priceDeltaPct returns the signed percentage difference of unit vs.
+// want: (unit - want) / want * 100. Negative means cheaper than asked.
+func priceDeltaPct(unit, want *big.Rat) float64 {
+	if want.Sign() == 0 {
+		return 0
+	}
+	diff := new(big.Rat).Sub(unit, want)
+	ratio := new(big.Rat).Quo(diff, want)
+	ratio.Mul(ratio, big.NewRat(100, 1))
+	f, _ := ratio.Float64()
+	return f
+}
+
+// ratFromFloat converts a float tolerance to an exact big.Rat.
+func ratFromFloat(f float64) *big.Rat {
+	r := new(big.Rat)
+	r.SetFloat64(f)
+	return r
+}
+
+// minInt32 returns the smaller of two int32s.
+func minInt32(a, b int32) int32 {
+	if a < b {
+		return a
+	}
+	return b
+}
+
+// sortOTCSuggestions orders suggestions cheapest-first, tie-breaking on
+// larger available inventory.
+func sortOTCSuggestions(s []*OTCMatchSuggestion) {
+	sort.SliceStable(s, func(i, j int) bool {
+		ui := money.MustParse(s[i].UnitPrice)
+		uj := money.MustParse(s[j].UnitPrice)
+		if c := ui.Cmp(uj); c != 0 {
+			return c < 0
+		}
+		return s[i].AvailableCount > s[j].AvailableCount
+	})
 }
 
 // =====================================================================

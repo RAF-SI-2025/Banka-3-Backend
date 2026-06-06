@@ -51,6 +51,7 @@ const (
 	TradingService_RunTax_FullMethodName                     = "/banka.trading.v1.TradingService/RunTax"
 	TradingService_ListRealizedPnL_FullMethodName            = "/banka.trading.v1.TradingService/ListRealizedPnL"
 	TradingService_ListPublicHoldings_FullMethodName         = "/banka.trading.v1.TradingService/ListPublicHoldings"
+	TradingService_SuggestOTCMatches_FullMethodName          = "/banka.trading.v1.TradingService/SuggestOTCMatches"
 	TradingService_CreateOTCOffer_FullMethodName             = "/banka.trading.v1.TradingService/CreateOTCOffer"
 	TradingService_CounterOfferOTC_FullMethodName            = "/banka.trading.v1.TradingService/CounterOfferOTC"
 	TradingService_WithdrawOTCOffer_FullMethodName           = "/banka.trading.v1.TradingService/WithdrawOTCOffer"
@@ -152,6 +153,14 @@ type TradingServiceClient interface {
 	// holdings owned by other users that have public_count > reserved_count
 	// are visible. Filterable by ticker.
 	ListPublicHoldings(ctx context.Context, in *ListPublicHoldingsRequest, opts ...grpc.CallOption) (*ListPublicHoldingsResponse, error)
+	// SuggestOTCMatches (todoSpec "OTC matching engine") is a read-only
+	// discovery aid: given a prospective buyer's desired security, quantity
+	// and price, it surfaces the public seller holdings whose unit (ask)
+	// price falls inside a tolerance band around the requested price
+	// (default ±5%) and whose available inventory can satisfy the request
+	// (fully or partially). Suggestions only — creating an offer stays the
+	// manual CreateOTCOffer flow.
+	SuggestOTCMatches(ctx context.Context, in *SuggestOTCMatchesRequest, opts ...grpc.CallOption) (*SuggestOTCMatchesResponse, error)
 	// CreateOTCOffer opens a new negotiation thread. The buyer initiates;
 	// the seller_holding_id resolves the seller (its owner). Increments
 	// reserved_count on the seller's holding by quantity.
@@ -603,6 +612,16 @@ func (c *tradingServiceClient) ListPublicHoldings(ctx context.Context, in *ListP
 	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
 	out := new(ListPublicHoldingsResponse)
 	err := c.cc.Invoke(ctx, TradingService_ListPublicHoldings_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *tradingServiceClient) SuggestOTCMatches(ctx context.Context, in *SuggestOTCMatchesRequest, opts ...grpc.CallOption) (*SuggestOTCMatchesResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(SuggestOTCMatchesResponse)
+	err := c.cc.Invoke(ctx, TradingService_SuggestOTCMatches_FullMethodName, in, out, cOpts...)
 	if err != nil {
 		return nil, err
 	}
@@ -1095,6 +1114,14 @@ type TradingServiceServer interface {
 	// holdings owned by other users that have public_count > reserved_count
 	// are visible. Filterable by ticker.
 	ListPublicHoldings(context.Context, *ListPublicHoldingsRequest) (*ListPublicHoldingsResponse, error)
+	// SuggestOTCMatches (todoSpec "OTC matching engine") is a read-only
+	// discovery aid: given a prospective buyer's desired security, quantity
+	// and price, it surfaces the public seller holdings whose unit (ask)
+	// price falls inside a tolerance band around the requested price
+	// (default ±5%) and whose available inventory can satisfy the request
+	// (fully or partially). Suggestions only — creating an offer stays the
+	// manual CreateOTCOffer flow.
+	SuggestOTCMatches(context.Context, *SuggestOTCMatchesRequest) (*SuggestOTCMatchesResponse, error)
 	// CreateOTCOffer opens a new negotiation thread. The buyer initiates;
 	// the seller_holding_id resolves the seller (its owner). Increments
 	// reserved_count on the seller's holding by quantity.
@@ -1333,6 +1360,9 @@ func (UnimplementedTradingServiceServer) ListRealizedPnL(context.Context, *ListR
 }
 func (UnimplementedTradingServiceServer) ListPublicHoldings(context.Context, *ListPublicHoldingsRequest) (*ListPublicHoldingsResponse, error) {
 	return nil, status.Error(codes.Unimplemented, "method ListPublicHoldings not implemented")
+}
+func (UnimplementedTradingServiceServer) SuggestOTCMatches(context.Context, *SuggestOTCMatchesRequest) (*SuggestOTCMatchesResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method SuggestOTCMatches not implemented")
 }
 func (UnimplementedTradingServiceServer) CreateOTCOffer(context.Context, *CreateOTCOfferRequest) (*OTCOffer, error) {
 	return nil, status.Error(codes.Unimplemented, "method CreateOTCOffer not implemented")
@@ -2037,6 +2067,24 @@ func _TradingService_ListPublicHoldings_Handler(srv interface{}, ctx context.Con
 	}
 	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
 		return srv.(TradingServiceServer).ListPublicHoldings(ctx, req.(*ListPublicHoldingsRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _TradingService_SuggestOTCMatches_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(SuggestOTCMatchesRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(TradingServiceServer).SuggestOTCMatches(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: TradingService_SuggestOTCMatches_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(TradingServiceServer).SuggestOTCMatches(ctx, req.(*SuggestOTCMatchesRequest))
 	}
 	return interceptor(ctx, in, info, handler)
 }
@@ -2945,6 +2993,10 @@ var TradingService_ServiceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "ListPublicHoldings",
 			Handler:    _TradingService_ListPublicHoldings_Handler,
+		},
+		{
+			MethodName: "SuggestOTCMatches",
+			Handler:    _TradingService_SuggestOTCMatches_Handler,
 		},
 		{
 			MethodName: "CreateOTCOffer",
