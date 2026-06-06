@@ -1417,6 +1417,232 @@ func local_request_BankService_SetForexForwardSpread_0(ctx context.Context, mars
 	return msg, metadata, err
 }
 
+var filter_BankService_ListInterbankTransactions_0 = &utilities.DoubleArray{Encoding: map[string]int{}, Base: []int(nil), Check: []int(nil)}
+
+func request_BankService_ListInterbankTransactions_0(ctx context.Context, marshaler runtime.Marshaler, client BankServiceClient, req *http.Request, pathParams map[string]string) (proto.Message, runtime.ServerMetadata, error) {
+	var (
+		protoReq ListInterbankTransactionsRequest
+		metadata runtime.ServerMetadata
+	)
+	if req.Body != nil {
+		_, _ = io.Copy(io.Discard, req.Body)
+	}
+	if err := req.ParseForm(); err != nil {
+		return nil, metadata, status.Errorf(codes.InvalidArgument, "%v", err)
+	}
+	if err := runtime.PopulateQueryParameters(&protoReq, req.Form, filter_BankService_ListInterbankTransactions_0); err != nil {
+		return nil, metadata, status.Errorf(codes.InvalidArgument, "%v", err)
+	}
+	msg, err := client.ListInterbankTransactions(ctx, &protoReq, grpc.Header(&metadata.HeaderMD), grpc.Trailer(&metadata.TrailerMD))
+	return msg, metadata, err
+}
+
+func local_request_BankService_ListInterbankTransactions_0(ctx context.Context, marshaler runtime.Marshaler, server BankServiceServer, req *http.Request, pathParams map[string]string) (proto.Message, runtime.ServerMetadata, error) {
+	var (
+		protoReq ListInterbankTransactionsRequest
+		metadata runtime.ServerMetadata
+	)
+	if err := req.ParseForm(); err != nil {
+		return nil, metadata, status.Errorf(codes.InvalidArgument, "%v", err)
+	}
+	if err := runtime.PopulateQueryParameters(&protoReq, req.Form, filter_BankService_ListInterbankTransactions_0); err != nil {
+		return nil, metadata, status.Errorf(codes.InvalidArgument, "%v", err)
+	}
+	msg, err := server.ListInterbankTransactions(ctx, &protoReq)
+	return msg, metadata, err
+}
+
+func request_BankService_GetInterbankTransaction_0(ctx context.Context, marshaler runtime.Marshaler, client BankServiceClient, req *http.Request, pathParams map[string]string) (proto.Message, runtime.ServerMetadata, error) {
+	var (
+		protoReq GetInterbankTransactionRequest
+		metadata runtime.ServerMetadata
+		err      error
+	)
+	if req.Body != nil {
+		_, _ = io.Copy(io.Discard, req.Body)
+	}
+	val, ok := pathParams["sender_routing_number"]
+	if !ok {
+		return nil, metadata, status.Errorf(codes.InvalidArgument, "missing parameter %s", "sender_routing_number")
+	}
+	protoReq.SenderRoutingNumber, err = runtime.Int32(val)
+	if err != nil {
+		return nil, metadata, status.Errorf(codes.InvalidArgument, "type mismatch, parameter: %s, error: %v", "sender_routing_number", err)
+	}
+	val, ok = pathParams["transaction_id"]
+	if !ok {
+		return nil, metadata, status.Errorf(codes.InvalidArgument, "missing parameter %s", "transaction_id")
+	}
+	protoReq.TransactionId, err = runtime.String(val)
+	if err != nil {
+		return nil, metadata, status.Errorf(codes.InvalidArgument, "type mismatch, parameter: %s, error: %v", "transaction_id", err)
+	}
+	msg, err := client.GetInterbankTransaction(ctx, &protoReq, grpc.Header(&metadata.HeaderMD), grpc.Trailer(&metadata.TrailerMD))
+	return msg, metadata, err
+}
+
+func local_request_BankService_GetInterbankTransaction_0(ctx context.Context, marshaler runtime.Marshaler, server BankServiceServer, req *http.Request, pathParams map[string]string) (proto.Message, runtime.ServerMetadata, error) {
+	var (
+		protoReq GetInterbankTransactionRequest
+		metadata runtime.ServerMetadata
+		err      error
+	)
+	val, ok := pathParams["sender_routing_number"]
+	if !ok {
+		return nil, metadata, status.Errorf(codes.InvalidArgument, "missing parameter %s", "sender_routing_number")
+	}
+	protoReq.SenderRoutingNumber, err = runtime.Int32(val)
+	if err != nil {
+		return nil, metadata, status.Errorf(codes.InvalidArgument, "type mismatch, parameter: %s, error: %v", "sender_routing_number", err)
+	}
+	val, ok = pathParams["transaction_id"]
+	if !ok {
+		return nil, metadata, status.Errorf(codes.InvalidArgument, "missing parameter %s", "transaction_id")
+	}
+	protoReq.TransactionId, err = runtime.String(val)
+	if err != nil {
+		return nil, metadata, status.Errorf(codes.InvalidArgument, "type mismatch, parameter: %s, error: %v", "transaction_id", err)
+	}
+	msg, err := server.GetInterbankTransaction(ctx, &protoReq)
+	return msg, metadata, err
+}
+
+var filter_BankService_ListInterbankAuditLog_0 = &utilities.DoubleArray{Encoding: map[string]int{}, Base: []int(nil), Check: []int(nil)}
+
+func request_BankService_ListInterbankAuditLog_0(ctx context.Context, marshaler runtime.Marshaler, client BankServiceClient, req *http.Request, pathParams map[string]string) (proto.Message, runtime.ServerMetadata, error) {
+	var (
+		protoReq ListInterbankAuditLogRequest
+		metadata runtime.ServerMetadata
+	)
+	if req.Body != nil {
+		_, _ = io.Copy(io.Discard, req.Body)
+	}
+	if err := req.ParseForm(); err != nil {
+		return nil, metadata, status.Errorf(codes.InvalidArgument, "%v", err)
+	}
+	if err := runtime.PopulateQueryParameters(&protoReq, req.Form, filter_BankService_ListInterbankAuditLog_0); err != nil {
+		return nil, metadata, status.Errorf(codes.InvalidArgument, "%v", err)
+	}
+	msg, err := client.ListInterbankAuditLog(ctx, &protoReq, grpc.Header(&metadata.HeaderMD), grpc.Trailer(&metadata.TrailerMD))
+	return msg, metadata, err
+}
+
+func local_request_BankService_ListInterbankAuditLog_0(ctx context.Context, marshaler runtime.Marshaler, server BankServiceServer, req *http.Request, pathParams map[string]string) (proto.Message, runtime.ServerMetadata, error) {
+	var (
+		protoReq ListInterbankAuditLogRequest
+		metadata runtime.ServerMetadata
+	)
+	if err := req.ParseForm(); err != nil {
+		return nil, metadata, status.Errorf(codes.InvalidArgument, "%v", err)
+	}
+	if err := runtime.PopulateQueryParameters(&protoReq, req.Form, filter_BankService_ListInterbankAuditLog_0); err != nil {
+		return nil, metadata, status.Errorf(codes.InvalidArgument, "%v", err)
+	}
+	msg, err := server.ListInterbankAuditLog(ctx, &protoReq)
+	return msg, metadata, err
+}
+
+var filter_BankService_ListInterbankBlacklist_0 = &utilities.DoubleArray{Encoding: map[string]int{}, Base: []int(nil), Check: []int(nil)}
+
+func request_BankService_ListInterbankBlacklist_0(ctx context.Context, marshaler runtime.Marshaler, client BankServiceClient, req *http.Request, pathParams map[string]string) (proto.Message, runtime.ServerMetadata, error) {
+	var (
+		protoReq ListInterbankBlacklistRequest
+		metadata runtime.ServerMetadata
+	)
+	if req.Body != nil {
+		_, _ = io.Copy(io.Discard, req.Body)
+	}
+	if err := req.ParseForm(); err != nil {
+		return nil, metadata, status.Errorf(codes.InvalidArgument, "%v", err)
+	}
+	if err := runtime.PopulateQueryParameters(&protoReq, req.Form, filter_BankService_ListInterbankBlacklist_0); err != nil {
+		return nil, metadata, status.Errorf(codes.InvalidArgument, "%v", err)
+	}
+	msg, err := client.ListInterbankBlacklist(ctx, &protoReq, grpc.Header(&metadata.HeaderMD), grpc.Trailer(&metadata.TrailerMD))
+	return msg, metadata, err
+}
+
+func local_request_BankService_ListInterbankBlacklist_0(ctx context.Context, marshaler runtime.Marshaler, server BankServiceServer, req *http.Request, pathParams map[string]string) (proto.Message, runtime.ServerMetadata, error) {
+	var (
+		protoReq ListInterbankBlacklistRequest
+		metadata runtime.ServerMetadata
+	)
+	if err := req.ParseForm(); err != nil {
+		return nil, metadata, status.Errorf(codes.InvalidArgument, "%v", err)
+	}
+	if err := runtime.PopulateQueryParameters(&protoReq, req.Form, filter_BankService_ListInterbankBlacklist_0); err != nil {
+		return nil, metadata, status.Errorf(codes.InvalidArgument, "%v", err)
+	}
+	msg, err := server.ListInterbankBlacklist(ctx, &protoReq)
+	return msg, metadata, err
+}
+
+func request_BankService_BlockInterbankPartner_0(ctx context.Context, marshaler runtime.Marshaler, client BankServiceClient, req *http.Request, pathParams map[string]string) (proto.Message, runtime.ServerMetadata, error) {
+	var (
+		protoReq BlockInterbankPartnerRequest
+		metadata runtime.ServerMetadata
+	)
+	if err := marshaler.NewDecoder(req.Body).Decode(&protoReq); err != nil && !errors.Is(err, io.EOF) {
+		return nil, metadata, status.Errorf(codes.InvalidArgument, "%v", err)
+	}
+	if req.Body != nil {
+		_, _ = io.Copy(io.Discard, req.Body)
+	}
+	msg, err := client.BlockInterbankPartner(ctx, &protoReq, grpc.Header(&metadata.HeaderMD), grpc.Trailer(&metadata.TrailerMD))
+	return msg, metadata, err
+}
+
+func local_request_BankService_BlockInterbankPartner_0(ctx context.Context, marshaler runtime.Marshaler, server BankServiceServer, req *http.Request, pathParams map[string]string) (proto.Message, runtime.ServerMetadata, error) {
+	var (
+		protoReq BlockInterbankPartnerRequest
+		metadata runtime.ServerMetadata
+	)
+	if err := marshaler.NewDecoder(req.Body).Decode(&protoReq); err != nil && !errors.Is(err, io.EOF) {
+		return nil, metadata, status.Errorf(codes.InvalidArgument, "%v", err)
+	}
+	msg, err := server.BlockInterbankPartner(ctx, &protoReq)
+	return msg, metadata, err
+}
+
+func request_BankService_UnblockInterbankPartner_0(ctx context.Context, marshaler runtime.Marshaler, client BankServiceClient, req *http.Request, pathParams map[string]string) (proto.Message, runtime.ServerMetadata, error) {
+	var (
+		protoReq UnblockInterbankPartnerRequest
+		metadata runtime.ServerMetadata
+		err      error
+	)
+	if req.Body != nil {
+		_, _ = io.Copy(io.Discard, req.Body)
+	}
+	val, ok := pathParams["sender_routing_number"]
+	if !ok {
+		return nil, metadata, status.Errorf(codes.InvalidArgument, "missing parameter %s", "sender_routing_number")
+	}
+	protoReq.SenderRoutingNumber, err = runtime.Int32(val)
+	if err != nil {
+		return nil, metadata, status.Errorf(codes.InvalidArgument, "type mismatch, parameter: %s, error: %v", "sender_routing_number", err)
+	}
+	msg, err := client.UnblockInterbankPartner(ctx, &protoReq, grpc.Header(&metadata.HeaderMD), grpc.Trailer(&metadata.TrailerMD))
+	return msg, metadata, err
+}
+
+func local_request_BankService_UnblockInterbankPartner_0(ctx context.Context, marshaler runtime.Marshaler, server BankServiceServer, req *http.Request, pathParams map[string]string) (proto.Message, runtime.ServerMetadata, error) {
+	var (
+		protoReq UnblockInterbankPartnerRequest
+		metadata runtime.ServerMetadata
+		err      error
+	)
+	val, ok := pathParams["sender_routing_number"]
+	if !ok {
+		return nil, metadata, status.Errorf(codes.InvalidArgument, "missing parameter %s", "sender_routing_number")
+	}
+	protoReq.SenderRoutingNumber, err = runtime.Int32(val)
+	if err != nil {
+		return nil, metadata, status.Errorf(codes.InvalidArgument, "type mismatch, parameter: %s, error: %v", "sender_routing_number", err)
+	}
+	msg, err := server.UnblockInterbankPartner(ctx, &protoReq)
+	return msg, metadata, err
+}
+
 // RegisterBankServiceHandlerServer registers the http handlers for service BankService to "mux".
 // UnaryRPC     :call BankServiceServer directly.
 // StreamingRPC :currently unsupported pending https://github.com/grpc/grpc-go/issues/906.
@@ -2263,6 +2489,126 @@ func RegisterBankServiceHandlerServer(ctx context.Context, mux *runtime.ServeMux
 		}
 		forward_BankService_SetForexForwardSpread_0(annotatedContext, mux, outboundMarshaler, w, req, resp, mux.GetForwardResponseOptions()...)
 	})
+	mux.Handle(http.MethodGet, pattern_BankService_ListInterbankTransactions_0, func(w http.ResponseWriter, req *http.Request, pathParams map[string]string) {
+		ctx, cancel := context.WithCancel(req.Context())
+		defer cancel()
+		var stream runtime.ServerTransportStream
+		ctx = grpc.NewContextWithServerTransportStream(ctx, &stream)
+		inboundMarshaler, outboundMarshaler := runtime.MarshalerForRequest(mux, req)
+		annotatedContext, err := runtime.AnnotateIncomingContext(ctx, mux, req, "/banka.bank.v1.BankService/ListInterbankTransactions", runtime.WithHTTPPathPattern("/api/v1/interbank/transactions"))
+		if err != nil {
+			runtime.HTTPError(ctx, mux, outboundMarshaler, w, req, err)
+			return
+		}
+		resp, md, err := local_request_BankService_ListInterbankTransactions_0(annotatedContext, inboundMarshaler, server, req, pathParams)
+		md.HeaderMD, md.TrailerMD = metadata.Join(md.HeaderMD, stream.Header()), metadata.Join(md.TrailerMD, stream.Trailer())
+		annotatedContext = runtime.NewServerMetadataContext(annotatedContext, md)
+		if err != nil {
+			runtime.HTTPError(annotatedContext, mux, outboundMarshaler, w, req, err)
+			return
+		}
+		forward_BankService_ListInterbankTransactions_0(annotatedContext, mux, outboundMarshaler, w, req, resp, mux.GetForwardResponseOptions()...)
+	})
+	mux.Handle(http.MethodGet, pattern_BankService_GetInterbankTransaction_0, func(w http.ResponseWriter, req *http.Request, pathParams map[string]string) {
+		ctx, cancel := context.WithCancel(req.Context())
+		defer cancel()
+		var stream runtime.ServerTransportStream
+		ctx = grpc.NewContextWithServerTransportStream(ctx, &stream)
+		inboundMarshaler, outboundMarshaler := runtime.MarshalerForRequest(mux, req)
+		annotatedContext, err := runtime.AnnotateIncomingContext(ctx, mux, req, "/banka.bank.v1.BankService/GetInterbankTransaction", runtime.WithHTTPPathPattern("/api/v1/interbank/transactions/{sender_routing_number}/{transaction_id}"))
+		if err != nil {
+			runtime.HTTPError(ctx, mux, outboundMarshaler, w, req, err)
+			return
+		}
+		resp, md, err := local_request_BankService_GetInterbankTransaction_0(annotatedContext, inboundMarshaler, server, req, pathParams)
+		md.HeaderMD, md.TrailerMD = metadata.Join(md.HeaderMD, stream.Header()), metadata.Join(md.TrailerMD, stream.Trailer())
+		annotatedContext = runtime.NewServerMetadataContext(annotatedContext, md)
+		if err != nil {
+			runtime.HTTPError(annotatedContext, mux, outboundMarshaler, w, req, err)
+			return
+		}
+		forward_BankService_GetInterbankTransaction_0(annotatedContext, mux, outboundMarshaler, w, req, resp, mux.GetForwardResponseOptions()...)
+	})
+	mux.Handle(http.MethodGet, pattern_BankService_ListInterbankAuditLog_0, func(w http.ResponseWriter, req *http.Request, pathParams map[string]string) {
+		ctx, cancel := context.WithCancel(req.Context())
+		defer cancel()
+		var stream runtime.ServerTransportStream
+		ctx = grpc.NewContextWithServerTransportStream(ctx, &stream)
+		inboundMarshaler, outboundMarshaler := runtime.MarshalerForRequest(mux, req)
+		annotatedContext, err := runtime.AnnotateIncomingContext(ctx, mux, req, "/banka.bank.v1.BankService/ListInterbankAuditLog", runtime.WithHTTPPathPattern("/api/v1/interbank/audit-log"))
+		if err != nil {
+			runtime.HTTPError(ctx, mux, outboundMarshaler, w, req, err)
+			return
+		}
+		resp, md, err := local_request_BankService_ListInterbankAuditLog_0(annotatedContext, inboundMarshaler, server, req, pathParams)
+		md.HeaderMD, md.TrailerMD = metadata.Join(md.HeaderMD, stream.Header()), metadata.Join(md.TrailerMD, stream.Trailer())
+		annotatedContext = runtime.NewServerMetadataContext(annotatedContext, md)
+		if err != nil {
+			runtime.HTTPError(annotatedContext, mux, outboundMarshaler, w, req, err)
+			return
+		}
+		forward_BankService_ListInterbankAuditLog_0(annotatedContext, mux, outboundMarshaler, w, req, resp, mux.GetForwardResponseOptions()...)
+	})
+	mux.Handle(http.MethodGet, pattern_BankService_ListInterbankBlacklist_0, func(w http.ResponseWriter, req *http.Request, pathParams map[string]string) {
+		ctx, cancel := context.WithCancel(req.Context())
+		defer cancel()
+		var stream runtime.ServerTransportStream
+		ctx = grpc.NewContextWithServerTransportStream(ctx, &stream)
+		inboundMarshaler, outboundMarshaler := runtime.MarshalerForRequest(mux, req)
+		annotatedContext, err := runtime.AnnotateIncomingContext(ctx, mux, req, "/banka.bank.v1.BankService/ListInterbankBlacklist", runtime.WithHTTPPathPattern("/api/v1/interbank/blacklist"))
+		if err != nil {
+			runtime.HTTPError(ctx, mux, outboundMarshaler, w, req, err)
+			return
+		}
+		resp, md, err := local_request_BankService_ListInterbankBlacklist_0(annotatedContext, inboundMarshaler, server, req, pathParams)
+		md.HeaderMD, md.TrailerMD = metadata.Join(md.HeaderMD, stream.Header()), metadata.Join(md.TrailerMD, stream.Trailer())
+		annotatedContext = runtime.NewServerMetadataContext(annotatedContext, md)
+		if err != nil {
+			runtime.HTTPError(annotatedContext, mux, outboundMarshaler, w, req, err)
+			return
+		}
+		forward_BankService_ListInterbankBlacklist_0(annotatedContext, mux, outboundMarshaler, w, req, resp, mux.GetForwardResponseOptions()...)
+	})
+	mux.Handle(http.MethodPost, pattern_BankService_BlockInterbankPartner_0, func(w http.ResponseWriter, req *http.Request, pathParams map[string]string) {
+		ctx, cancel := context.WithCancel(req.Context())
+		defer cancel()
+		var stream runtime.ServerTransportStream
+		ctx = grpc.NewContextWithServerTransportStream(ctx, &stream)
+		inboundMarshaler, outboundMarshaler := runtime.MarshalerForRequest(mux, req)
+		annotatedContext, err := runtime.AnnotateIncomingContext(ctx, mux, req, "/banka.bank.v1.BankService/BlockInterbankPartner", runtime.WithHTTPPathPattern("/api/v1/interbank/blacklist"))
+		if err != nil {
+			runtime.HTTPError(ctx, mux, outboundMarshaler, w, req, err)
+			return
+		}
+		resp, md, err := local_request_BankService_BlockInterbankPartner_0(annotatedContext, inboundMarshaler, server, req, pathParams)
+		md.HeaderMD, md.TrailerMD = metadata.Join(md.HeaderMD, stream.Header()), metadata.Join(md.TrailerMD, stream.Trailer())
+		annotatedContext = runtime.NewServerMetadataContext(annotatedContext, md)
+		if err != nil {
+			runtime.HTTPError(annotatedContext, mux, outboundMarshaler, w, req, err)
+			return
+		}
+		forward_BankService_BlockInterbankPartner_0(annotatedContext, mux, outboundMarshaler, w, req, resp, mux.GetForwardResponseOptions()...)
+	})
+	mux.Handle(http.MethodDelete, pattern_BankService_UnblockInterbankPartner_0, func(w http.ResponseWriter, req *http.Request, pathParams map[string]string) {
+		ctx, cancel := context.WithCancel(req.Context())
+		defer cancel()
+		var stream runtime.ServerTransportStream
+		ctx = grpc.NewContextWithServerTransportStream(ctx, &stream)
+		inboundMarshaler, outboundMarshaler := runtime.MarshalerForRequest(mux, req)
+		annotatedContext, err := runtime.AnnotateIncomingContext(ctx, mux, req, "/banka.bank.v1.BankService/UnblockInterbankPartner", runtime.WithHTTPPathPattern("/api/v1/interbank/blacklist/{sender_routing_number}"))
+		if err != nil {
+			runtime.HTTPError(ctx, mux, outboundMarshaler, w, req, err)
+			return
+		}
+		resp, md, err := local_request_BankService_UnblockInterbankPartner_0(annotatedContext, inboundMarshaler, server, req, pathParams)
+		md.HeaderMD, md.TrailerMD = metadata.Join(md.HeaderMD, stream.Header()), metadata.Join(md.TrailerMD, stream.Trailer())
+		annotatedContext = runtime.NewServerMetadataContext(annotatedContext, md)
+		if err != nil {
+			runtime.HTTPError(annotatedContext, mux, outboundMarshaler, w, req, err)
+			return
+		}
+		forward_BankService_UnblockInterbankPartner_0(annotatedContext, mux, outboundMarshaler, w, req, resp, mux.GetForwardResponseOptions()...)
+	})
 
 	return nil
 }
@@ -3017,95 +3363,209 @@ func RegisterBankServiceHandlerClient(ctx context.Context, mux *runtime.ServeMux
 		}
 		forward_BankService_SetForexForwardSpread_0(annotatedContext, mux, outboundMarshaler, w, req, resp, mux.GetForwardResponseOptions()...)
 	})
+	mux.Handle(http.MethodGet, pattern_BankService_ListInterbankTransactions_0, func(w http.ResponseWriter, req *http.Request, pathParams map[string]string) {
+		ctx, cancel := context.WithCancel(req.Context())
+		defer cancel()
+		inboundMarshaler, outboundMarshaler := runtime.MarshalerForRequest(mux, req)
+		annotatedContext, err := runtime.AnnotateContext(ctx, mux, req, "/banka.bank.v1.BankService/ListInterbankTransactions", runtime.WithHTTPPathPattern("/api/v1/interbank/transactions"))
+		if err != nil {
+			runtime.HTTPError(ctx, mux, outboundMarshaler, w, req, err)
+			return
+		}
+		resp, md, err := request_BankService_ListInterbankTransactions_0(annotatedContext, inboundMarshaler, client, req, pathParams)
+		annotatedContext = runtime.NewServerMetadataContext(annotatedContext, md)
+		if err != nil {
+			runtime.HTTPError(annotatedContext, mux, outboundMarshaler, w, req, err)
+			return
+		}
+		forward_BankService_ListInterbankTransactions_0(annotatedContext, mux, outboundMarshaler, w, req, resp, mux.GetForwardResponseOptions()...)
+	})
+	mux.Handle(http.MethodGet, pattern_BankService_GetInterbankTransaction_0, func(w http.ResponseWriter, req *http.Request, pathParams map[string]string) {
+		ctx, cancel := context.WithCancel(req.Context())
+		defer cancel()
+		inboundMarshaler, outboundMarshaler := runtime.MarshalerForRequest(mux, req)
+		annotatedContext, err := runtime.AnnotateContext(ctx, mux, req, "/banka.bank.v1.BankService/GetInterbankTransaction", runtime.WithHTTPPathPattern("/api/v1/interbank/transactions/{sender_routing_number}/{transaction_id}"))
+		if err != nil {
+			runtime.HTTPError(ctx, mux, outboundMarshaler, w, req, err)
+			return
+		}
+		resp, md, err := request_BankService_GetInterbankTransaction_0(annotatedContext, inboundMarshaler, client, req, pathParams)
+		annotatedContext = runtime.NewServerMetadataContext(annotatedContext, md)
+		if err != nil {
+			runtime.HTTPError(annotatedContext, mux, outboundMarshaler, w, req, err)
+			return
+		}
+		forward_BankService_GetInterbankTransaction_0(annotatedContext, mux, outboundMarshaler, w, req, resp, mux.GetForwardResponseOptions()...)
+	})
+	mux.Handle(http.MethodGet, pattern_BankService_ListInterbankAuditLog_0, func(w http.ResponseWriter, req *http.Request, pathParams map[string]string) {
+		ctx, cancel := context.WithCancel(req.Context())
+		defer cancel()
+		inboundMarshaler, outboundMarshaler := runtime.MarshalerForRequest(mux, req)
+		annotatedContext, err := runtime.AnnotateContext(ctx, mux, req, "/banka.bank.v1.BankService/ListInterbankAuditLog", runtime.WithHTTPPathPattern("/api/v1/interbank/audit-log"))
+		if err != nil {
+			runtime.HTTPError(ctx, mux, outboundMarshaler, w, req, err)
+			return
+		}
+		resp, md, err := request_BankService_ListInterbankAuditLog_0(annotatedContext, inboundMarshaler, client, req, pathParams)
+		annotatedContext = runtime.NewServerMetadataContext(annotatedContext, md)
+		if err != nil {
+			runtime.HTTPError(annotatedContext, mux, outboundMarshaler, w, req, err)
+			return
+		}
+		forward_BankService_ListInterbankAuditLog_0(annotatedContext, mux, outboundMarshaler, w, req, resp, mux.GetForwardResponseOptions()...)
+	})
+	mux.Handle(http.MethodGet, pattern_BankService_ListInterbankBlacklist_0, func(w http.ResponseWriter, req *http.Request, pathParams map[string]string) {
+		ctx, cancel := context.WithCancel(req.Context())
+		defer cancel()
+		inboundMarshaler, outboundMarshaler := runtime.MarshalerForRequest(mux, req)
+		annotatedContext, err := runtime.AnnotateContext(ctx, mux, req, "/banka.bank.v1.BankService/ListInterbankBlacklist", runtime.WithHTTPPathPattern("/api/v1/interbank/blacklist"))
+		if err != nil {
+			runtime.HTTPError(ctx, mux, outboundMarshaler, w, req, err)
+			return
+		}
+		resp, md, err := request_BankService_ListInterbankBlacklist_0(annotatedContext, inboundMarshaler, client, req, pathParams)
+		annotatedContext = runtime.NewServerMetadataContext(annotatedContext, md)
+		if err != nil {
+			runtime.HTTPError(annotatedContext, mux, outboundMarshaler, w, req, err)
+			return
+		}
+		forward_BankService_ListInterbankBlacklist_0(annotatedContext, mux, outboundMarshaler, w, req, resp, mux.GetForwardResponseOptions()...)
+	})
+	mux.Handle(http.MethodPost, pattern_BankService_BlockInterbankPartner_0, func(w http.ResponseWriter, req *http.Request, pathParams map[string]string) {
+		ctx, cancel := context.WithCancel(req.Context())
+		defer cancel()
+		inboundMarshaler, outboundMarshaler := runtime.MarshalerForRequest(mux, req)
+		annotatedContext, err := runtime.AnnotateContext(ctx, mux, req, "/banka.bank.v1.BankService/BlockInterbankPartner", runtime.WithHTTPPathPattern("/api/v1/interbank/blacklist"))
+		if err != nil {
+			runtime.HTTPError(ctx, mux, outboundMarshaler, w, req, err)
+			return
+		}
+		resp, md, err := request_BankService_BlockInterbankPartner_0(annotatedContext, inboundMarshaler, client, req, pathParams)
+		annotatedContext = runtime.NewServerMetadataContext(annotatedContext, md)
+		if err != nil {
+			runtime.HTTPError(annotatedContext, mux, outboundMarshaler, w, req, err)
+			return
+		}
+		forward_BankService_BlockInterbankPartner_0(annotatedContext, mux, outboundMarshaler, w, req, resp, mux.GetForwardResponseOptions()...)
+	})
+	mux.Handle(http.MethodDelete, pattern_BankService_UnblockInterbankPartner_0, func(w http.ResponseWriter, req *http.Request, pathParams map[string]string) {
+		ctx, cancel := context.WithCancel(req.Context())
+		defer cancel()
+		inboundMarshaler, outboundMarshaler := runtime.MarshalerForRequest(mux, req)
+		annotatedContext, err := runtime.AnnotateContext(ctx, mux, req, "/banka.bank.v1.BankService/UnblockInterbankPartner", runtime.WithHTTPPathPattern("/api/v1/interbank/blacklist/{sender_routing_number}"))
+		if err != nil {
+			runtime.HTTPError(ctx, mux, outboundMarshaler, w, req, err)
+			return
+		}
+		resp, md, err := request_BankService_UnblockInterbankPartner_0(annotatedContext, inboundMarshaler, client, req, pathParams)
+		annotatedContext = runtime.NewServerMetadataContext(annotatedContext, md)
+		if err != nil {
+			runtime.HTTPError(annotatedContext, mux, outboundMarshaler, w, req, err)
+			return
+		}
+		forward_BankService_UnblockInterbankPartner_0(annotatedContext, mux, outboundMarshaler, w, req, resp, mux.GetForwardResponseOptions()...)
+	})
 	return nil
 }
 
 var (
-	pattern_BankService_CreateCompany_0          = runtime.MustPattern(runtime.NewPattern(1, []int{2, 0, 2, 1, 2, 2}, []string{"api", "v1", "companies"}, ""))
-	pattern_BankService_ListCompanies_0          = runtime.MustPattern(runtime.NewPattern(1, []int{2, 0, 2, 1, 2, 2}, []string{"api", "v1", "companies"}, ""))
-	pattern_BankService_GetCompany_0             = runtime.MustPattern(runtime.NewPattern(1, []int{2, 0, 2, 1, 2, 2, 1, 0, 4, 1, 5, 3}, []string{"api", "v1", "companies", "id"}, ""))
-	pattern_BankService_UpdateCompany_0          = runtime.MustPattern(runtime.NewPattern(1, []int{2, 0, 2, 1, 2, 2, 1, 0, 4, 1, 5, 3}, []string{"api", "v1", "companies", "id"}, ""))
-	pattern_BankService_CreateAccount_0          = runtime.MustPattern(runtime.NewPattern(1, []int{2, 0, 2, 1, 2, 2}, []string{"api", "v1", "accounts"}, ""))
-	pattern_BankService_ListAccounts_0           = runtime.MustPattern(runtime.NewPattern(1, []int{2, 0, 2, 1, 2, 2}, []string{"api", "v1", "accounts"}, ""))
-	pattern_BankService_GetAccount_0             = runtime.MustPattern(runtime.NewPattern(1, []int{2, 0, 2, 1, 2, 2, 1, 0, 4, 1, 5, 3}, []string{"api", "v1", "accounts", "id"}, ""))
-	pattern_BankService_UpdateAccountLimits_0    = runtime.MustPattern(runtime.NewPattern(1, []int{2, 0, 2, 1, 2, 2, 1, 0, 4, 1, 5, 3, 2, 4}, []string{"api", "v1", "accounts", "id", "limits"}, ""))
-	pattern_BankService_UpdateAccountName_0      = runtime.MustPattern(runtime.NewPattern(1, []int{2, 0, 2, 1, 2, 2, 1, 0, 4, 1, 5, 3, 2, 4}, []string{"api", "v1", "accounts", "id", "name"}, ""))
-	pattern_BankService_SetAccountStatus_0       = runtime.MustPattern(runtime.NewPattern(1, []int{2, 0, 2, 1, 2, 2, 1, 0, 4, 1, 5, 3, 2, 4}, []string{"api", "v1", "accounts", "id", "status"}, ""))
-	pattern_BankService_CreatePayment_0          = runtime.MustPattern(runtime.NewPattern(1, []int{2, 0, 2, 1, 2, 2}, []string{"api", "v1", "payments"}, ""))
-	pattern_BankService_CreateTransfer_0         = runtime.MustPattern(runtime.NewPattern(1, []int{2, 0, 2, 1, 2, 2}, []string{"api", "v1", "transfers"}, ""))
-	pattern_BankService_QuoteExchange_0          = runtime.MustPattern(runtime.NewPattern(1, []int{2, 0, 2, 1, 2, 2, 2, 3}, []string{"api", "v1", "menjacnica", "quote"}, ""))
-	pattern_BankService_ListTransactions_0       = runtime.MustPattern(runtime.NewPattern(1, []int{2, 0, 2, 1, 2, 2}, []string{"api", "v1", "transactions"}, ""))
-	pattern_BankService_CreatePaymentRecipient_0 = runtime.MustPattern(runtime.NewPattern(1, []int{2, 0, 2, 1, 2, 2}, []string{"api", "v1", "payment-recipients"}, ""))
-	pattern_BankService_ListPaymentRecipients_0  = runtime.MustPattern(runtime.NewPattern(1, []int{2, 0, 2, 1, 2, 2}, []string{"api", "v1", "payment-recipients"}, ""))
-	pattern_BankService_UpdatePaymentRecipient_0 = runtime.MustPattern(runtime.NewPattern(1, []int{2, 0, 2, 1, 2, 2, 1, 0, 4, 1, 5, 3}, []string{"api", "v1", "payment-recipients", "id"}, ""))
-	pattern_BankService_DeletePaymentRecipient_0 = runtime.MustPattern(runtime.NewPattern(1, []int{2, 0, 2, 1, 2, 2, 1, 0, 4, 1, 5, 3}, []string{"api", "v1", "payment-recipients", "id"}, ""))
-	pattern_BankService_SchedulePayment_0        = runtime.MustPattern(runtime.NewPattern(1, []int{2, 0, 2, 1, 2, 2}, []string{"api", "v1", "scheduled-payments"}, ""))
-	pattern_BankService_ListScheduledPayments_0  = runtime.MustPattern(runtime.NewPattern(1, []int{2, 0, 2, 1, 2, 2}, []string{"api", "v1", "scheduled-payments"}, ""))
-	pattern_BankService_CancelScheduledPayment_0 = runtime.MustPattern(runtime.NewPattern(1, []int{2, 0, 2, 1, 2, 2, 1, 0, 4, 1, 5, 3}, []string{"api", "v1", "scheduled-payments", "id"}, ""))
-	pattern_BankService_CreateCard_0             = runtime.MustPattern(runtime.NewPattern(1, []int{2, 0, 2, 1, 2, 2}, []string{"api", "v1", "cards"}, ""))
-	pattern_BankService_ListCards_0              = runtime.MustPattern(runtime.NewPattern(1, []int{2, 0, 2, 1, 2, 2}, []string{"api", "v1", "cards"}, ""))
-	pattern_BankService_SetCardStatus_0          = runtime.MustPattern(runtime.NewPattern(1, []int{2, 0, 2, 1, 2, 2, 1, 0, 4, 1, 5, 3, 2, 4}, []string{"api", "v1", "cards", "id", "status"}, ""))
-	pattern_BankService_UpdateCardLimit_0        = runtime.MustPattern(runtime.NewPattern(1, []int{2, 0, 2, 1, 2, 2, 1, 0, 4, 1, 5, 3, 2, 4}, []string{"api", "v1", "cards", "id", "limit"}, ""))
-	pattern_BankService_CreateAuthorizedPerson_0 = runtime.MustPattern(runtime.NewPattern(1, []int{2, 0, 2, 1, 2, 2}, []string{"api", "v1", "authorized-persons"}, ""))
-	pattern_BankService_ListAuthorizedPersons_0  = runtime.MustPattern(runtime.NewPattern(1, []int{2, 0, 2, 1, 2, 2}, []string{"api", "v1", "authorized-persons"}, ""))
-	pattern_BankService_SubmitLoanRequest_0      = runtime.MustPattern(runtime.NewPattern(1, []int{2, 0, 2, 1, 2, 2}, []string{"api", "v1", "loan-requests"}, ""))
-	pattern_BankService_ListLoanRequests_0       = runtime.MustPattern(runtime.NewPattern(1, []int{2, 0, 2, 1, 2, 2}, []string{"api", "v1", "loan-requests"}, ""))
-	pattern_BankService_DecideLoanRequest_0      = runtime.MustPattern(runtime.NewPattern(1, []int{2, 0, 2, 1, 2, 2, 1, 0, 4, 1, 5, 3, 2, 4}, []string{"api", "v1", "loan-requests", "id", "decide"}, ""))
-	pattern_BankService_ListLoans_0              = runtime.MustPattern(runtime.NewPattern(1, []int{2, 0, 2, 1, 2, 2}, []string{"api", "v1", "loans"}, ""))
-	pattern_BankService_GetLoan_0                = runtime.MustPattern(runtime.NewPattern(1, []int{2, 0, 2, 1, 2, 2, 1, 0, 4, 1, 5, 3}, []string{"api", "v1", "loans", "id"}, ""))
-	pattern_BankService_RunInstallmentJob_0      = runtime.MustPattern(runtime.NewPattern(1, []int{2, 0, 2, 1, 2, 2, 2, 3}, []string{"api", "v1", "loans", "run-installment-job"}, ""))
-	pattern_BankService_RunVariableRateJob_0     = runtime.MustPattern(runtime.NewPattern(1, []int{2, 0, 2, 1, 2, 2, 2, 3}, []string{"api", "v1", "loans", "run-variable-rate-job"}, ""))
-	pattern_BankService_RunMaintenanceFeeJob_0   = runtime.MustPattern(runtime.NewPattern(1, []int{2, 0, 2, 1, 2, 2, 2, 3}, []string{"api", "v1", "accounts", "run-maintenance-fee-job"}, ""))
-	pattern_BankService_RunSpentResetJob_0       = runtime.MustPattern(runtime.NewPattern(1, []int{2, 0, 2, 1, 2, 2, 2, 3}, []string{"api", "v1", "accounts", "run-spent-reset-job"}, ""))
-	pattern_BankService_QuoteForexForward_0      = runtime.MustPattern(runtime.NewPattern(1, []int{2, 0, 2, 1, 2, 2, 2, 3}, []string{"api", "v1", "forex-forwards", "quote"}, ""))
-	pattern_BankService_CreateForexForward_0     = runtime.MustPattern(runtime.NewPattern(1, []int{2, 0, 2, 1, 2, 2}, []string{"api", "v1", "forex-forwards"}, ""))
-	pattern_BankService_ListForexForwards_0      = runtime.MustPattern(runtime.NewPattern(1, []int{2, 0, 2, 1, 2, 2}, []string{"api", "v1", "forex-forwards"}, ""))
-	pattern_BankService_CancelForexForward_0     = runtime.MustPattern(runtime.NewPattern(1, []int{2, 0, 2, 1, 2, 2, 1, 0, 4, 1, 5, 3}, []string{"api", "v1", "forex-forwards", "id"}, ""))
-	pattern_BankService_GetForexForwardSpreads_0 = runtime.MustPattern(runtime.NewPattern(1, []int{2, 0, 2, 1, 2, 2, 2, 3}, []string{"api", "v1", "forex-forwards", "spreads"}, ""))
-	pattern_BankService_SetForexForwardSpread_0  = runtime.MustPattern(runtime.NewPattern(1, []int{2, 0, 2, 1, 2, 2, 2, 3}, []string{"api", "v1", "forex-forwards", "spreads"}, ""))
+	pattern_BankService_CreateCompany_0             = runtime.MustPattern(runtime.NewPattern(1, []int{2, 0, 2, 1, 2, 2}, []string{"api", "v1", "companies"}, ""))
+	pattern_BankService_ListCompanies_0             = runtime.MustPattern(runtime.NewPattern(1, []int{2, 0, 2, 1, 2, 2}, []string{"api", "v1", "companies"}, ""))
+	pattern_BankService_GetCompany_0                = runtime.MustPattern(runtime.NewPattern(1, []int{2, 0, 2, 1, 2, 2, 1, 0, 4, 1, 5, 3}, []string{"api", "v1", "companies", "id"}, ""))
+	pattern_BankService_UpdateCompany_0             = runtime.MustPattern(runtime.NewPattern(1, []int{2, 0, 2, 1, 2, 2, 1, 0, 4, 1, 5, 3}, []string{"api", "v1", "companies", "id"}, ""))
+	pattern_BankService_CreateAccount_0             = runtime.MustPattern(runtime.NewPattern(1, []int{2, 0, 2, 1, 2, 2}, []string{"api", "v1", "accounts"}, ""))
+	pattern_BankService_ListAccounts_0              = runtime.MustPattern(runtime.NewPattern(1, []int{2, 0, 2, 1, 2, 2}, []string{"api", "v1", "accounts"}, ""))
+	pattern_BankService_GetAccount_0                = runtime.MustPattern(runtime.NewPattern(1, []int{2, 0, 2, 1, 2, 2, 1, 0, 4, 1, 5, 3}, []string{"api", "v1", "accounts", "id"}, ""))
+	pattern_BankService_UpdateAccountLimits_0       = runtime.MustPattern(runtime.NewPattern(1, []int{2, 0, 2, 1, 2, 2, 1, 0, 4, 1, 5, 3, 2, 4}, []string{"api", "v1", "accounts", "id", "limits"}, ""))
+	pattern_BankService_UpdateAccountName_0         = runtime.MustPattern(runtime.NewPattern(1, []int{2, 0, 2, 1, 2, 2, 1, 0, 4, 1, 5, 3, 2, 4}, []string{"api", "v1", "accounts", "id", "name"}, ""))
+	pattern_BankService_SetAccountStatus_0          = runtime.MustPattern(runtime.NewPattern(1, []int{2, 0, 2, 1, 2, 2, 1, 0, 4, 1, 5, 3, 2, 4}, []string{"api", "v1", "accounts", "id", "status"}, ""))
+	pattern_BankService_CreatePayment_0             = runtime.MustPattern(runtime.NewPattern(1, []int{2, 0, 2, 1, 2, 2}, []string{"api", "v1", "payments"}, ""))
+	pattern_BankService_CreateTransfer_0            = runtime.MustPattern(runtime.NewPattern(1, []int{2, 0, 2, 1, 2, 2}, []string{"api", "v1", "transfers"}, ""))
+	pattern_BankService_QuoteExchange_0             = runtime.MustPattern(runtime.NewPattern(1, []int{2, 0, 2, 1, 2, 2, 2, 3}, []string{"api", "v1", "menjacnica", "quote"}, ""))
+	pattern_BankService_ListTransactions_0          = runtime.MustPattern(runtime.NewPattern(1, []int{2, 0, 2, 1, 2, 2}, []string{"api", "v1", "transactions"}, ""))
+	pattern_BankService_CreatePaymentRecipient_0    = runtime.MustPattern(runtime.NewPattern(1, []int{2, 0, 2, 1, 2, 2}, []string{"api", "v1", "payment-recipients"}, ""))
+	pattern_BankService_ListPaymentRecipients_0     = runtime.MustPattern(runtime.NewPattern(1, []int{2, 0, 2, 1, 2, 2}, []string{"api", "v1", "payment-recipients"}, ""))
+	pattern_BankService_UpdatePaymentRecipient_0    = runtime.MustPattern(runtime.NewPattern(1, []int{2, 0, 2, 1, 2, 2, 1, 0, 4, 1, 5, 3}, []string{"api", "v1", "payment-recipients", "id"}, ""))
+	pattern_BankService_DeletePaymentRecipient_0    = runtime.MustPattern(runtime.NewPattern(1, []int{2, 0, 2, 1, 2, 2, 1, 0, 4, 1, 5, 3}, []string{"api", "v1", "payment-recipients", "id"}, ""))
+	pattern_BankService_SchedulePayment_0           = runtime.MustPattern(runtime.NewPattern(1, []int{2, 0, 2, 1, 2, 2}, []string{"api", "v1", "scheduled-payments"}, ""))
+	pattern_BankService_ListScheduledPayments_0     = runtime.MustPattern(runtime.NewPattern(1, []int{2, 0, 2, 1, 2, 2}, []string{"api", "v1", "scheduled-payments"}, ""))
+	pattern_BankService_CancelScheduledPayment_0    = runtime.MustPattern(runtime.NewPattern(1, []int{2, 0, 2, 1, 2, 2, 1, 0, 4, 1, 5, 3}, []string{"api", "v1", "scheduled-payments", "id"}, ""))
+	pattern_BankService_CreateCard_0                = runtime.MustPattern(runtime.NewPattern(1, []int{2, 0, 2, 1, 2, 2}, []string{"api", "v1", "cards"}, ""))
+	pattern_BankService_ListCards_0                 = runtime.MustPattern(runtime.NewPattern(1, []int{2, 0, 2, 1, 2, 2}, []string{"api", "v1", "cards"}, ""))
+	pattern_BankService_SetCardStatus_0             = runtime.MustPattern(runtime.NewPattern(1, []int{2, 0, 2, 1, 2, 2, 1, 0, 4, 1, 5, 3, 2, 4}, []string{"api", "v1", "cards", "id", "status"}, ""))
+	pattern_BankService_UpdateCardLimit_0           = runtime.MustPattern(runtime.NewPattern(1, []int{2, 0, 2, 1, 2, 2, 1, 0, 4, 1, 5, 3, 2, 4}, []string{"api", "v1", "cards", "id", "limit"}, ""))
+	pattern_BankService_CreateAuthorizedPerson_0    = runtime.MustPattern(runtime.NewPattern(1, []int{2, 0, 2, 1, 2, 2}, []string{"api", "v1", "authorized-persons"}, ""))
+	pattern_BankService_ListAuthorizedPersons_0     = runtime.MustPattern(runtime.NewPattern(1, []int{2, 0, 2, 1, 2, 2}, []string{"api", "v1", "authorized-persons"}, ""))
+	pattern_BankService_SubmitLoanRequest_0         = runtime.MustPattern(runtime.NewPattern(1, []int{2, 0, 2, 1, 2, 2}, []string{"api", "v1", "loan-requests"}, ""))
+	pattern_BankService_ListLoanRequests_0          = runtime.MustPattern(runtime.NewPattern(1, []int{2, 0, 2, 1, 2, 2}, []string{"api", "v1", "loan-requests"}, ""))
+	pattern_BankService_DecideLoanRequest_0         = runtime.MustPattern(runtime.NewPattern(1, []int{2, 0, 2, 1, 2, 2, 1, 0, 4, 1, 5, 3, 2, 4}, []string{"api", "v1", "loan-requests", "id", "decide"}, ""))
+	pattern_BankService_ListLoans_0                 = runtime.MustPattern(runtime.NewPattern(1, []int{2, 0, 2, 1, 2, 2}, []string{"api", "v1", "loans"}, ""))
+	pattern_BankService_GetLoan_0                   = runtime.MustPattern(runtime.NewPattern(1, []int{2, 0, 2, 1, 2, 2, 1, 0, 4, 1, 5, 3}, []string{"api", "v1", "loans", "id"}, ""))
+	pattern_BankService_RunInstallmentJob_0         = runtime.MustPattern(runtime.NewPattern(1, []int{2, 0, 2, 1, 2, 2, 2, 3}, []string{"api", "v1", "loans", "run-installment-job"}, ""))
+	pattern_BankService_RunVariableRateJob_0        = runtime.MustPattern(runtime.NewPattern(1, []int{2, 0, 2, 1, 2, 2, 2, 3}, []string{"api", "v1", "loans", "run-variable-rate-job"}, ""))
+	pattern_BankService_RunMaintenanceFeeJob_0      = runtime.MustPattern(runtime.NewPattern(1, []int{2, 0, 2, 1, 2, 2, 2, 3}, []string{"api", "v1", "accounts", "run-maintenance-fee-job"}, ""))
+	pattern_BankService_RunSpentResetJob_0          = runtime.MustPattern(runtime.NewPattern(1, []int{2, 0, 2, 1, 2, 2, 2, 3}, []string{"api", "v1", "accounts", "run-spent-reset-job"}, ""))
+	pattern_BankService_QuoteForexForward_0         = runtime.MustPattern(runtime.NewPattern(1, []int{2, 0, 2, 1, 2, 2, 2, 3}, []string{"api", "v1", "forex-forwards", "quote"}, ""))
+	pattern_BankService_CreateForexForward_0        = runtime.MustPattern(runtime.NewPattern(1, []int{2, 0, 2, 1, 2, 2}, []string{"api", "v1", "forex-forwards"}, ""))
+	pattern_BankService_ListForexForwards_0         = runtime.MustPattern(runtime.NewPattern(1, []int{2, 0, 2, 1, 2, 2}, []string{"api", "v1", "forex-forwards"}, ""))
+	pattern_BankService_CancelForexForward_0        = runtime.MustPattern(runtime.NewPattern(1, []int{2, 0, 2, 1, 2, 2, 1, 0, 4, 1, 5, 3}, []string{"api", "v1", "forex-forwards", "id"}, ""))
+	pattern_BankService_GetForexForwardSpreads_0    = runtime.MustPattern(runtime.NewPattern(1, []int{2, 0, 2, 1, 2, 2, 2, 3}, []string{"api", "v1", "forex-forwards", "spreads"}, ""))
+	pattern_BankService_SetForexForwardSpread_0     = runtime.MustPattern(runtime.NewPattern(1, []int{2, 0, 2, 1, 2, 2, 2, 3}, []string{"api", "v1", "forex-forwards", "spreads"}, ""))
+	pattern_BankService_ListInterbankTransactions_0 = runtime.MustPattern(runtime.NewPattern(1, []int{2, 0, 2, 1, 2, 2, 2, 3}, []string{"api", "v1", "interbank", "transactions"}, ""))
+	pattern_BankService_GetInterbankTransaction_0   = runtime.MustPattern(runtime.NewPattern(1, []int{2, 0, 2, 1, 2, 2, 2, 3, 1, 0, 4, 1, 5, 4, 1, 0, 4, 1, 5, 5}, []string{"api", "v1", "interbank", "transactions", "sender_routing_number", "transaction_id"}, ""))
+	pattern_BankService_ListInterbankAuditLog_0     = runtime.MustPattern(runtime.NewPattern(1, []int{2, 0, 2, 1, 2, 2, 2, 3}, []string{"api", "v1", "interbank", "audit-log"}, ""))
+	pattern_BankService_ListInterbankBlacklist_0    = runtime.MustPattern(runtime.NewPattern(1, []int{2, 0, 2, 1, 2, 2, 2, 3}, []string{"api", "v1", "interbank", "blacklist"}, ""))
+	pattern_BankService_BlockInterbankPartner_0     = runtime.MustPattern(runtime.NewPattern(1, []int{2, 0, 2, 1, 2, 2, 2, 3}, []string{"api", "v1", "interbank", "blacklist"}, ""))
+	pattern_BankService_UnblockInterbankPartner_0   = runtime.MustPattern(runtime.NewPattern(1, []int{2, 0, 2, 1, 2, 2, 2, 3, 1, 0, 4, 1, 5, 4}, []string{"api", "v1", "interbank", "blacklist", "sender_routing_number"}, ""))
 )
 
 var (
-	forward_BankService_CreateCompany_0          = runtime.ForwardResponseMessage
-	forward_BankService_ListCompanies_0          = runtime.ForwardResponseMessage
-	forward_BankService_GetCompany_0             = runtime.ForwardResponseMessage
-	forward_BankService_UpdateCompany_0          = runtime.ForwardResponseMessage
-	forward_BankService_CreateAccount_0          = runtime.ForwardResponseMessage
-	forward_BankService_ListAccounts_0           = runtime.ForwardResponseMessage
-	forward_BankService_GetAccount_0             = runtime.ForwardResponseMessage
-	forward_BankService_UpdateAccountLimits_0    = runtime.ForwardResponseMessage
-	forward_BankService_UpdateAccountName_0      = runtime.ForwardResponseMessage
-	forward_BankService_SetAccountStatus_0       = runtime.ForwardResponseMessage
-	forward_BankService_CreatePayment_0          = runtime.ForwardResponseMessage
-	forward_BankService_CreateTransfer_0         = runtime.ForwardResponseMessage
-	forward_BankService_QuoteExchange_0          = runtime.ForwardResponseMessage
-	forward_BankService_ListTransactions_0       = runtime.ForwardResponseMessage
-	forward_BankService_CreatePaymentRecipient_0 = runtime.ForwardResponseMessage
-	forward_BankService_ListPaymentRecipients_0  = runtime.ForwardResponseMessage
-	forward_BankService_UpdatePaymentRecipient_0 = runtime.ForwardResponseMessage
-	forward_BankService_DeletePaymentRecipient_0 = runtime.ForwardResponseMessage
-	forward_BankService_SchedulePayment_0        = runtime.ForwardResponseMessage
-	forward_BankService_ListScheduledPayments_0  = runtime.ForwardResponseMessage
-	forward_BankService_CancelScheduledPayment_0 = runtime.ForwardResponseMessage
-	forward_BankService_CreateCard_0             = runtime.ForwardResponseMessage
-	forward_BankService_ListCards_0              = runtime.ForwardResponseMessage
-	forward_BankService_SetCardStatus_0          = runtime.ForwardResponseMessage
-	forward_BankService_UpdateCardLimit_0        = runtime.ForwardResponseMessage
-	forward_BankService_CreateAuthorizedPerson_0 = runtime.ForwardResponseMessage
-	forward_BankService_ListAuthorizedPersons_0  = runtime.ForwardResponseMessage
-	forward_BankService_SubmitLoanRequest_0      = runtime.ForwardResponseMessage
-	forward_BankService_ListLoanRequests_0       = runtime.ForwardResponseMessage
-	forward_BankService_DecideLoanRequest_0      = runtime.ForwardResponseMessage
-	forward_BankService_ListLoans_0              = runtime.ForwardResponseMessage
-	forward_BankService_GetLoan_0                = runtime.ForwardResponseMessage
-	forward_BankService_RunInstallmentJob_0      = runtime.ForwardResponseMessage
-	forward_BankService_RunVariableRateJob_0     = runtime.ForwardResponseMessage
-	forward_BankService_RunMaintenanceFeeJob_0   = runtime.ForwardResponseMessage
-	forward_BankService_RunSpentResetJob_0       = runtime.ForwardResponseMessage
-	forward_BankService_QuoteForexForward_0      = runtime.ForwardResponseMessage
-	forward_BankService_CreateForexForward_0     = runtime.ForwardResponseMessage
-	forward_BankService_ListForexForwards_0      = runtime.ForwardResponseMessage
-	forward_BankService_CancelForexForward_0     = runtime.ForwardResponseMessage
-	forward_BankService_GetForexForwardSpreads_0 = runtime.ForwardResponseMessage
-	forward_BankService_SetForexForwardSpread_0  = runtime.ForwardResponseMessage
+	forward_BankService_CreateCompany_0             = runtime.ForwardResponseMessage
+	forward_BankService_ListCompanies_0             = runtime.ForwardResponseMessage
+	forward_BankService_GetCompany_0                = runtime.ForwardResponseMessage
+	forward_BankService_UpdateCompany_0             = runtime.ForwardResponseMessage
+	forward_BankService_CreateAccount_0             = runtime.ForwardResponseMessage
+	forward_BankService_ListAccounts_0              = runtime.ForwardResponseMessage
+	forward_BankService_GetAccount_0                = runtime.ForwardResponseMessage
+	forward_BankService_UpdateAccountLimits_0       = runtime.ForwardResponseMessage
+	forward_BankService_UpdateAccountName_0         = runtime.ForwardResponseMessage
+	forward_BankService_SetAccountStatus_0          = runtime.ForwardResponseMessage
+	forward_BankService_CreatePayment_0             = runtime.ForwardResponseMessage
+	forward_BankService_CreateTransfer_0            = runtime.ForwardResponseMessage
+	forward_BankService_QuoteExchange_0             = runtime.ForwardResponseMessage
+	forward_BankService_ListTransactions_0          = runtime.ForwardResponseMessage
+	forward_BankService_CreatePaymentRecipient_0    = runtime.ForwardResponseMessage
+	forward_BankService_ListPaymentRecipients_0     = runtime.ForwardResponseMessage
+	forward_BankService_UpdatePaymentRecipient_0    = runtime.ForwardResponseMessage
+	forward_BankService_DeletePaymentRecipient_0    = runtime.ForwardResponseMessage
+	forward_BankService_SchedulePayment_0           = runtime.ForwardResponseMessage
+	forward_BankService_ListScheduledPayments_0     = runtime.ForwardResponseMessage
+	forward_BankService_CancelScheduledPayment_0    = runtime.ForwardResponseMessage
+	forward_BankService_CreateCard_0                = runtime.ForwardResponseMessage
+	forward_BankService_ListCards_0                 = runtime.ForwardResponseMessage
+	forward_BankService_SetCardStatus_0             = runtime.ForwardResponseMessage
+	forward_BankService_UpdateCardLimit_0           = runtime.ForwardResponseMessage
+	forward_BankService_CreateAuthorizedPerson_0    = runtime.ForwardResponseMessage
+	forward_BankService_ListAuthorizedPersons_0     = runtime.ForwardResponseMessage
+	forward_BankService_SubmitLoanRequest_0         = runtime.ForwardResponseMessage
+	forward_BankService_ListLoanRequests_0          = runtime.ForwardResponseMessage
+	forward_BankService_DecideLoanRequest_0         = runtime.ForwardResponseMessage
+	forward_BankService_ListLoans_0                 = runtime.ForwardResponseMessage
+	forward_BankService_GetLoan_0                   = runtime.ForwardResponseMessage
+	forward_BankService_RunInstallmentJob_0         = runtime.ForwardResponseMessage
+	forward_BankService_RunVariableRateJob_0        = runtime.ForwardResponseMessage
+	forward_BankService_RunMaintenanceFeeJob_0      = runtime.ForwardResponseMessage
+	forward_BankService_RunSpentResetJob_0          = runtime.ForwardResponseMessage
+	forward_BankService_QuoteForexForward_0         = runtime.ForwardResponseMessage
+	forward_BankService_CreateForexForward_0        = runtime.ForwardResponseMessage
+	forward_BankService_ListForexForwards_0         = runtime.ForwardResponseMessage
+	forward_BankService_CancelForexForward_0        = runtime.ForwardResponseMessage
+	forward_BankService_GetForexForwardSpreads_0    = runtime.ForwardResponseMessage
+	forward_BankService_SetForexForwardSpread_0     = runtime.ForwardResponseMessage
+	forward_BankService_ListInterbankTransactions_0 = runtime.ForwardResponseMessage
+	forward_BankService_GetInterbankTransaction_0   = runtime.ForwardResponseMessage
+	forward_BankService_ListInterbankAuditLog_0     = runtime.ForwardResponseMessage
+	forward_BankService_ListInterbankBlacklist_0    = runtime.ForwardResponseMessage
+	forward_BankService_BlockInterbankPartner_0     = runtime.ForwardResponseMessage
+	forward_BankService_UnblockInterbankPartner_0   = runtime.ForwardResponseMessage
 )

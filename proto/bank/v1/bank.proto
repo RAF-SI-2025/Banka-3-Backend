@@ -427,6 +427,53 @@ service BankService {
   // RunForexForwardSettlement settles every active forward whose
   // settlement date has arrived. Internal — driven by the scheduler.
   rpc RunForexForwardSettlement(RunForexForwardSettlementRequest) returns (RunForexForwardSettlementResponse);
+
+  // -----------------------------------------------------------------
+  // Inter-bank observability & control (celina 5, spec p.77+).
+  // Supervisor-facing read surface + blacklist management for the
+  // "Međubankarske transakcije" portal. Gated to admin / supervisor in
+  // the service layer (not internal-only); auto-exposed via the
+  // already-registered BankServiceHandler.
+  // -----------------------------------------------------------------
+
+  // ListInterbankTransactions returns cross-bank 2PC transactions with
+  // their full status flow, filterable by partner / status / direction /
+  // date range. Real-time status tracking is poll-based off this list.
+  rpc ListInterbankTransactions(ListInterbankTransactionsRequest) returns (ListInterbankTransactionsResponse) {
+    option (google.api.http) = {get: "/api/v1/interbank/transactions"};
+  }
+
+  // GetInterbankTransaction returns a single transaction by its
+  // (sender_routing_number, transaction_id) identity.
+  rpc GetInterbankTransaction(GetInterbankTransactionRequest) returns (InterbankTransaction) {
+    option (google.api.http) = {get: "/api/v1/interbank/transactions/{sender_routing_number}/{transaction_id}"};
+  }
+
+  // ListInterbankAuditLog returns the inbound-message comms history
+  // (NEW_TX / COMMIT_TX / ROLLBACK_TX + the response we returned),
+  // filterable by partner / message type / date range.
+  rpc ListInterbankAuditLog(ListInterbankAuditLogRequest) returns (ListInterbankAuditLogResponse) {
+    option (google.api.http) = {get: "/api/v1/interbank/audit-log"};
+  }
+
+  // ListInterbankBlacklist returns blacklisted partner banks. Pass
+  // active_only=true for currently-blocked partners, false for history.
+  rpc ListInterbankBlacklist(ListInterbankBlacklistRequest) returns (ListInterbankBlacklistResponse) {
+    option (google.api.http) = {get: "/api/v1/interbank/blacklist"};
+  }
+
+  // BlockInterbankPartner manually blacklists a partner bank.
+  rpc BlockInterbankPartner(BlockInterbankPartnerRequest) returns (InterbankBlacklistEntry) {
+    option (google.api.http) = {
+      post: "/api/v1/interbank/blacklist"
+      body: "*"
+    };
+  }
+
+  // UnblockInterbankPartner lifts an active blacklist entry.
+  rpc UnblockInterbankPartner(UnblockInterbankPartnerRequest) returns (InterbankBlacklistEntry) {
+    option (google.api.http) = {delete: "/api/v1/interbank/blacklist/{sender_routing_number}"};
+  }
 }
 
 // =====================================================================
@@ -1615,4 +1662,113 @@ message RunForexForwardSettlementResponse {
   int32 processed = 1;
   int32 settled = 2;
   int32 failed = 3;
+}
+
+// =====================================================================
+// Inter-bank observability & control (celina 5).
+// =====================================================================
+
+// InterbankTransaction is the supervisor-facing projection of a
+// "bank".interbank_protocol_transactions row. Status / direction are
+// rendered as their stored lower-case strings ("pending","failed",
+// "prepared","committed","rolled_back" / "inbound","outbound") so the FE
+// doesn't need to track a separate enum from the 2PC wire protocol.
+message InterbankTransaction {
+  int32 sender_routing_number = 1;
+  string transaction_id = 2;
+  string direction = 3;
+  string local_account_number = 4;
+  string remote_account_number = 5;
+  Currency currency = 6;
+  string amount = 7;
+  string purpose = 8;
+  string reservation_id = 9;
+  string op_id = 10;
+  string status = 11;
+  string last_error = 12;
+  google.protobuf.Timestamp created_at = 13;
+  google.protobuf.Timestamp updated_at = 14;
+}
+
+message ListInterbankTransactionsRequest {
+  // All filters optional. routing 0 / empty string = any.
+  int32 sender_routing_number = 1;
+  string status = 2;
+  string direction = 3;
+  google.protobuf.Timestamp from = 4;
+  google.protobuf.Timestamp to = 5;
+  int32 page = 6;
+  int32 page_size = 7;
+}
+
+message ListInterbankTransactionsResponse {
+  repeated InterbankTransaction transactions = 1;
+  int32 page = 2;
+  int32 page_size = 3;
+  int64 total = 4;
+}
+
+message GetInterbankTransactionRequest {
+  int32 sender_routing_number = 1 [(buf.validate.field).int32.gt = 0];
+  string transaction_id = 2 [(buf.validate.field).string.min_len = 1];
+}
+
+// InterbankMessage is the supervisor projection of a recorded inbound
+// partner message (the comms / audit history). message_type is the
+// stored "NEW_TX" / "COMMIT_TX" / "ROLLBACK_TX" string.
+message InterbankMessage {
+  int32 sender_routing_number = 1;
+  string idempotence_key = 2;
+  string message_type = 3;
+  string transaction_id = 4;
+  int32 response_status = 5;
+  string response_body = 6;
+  google.protobuf.Timestamp created_at = 7;
+  google.protobuf.Timestamp updated_at = 8;
+}
+
+message ListInterbankAuditLogRequest {
+  int32 sender_routing_number = 1;
+  string message_type = 2;
+  google.protobuf.Timestamp from = 3;
+  google.protobuf.Timestamp to = 4;
+  int32 page = 5;
+  int32 page_size = 6;
+}
+
+message ListInterbankAuditLogResponse {
+  repeated InterbankMessage messages = 1;
+  int32 page = 2;
+  int32 page_size = 3;
+  int64 total = 4;
+}
+
+// InterbankBlacklistEntry mirrors a "bank".interbank_blacklist row.
+message InterbankBlacklistEntry {
+  int32 sender_routing_number = 1;
+  string reason = 2;
+  // Supervisor user id for a manual block, or "system" for an auto-block.
+  string blocked_by = 3;
+  google.protobuf.Timestamp blocked_at = 4;
+  // Set only on inactive (unblocked) rows.
+  google.protobuf.Timestamp unblocked_at = 5;
+  bool active = 6;
+}
+
+message ListInterbankBlacklistRequest {
+  // active_only=true → only currently-blocked partners; false → history.
+  bool active_only = 1;
+}
+
+message ListInterbankBlacklistResponse {
+  repeated InterbankBlacklistEntry entries = 1;
+}
+
+message BlockInterbankPartnerRequest {
+  int32 sender_routing_number = 1 [(buf.validate.field).int32.gt = 0];
+  string reason = 2;
+}
+
+message UnblockInterbankPartnerRequest {
+  int32 sender_routing_number = 1 [(buf.validate.field).int32.gt = 0];
 }

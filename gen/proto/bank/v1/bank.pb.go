@@ -7842,6 +7842,899 @@ func (x *RunForexForwardSettlementResponse) GetFailed() int32 {
 	return 0
 }
 
+// InterbankTransaction is the supervisor-facing projection of a
+// "bank".interbank_protocol_transactions row. Status / direction are
+// rendered as their stored lower-case strings ("pending","failed",
+// "prepared","committed","rolled_back" / "inbound","outbound") so the FE
+// doesn't need to track a separate enum from the 2PC wire protocol.
+type InterbankTransaction struct {
+	state               protoimpl.MessageState `protogen:"open.v1"`
+	SenderRoutingNumber int32                  `protobuf:"varint,1,opt,name=sender_routing_number,json=senderRoutingNumber,proto3" json:"sender_routing_number,omitempty"`
+	TransactionId       string                 `protobuf:"bytes,2,opt,name=transaction_id,json=transactionId,proto3" json:"transaction_id,omitempty"`
+	Direction           string                 `protobuf:"bytes,3,opt,name=direction,proto3" json:"direction,omitempty"`
+	LocalAccountNumber  string                 `protobuf:"bytes,4,opt,name=local_account_number,json=localAccountNumber,proto3" json:"local_account_number,omitempty"`
+	RemoteAccountNumber string                 `protobuf:"bytes,5,opt,name=remote_account_number,json=remoteAccountNumber,proto3" json:"remote_account_number,omitempty"`
+	Currency            Currency               `protobuf:"varint,6,opt,name=currency,proto3,enum=banka.bank.v1.Currency" json:"currency,omitempty"`
+	Amount              string                 `protobuf:"bytes,7,opt,name=amount,proto3" json:"amount,omitempty"`
+	Purpose             string                 `protobuf:"bytes,8,opt,name=purpose,proto3" json:"purpose,omitempty"`
+	ReservationId       string                 `protobuf:"bytes,9,opt,name=reservation_id,json=reservationId,proto3" json:"reservation_id,omitempty"`
+	OpId                string                 `protobuf:"bytes,10,opt,name=op_id,json=opId,proto3" json:"op_id,omitempty"`
+	Status              string                 `protobuf:"bytes,11,opt,name=status,proto3" json:"status,omitempty"`
+	LastError           string                 `protobuf:"bytes,12,opt,name=last_error,json=lastError,proto3" json:"last_error,omitempty"`
+	CreatedAt           *timestamppb.Timestamp `protobuf:"bytes,13,opt,name=created_at,json=createdAt,proto3" json:"created_at,omitempty"`
+	UpdatedAt           *timestamppb.Timestamp `protobuf:"bytes,14,opt,name=updated_at,json=updatedAt,proto3" json:"updated_at,omitempty"`
+	unknownFields       protoimpl.UnknownFields
+	sizeCache           protoimpl.SizeCache
+}
+
+func (x *InterbankTransaction) Reset() {
+	*x = InterbankTransaction{}
+	mi := &file_bank_v1_bank_proto_msgTypes[95]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *InterbankTransaction) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*InterbankTransaction) ProtoMessage() {}
+
+func (x *InterbankTransaction) ProtoReflect() protoreflect.Message {
+	mi := &file_bank_v1_bank_proto_msgTypes[95]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use InterbankTransaction.ProtoReflect.Descriptor instead.
+func (*InterbankTransaction) Descriptor() ([]byte, []int) {
+	return file_bank_v1_bank_proto_rawDescGZIP(), []int{95}
+}
+
+func (x *InterbankTransaction) GetSenderRoutingNumber() int32 {
+	if x != nil {
+		return x.SenderRoutingNumber
+	}
+	return 0
+}
+
+func (x *InterbankTransaction) GetTransactionId() string {
+	if x != nil {
+		return x.TransactionId
+	}
+	return ""
+}
+
+func (x *InterbankTransaction) GetDirection() string {
+	if x != nil {
+		return x.Direction
+	}
+	return ""
+}
+
+func (x *InterbankTransaction) GetLocalAccountNumber() string {
+	if x != nil {
+		return x.LocalAccountNumber
+	}
+	return ""
+}
+
+func (x *InterbankTransaction) GetRemoteAccountNumber() string {
+	if x != nil {
+		return x.RemoteAccountNumber
+	}
+	return ""
+}
+
+func (x *InterbankTransaction) GetCurrency() Currency {
+	if x != nil {
+		return x.Currency
+	}
+	return Currency_CURRENCY_UNSPECIFIED
+}
+
+func (x *InterbankTransaction) GetAmount() string {
+	if x != nil {
+		return x.Amount
+	}
+	return ""
+}
+
+func (x *InterbankTransaction) GetPurpose() string {
+	if x != nil {
+		return x.Purpose
+	}
+	return ""
+}
+
+func (x *InterbankTransaction) GetReservationId() string {
+	if x != nil {
+		return x.ReservationId
+	}
+	return ""
+}
+
+func (x *InterbankTransaction) GetOpId() string {
+	if x != nil {
+		return x.OpId
+	}
+	return ""
+}
+
+func (x *InterbankTransaction) GetStatus() string {
+	if x != nil {
+		return x.Status
+	}
+	return ""
+}
+
+func (x *InterbankTransaction) GetLastError() string {
+	if x != nil {
+		return x.LastError
+	}
+	return ""
+}
+
+func (x *InterbankTransaction) GetCreatedAt() *timestamppb.Timestamp {
+	if x != nil {
+		return x.CreatedAt
+	}
+	return nil
+}
+
+func (x *InterbankTransaction) GetUpdatedAt() *timestamppb.Timestamp {
+	if x != nil {
+		return x.UpdatedAt
+	}
+	return nil
+}
+
+type ListInterbankTransactionsRequest struct {
+	state protoimpl.MessageState `protogen:"open.v1"`
+	// All filters optional. routing 0 / empty string = any.
+	SenderRoutingNumber int32                  `protobuf:"varint,1,opt,name=sender_routing_number,json=senderRoutingNumber,proto3" json:"sender_routing_number,omitempty"`
+	Status              string                 `protobuf:"bytes,2,opt,name=status,proto3" json:"status,omitempty"`
+	Direction           string                 `protobuf:"bytes,3,opt,name=direction,proto3" json:"direction,omitempty"`
+	From                *timestamppb.Timestamp `protobuf:"bytes,4,opt,name=from,proto3" json:"from,omitempty"`
+	To                  *timestamppb.Timestamp `protobuf:"bytes,5,opt,name=to,proto3" json:"to,omitempty"`
+	Page                int32                  `protobuf:"varint,6,opt,name=page,proto3" json:"page,omitempty"`
+	PageSize            int32                  `protobuf:"varint,7,opt,name=page_size,json=pageSize,proto3" json:"page_size,omitempty"`
+	unknownFields       protoimpl.UnknownFields
+	sizeCache           protoimpl.SizeCache
+}
+
+func (x *ListInterbankTransactionsRequest) Reset() {
+	*x = ListInterbankTransactionsRequest{}
+	mi := &file_bank_v1_bank_proto_msgTypes[96]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *ListInterbankTransactionsRequest) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*ListInterbankTransactionsRequest) ProtoMessage() {}
+
+func (x *ListInterbankTransactionsRequest) ProtoReflect() protoreflect.Message {
+	mi := &file_bank_v1_bank_proto_msgTypes[96]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use ListInterbankTransactionsRequest.ProtoReflect.Descriptor instead.
+func (*ListInterbankTransactionsRequest) Descriptor() ([]byte, []int) {
+	return file_bank_v1_bank_proto_rawDescGZIP(), []int{96}
+}
+
+func (x *ListInterbankTransactionsRequest) GetSenderRoutingNumber() int32 {
+	if x != nil {
+		return x.SenderRoutingNumber
+	}
+	return 0
+}
+
+func (x *ListInterbankTransactionsRequest) GetStatus() string {
+	if x != nil {
+		return x.Status
+	}
+	return ""
+}
+
+func (x *ListInterbankTransactionsRequest) GetDirection() string {
+	if x != nil {
+		return x.Direction
+	}
+	return ""
+}
+
+func (x *ListInterbankTransactionsRequest) GetFrom() *timestamppb.Timestamp {
+	if x != nil {
+		return x.From
+	}
+	return nil
+}
+
+func (x *ListInterbankTransactionsRequest) GetTo() *timestamppb.Timestamp {
+	if x != nil {
+		return x.To
+	}
+	return nil
+}
+
+func (x *ListInterbankTransactionsRequest) GetPage() int32 {
+	if x != nil {
+		return x.Page
+	}
+	return 0
+}
+
+func (x *ListInterbankTransactionsRequest) GetPageSize() int32 {
+	if x != nil {
+		return x.PageSize
+	}
+	return 0
+}
+
+type ListInterbankTransactionsResponse struct {
+	state         protoimpl.MessageState  `protogen:"open.v1"`
+	Transactions  []*InterbankTransaction `protobuf:"bytes,1,rep,name=transactions,proto3" json:"transactions,omitempty"`
+	Page          int32                   `protobuf:"varint,2,opt,name=page,proto3" json:"page,omitempty"`
+	PageSize      int32                   `protobuf:"varint,3,opt,name=page_size,json=pageSize,proto3" json:"page_size,omitempty"`
+	Total         int64                   `protobuf:"varint,4,opt,name=total,proto3" json:"total,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *ListInterbankTransactionsResponse) Reset() {
+	*x = ListInterbankTransactionsResponse{}
+	mi := &file_bank_v1_bank_proto_msgTypes[97]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *ListInterbankTransactionsResponse) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*ListInterbankTransactionsResponse) ProtoMessage() {}
+
+func (x *ListInterbankTransactionsResponse) ProtoReflect() protoreflect.Message {
+	mi := &file_bank_v1_bank_proto_msgTypes[97]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use ListInterbankTransactionsResponse.ProtoReflect.Descriptor instead.
+func (*ListInterbankTransactionsResponse) Descriptor() ([]byte, []int) {
+	return file_bank_v1_bank_proto_rawDescGZIP(), []int{97}
+}
+
+func (x *ListInterbankTransactionsResponse) GetTransactions() []*InterbankTransaction {
+	if x != nil {
+		return x.Transactions
+	}
+	return nil
+}
+
+func (x *ListInterbankTransactionsResponse) GetPage() int32 {
+	if x != nil {
+		return x.Page
+	}
+	return 0
+}
+
+func (x *ListInterbankTransactionsResponse) GetPageSize() int32 {
+	if x != nil {
+		return x.PageSize
+	}
+	return 0
+}
+
+func (x *ListInterbankTransactionsResponse) GetTotal() int64 {
+	if x != nil {
+		return x.Total
+	}
+	return 0
+}
+
+type GetInterbankTransactionRequest struct {
+	state               protoimpl.MessageState `protogen:"open.v1"`
+	SenderRoutingNumber int32                  `protobuf:"varint,1,opt,name=sender_routing_number,json=senderRoutingNumber,proto3" json:"sender_routing_number,omitempty"`
+	TransactionId       string                 `protobuf:"bytes,2,opt,name=transaction_id,json=transactionId,proto3" json:"transaction_id,omitempty"`
+	unknownFields       protoimpl.UnknownFields
+	sizeCache           protoimpl.SizeCache
+}
+
+func (x *GetInterbankTransactionRequest) Reset() {
+	*x = GetInterbankTransactionRequest{}
+	mi := &file_bank_v1_bank_proto_msgTypes[98]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *GetInterbankTransactionRequest) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*GetInterbankTransactionRequest) ProtoMessage() {}
+
+func (x *GetInterbankTransactionRequest) ProtoReflect() protoreflect.Message {
+	mi := &file_bank_v1_bank_proto_msgTypes[98]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use GetInterbankTransactionRequest.ProtoReflect.Descriptor instead.
+func (*GetInterbankTransactionRequest) Descriptor() ([]byte, []int) {
+	return file_bank_v1_bank_proto_rawDescGZIP(), []int{98}
+}
+
+func (x *GetInterbankTransactionRequest) GetSenderRoutingNumber() int32 {
+	if x != nil {
+		return x.SenderRoutingNumber
+	}
+	return 0
+}
+
+func (x *GetInterbankTransactionRequest) GetTransactionId() string {
+	if x != nil {
+		return x.TransactionId
+	}
+	return ""
+}
+
+// InterbankMessage is the supervisor projection of a recorded inbound
+// partner message (the comms / audit history). message_type is the
+// stored "NEW_TX" / "COMMIT_TX" / "ROLLBACK_TX" string.
+type InterbankMessage struct {
+	state               protoimpl.MessageState `protogen:"open.v1"`
+	SenderRoutingNumber int32                  `protobuf:"varint,1,opt,name=sender_routing_number,json=senderRoutingNumber,proto3" json:"sender_routing_number,omitempty"`
+	IdempotenceKey      string                 `protobuf:"bytes,2,opt,name=idempotence_key,json=idempotenceKey,proto3" json:"idempotence_key,omitempty"`
+	MessageType         string                 `protobuf:"bytes,3,opt,name=message_type,json=messageType,proto3" json:"message_type,omitempty"`
+	TransactionId       string                 `protobuf:"bytes,4,opt,name=transaction_id,json=transactionId,proto3" json:"transaction_id,omitempty"`
+	ResponseStatus      int32                  `protobuf:"varint,5,opt,name=response_status,json=responseStatus,proto3" json:"response_status,omitempty"`
+	ResponseBody        string                 `protobuf:"bytes,6,opt,name=response_body,json=responseBody,proto3" json:"response_body,omitempty"`
+	CreatedAt           *timestamppb.Timestamp `protobuf:"bytes,7,opt,name=created_at,json=createdAt,proto3" json:"created_at,omitempty"`
+	UpdatedAt           *timestamppb.Timestamp `protobuf:"bytes,8,opt,name=updated_at,json=updatedAt,proto3" json:"updated_at,omitempty"`
+	unknownFields       protoimpl.UnknownFields
+	sizeCache           protoimpl.SizeCache
+}
+
+func (x *InterbankMessage) Reset() {
+	*x = InterbankMessage{}
+	mi := &file_bank_v1_bank_proto_msgTypes[99]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *InterbankMessage) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*InterbankMessage) ProtoMessage() {}
+
+func (x *InterbankMessage) ProtoReflect() protoreflect.Message {
+	mi := &file_bank_v1_bank_proto_msgTypes[99]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use InterbankMessage.ProtoReflect.Descriptor instead.
+func (*InterbankMessage) Descriptor() ([]byte, []int) {
+	return file_bank_v1_bank_proto_rawDescGZIP(), []int{99}
+}
+
+func (x *InterbankMessage) GetSenderRoutingNumber() int32 {
+	if x != nil {
+		return x.SenderRoutingNumber
+	}
+	return 0
+}
+
+func (x *InterbankMessage) GetIdempotenceKey() string {
+	if x != nil {
+		return x.IdempotenceKey
+	}
+	return ""
+}
+
+func (x *InterbankMessage) GetMessageType() string {
+	if x != nil {
+		return x.MessageType
+	}
+	return ""
+}
+
+func (x *InterbankMessage) GetTransactionId() string {
+	if x != nil {
+		return x.TransactionId
+	}
+	return ""
+}
+
+func (x *InterbankMessage) GetResponseStatus() int32 {
+	if x != nil {
+		return x.ResponseStatus
+	}
+	return 0
+}
+
+func (x *InterbankMessage) GetResponseBody() string {
+	if x != nil {
+		return x.ResponseBody
+	}
+	return ""
+}
+
+func (x *InterbankMessage) GetCreatedAt() *timestamppb.Timestamp {
+	if x != nil {
+		return x.CreatedAt
+	}
+	return nil
+}
+
+func (x *InterbankMessage) GetUpdatedAt() *timestamppb.Timestamp {
+	if x != nil {
+		return x.UpdatedAt
+	}
+	return nil
+}
+
+type ListInterbankAuditLogRequest struct {
+	state               protoimpl.MessageState `protogen:"open.v1"`
+	SenderRoutingNumber int32                  `protobuf:"varint,1,opt,name=sender_routing_number,json=senderRoutingNumber,proto3" json:"sender_routing_number,omitempty"`
+	MessageType         string                 `protobuf:"bytes,2,opt,name=message_type,json=messageType,proto3" json:"message_type,omitempty"`
+	From                *timestamppb.Timestamp `protobuf:"bytes,3,opt,name=from,proto3" json:"from,omitempty"`
+	To                  *timestamppb.Timestamp `protobuf:"bytes,4,opt,name=to,proto3" json:"to,omitempty"`
+	Page                int32                  `protobuf:"varint,5,opt,name=page,proto3" json:"page,omitempty"`
+	PageSize            int32                  `protobuf:"varint,6,opt,name=page_size,json=pageSize,proto3" json:"page_size,omitempty"`
+	unknownFields       protoimpl.UnknownFields
+	sizeCache           protoimpl.SizeCache
+}
+
+func (x *ListInterbankAuditLogRequest) Reset() {
+	*x = ListInterbankAuditLogRequest{}
+	mi := &file_bank_v1_bank_proto_msgTypes[100]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *ListInterbankAuditLogRequest) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*ListInterbankAuditLogRequest) ProtoMessage() {}
+
+func (x *ListInterbankAuditLogRequest) ProtoReflect() protoreflect.Message {
+	mi := &file_bank_v1_bank_proto_msgTypes[100]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use ListInterbankAuditLogRequest.ProtoReflect.Descriptor instead.
+func (*ListInterbankAuditLogRequest) Descriptor() ([]byte, []int) {
+	return file_bank_v1_bank_proto_rawDescGZIP(), []int{100}
+}
+
+func (x *ListInterbankAuditLogRequest) GetSenderRoutingNumber() int32 {
+	if x != nil {
+		return x.SenderRoutingNumber
+	}
+	return 0
+}
+
+func (x *ListInterbankAuditLogRequest) GetMessageType() string {
+	if x != nil {
+		return x.MessageType
+	}
+	return ""
+}
+
+func (x *ListInterbankAuditLogRequest) GetFrom() *timestamppb.Timestamp {
+	if x != nil {
+		return x.From
+	}
+	return nil
+}
+
+func (x *ListInterbankAuditLogRequest) GetTo() *timestamppb.Timestamp {
+	if x != nil {
+		return x.To
+	}
+	return nil
+}
+
+func (x *ListInterbankAuditLogRequest) GetPage() int32 {
+	if x != nil {
+		return x.Page
+	}
+	return 0
+}
+
+func (x *ListInterbankAuditLogRequest) GetPageSize() int32 {
+	if x != nil {
+		return x.PageSize
+	}
+	return 0
+}
+
+type ListInterbankAuditLogResponse struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	Messages      []*InterbankMessage    `protobuf:"bytes,1,rep,name=messages,proto3" json:"messages,omitempty"`
+	Page          int32                  `protobuf:"varint,2,opt,name=page,proto3" json:"page,omitempty"`
+	PageSize      int32                  `protobuf:"varint,3,opt,name=page_size,json=pageSize,proto3" json:"page_size,omitempty"`
+	Total         int64                  `protobuf:"varint,4,opt,name=total,proto3" json:"total,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *ListInterbankAuditLogResponse) Reset() {
+	*x = ListInterbankAuditLogResponse{}
+	mi := &file_bank_v1_bank_proto_msgTypes[101]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *ListInterbankAuditLogResponse) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*ListInterbankAuditLogResponse) ProtoMessage() {}
+
+func (x *ListInterbankAuditLogResponse) ProtoReflect() protoreflect.Message {
+	mi := &file_bank_v1_bank_proto_msgTypes[101]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use ListInterbankAuditLogResponse.ProtoReflect.Descriptor instead.
+func (*ListInterbankAuditLogResponse) Descriptor() ([]byte, []int) {
+	return file_bank_v1_bank_proto_rawDescGZIP(), []int{101}
+}
+
+func (x *ListInterbankAuditLogResponse) GetMessages() []*InterbankMessage {
+	if x != nil {
+		return x.Messages
+	}
+	return nil
+}
+
+func (x *ListInterbankAuditLogResponse) GetPage() int32 {
+	if x != nil {
+		return x.Page
+	}
+	return 0
+}
+
+func (x *ListInterbankAuditLogResponse) GetPageSize() int32 {
+	if x != nil {
+		return x.PageSize
+	}
+	return 0
+}
+
+func (x *ListInterbankAuditLogResponse) GetTotal() int64 {
+	if x != nil {
+		return x.Total
+	}
+	return 0
+}
+
+// InterbankBlacklistEntry mirrors a "bank".interbank_blacklist row.
+type InterbankBlacklistEntry struct {
+	state               protoimpl.MessageState `protogen:"open.v1"`
+	SenderRoutingNumber int32                  `protobuf:"varint,1,opt,name=sender_routing_number,json=senderRoutingNumber,proto3" json:"sender_routing_number,omitempty"`
+	Reason              string                 `protobuf:"bytes,2,opt,name=reason,proto3" json:"reason,omitempty"`
+	// Supervisor user id for a manual block, or "system" for an auto-block.
+	BlockedBy string                 `protobuf:"bytes,3,opt,name=blocked_by,json=blockedBy,proto3" json:"blocked_by,omitempty"`
+	BlockedAt *timestamppb.Timestamp `protobuf:"bytes,4,opt,name=blocked_at,json=blockedAt,proto3" json:"blocked_at,omitempty"`
+	// Set only on inactive (unblocked) rows.
+	UnblockedAt   *timestamppb.Timestamp `protobuf:"bytes,5,opt,name=unblocked_at,json=unblockedAt,proto3" json:"unblocked_at,omitempty"`
+	Active        bool                   `protobuf:"varint,6,opt,name=active,proto3" json:"active,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *InterbankBlacklistEntry) Reset() {
+	*x = InterbankBlacklistEntry{}
+	mi := &file_bank_v1_bank_proto_msgTypes[102]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *InterbankBlacklistEntry) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*InterbankBlacklistEntry) ProtoMessage() {}
+
+func (x *InterbankBlacklistEntry) ProtoReflect() protoreflect.Message {
+	mi := &file_bank_v1_bank_proto_msgTypes[102]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use InterbankBlacklistEntry.ProtoReflect.Descriptor instead.
+func (*InterbankBlacklistEntry) Descriptor() ([]byte, []int) {
+	return file_bank_v1_bank_proto_rawDescGZIP(), []int{102}
+}
+
+func (x *InterbankBlacklistEntry) GetSenderRoutingNumber() int32 {
+	if x != nil {
+		return x.SenderRoutingNumber
+	}
+	return 0
+}
+
+func (x *InterbankBlacklistEntry) GetReason() string {
+	if x != nil {
+		return x.Reason
+	}
+	return ""
+}
+
+func (x *InterbankBlacklistEntry) GetBlockedBy() string {
+	if x != nil {
+		return x.BlockedBy
+	}
+	return ""
+}
+
+func (x *InterbankBlacklistEntry) GetBlockedAt() *timestamppb.Timestamp {
+	if x != nil {
+		return x.BlockedAt
+	}
+	return nil
+}
+
+func (x *InterbankBlacklistEntry) GetUnblockedAt() *timestamppb.Timestamp {
+	if x != nil {
+		return x.UnblockedAt
+	}
+	return nil
+}
+
+func (x *InterbankBlacklistEntry) GetActive() bool {
+	if x != nil {
+		return x.Active
+	}
+	return false
+}
+
+type ListInterbankBlacklistRequest struct {
+	state protoimpl.MessageState `protogen:"open.v1"`
+	// active_only=true → only currently-blocked partners; false → history.
+	ActiveOnly    bool `protobuf:"varint,1,opt,name=active_only,json=activeOnly,proto3" json:"active_only,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *ListInterbankBlacklistRequest) Reset() {
+	*x = ListInterbankBlacklistRequest{}
+	mi := &file_bank_v1_bank_proto_msgTypes[103]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *ListInterbankBlacklistRequest) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*ListInterbankBlacklistRequest) ProtoMessage() {}
+
+func (x *ListInterbankBlacklistRequest) ProtoReflect() protoreflect.Message {
+	mi := &file_bank_v1_bank_proto_msgTypes[103]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use ListInterbankBlacklistRequest.ProtoReflect.Descriptor instead.
+func (*ListInterbankBlacklistRequest) Descriptor() ([]byte, []int) {
+	return file_bank_v1_bank_proto_rawDescGZIP(), []int{103}
+}
+
+func (x *ListInterbankBlacklistRequest) GetActiveOnly() bool {
+	if x != nil {
+		return x.ActiveOnly
+	}
+	return false
+}
+
+type ListInterbankBlacklistResponse struct {
+	state         protoimpl.MessageState     `protogen:"open.v1"`
+	Entries       []*InterbankBlacklistEntry `protobuf:"bytes,1,rep,name=entries,proto3" json:"entries,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *ListInterbankBlacklistResponse) Reset() {
+	*x = ListInterbankBlacklistResponse{}
+	mi := &file_bank_v1_bank_proto_msgTypes[104]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *ListInterbankBlacklistResponse) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*ListInterbankBlacklistResponse) ProtoMessage() {}
+
+func (x *ListInterbankBlacklistResponse) ProtoReflect() protoreflect.Message {
+	mi := &file_bank_v1_bank_proto_msgTypes[104]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use ListInterbankBlacklistResponse.ProtoReflect.Descriptor instead.
+func (*ListInterbankBlacklistResponse) Descriptor() ([]byte, []int) {
+	return file_bank_v1_bank_proto_rawDescGZIP(), []int{104}
+}
+
+func (x *ListInterbankBlacklistResponse) GetEntries() []*InterbankBlacklistEntry {
+	if x != nil {
+		return x.Entries
+	}
+	return nil
+}
+
+type BlockInterbankPartnerRequest struct {
+	state               protoimpl.MessageState `protogen:"open.v1"`
+	SenderRoutingNumber int32                  `protobuf:"varint,1,opt,name=sender_routing_number,json=senderRoutingNumber,proto3" json:"sender_routing_number,omitempty"`
+	Reason              string                 `protobuf:"bytes,2,opt,name=reason,proto3" json:"reason,omitempty"`
+	unknownFields       protoimpl.UnknownFields
+	sizeCache           protoimpl.SizeCache
+}
+
+func (x *BlockInterbankPartnerRequest) Reset() {
+	*x = BlockInterbankPartnerRequest{}
+	mi := &file_bank_v1_bank_proto_msgTypes[105]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *BlockInterbankPartnerRequest) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*BlockInterbankPartnerRequest) ProtoMessage() {}
+
+func (x *BlockInterbankPartnerRequest) ProtoReflect() protoreflect.Message {
+	mi := &file_bank_v1_bank_proto_msgTypes[105]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use BlockInterbankPartnerRequest.ProtoReflect.Descriptor instead.
+func (*BlockInterbankPartnerRequest) Descriptor() ([]byte, []int) {
+	return file_bank_v1_bank_proto_rawDescGZIP(), []int{105}
+}
+
+func (x *BlockInterbankPartnerRequest) GetSenderRoutingNumber() int32 {
+	if x != nil {
+		return x.SenderRoutingNumber
+	}
+	return 0
+}
+
+func (x *BlockInterbankPartnerRequest) GetReason() string {
+	if x != nil {
+		return x.Reason
+	}
+	return ""
+}
+
+type UnblockInterbankPartnerRequest struct {
+	state               protoimpl.MessageState `protogen:"open.v1"`
+	SenderRoutingNumber int32                  `protobuf:"varint,1,opt,name=sender_routing_number,json=senderRoutingNumber,proto3" json:"sender_routing_number,omitempty"`
+	unknownFields       protoimpl.UnknownFields
+	sizeCache           protoimpl.SizeCache
+}
+
+func (x *UnblockInterbankPartnerRequest) Reset() {
+	*x = UnblockInterbankPartnerRequest{}
+	mi := &file_bank_v1_bank_proto_msgTypes[106]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *UnblockInterbankPartnerRequest) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*UnblockInterbankPartnerRequest) ProtoMessage() {}
+
+func (x *UnblockInterbankPartnerRequest) ProtoReflect() protoreflect.Message {
+	mi := &file_bank_v1_bank_proto_msgTypes[106]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use UnblockInterbankPartnerRequest.ProtoReflect.Descriptor instead.
+func (*UnblockInterbankPartnerRequest) Descriptor() ([]byte, []int) {
+	return file_bank_v1_bank_proto_rawDescGZIP(), []int{106}
+}
+
+func (x *UnblockInterbankPartnerRequest) GetSenderRoutingNumber() int32 {
+	if x != nil {
+		return x.SenderRoutingNumber
+	}
+	return 0
+}
+
 var File_bank_v1_bank_proto protoreflect.FileDescriptor
 
 const file_bank_v1_bank_proto_rawDesc = "" +
@@ -8463,7 +9356,84 @@ const file_bank_v1_bank_proto_rawDesc = "" +
 	"!RunForexForwardSettlementResponse\x12\x1c\n" +
 	"\tprocessed\x18\x01 \x01(\x05R\tprocessed\x12\x18\n" +
 	"\asettled\x18\x02 \x01(\x05R\asettled\x12\x16\n" +
-	"\x06failed\x18\x03 \x01(\x05R\x06failed*\xb4\x01\n" +
+	"\x06failed\x18\x03 \x01(\x05R\x06failed\"\xc5\x04\n" +
+	"\x14InterbankTransaction\x122\n" +
+	"\x15sender_routing_number\x18\x01 \x01(\x05R\x13senderRoutingNumber\x12%\n" +
+	"\x0etransaction_id\x18\x02 \x01(\tR\rtransactionId\x12\x1c\n" +
+	"\tdirection\x18\x03 \x01(\tR\tdirection\x120\n" +
+	"\x14local_account_number\x18\x04 \x01(\tR\x12localAccountNumber\x122\n" +
+	"\x15remote_account_number\x18\x05 \x01(\tR\x13remoteAccountNumber\x123\n" +
+	"\bcurrency\x18\x06 \x01(\x0e2\x17.banka.bank.v1.CurrencyR\bcurrency\x12\x16\n" +
+	"\x06amount\x18\a \x01(\tR\x06amount\x12\x18\n" +
+	"\apurpose\x18\b \x01(\tR\apurpose\x12%\n" +
+	"\x0ereservation_id\x18\t \x01(\tR\rreservationId\x12\x13\n" +
+	"\x05op_id\x18\n" +
+	" \x01(\tR\x04opId\x12\x16\n" +
+	"\x06status\x18\v \x01(\tR\x06status\x12\x1d\n" +
+	"\n" +
+	"last_error\x18\f \x01(\tR\tlastError\x129\n" +
+	"\n" +
+	"created_at\x18\r \x01(\v2\x1a.google.protobuf.TimestampR\tcreatedAt\x129\n" +
+	"\n" +
+	"updated_at\x18\x0e \x01(\v2\x1a.google.protobuf.TimestampR\tupdatedAt\"\x99\x02\n" +
+	" ListInterbankTransactionsRequest\x122\n" +
+	"\x15sender_routing_number\x18\x01 \x01(\x05R\x13senderRoutingNumber\x12\x16\n" +
+	"\x06status\x18\x02 \x01(\tR\x06status\x12\x1c\n" +
+	"\tdirection\x18\x03 \x01(\tR\tdirection\x12.\n" +
+	"\x04from\x18\x04 \x01(\v2\x1a.google.protobuf.TimestampR\x04from\x12*\n" +
+	"\x02to\x18\x05 \x01(\v2\x1a.google.protobuf.TimestampR\x02to\x12\x12\n" +
+	"\x04page\x18\x06 \x01(\x05R\x04page\x12\x1b\n" +
+	"\tpage_size\x18\a \x01(\x05R\bpageSize\"\xb3\x01\n" +
+	"!ListInterbankTransactionsResponse\x12G\n" +
+	"\ftransactions\x18\x01 \x03(\v2#.banka.bank.v1.InterbankTransactionR\ftransactions\x12\x12\n" +
+	"\x04page\x18\x02 \x01(\x05R\x04page\x12\x1b\n" +
+	"\tpage_size\x18\x03 \x01(\x05R\bpageSize\x12\x14\n" +
+	"\x05total\x18\x04 \x01(\x03R\x05total\"\x8d\x01\n" +
+	"\x1eGetInterbankTransactionRequest\x12;\n" +
+	"\x15sender_routing_number\x18\x01 \x01(\x05B\a\xbaH\x04\x1a\x02 \x00R\x13senderRoutingNumber\x12.\n" +
+	"\x0etransaction_id\x18\x02 \x01(\tB\a\xbaH\x04r\x02\x10\x01R\rtransactionId\"\xfd\x02\n" +
+	"\x10InterbankMessage\x122\n" +
+	"\x15sender_routing_number\x18\x01 \x01(\x05R\x13senderRoutingNumber\x12'\n" +
+	"\x0fidempotence_key\x18\x02 \x01(\tR\x0eidempotenceKey\x12!\n" +
+	"\fmessage_type\x18\x03 \x01(\tR\vmessageType\x12%\n" +
+	"\x0etransaction_id\x18\x04 \x01(\tR\rtransactionId\x12'\n" +
+	"\x0fresponse_status\x18\x05 \x01(\x05R\x0eresponseStatus\x12#\n" +
+	"\rresponse_body\x18\x06 \x01(\tR\fresponseBody\x129\n" +
+	"\n" +
+	"created_at\x18\a \x01(\v2\x1a.google.protobuf.TimestampR\tcreatedAt\x129\n" +
+	"\n" +
+	"updated_at\x18\b \x01(\v2\x1a.google.protobuf.TimestampR\tupdatedAt\"\x82\x02\n" +
+	"\x1cListInterbankAuditLogRequest\x122\n" +
+	"\x15sender_routing_number\x18\x01 \x01(\x05R\x13senderRoutingNumber\x12!\n" +
+	"\fmessage_type\x18\x02 \x01(\tR\vmessageType\x12.\n" +
+	"\x04from\x18\x03 \x01(\v2\x1a.google.protobuf.TimestampR\x04from\x12*\n" +
+	"\x02to\x18\x04 \x01(\v2\x1a.google.protobuf.TimestampR\x02to\x12\x12\n" +
+	"\x04page\x18\x05 \x01(\x05R\x04page\x12\x1b\n" +
+	"\tpage_size\x18\x06 \x01(\x05R\bpageSize\"\xa3\x01\n" +
+	"\x1dListInterbankAuditLogResponse\x12;\n" +
+	"\bmessages\x18\x01 \x03(\v2\x1f.banka.bank.v1.InterbankMessageR\bmessages\x12\x12\n" +
+	"\x04page\x18\x02 \x01(\x05R\x04page\x12\x1b\n" +
+	"\tpage_size\x18\x03 \x01(\x05R\bpageSize\x12\x14\n" +
+	"\x05total\x18\x04 \x01(\x03R\x05total\"\x96\x02\n" +
+	"\x17InterbankBlacklistEntry\x122\n" +
+	"\x15sender_routing_number\x18\x01 \x01(\x05R\x13senderRoutingNumber\x12\x16\n" +
+	"\x06reason\x18\x02 \x01(\tR\x06reason\x12\x1d\n" +
+	"\n" +
+	"blocked_by\x18\x03 \x01(\tR\tblockedBy\x129\n" +
+	"\n" +
+	"blocked_at\x18\x04 \x01(\v2\x1a.google.protobuf.TimestampR\tblockedAt\x12=\n" +
+	"\funblocked_at\x18\x05 \x01(\v2\x1a.google.protobuf.TimestampR\vunblockedAt\x12\x16\n" +
+	"\x06active\x18\x06 \x01(\bR\x06active\"@\n" +
+	"\x1dListInterbankBlacklistRequest\x12\x1f\n" +
+	"\vactive_only\x18\x01 \x01(\bR\n" +
+	"activeOnly\"b\n" +
+	"\x1eListInterbankBlacklistResponse\x12@\n" +
+	"\aentries\x18\x01 \x03(\v2&.banka.bank.v1.InterbankBlacklistEntryR\aentries\"s\n" +
+	"\x1cBlockInterbankPartnerRequest\x12;\n" +
+	"\x15sender_routing_number\x18\x01 \x01(\x05B\a\xbaH\x04\x1a\x02 \x00R\x13senderRoutingNumber\x12\x16\n" +
+	"\x06reason\x18\x02 \x01(\tR\x06reason\"]\n" +
+	"\x1eUnblockInterbankPartnerRequest\x12;\n" +
+	"\x15sender_routing_number\x18\x01 \x01(\x05B\a\xbaH\x04\x1a\x02 \x00R\x13senderRoutingNumber*\xb4\x01\n" +
 	"\bCurrency\x12\x18\n" +
 	"\x14CURRENCY_UNSPECIFIED\x10\x00\x12\x10\n" +
 	"\fCURRENCY_RSD\x10\x01\x12\x10\n" +
@@ -8582,7 +9552,7 @@ const file_bank_v1_bank_proto_rawDesc = "" +
 	"\x1bFOREX_FORWARD_STATUS_ACTIVE\x10\x01\x12 \n" +
 	"\x1cFOREX_FORWARD_STATUS_SETTLED\x10\x02\x12\"\n" +
 	"\x1eFOREX_FORWARD_STATUS_CANCELLED\x10\x03\x12\x1f\n" +
-	"\x1bFOREX_FORWARD_STATUS_FAILED\x10\x042\xa24\n" +
+	"\x1bFOREX_FORWARD_STATUS_FAILED\x10\x042\x8a<\n" +
 	"\vBankService\x12j\n" +
 	"\rCreateCompany\x12#.banka.bank.v1.CreateCompanyRequest\x1a\x16.banka.bank.v1.Company\"\x1c\x82\xd3\xe4\x93\x02\x16:\x01*\"\x11/api/v1/companies\x12u\n" +
 	"\rListCompanies\x12#.banka.bank.v1.ListCompaniesRequest\x1a$.banka.bank.v1.ListCompaniesResponse\"\x19\x82\xd3\xe4\x93\x02\x13\x12\x11/api/v1/companies\x12f\n" +
@@ -8640,7 +9610,13 @@ const file_bank_v1_bank_proto_rawDesc = "" +
 	"\x12CancelForexForward\x12(.banka.bank.v1.CancelForexForwardRequest\x1a\x1b.banka.bank.v1.ForexForward\"#\x82\xd3\xe4\x93\x02\x1d*\x1b/api/v1/forex-forwards/{id}\x12\x9d\x01\n" +
 	"\x16GetForexForwardSpreads\x12,.banka.bank.v1.GetForexForwardSpreadsRequest\x1a-.banka.bank.v1.GetForexForwardSpreadsResponse\"&\x82\xd3\xe4\x93\x02 \x12\x1e/api/v1/forex-forwards/spreads\x12\x92\x01\n" +
 	"\x15SetForexForwardSpread\x12+.banka.bank.v1.SetForexForwardSpreadRequest\x1a!.banka.bank.v1.ForexForwardSpread\")\x82\xd3\xe4\x93\x02#:\x01*\x1a\x1e/api/v1/forex-forwards/spreads\x12~\n" +
-	"\x19RunForexForwardSettlement\x12/.banka.bank.v1.RunForexForwardSettlementRequest\x1a0.banka.bank.v1.RunForexForwardSettlementResponseB\xb5\x01\n" +
+	"\x19RunForexForwardSettlement\x12/.banka.bank.v1.RunForexForwardSettlementRequest\x1a0.banka.bank.v1.RunForexForwardSettlementResponse\x12\xa6\x01\n" +
+	"\x19ListInterbankTransactions\x12/.banka.bank.v1.ListInterbankTransactionsRequest\x1a0.banka.bank.v1.ListInterbankTransactionsResponse\"&\x82\xd3\xe4\x93\x02 \x12\x1e/api/v1/interbank/transactions\x12\xbe\x01\n" +
+	"\x17GetInterbankTransaction\x12-.banka.bank.v1.GetInterbankTransactionRequest\x1a#.banka.bank.v1.InterbankTransaction\"O\x82\xd3\xe4\x93\x02I\x12G/api/v1/interbank/transactions/{sender_routing_number}/{transaction_id}\x12\x97\x01\n" +
+	"\x15ListInterbankAuditLog\x12+.banka.bank.v1.ListInterbankAuditLogRequest\x1a,.banka.bank.v1.ListInterbankAuditLogResponse\"#\x82\xd3\xe4\x93\x02\x1d\x12\x1b/api/v1/interbank/audit-log\x12\x9a\x01\n" +
+	"\x16ListInterbankBlacklist\x12,.banka.bank.v1.ListInterbankBlacklistRequest\x1a-.banka.bank.v1.ListInterbankBlacklistResponse\"#\x82\xd3\xe4\x93\x02\x1d\x12\x1b/api/v1/interbank/blacklist\x12\x94\x01\n" +
+	"\x15BlockInterbankPartner\x12+.banka.bank.v1.BlockInterbankPartnerRequest\x1a&.banka.bank.v1.InterbankBlacklistEntry\"&\x82\xd3\xe4\x93\x02 :\x01*\"\x1b/api/v1/interbank/blacklist\x12\xad\x01\n" +
+	"\x17UnblockInterbankPartner\x12-.banka.bank.v1.UnblockInterbankPartnerRequest\x1a&.banka.bank.v1.InterbankBlacklistEntry\";\x82\xd3\xe4\x93\x025*3/api/v1/interbank/blacklist/{sender_routing_number}B\xb5\x01\n" +
 	"\x11com.banka.bank.v1B\tBankProtoP\x01Z?github.com/RAF-SI-2025/Banka-3-Backend/gen/proto/bank/v1;bankv1\xa2\x02\x03BBX\xaa\x02\rBanka.Bank.V1\xca\x02\rBanka\\Bank\\V1\xe2\x02\x19Banka\\Bank\\V1\\GPBMetadata\xea\x02\x0fBanka::Bank::V1b\x06proto3"
 
 var (
@@ -8656,7 +9632,7 @@ func file_bank_v1_bank_proto_rawDescGZIP() []byte {
 }
 
 var file_bank_v1_bank_proto_enumTypes = make([]protoimpl.EnumInfo, 17)
-var file_bank_v1_bank_proto_msgTypes = make([]protoimpl.MessageInfo, 95)
+var file_bank_v1_bank_proto_msgTypes = make([]protoimpl.MessageInfo, 107)
 var file_bank_v1_bank_proto_goTypes = []any{
 	(Currency)(0),                             // 0: banka.bank.v1.Currency
 	(AccountKind)(0),                          // 1: banka.bank.v1.AccountKind
@@ -8770,19 +9746,31 @@ var file_bank_v1_bank_proto_goTypes = []any{
 	(*SetForexForwardSpreadRequest)(nil),      // 109: banka.bank.v1.SetForexForwardSpreadRequest
 	(*RunForexForwardSettlementRequest)(nil),  // 110: banka.bank.v1.RunForexForwardSettlementRequest
 	(*RunForexForwardSettlementResponse)(nil), // 111: banka.bank.v1.RunForexForwardSettlementResponse
-	(*timestamppb.Timestamp)(nil),             // 112: google.protobuf.Timestamp
-	(*emptypb.Empty)(nil),                     // 113: google.protobuf.Empty
+	(*InterbankTransaction)(nil),              // 112: banka.bank.v1.InterbankTransaction
+	(*ListInterbankTransactionsRequest)(nil),  // 113: banka.bank.v1.ListInterbankTransactionsRequest
+	(*ListInterbankTransactionsResponse)(nil), // 114: banka.bank.v1.ListInterbankTransactionsResponse
+	(*GetInterbankTransactionRequest)(nil),    // 115: banka.bank.v1.GetInterbankTransactionRequest
+	(*InterbankMessage)(nil),                  // 116: banka.bank.v1.InterbankMessage
+	(*ListInterbankAuditLogRequest)(nil),      // 117: banka.bank.v1.ListInterbankAuditLogRequest
+	(*ListInterbankAuditLogResponse)(nil),     // 118: banka.bank.v1.ListInterbankAuditLogResponse
+	(*InterbankBlacklistEntry)(nil),           // 119: banka.bank.v1.InterbankBlacklistEntry
+	(*ListInterbankBlacklistRequest)(nil),     // 120: banka.bank.v1.ListInterbankBlacklistRequest
+	(*ListInterbankBlacklistResponse)(nil),    // 121: banka.bank.v1.ListInterbankBlacklistResponse
+	(*BlockInterbankPartnerRequest)(nil),      // 122: banka.bank.v1.BlockInterbankPartnerRequest
+	(*UnblockInterbankPartnerRequest)(nil),    // 123: banka.bank.v1.UnblockInterbankPartnerRequest
+	(*timestamppb.Timestamp)(nil),             // 124: google.protobuf.Timestamp
+	(*emptypb.Empty)(nil),                     // 125: google.protobuf.Empty
 }
 var file_bank_v1_bank_proto_depIdxs = []int32{
-	112, // 0: banka.bank.v1.Company.created_at:type_name -> google.protobuf.Timestamp
-	112, // 1: banka.bank.v1.Company.updated_at:type_name -> google.protobuf.Timestamp
+	124, // 0: banka.bank.v1.Company.created_at:type_name -> google.protobuf.Timestamp
+	124, // 1: banka.bank.v1.Company.updated_at:type_name -> google.protobuf.Timestamp
 	1,   // 2: banka.bank.v1.Account.kind:type_name -> banka.bank.v1.AccountKind
 	2,   // 3: banka.bank.v1.Account.subtype:type_name -> banka.bank.v1.AccountSubtype
 	0,   // 4: banka.bank.v1.Account.currency:type_name -> banka.bank.v1.Currency
 	3,   // 5: banka.bank.v1.Account.status:type_name -> banka.bank.v1.AccountStatus
-	112, // 6: banka.bank.v1.Account.created_at:type_name -> google.protobuf.Timestamp
-	112, // 7: banka.bank.v1.Account.expires_at:type_name -> google.protobuf.Timestamp
-	112, // 8: banka.bank.v1.Account.updated_at:type_name -> google.protobuf.Timestamp
+	124, // 6: banka.bank.v1.Account.created_at:type_name -> google.protobuf.Timestamp
+	124, // 7: banka.bank.v1.Account.expires_at:type_name -> google.protobuf.Timestamp
+	124, // 8: banka.bank.v1.Account.updated_at:type_name -> google.protobuf.Timestamp
 	17,  // 9: banka.bank.v1.ListCompaniesResponse.companies:type_name -> banka.bank.v1.Company
 	1,   // 10: banka.bank.v1.CreateAccountRequest.kind:type_name -> banka.bank.v1.AccountKind
 	2,   // 11: banka.bank.v1.CreateAccountRequest.subtype:type_name -> banka.bank.v1.AccountSubtype
@@ -8808,34 +9796,34 @@ var file_bank_v1_bank_proto_depIdxs = []int32{
 	49,  // 31: banka.bank.v1.TransferBetweenClientsResponse.transactions:type_name -> banka.bank.v1.Transaction
 	5,   // 32: banka.bank.v1.Transaction.kind:type_name -> banka.bank.v1.TransactionKind
 	4,   // 33: banka.bank.v1.Transaction.status:type_name -> banka.bank.v1.TransactionStatus
-	112, // 34: banka.bank.v1.Transaction.created_at:type_name -> google.protobuf.Timestamp
+	124, // 34: banka.bank.v1.Transaction.created_at:type_name -> google.protobuf.Timestamp
 	49,  // 35: banka.bank.v1.PaymentResult.transactions:type_name -> banka.bank.v1.Transaction
 	4,   // 36: banka.bank.v1.PaymentResult.status:type_name -> banka.bank.v1.TransactionStatus
 	0,   // 37: banka.bank.v1.QuoteExchangeRequest.from:type_name -> banka.bank.v1.Currency
 	0,   // 38: banka.bank.v1.QuoteExchangeRequest.to:type_name -> banka.bank.v1.Currency
-	112, // 39: banka.bank.v1.ListTransactionsRequest.from:type_name -> google.protobuf.Timestamp
-	112, // 40: banka.bank.v1.ListTransactionsRequest.to:type_name -> google.protobuf.Timestamp
+	124, // 39: banka.bank.v1.ListTransactionsRequest.from:type_name -> google.protobuf.Timestamp
+	124, // 40: banka.bank.v1.ListTransactionsRequest.to:type_name -> google.protobuf.Timestamp
 	49,  // 41: banka.bank.v1.ListTransactionsResponse.transactions:type_name -> banka.bank.v1.Transaction
-	112, // 42: banka.bank.v1.PaymentRecipient.created_at:type_name -> google.protobuf.Timestamp
+	124, // 42: banka.bank.v1.PaymentRecipient.created_at:type_name -> google.protobuf.Timestamp
 	57,  // 43: banka.bank.v1.ListPaymentRecipientsResponse.recipients:type_name -> banka.bank.v1.PaymentRecipient
 	0,   // 44: banka.bank.v1.ScheduledPayment.currency:type_name -> banka.bank.v1.Currency
-	112, // 45: banka.bank.v1.ScheduledPayment.scheduled_date:type_name -> google.protobuf.Timestamp
+	124, // 45: banka.bank.v1.ScheduledPayment.scheduled_date:type_name -> google.protobuf.Timestamp
 	6,   // 46: banka.bank.v1.ScheduledPayment.status:type_name -> banka.bank.v1.ScheduledPaymentStatus
-	112, // 47: banka.bank.v1.ScheduledPayment.created_at:type_name -> google.protobuf.Timestamp
-	112, // 48: banka.bank.v1.ScheduledPayment.executed_at:type_name -> google.protobuf.Timestamp
-	112, // 49: banka.bank.v1.SchedulePaymentRequest.scheduled_date:type_name -> google.protobuf.Timestamp
+	124, // 47: banka.bank.v1.ScheduledPayment.created_at:type_name -> google.protobuf.Timestamp
+	124, // 48: banka.bank.v1.ScheduledPayment.executed_at:type_name -> google.protobuf.Timestamp
+	124, // 49: banka.bank.v1.SchedulePaymentRequest.scheduled_date:type_name -> google.protobuf.Timestamp
 	63,  // 50: banka.bank.v1.ListScheduledPaymentsResponse.scheduled_payments:type_name -> banka.bank.v1.ScheduledPayment
 	7,   // 51: banka.bank.v1.Card.brand:type_name -> banka.bank.v1.CardBrand
 	8,   // 52: banka.bank.v1.Card.status:type_name -> banka.bank.v1.CardStatus
-	112, // 53: banka.bank.v1.Card.expires_at:type_name -> google.protobuf.Timestamp
-	112, // 54: banka.bank.v1.Card.created_at:type_name -> google.protobuf.Timestamp
-	112, // 55: banka.bank.v1.Card.updated_at:type_name -> google.protobuf.Timestamp
+	124, // 53: banka.bank.v1.Card.expires_at:type_name -> google.protobuf.Timestamp
+	124, // 54: banka.bank.v1.Card.created_at:type_name -> google.protobuf.Timestamp
+	124, // 55: banka.bank.v1.Card.updated_at:type_name -> google.protobuf.Timestamp
 	7,   // 56: banka.bank.v1.CreateCardRequest.brand:type_name -> banka.bank.v1.CardBrand
 	70,  // 57: banka.bank.v1.ListCardsResponse.cards:type_name -> banka.bank.v1.Card
 	8,   // 58: banka.bank.v1.SetCardStatusRequest.status:type_name -> banka.bank.v1.CardStatus
 	9,   // 59: banka.bank.v1.AuthorizedPerson.gender:type_name -> banka.bank.v1.Gender
-	112, // 60: banka.bank.v1.AuthorizedPerson.created_at:type_name -> google.protobuf.Timestamp
-	112, // 61: banka.bank.v1.AuthorizedPerson.updated_at:type_name -> google.protobuf.Timestamp
+	124, // 60: banka.bank.v1.AuthorizedPerson.created_at:type_name -> google.protobuf.Timestamp
+	124, // 61: banka.bank.v1.AuthorizedPerson.updated_at:type_name -> google.protobuf.Timestamp
 	9,   // 62: banka.bank.v1.CreateAuthorizedPersonRequest.gender:type_name -> banka.bank.v1.Gender
 	76,  // 63: banka.bank.v1.ListAuthorizedPersonsResponse.authorized_persons:type_name -> banka.bank.v1.AuthorizedPerson
 	10,  // 64: banka.bank.v1.LoanRequest.loan_type:type_name -> banka.bank.v1.LoanType
@@ -8843,15 +9831,15 @@ var file_bank_v1_bank_proto_depIdxs = []int32{
 	0,   // 66: banka.bank.v1.LoanRequest.currency:type_name -> banka.bank.v1.Currency
 	12,  // 67: banka.bank.v1.LoanRequest.employment_status:type_name -> banka.bank.v1.EmploymentStatus
 	13,  // 68: banka.bank.v1.LoanRequest.status:type_name -> banka.bank.v1.LoanRequestStatus
-	112, // 69: banka.bank.v1.LoanRequest.decided_at:type_name -> google.protobuf.Timestamp
-	112, // 70: banka.bank.v1.LoanRequest.created_at:type_name -> google.protobuf.Timestamp
+	124, // 69: banka.bank.v1.LoanRequest.decided_at:type_name -> google.protobuf.Timestamp
+	124, // 70: banka.bank.v1.LoanRequest.created_at:type_name -> google.protobuf.Timestamp
 	10,  // 71: banka.bank.v1.Loan.loan_type:type_name -> banka.bank.v1.LoanType
 	11,  // 72: banka.bank.v1.Loan.interest_type:type_name -> banka.bank.v1.InterestType
 	0,   // 73: banka.bank.v1.Loan.currency:type_name -> banka.bank.v1.Currency
 	14,  // 74: banka.bank.v1.Loan.status:type_name -> banka.bank.v1.LoanStatus
-	112, // 75: banka.bank.v1.Loan.contracted_at:type_name -> google.protobuf.Timestamp
+	124, // 75: banka.bank.v1.Loan.contracted_at:type_name -> google.protobuf.Timestamp
 	0,   // 76: banka.bank.v1.LoanInstallment.currency:type_name -> banka.bank.v1.Currency
-	112, // 77: banka.bank.v1.LoanInstallment.actual_paid_at:type_name -> google.protobuf.Timestamp
+	124, // 77: banka.bank.v1.LoanInstallment.actual_paid_at:type_name -> google.protobuf.Timestamp
 	15,  // 78: banka.bank.v1.LoanInstallment.status:type_name -> banka.bank.v1.InstallmentStatus
 	81,  // 79: banka.bank.v1.LoanWithInstallments.loan:type_name -> banka.bank.v1.Loan
 	82,  // 80: banka.bank.v1.LoanWithInstallments.installments:type_name -> banka.bank.v1.LoanInstallment
@@ -8867,136 +9855,162 @@ var file_bank_v1_bank_proto_depIdxs = []int32{
 	81,  // 90: banka.bank.v1.ListLoansResponse.loans:type_name -> banka.bank.v1.Loan
 	0,   // 91: banka.bank.v1.ForexForward.base_currency:type_name -> banka.bank.v1.Currency
 	0,   // 92: banka.bank.v1.ForexForward.quote_currency:type_name -> banka.bank.v1.Currency
-	112, // 93: banka.bank.v1.ForexForward.settlement_date:type_name -> google.protobuf.Timestamp
+	124, // 93: banka.bank.v1.ForexForward.settlement_date:type_name -> google.protobuf.Timestamp
 	16,  // 94: banka.bank.v1.ForexForward.status:type_name -> banka.bank.v1.ForexForwardStatus
-	112, // 95: banka.bank.v1.ForexForward.created_at:type_name -> google.protobuf.Timestamp
-	112, // 96: banka.bank.v1.ForexForward.settled_at:type_name -> google.protobuf.Timestamp
+	124, // 95: banka.bank.v1.ForexForward.created_at:type_name -> google.protobuf.Timestamp
+	124, // 96: banka.bank.v1.ForexForward.settled_at:type_name -> google.protobuf.Timestamp
 	0,   // 97: banka.bank.v1.ForexForwardSpread.base_currency:type_name -> banka.bank.v1.Currency
 	0,   // 98: banka.bank.v1.ForexForwardSpread.quote_currency:type_name -> banka.bank.v1.Currency
-	112, // 99: banka.bank.v1.ForexForwardSpread.updated_at:type_name -> google.protobuf.Timestamp
+	124, // 99: banka.bank.v1.ForexForwardSpread.updated_at:type_name -> google.protobuf.Timestamp
 	0,   // 100: banka.bank.v1.ForexForwardQuote.base_currency:type_name -> banka.bank.v1.Currency
 	0,   // 101: banka.bank.v1.ForexForwardQuote.quote_currency:type_name -> banka.bank.v1.Currency
 	0,   // 102: banka.bank.v1.QuoteForexForwardRequest.base_currency:type_name -> banka.bank.v1.Currency
-	112, // 103: banka.bank.v1.QuoteForexForwardRequest.settlement_date:type_name -> google.protobuf.Timestamp
+	124, // 103: banka.bank.v1.QuoteForexForwardRequest.settlement_date:type_name -> google.protobuf.Timestamp
 	0,   // 104: banka.bank.v1.CreateForexForwardRequest.base_currency:type_name -> banka.bank.v1.Currency
-	112, // 105: banka.bank.v1.CreateForexForwardRequest.settlement_date:type_name -> google.protobuf.Timestamp
+	124, // 105: banka.bank.v1.CreateForexForwardRequest.settlement_date:type_name -> google.protobuf.Timestamp
 	99,  // 106: banka.bank.v1.ListForexForwardsResponse.forex_forwards:type_name -> banka.bank.v1.ForexForward
 	100, // 107: banka.bank.v1.GetForexForwardSpreadsResponse.spreads:type_name -> banka.bank.v1.ForexForwardSpread
 	0,   // 108: banka.bank.v1.SetForexForwardSpreadRequest.base_currency:type_name -> banka.bank.v1.Currency
 	0,   // 109: banka.bank.v1.SetForexForwardSpreadRequest.quote_currency:type_name -> banka.bank.v1.Currency
-	19,  // 110: banka.bank.v1.BankService.CreateCompany:input_type -> banka.bank.v1.CreateCompanyRequest
-	20,  // 111: banka.bank.v1.BankService.ListCompanies:input_type -> banka.bank.v1.ListCompaniesRequest
-	22,  // 112: banka.bank.v1.BankService.GetCompany:input_type -> banka.bank.v1.GetCompanyRequest
-	23,  // 113: banka.bank.v1.BankService.UpdateCompany:input_type -> banka.bank.v1.UpdateCompanyRequest
-	24,  // 114: banka.bank.v1.BankService.CreateAccount:input_type -> banka.bank.v1.CreateAccountRequest
-	25,  // 115: banka.bank.v1.BankService.ListAccounts:input_type -> banka.bank.v1.ListAccountsRequest
-	27,  // 116: banka.bank.v1.BankService.GetAccount:input_type -> banka.bank.v1.GetAccountRequest
-	28,  // 117: banka.bank.v1.BankService.UpdateAccountLimits:input_type -> banka.bank.v1.UpdateAccountLimitsRequest
-	29,  // 118: banka.bank.v1.BankService.UpdateAccountName:input_type -> banka.bank.v1.UpdateAccountNameRequest
-	30,  // 119: banka.bank.v1.BankService.SetAccountStatus:input_type -> banka.bank.v1.SetAccountStatusRequest
-	31,  // 120: banka.bank.v1.BankService.GetSystemAccount:input_type -> banka.bank.v1.GetSystemAccountRequest
-	33,  // 121: banka.bank.v1.BankService.SettleTrade:input_type -> banka.bank.v1.SettleTradeRequest
-	35,  // 122: banka.bank.v1.BankService.SettleCapitalGainsTax:input_type -> banka.bank.v1.SettleCapitalGainsTaxRequest
-	37,  // 123: banka.bank.v1.BankService.SettleDividend:input_type -> banka.bank.v1.SettleDividendRequest
-	39,  // 124: banka.bank.v1.BankService.SettleForexFill:input_type -> banka.bank.v1.SettleForexFillRequest
-	41,  // 125: banka.bank.v1.BankService.ReserveFunds:input_type -> banka.bank.v1.ReserveFundsRequest
-	43,  // 126: banka.bank.v1.BankService.ReleaseFunds:input_type -> banka.bank.v1.ReleaseFundsRequest
-	45,  // 127: banka.bank.v1.BankService.CommitReservedFunds:input_type -> banka.bank.v1.CommitReservedFundsRequest
-	47,  // 128: banka.bank.v1.BankService.TransferBetweenClients:input_type -> banka.bank.v1.TransferBetweenClientsRequest
-	32,  // 129: banka.bank.v1.BankService.CreateFundAccount:input_type -> banka.bank.v1.CreateFundAccountRequest
-	50,  // 130: banka.bank.v1.BankService.CreatePayment:input_type -> banka.bank.v1.CreatePaymentRequest
-	51,  // 131: banka.bank.v1.BankService.CreateTransfer:input_type -> banka.bank.v1.CreateTransferRequest
-	53,  // 132: banka.bank.v1.BankService.QuoteExchange:input_type -> banka.bank.v1.QuoteExchangeRequest
-	55,  // 133: banka.bank.v1.BankService.ListTransactions:input_type -> banka.bank.v1.ListTransactionsRequest
-	58,  // 134: banka.bank.v1.BankService.CreatePaymentRecipient:input_type -> banka.bank.v1.CreatePaymentRecipientRequest
-	59,  // 135: banka.bank.v1.BankService.ListPaymentRecipients:input_type -> banka.bank.v1.ListPaymentRecipientsRequest
-	61,  // 136: banka.bank.v1.BankService.UpdatePaymentRecipient:input_type -> banka.bank.v1.UpdatePaymentRecipientRequest
-	62,  // 137: banka.bank.v1.BankService.DeletePaymentRecipient:input_type -> banka.bank.v1.DeletePaymentRecipientRequest
-	64,  // 138: banka.bank.v1.BankService.SchedulePayment:input_type -> banka.bank.v1.SchedulePaymentRequest
-	65,  // 139: banka.bank.v1.BankService.ListScheduledPayments:input_type -> banka.bank.v1.ListScheduledPaymentsRequest
-	67,  // 140: banka.bank.v1.BankService.CancelScheduledPayment:input_type -> banka.bank.v1.CancelScheduledPaymentRequest
-	68,  // 141: banka.bank.v1.BankService.RunDueScheduledPayments:input_type -> banka.bank.v1.RunDueScheduledPaymentsRequest
-	71,  // 142: banka.bank.v1.BankService.CreateCard:input_type -> banka.bank.v1.CreateCardRequest
-	72,  // 143: banka.bank.v1.BankService.ListCards:input_type -> banka.bank.v1.ListCardsRequest
-	74,  // 144: banka.bank.v1.BankService.SetCardStatus:input_type -> banka.bank.v1.SetCardStatusRequest
-	75,  // 145: banka.bank.v1.BankService.UpdateCardLimit:input_type -> banka.bank.v1.UpdateCardLimitRequest
-	77,  // 146: banka.bank.v1.BankService.CreateAuthorizedPerson:input_type -> banka.bank.v1.CreateAuthorizedPersonRequest
-	78,  // 147: banka.bank.v1.BankService.ListAuthorizedPersons:input_type -> banka.bank.v1.ListAuthorizedPersonsRequest
-	84,  // 148: banka.bank.v1.BankService.SubmitLoanRequest:input_type -> banka.bank.v1.SubmitLoanRequestRequest
-	85,  // 149: banka.bank.v1.BankService.ListLoanRequests:input_type -> banka.bank.v1.ListLoanRequestsRequest
-	87,  // 150: banka.bank.v1.BankService.DecideLoanRequest:input_type -> banka.bank.v1.DecideLoanRequestRequest
-	88,  // 151: banka.bank.v1.BankService.ListLoans:input_type -> banka.bank.v1.ListLoansRequest
-	90,  // 152: banka.bank.v1.BankService.GetLoan:input_type -> banka.bank.v1.GetLoanRequest
-	91,  // 153: banka.bank.v1.BankService.RunInstallmentJob:input_type -> banka.bank.v1.RunInstallmentJobRequest
-	93,  // 154: banka.bank.v1.BankService.RunVariableRateJob:input_type -> banka.bank.v1.RunVariableRateJobRequest
-	95,  // 155: banka.bank.v1.BankService.RunMaintenanceFeeJob:input_type -> banka.bank.v1.RunMaintenanceFeeJobRequest
-	97,  // 156: banka.bank.v1.BankService.RunSpentResetJob:input_type -> banka.bank.v1.RunSpentResetJobRequest
-	102, // 157: banka.bank.v1.BankService.QuoteForexForward:input_type -> banka.bank.v1.QuoteForexForwardRequest
-	103, // 158: banka.bank.v1.BankService.CreateForexForward:input_type -> banka.bank.v1.CreateForexForwardRequest
-	104, // 159: banka.bank.v1.BankService.ListForexForwards:input_type -> banka.bank.v1.ListForexForwardsRequest
-	106, // 160: banka.bank.v1.BankService.CancelForexForward:input_type -> banka.bank.v1.CancelForexForwardRequest
-	107, // 161: banka.bank.v1.BankService.GetForexForwardSpreads:input_type -> banka.bank.v1.GetForexForwardSpreadsRequest
-	109, // 162: banka.bank.v1.BankService.SetForexForwardSpread:input_type -> banka.bank.v1.SetForexForwardSpreadRequest
-	110, // 163: banka.bank.v1.BankService.RunForexForwardSettlement:input_type -> banka.bank.v1.RunForexForwardSettlementRequest
-	17,  // 164: banka.bank.v1.BankService.CreateCompany:output_type -> banka.bank.v1.Company
-	21,  // 165: banka.bank.v1.BankService.ListCompanies:output_type -> banka.bank.v1.ListCompaniesResponse
-	17,  // 166: banka.bank.v1.BankService.GetCompany:output_type -> banka.bank.v1.Company
-	17,  // 167: banka.bank.v1.BankService.UpdateCompany:output_type -> banka.bank.v1.Company
-	18,  // 168: banka.bank.v1.BankService.CreateAccount:output_type -> banka.bank.v1.Account
-	26,  // 169: banka.bank.v1.BankService.ListAccounts:output_type -> banka.bank.v1.ListAccountsResponse
-	18,  // 170: banka.bank.v1.BankService.GetAccount:output_type -> banka.bank.v1.Account
-	18,  // 171: banka.bank.v1.BankService.UpdateAccountLimits:output_type -> banka.bank.v1.Account
-	18,  // 172: banka.bank.v1.BankService.UpdateAccountName:output_type -> banka.bank.v1.Account
-	18,  // 173: banka.bank.v1.BankService.SetAccountStatus:output_type -> banka.bank.v1.Account
-	18,  // 174: banka.bank.v1.BankService.GetSystemAccount:output_type -> banka.bank.v1.Account
-	34,  // 175: banka.bank.v1.BankService.SettleTrade:output_type -> banka.bank.v1.SettleTradeResponse
-	36,  // 176: banka.bank.v1.BankService.SettleCapitalGainsTax:output_type -> banka.bank.v1.SettleCapitalGainsTaxResponse
-	38,  // 177: banka.bank.v1.BankService.SettleDividend:output_type -> banka.bank.v1.SettleDividendResponse
-	40,  // 178: banka.bank.v1.BankService.SettleForexFill:output_type -> banka.bank.v1.SettleForexFillResponse
-	42,  // 179: banka.bank.v1.BankService.ReserveFunds:output_type -> banka.bank.v1.ReserveFundsResponse
-	44,  // 180: banka.bank.v1.BankService.ReleaseFunds:output_type -> banka.bank.v1.ReleaseFundsResponse
-	46,  // 181: banka.bank.v1.BankService.CommitReservedFunds:output_type -> banka.bank.v1.CommitReservedFundsResponse
-	48,  // 182: banka.bank.v1.BankService.TransferBetweenClients:output_type -> banka.bank.v1.TransferBetweenClientsResponse
-	18,  // 183: banka.bank.v1.BankService.CreateFundAccount:output_type -> banka.bank.v1.Account
-	52,  // 184: banka.bank.v1.BankService.CreatePayment:output_type -> banka.bank.v1.PaymentResult
-	52,  // 185: banka.bank.v1.BankService.CreateTransfer:output_type -> banka.bank.v1.PaymentResult
-	54,  // 186: banka.bank.v1.BankService.QuoteExchange:output_type -> banka.bank.v1.QuoteExchangeResponse
-	56,  // 187: banka.bank.v1.BankService.ListTransactions:output_type -> banka.bank.v1.ListTransactionsResponse
-	57,  // 188: banka.bank.v1.BankService.CreatePaymentRecipient:output_type -> banka.bank.v1.PaymentRecipient
-	60,  // 189: banka.bank.v1.BankService.ListPaymentRecipients:output_type -> banka.bank.v1.ListPaymentRecipientsResponse
-	57,  // 190: banka.bank.v1.BankService.UpdatePaymentRecipient:output_type -> banka.bank.v1.PaymentRecipient
-	113, // 191: banka.bank.v1.BankService.DeletePaymentRecipient:output_type -> google.protobuf.Empty
-	63,  // 192: banka.bank.v1.BankService.SchedulePayment:output_type -> banka.bank.v1.ScheduledPayment
-	66,  // 193: banka.bank.v1.BankService.ListScheduledPayments:output_type -> banka.bank.v1.ListScheduledPaymentsResponse
-	63,  // 194: banka.bank.v1.BankService.CancelScheduledPayment:output_type -> banka.bank.v1.ScheduledPayment
-	69,  // 195: banka.bank.v1.BankService.RunDueScheduledPayments:output_type -> banka.bank.v1.RunDueScheduledPaymentsResponse
-	70,  // 196: banka.bank.v1.BankService.CreateCard:output_type -> banka.bank.v1.Card
-	73,  // 197: banka.bank.v1.BankService.ListCards:output_type -> banka.bank.v1.ListCardsResponse
-	70,  // 198: banka.bank.v1.BankService.SetCardStatus:output_type -> banka.bank.v1.Card
-	70,  // 199: banka.bank.v1.BankService.UpdateCardLimit:output_type -> banka.bank.v1.Card
-	76,  // 200: banka.bank.v1.BankService.CreateAuthorizedPerson:output_type -> banka.bank.v1.AuthorizedPerson
-	79,  // 201: banka.bank.v1.BankService.ListAuthorizedPersons:output_type -> banka.bank.v1.ListAuthorizedPersonsResponse
-	80,  // 202: banka.bank.v1.BankService.SubmitLoanRequest:output_type -> banka.bank.v1.LoanRequest
-	86,  // 203: banka.bank.v1.BankService.ListLoanRequests:output_type -> banka.bank.v1.ListLoanRequestsResponse
-	80,  // 204: banka.bank.v1.BankService.DecideLoanRequest:output_type -> banka.bank.v1.LoanRequest
-	89,  // 205: banka.bank.v1.BankService.ListLoans:output_type -> banka.bank.v1.ListLoansResponse
-	83,  // 206: banka.bank.v1.BankService.GetLoan:output_type -> banka.bank.v1.LoanWithInstallments
-	92,  // 207: banka.bank.v1.BankService.RunInstallmentJob:output_type -> banka.bank.v1.RunInstallmentJobResponse
-	94,  // 208: banka.bank.v1.BankService.RunVariableRateJob:output_type -> banka.bank.v1.RunVariableRateJobResponse
-	96,  // 209: banka.bank.v1.BankService.RunMaintenanceFeeJob:output_type -> banka.bank.v1.RunMaintenanceFeeJobResponse
-	98,  // 210: banka.bank.v1.BankService.RunSpentResetJob:output_type -> banka.bank.v1.RunSpentResetJobResponse
-	101, // 211: banka.bank.v1.BankService.QuoteForexForward:output_type -> banka.bank.v1.ForexForwardQuote
-	99,  // 212: banka.bank.v1.BankService.CreateForexForward:output_type -> banka.bank.v1.ForexForward
-	105, // 213: banka.bank.v1.BankService.ListForexForwards:output_type -> banka.bank.v1.ListForexForwardsResponse
-	99,  // 214: banka.bank.v1.BankService.CancelForexForward:output_type -> banka.bank.v1.ForexForward
-	108, // 215: banka.bank.v1.BankService.GetForexForwardSpreads:output_type -> banka.bank.v1.GetForexForwardSpreadsResponse
-	100, // 216: banka.bank.v1.BankService.SetForexForwardSpread:output_type -> banka.bank.v1.ForexForwardSpread
-	111, // 217: banka.bank.v1.BankService.RunForexForwardSettlement:output_type -> banka.bank.v1.RunForexForwardSettlementResponse
-	164, // [164:218] is the sub-list for method output_type
-	110, // [110:164] is the sub-list for method input_type
-	110, // [110:110] is the sub-list for extension type_name
-	110, // [110:110] is the sub-list for extension extendee
-	0,   // [0:110] is the sub-list for field type_name
+	0,   // 110: banka.bank.v1.InterbankTransaction.currency:type_name -> banka.bank.v1.Currency
+	124, // 111: banka.bank.v1.InterbankTransaction.created_at:type_name -> google.protobuf.Timestamp
+	124, // 112: banka.bank.v1.InterbankTransaction.updated_at:type_name -> google.protobuf.Timestamp
+	124, // 113: banka.bank.v1.ListInterbankTransactionsRequest.from:type_name -> google.protobuf.Timestamp
+	124, // 114: banka.bank.v1.ListInterbankTransactionsRequest.to:type_name -> google.protobuf.Timestamp
+	112, // 115: banka.bank.v1.ListInterbankTransactionsResponse.transactions:type_name -> banka.bank.v1.InterbankTransaction
+	124, // 116: banka.bank.v1.InterbankMessage.created_at:type_name -> google.protobuf.Timestamp
+	124, // 117: banka.bank.v1.InterbankMessage.updated_at:type_name -> google.protobuf.Timestamp
+	124, // 118: banka.bank.v1.ListInterbankAuditLogRequest.from:type_name -> google.protobuf.Timestamp
+	124, // 119: banka.bank.v1.ListInterbankAuditLogRequest.to:type_name -> google.protobuf.Timestamp
+	116, // 120: banka.bank.v1.ListInterbankAuditLogResponse.messages:type_name -> banka.bank.v1.InterbankMessage
+	124, // 121: banka.bank.v1.InterbankBlacklistEntry.blocked_at:type_name -> google.protobuf.Timestamp
+	124, // 122: banka.bank.v1.InterbankBlacklistEntry.unblocked_at:type_name -> google.protobuf.Timestamp
+	119, // 123: banka.bank.v1.ListInterbankBlacklistResponse.entries:type_name -> banka.bank.v1.InterbankBlacklistEntry
+	19,  // 124: banka.bank.v1.BankService.CreateCompany:input_type -> banka.bank.v1.CreateCompanyRequest
+	20,  // 125: banka.bank.v1.BankService.ListCompanies:input_type -> banka.bank.v1.ListCompaniesRequest
+	22,  // 126: banka.bank.v1.BankService.GetCompany:input_type -> banka.bank.v1.GetCompanyRequest
+	23,  // 127: banka.bank.v1.BankService.UpdateCompany:input_type -> banka.bank.v1.UpdateCompanyRequest
+	24,  // 128: banka.bank.v1.BankService.CreateAccount:input_type -> banka.bank.v1.CreateAccountRequest
+	25,  // 129: banka.bank.v1.BankService.ListAccounts:input_type -> banka.bank.v1.ListAccountsRequest
+	27,  // 130: banka.bank.v1.BankService.GetAccount:input_type -> banka.bank.v1.GetAccountRequest
+	28,  // 131: banka.bank.v1.BankService.UpdateAccountLimits:input_type -> banka.bank.v1.UpdateAccountLimitsRequest
+	29,  // 132: banka.bank.v1.BankService.UpdateAccountName:input_type -> banka.bank.v1.UpdateAccountNameRequest
+	30,  // 133: banka.bank.v1.BankService.SetAccountStatus:input_type -> banka.bank.v1.SetAccountStatusRequest
+	31,  // 134: banka.bank.v1.BankService.GetSystemAccount:input_type -> banka.bank.v1.GetSystemAccountRequest
+	33,  // 135: banka.bank.v1.BankService.SettleTrade:input_type -> banka.bank.v1.SettleTradeRequest
+	35,  // 136: banka.bank.v1.BankService.SettleCapitalGainsTax:input_type -> banka.bank.v1.SettleCapitalGainsTaxRequest
+	37,  // 137: banka.bank.v1.BankService.SettleDividend:input_type -> banka.bank.v1.SettleDividendRequest
+	39,  // 138: banka.bank.v1.BankService.SettleForexFill:input_type -> banka.bank.v1.SettleForexFillRequest
+	41,  // 139: banka.bank.v1.BankService.ReserveFunds:input_type -> banka.bank.v1.ReserveFundsRequest
+	43,  // 140: banka.bank.v1.BankService.ReleaseFunds:input_type -> banka.bank.v1.ReleaseFundsRequest
+	45,  // 141: banka.bank.v1.BankService.CommitReservedFunds:input_type -> banka.bank.v1.CommitReservedFundsRequest
+	47,  // 142: banka.bank.v1.BankService.TransferBetweenClients:input_type -> banka.bank.v1.TransferBetweenClientsRequest
+	32,  // 143: banka.bank.v1.BankService.CreateFundAccount:input_type -> banka.bank.v1.CreateFundAccountRequest
+	50,  // 144: banka.bank.v1.BankService.CreatePayment:input_type -> banka.bank.v1.CreatePaymentRequest
+	51,  // 145: banka.bank.v1.BankService.CreateTransfer:input_type -> banka.bank.v1.CreateTransferRequest
+	53,  // 146: banka.bank.v1.BankService.QuoteExchange:input_type -> banka.bank.v1.QuoteExchangeRequest
+	55,  // 147: banka.bank.v1.BankService.ListTransactions:input_type -> banka.bank.v1.ListTransactionsRequest
+	58,  // 148: banka.bank.v1.BankService.CreatePaymentRecipient:input_type -> banka.bank.v1.CreatePaymentRecipientRequest
+	59,  // 149: banka.bank.v1.BankService.ListPaymentRecipients:input_type -> banka.bank.v1.ListPaymentRecipientsRequest
+	61,  // 150: banka.bank.v1.BankService.UpdatePaymentRecipient:input_type -> banka.bank.v1.UpdatePaymentRecipientRequest
+	62,  // 151: banka.bank.v1.BankService.DeletePaymentRecipient:input_type -> banka.bank.v1.DeletePaymentRecipientRequest
+	64,  // 152: banka.bank.v1.BankService.SchedulePayment:input_type -> banka.bank.v1.SchedulePaymentRequest
+	65,  // 153: banka.bank.v1.BankService.ListScheduledPayments:input_type -> banka.bank.v1.ListScheduledPaymentsRequest
+	67,  // 154: banka.bank.v1.BankService.CancelScheduledPayment:input_type -> banka.bank.v1.CancelScheduledPaymentRequest
+	68,  // 155: banka.bank.v1.BankService.RunDueScheduledPayments:input_type -> banka.bank.v1.RunDueScheduledPaymentsRequest
+	71,  // 156: banka.bank.v1.BankService.CreateCard:input_type -> banka.bank.v1.CreateCardRequest
+	72,  // 157: banka.bank.v1.BankService.ListCards:input_type -> banka.bank.v1.ListCardsRequest
+	74,  // 158: banka.bank.v1.BankService.SetCardStatus:input_type -> banka.bank.v1.SetCardStatusRequest
+	75,  // 159: banka.bank.v1.BankService.UpdateCardLimit:input_type -> banka.bank.v1.UpdateCardLimitRequest
+	77,  // 160: banka.bank.v1.BankService.CreateAuthorizedPerson:input_type -> banka.bank.v1.CreateAuthorizedPersonRequest
+	78,  // 161: banka.bank.v1.BankService.ListAuthorizedPersons:input_type -> banka.bank.v1.ListAuthorizedPersonsRequest
+	84,  // 162: banka.bank.v1.BankService.SubmitLoanRequest:input_type -> banka.bank.v1.SubmitLoanRequestRequest
+	85,  // 163: banka.bank.v1.BankService.ListLoanRequests:input_type -> banka.bank.v1.ListLoanRequestsRequest
+	87,  // 164: banka.bank.v1.BankService.DecideLoanRequest:input_type -> banka.bank.v1.DecideLoanRequestRequest
+	88,  // 165: banka.bank.v1.BankService.ListLoans:input_type -> banka.bank.v1.ListLoansRequest
+	90,  // 166: banka.bank.v1.BankService.GetLoan:input_type -> banka.bank.v1.GetLoanRequest
+	91,  // 167: banka.bank.v1.BankService.RunInstallmentJob:input_type -> banka.bank.v1.RunInstallmentJobRequest
+	93,  // 168: banka.bank.v1.BankService.RunVariableRateJob:input_type -> banka.bank.v1.RunVariableRateJobRequest
+	95,  // 169: banka.bank.v1.BankService.RunMaintenanceFeeJob:input_type -> banka.bank.v1.RunMaintenanceFeeJobRequest
+	97,  // 170: banka.bank.v1.BankService.RunSpentResetJob:input_type -> banka.bank.v1.RunSpentResetJobRequest
+	102, // 171: banka.bank.v1.BankService.QuoteForexForward:input_type -> banka.bank.v1.QuoteForexForwardRequest
+	103, // 172: banka.bank.v1.BankService.CreateForexForward:input_type -> banka.bank.v1.CreateForexForwardRequest
+	104, // 173: banka.bank.v1.BankService.ListForexForwards:input_type -> banka.bank.v1.ListForexForwardsRequest
+	106, // 174: banka.bank.v1.BankService.CancelForexForward:input_type -> banka.bank.v1.CancelForexForwardRequest
+	107, // 175: banka.bank.v1.BankService.GetForexForwardSpreads:input_type -> banka.bank.v1.GetForexForwardSpreadsRequest
+	109, // 176: banka.bank.v1.BankService.SetForexForwardSpread:input_type -> banka.bank.v1.SetForexForwardSpreadRequest
+	110, // 177: banka.bank.v1.BankService.RunForexForwardSettlement:input_type -> banka.bank.v1.RunForexForwardSettlementRequest
+	113, // 178: banka.bank.v1.BankService.ListInterbankTransactions:input_type -> banka.bank.v1.ListInterbankTransactionsRequest
+	115, // 179: banka.bank.v1.BankService.GetInterbankTransaction:input_type -> banka.bank.v1.GetInterbankTransactionRequest
+	117, // 180: banka.bank.v1.BankService.ListInterbankAuditLog:input_type -> banka.bank.v1.ListInterbankAuditLogRequest
+	120, // 181: banka.bank.v1.BankService.ListInterbankBlacklist:input_type -> banka.bank.v1.ListInterbankBlacklistRequest
+	122, // 182: banka.bank.v1.BankService.BlockInterbankPartner:input_type -> banka.bank.v1.BlockInterbankPartnerRequest
+	123, // 183: banka.bank.v1.BankService.UnblockInterbankPartner:input_type -> banka.bank.v1.UnblockInterbankPartnerRequest
+	17,  // 184: banka.bank.v1.BankService.CreateCompany:output_type -> banka.bank.v1.Company
+	21,  // 185: banka.bank.v1.BankService.ListCompanies:output_type -> banka.bank.v1.ListCompaniesResponse
+	17,  // 186: banka.bank.v1.BankService.GetCompany:output_type -> banka.bank.v1.Company
+	17,  // 187: banka.bank.v1.BankService.UpdateCompany:output_type -> banka.bank.v1.Company
+	18,  // 188: banka.bank.v1.BankService.CreateAccount:output_type -> banka.bank.v1.Account
+	26,  // 189: banka.bank.v1.BankService.ListAccounts:output_type -> banka.bank.v1.ListAccountsResponse
+	18,  // 190: banka.bank.v1.BankService.GetAccount:output_type -> banka.bank.v1.Account
+	18,  // 191: banka.bank.v1.BankService.UpdateAccountLimits:output_type -> banka.bank.v1.Account
+	18,  // 192: banka.bank.v1.BankService.UpdateAccountName:output_type -> banka.bank.v1.Account
+	18,  // 193: banka.bank.v1.BankService.SetAccountStatus:output_type -> banka.bank.v1.Account
+	18,  // 194: banka.bank.v1.BankService.GetSystemAccount:output_type -> banka.bank.v1.Account
+	34,  // 195: banka.bank.v1.BankService.SettleTrade:output_type -> banka.bank.v1.SettleTradeResponse
+	36,  // 196: banka.bank.v1.BankService.SettleCapitalGainsTax:output_type -> banka.bank.v1.SettleCapitalGainsTaxResponse
+	38,  // 197: banka.bank.v1.BankService.SettleDividend:output_type -> banka.bank.v1.SettleDividendResponse
+	40,  // 198: banka.bank.v1.BankService.SettleForexFill:output_type -> banka.bank.v1.SettleForexFillResponse
+	42,  // 199: banka.bank.v1.BankService.ReserveFunds:output_type -> banka.bank.v1.ReserveFundsResponse
+	44,  // 200: banka.bank.v1.BankService.ReleaseFunds:output_type -> banka.bank.v1.ReleaseFundsResponse
+	46,  // 201: banka.bank.v1.BankService.CommitReservedFunds:output_type -> banka.bank.v1.CommitReservedFundsResponse
+	48,  // 202: banka.bank.v1.BankService.TransferBetweenClients:output_type -> banka.bank.v1.TransferBetweenClientsResponse
+	18,  // 203: banka.bank.v1.BankService.CreateFundAccount:output_type -> banka.bank.v1.Account
+	52,  // 204: banka.bank.v1.BankService.CreatePayment:output_type -> banka.bank.v1.PaymentResult
+	52,  // 205: banka.bank.v1.BankService.CreateTransfer:output_type -> banka.bank.v1.PaymentResult
+	54,  // 206: banka.bank.v1.BankService.QuoteExchange:output_type -> banka.bank.v1.QuoteExchangeResponse
+	56,  // 207: banka.bank.v1.BankService.ListTransactions:output_type -> banka.bank.v1.ListTransactionsResponse
+	57,  // 208: banka.bank.v1.BankService.CreatePaymentRecipient:output_type -> banka.bank.v1.PaymentRecipient
+	60,  // 209: banka.bank.v1.BankService.ListPaymentRecipients:output_type -> banka.bank.v1.ListPaymentRecipientsResponse
+	57,  // 210: banka.bank.v1.BankService.UpdatePaymentRecipient:output_type -> banka.bank.v1.PaymentRecipient
+	125, // 211: banka.bank.v1.BankService.DeletePaymentRecipient:output_type -> google.protobuf.Empty
+	63,  // 212: banka.bank.v1.BankService.SchedulePayment:output_type -> banka.bank.v1.ScheduledPayment
+	66,  // 213: banka.bank.v1.BankService.ListScheduledPayments:output_type -> banka.bank.v1.ListScheduledPaymentsResponse
+	63,  // 214: banka.bank.v1.BankService.CancelScheduledPayment:output_type -> banka.bank.v1.ScheduledPayment
+	69,  // 215: banka.bank.v1.BankService.RunDueScheduledPayments:output_type -> banka.bank.v1.RunDueScheduledPaymentsResponse
+	70,  // 216: banka.bank.v1.BankService.CreateCard:output_type -> banka.bank.v1.Card
+	73,  // 217: banka.bank.v1.BankService.ListCards:output_type -> banka.bank.v1.ListCardsResponse
+	70,  // 218: banka.bank.v1.BankService.SetCardStatus:output_type -> banka.bank.v1.Card
+	70,  // 219: banka.bank.v1.BankService.UpdateCardLimit:output_type -> banka.bank.v1.Card
+	76,  // 220: banka.bank.v1.BankService.CreateAuthorizedPerson:output_type -> banka.bank.v1.AuthorizedPerson
+	79,  // 221: banka.bank.v1.BankService.ListAuthorizedPersons:output_type -> banka.bank.v1.ListAuthorizedPersonsResponse
+	80,  // 222: banka.bank.v1.BankService.SubmitLoanRequest:output_type -> banka.bank.v1.LoanRequest
+	86,  // 223: banka.bank.v1.BankService.ListLoanRequests:output_type -> banka.bank.v1.ListLoanRequestsResponse
+	80,  // 224: banka.bank.v1.BankService.DecideLoanRequest:output_type -> banka.bank.v1.LoanRequest
+	89,  // 225: banka.bank.v1.BankService.ListLoans:output_type -> banka.bank.v1.ListLoansResponse
+	83,  // 226: banka.bank.v1.BankService.GetLoan:output_type -> banka.bank.v1.LoanWithInstallments
+	92,  // 227: banka.bank.v1.BankService.RunInstallmentJob:output_type -> banka.bank.v1.RunInstallmentJobResponse
+	94,  // 228: banka.bank.v1.BankService.RunVariableRateJob:output_type -> banka.bank.v1.RunVariableRateJobResponse
+	96,  // 229: banka.bank.v1.BankService.RunMaintenanceFeeJob:output_type -> banka.bank.v1.RunMaintenanceFeeJobResponse
+	98,  // 230: banka.bank.v1.BankService.RunSpentResetJob:output_type -> banka.bank.v1.RunSpentResetJobResponse
+	101, // 231: banka.bank.v1.BankService.QuoteForexForward:output_type -> banka.bank.v1.ForexForwardQuote
+	99,  // 232: banka.bank.v1.BankService.CreateForexForward:output_type -> banka.bank.v1.ForexForward
+	105, // 233: banka.bank.v1.BankService.ListForexForwards:output_type -> banka.bank.v1.ListForexForwardsResponse
+	99,  // 234: banka.bank.v1.BankService.CancelForexForward:output_type -> banka.bank.v1.ForexForward
+	108, // 235: banka.bank.v1.BankService.GetForexForwardSpreads:output_type -> banka.bank.v1.GetForexForwardSpreadsResponse
+	100, // 236: banka.bank.v1.BankService.SetForexForwardSpread:output_type -> banka.bank.v1.ForexForwardSpread
+	111, // 237: banka.bank.v1.BankService.RunForexForwardSettlement:output_type -> banka.bank.v1.RunForexForwardSettlementResponse
+	114, // 238: banka.bank.v1.BankService.ListInterbankTransactions:output_type -> banka.bank.v1.ListInterbankTransactionsResponse
+	112, // 239: banka.bank.v1.BankService.GetInterbankTransaction:output_type -> banka.bank.v1.InterbankTransaction
+	118, // 240: banka.bank.v1.BankService.ListInterbankAuditLog:output_type -> banka.bank.v1.ListInterbankAuditLogResponse
+	121, // 241: banka.bank.v1.BankService.ListInterbankBlacklist:output_type -> banka.bank.v1.ListInterbankBlacklistResponse
+	119, // 242: banka.bank.v1.BankService.BlockInterbankPartner:output_type -> banka.bank.v1.InterbankBlacklistEntry
+	119, // 243: banka.bank.v1.BankService.UnblockInterbankPartner:output_type -> banka.bank.v1.InterbankBlacklistEntry
+	184, // [184:244] is the sub-list for method output_type
+	124, // [124:184] is the sub-list for method input_type
+	124, // [124:124] is the sub-list for extension type_name
+	124, // [124:124] is the sub-list for extension extendee
+	0,   // [0:124] is the sub-list for field type_name
 }
 
 func init() { file_bank_v1_bank_proto_init() }
@@ -9010,7 +10024,7 @@ func file_bank_v1_bank_proto_init() {
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
 			RawDescriptor: unsafe.Slice(unsafe.StringData(file_bank_v1_bank_proto_rawDesc), len(file_bank_v1_bank_proto_rawDesc)),
 			NumEnums:      17,
-			NumMessages:   95,
+			NumMessages:   107,
 			NumExtensions: 0,
 			NumServices:   1,
 		},
