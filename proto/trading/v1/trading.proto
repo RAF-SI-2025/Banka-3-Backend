@@ -229,6 +229,17 @@ service TradingService {
     option (google.api.http) = {get: "/api/v1/otc/discovery"};
   }
 
+  // SuggestOTCMatches (todoSpec "OTC matching engine") is a read-only
+  // discovery aid: given a prospective buyer's desired security, quantity
+  // and price, it surfaces the public seller holdings whose unit (ask)
+  // price falls inside a tolerance band around the requested price
+  // (default ±5%) and whose available inventory can satisfy the request
+  // (fully or partially). Suggestions only — creating an offer stays the
+  // manual CreateOTCOffer flow.
+  rpc SuggestOTCMatches(SuggestOTCMatchesRequest) returns (SuggestOTCMatchesResponse) {
+    option (google.api.http) = {get: "/api/v1/otc/suggestions"};
+  }
+
   // CreateOTCOffer opens a new negotiation thread. The buyer initiates;
   // the seller_holding_id resolves the seller (its owner). Increments
   // reserved_count on the seller's holding by quantity.
@@ -1337,6 +1348,56 @@ message ListPublicHoldingsRequest {
 
 message ListPublicHoldingsResponse {
   repeated PublicHoldingItem items = 1;
+}
+
+// SuggestOTCMatchesRequest (todoSpec "OTC matching engine"). The buyer
+// states what they want and at what price; the engine finds compatible
+// public seller holdings.
+message SuggestOTCMatchesRequest {
+  // security_id is the instrument the buyer wants to acquire.
+  string security_id = 1 [(buf.validate.field).string.uuid = true];
+  // quantity the buyer wants.
+  int32 quantity = 2 [(buf.validate.field).int32.gt = 0];
+  // price the buyer is willing to pay per unit (the desired price the
+  // tolerance band centers on).
+  string price = 3 [(buf.validate.field).string.min_len = 1];
+  // tolerance_pct is the symmetric band around `price`, in percent.
+  // 0 or unset defaults to 5 (±5%). Spec example: buyer wants $100,
+  // a seller at $101 is within +1% so it matches a default ±5% band.
+  double tolerance_pct = 4 [(buf.validate.field).double.gte = 0];
+}
+
+// OTCMatchSuggestion is one candidate seller holding the buyer could
+// open an offer against. It carries the seller-side details the FE needs
+// to prefill CreateOTCOffer.
+message OTCMatchSuggestion {
+  string holding_id = 1;
+  string seller_id = 2;
+  UserKind seller_kind = 3;
+  string seller_account_id = 4;
+  string seller_display_name = 5;
+  Security security = 6;
+  // unit_price is the seller's current ask (the listing price) — the
+  // value compared against the tolerance band.
+  string unit_price = 7;
+  Currency currency = 8;
+  // available_count is the seller's inventory available on the OTC board
+  // (public_count - reserved_count, clamped to zero).
+  int32 available_count = 9;
+  // suggested_quantity is min(available_count, requested quantity).
+  int32 suggested_quantity = 10;
+  // fully_satisfies is true when available_count >= requested quantity;
+  // false signals the FE to render a partial-fill hint.
+  bool fully_satisfies = 11;
+  // price_delta_pct is the signed % difference of unit_price vs. the
+  // buyer's requested price ((unit-price)/price*100); negative is cheaper.
+  double price_delta_pct = 12;
+}
+
+message SuggestOTCMatchesResponse {
+  repeated OTCMatchSuggestion suggestions = 1;
+  // tolerance_pct echoes the effective band used (5 when defaulted).
+  double tolerance_pct = 2;
 }
 
 message OTCOffer {

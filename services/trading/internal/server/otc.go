@@ -42,6 +42,40 @@ func (s *Server) ListPublicHoldings(ctx context.Context, in *tradingpb.ListPubli
 	return out, nil
 }
 
+func (s *Server) SuggestOTCMatches(ctx context.Context, in *tradingpb.SuggestOTCMatchesRequest) (*tradingpb.SuggestOTCMatchesResponse, error) {
+	sugs, tol, err := s.Svc.SuggestOTCMatches(ctx, service.SuggestOTCMatchInput{
+		SecurityID:   in.GetSecurityId(),
+		Quantity:     in.GetQuantity(),
+		Price:        in.GetPrice(),
+		TolerancePct: in.GetTolerancePct(),
+	})
+	if err != nil {
+		return nil, err
+	}
+	out := &tradingpb.SuggestOTCMatchesResponse{
+		Suggestions:  make([]*tradingpb.OTCMatchSuggestion, 0, len(sugs)),
+		TolerancePct: tol,
+	}
+	for _, sg := range sugs {
+		item := &tradingpb.OTCMatchSuggestion{
+			HoldingId:         sg.Holding.ID,
+			SellerId:          sg.Holding.UserID,
+			SellerKind:        userKindToProto(sg.Holding.UserKind),
+			SellerAccountId:   sg.Holding.AccountID,
+			SellerDisplayName: sg.SellerDisplayName,
+			Security:          securityToProto(sg.Security),
+			UnitPrice:         sg.UnitPrice,
+			Currency:          currencyToProto(sg.Security.Currency),
+			AvailableCount:    sg.AvailableCount,
+			SuggestedQuantity: sg.SuggestedQuantity,
+			FullySatisfies:    sg.FullySatisfies,
+			PriceDeltaPct:     sg.PriceDeltaPct,
+		}
+		out.Suggestions = append(out.Suggestions, item)
+	}
+	return out, nil
+}
+
 func (s *Server) CreateOTCOffer(ctx context.Context, in *tradingpb.CreateOTCOfferRequest) (*tradingpb.OTCOffer, error) {
 	offer, err := s.Svc.CreateOTCOffer(ctx, service.CreateOTCOfferInput{
 		SellerHoldingID: in.GetSellerHoldingId(),

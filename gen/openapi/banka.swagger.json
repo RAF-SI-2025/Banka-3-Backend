@@ -4062,6 +4062,61 @@
         ]
       }
     },
+    "/api/v1/otc/suggestions": {
+      "get": {
+        "summary": "SuggestOTCMatches (todoSpec \"OTC matching engine\") is a read-only\ndiscovery aid: given a prospective buyer's desired security, quantity\nand price, it surfaces the public seller holdings whose unit (ask)\nprice falls inside a tolerance band around the requested price\n(default ±5%) and whose available inventory can satisfy the request\n(fully or partially). Suggestions only — creating an offer stays the\nmanual CreateOTCOffer flow.",
+        "operationId": "TradingService_SuggestOTCMatches",
+        "responses": {
+          "200": {
+            "description": "A successful response.",
+            "schema": {
+              "$ref": "#/definitions/v1SuggestOTCMatchesResponse"
+            }
+          },
+          "default": {
+            "description": "An unexpected error response.",
+            "schema": {
+              "$ref": "#/definitions/rpcStatus"
+            }
+          }
+        },
+        "parameters": [
+          {
+            "name": "securityId",
+            "description": "security_id is the instrument the buyer wants to acquire.",
+            "in": "query",
+            "required": false,
+            "type": "string"
+          },
+          {
+            "name": "quantity",
+            "description": "quantity the buyer wants.",
+            "in": "query",
+            "required": false,
+            "type": "integer",
+            "format": "int32"
+          },
+          {
+            "name": "price",
+            "description": "price the buyer is willing to pay per unit (the desired price the\ntolerance band centers on).",
+            "in": "query",
+            "required": false,
+            "type": "string"
+          },
+          {
+            "name": "tolerancePct",
+            "description": "tolerance_pct is the symmetric band around `price`, in percent.\n0 or unset defaults to 5 (±5%). Spec example: buyer wants $100,\na seller at $101 is within +1% so it matches a default ±5% band.",
+            "in": "query",
+            "required": false,
+            "type": "number",
+            "format": "double"
+          }
+        ],
+        "tags": [
+          "TradingService"
+        ]
+      }
+    },
     "/api/v1/payment-recipients": {
       "get": {
         "operationId": "BankService_ListPaymentRecipients",
@@ -8943,6 +8998,56 @@
       ],
       "default": "OTC_CONTRACT_STATUS_UNSPECIFIED"
     },
+    "v1OTCMatchSuggestion": {
+      "type": "object",
+      "properties": {
+        "holdingId": {
+          "type": "string"
+        },
+        "sellerId": {
+          "type": "string"
+        },
+        "sellerKind": {
+          "$ref": "#/definitions/bankaTradingV1UserKind"
+        },
+        "sellerAccountId": {
+          "type": "string"
+        },
+        "sellerDisplayName": {
+          "type": "string"
+        },
+        "security": {
+          "$ref": "#/definitions/v1Security"
+        },
+        "unitPrice": {
+          "type": "string",
+          "description": "unit_price is the seller's current ask (the listing price) — the\nvalue compared against the tolerance band."
+        },
+        "currency": {
+          "$ref": "#/definitions/bankaTradingV1Currency"
+        },
+        "availableCount": {
+          "type": "integer",
+          "format": "int32",
+          "description": "available_count is the seller's inventory available on the OTC board\n(public_count - reserved_count, clamped to zero)."
+        },
+        "suggestedQuantity": {
+          "type": "integer",
+          "format": "int32",
+          "description": "suggested_quantity is min(available_count, requested quantity)."
+        },
+        "fullySatisfies": {
+          "type": "boolean",
+          "description": "fully_satisfies is true when available_count \u003e= requested quantity;\nfalse signals the FE to render a partial-fill hint."
+        },
+        "priceDeltaPct": {
+          "type": "number",
+          "format": "double",
+          "description": "price_delta_pct is the signed % difference of unit_price vs. the\nbuyer's requested price ((unit-price)/price*100); negative is cheaper."
+        }
+      },
+      "description": "OTCMatchSuggestion is one candidate seller holding the buyer could\nopen an offer against. It carries the seller-side details the FE needs\nto prefill CreateOTCOffer."
+    },
     "v1OTCOffer": {
       "type": "object",
       "properties": {
@@ -9987,6 +10092,23 @@
         },
         "contactPhone": {
           "type": "string"
+        }
+      }
+    },
+    "v1SuggestOTCMatchesResponse": {
+      "type": "object",
+      "properties": {
+        "suggestions": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "$ref": "#/definitions/v1OTCMatchSuggestion"
+          }
+        },
+        "tolerancePct": {
+          "type": "number",
+          "format": "double",
+          "description": "tolerance_pct echoes the effective band used (5 when defaulted)."
         }
       }
     },

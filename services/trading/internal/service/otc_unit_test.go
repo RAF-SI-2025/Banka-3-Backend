@@ -5,9 +5,84 @@ import (
 	"time"
 
 	"github.com/RAF-SI-2025/Banka-3-Backend/pkg/auth"
+	"github.com/RAF-SI-2025/Banka-3-Backend/pkg/money"
 	"github.com/RAF-SI-2025/Banka-3-Backend/pkg/permissions"
 	"github.com/RAF-SI-2025/Banka-3-Backend/services/trading/internal/domain"
 )
+
+// TestOTCToleranceBandMatch exercises the matching-engine band predicate
+// (todoSpec "OTC matching engine"): a seller's unit price matches when
+// it falls inside [price*(1-tol), price*(1+tol)]. The spec example:
+// buyer wants $100, default ±5% band → seller at $101 matches.
+func TestOTCToleranceBandMatch(t *testing.T) {
+	cases := []struct {
+		name      string
+		want      string
+		tolPct    float64
+		unitPrice string
+		match     bool
+	}{
+		{"spec example $101 vs $100 @5%", "100", 5, "101", true},
+		{"top edge $105 vs $100 @5%", "100", 5, "105", true},
+		{"bottom edge $95 vs $100 @5%", "100", 5, "95", true},
+		{"above band $106 vs $100 @5%", "100", 5, "106", false},
+		{"below band $94 vs $100 @5%", "100", 5, "94", false},
+		{"exact match", "100", 5, "100", true},
+		{"tight band $101 vs $100 @0.5%", "100", 0.5, "101", false},
+		{"wide band $120 vs $100 @25%", "100", 25, "120", true},
+	}
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			lo, hi := tolerancePriceBand(money.MustParse(c.want), c.tolPct)
+			got := priceInBand(money.MustParse(c.unitPrice), lo, hi)
+			if got != c.match {
+				t.Fatalf("priceInBand(%s in band[%s..%s]) = %v, want %v",
+					c.unitPrice, money.FormatAmount(lo), money.FormatAmount(hi), got, c.match)
+			}
+		})
+	}
+}
+
+// TestOTCPriceDeltaPct verifies the signed delta used for the FE hint.
+func TestOTCPriceDeltaPct(t *testing.T) {
+	cases := []struct {
+		unit, want string
+		approx     float64
+	}{
+		{"101", "100", 1},
+		{"95", "100", -5},
+		{"100", "100", 0},
+		{"110", "100", 10},
+	}
+	for _, c := range cases {
+		got := priceDeltaPct(money.MustParse(c.unit), money.MustParse(c.want))
+		if diff := got - c.approx; diff > 0.0001 || diff < -0.0001 {
+			t.Fatalf("priceDeltaPct(%s,%s) = %v, want ~%v", c.unit, c.want, got, c.approx)
+		}
+	}
+}
+
+// TestSortOTCSuggestions confirms cheapest-first ordering with the
+// larger-inventory tie-break.
+func TestSortOTCSuggestions(t *testing.T) {
+	in := []*OTCMatchSuggestion{
+		{UnitPrice: "102", AvailableCount: 10},
+		{UnitPrice: "100", AvailableCount: 5},
+		{UnitPrice: "100", AvailableCount: 20},
+		{UnitPrice: "101", AvailableCount: 1},
+	}
+	sortOTCSuggestions(in)
+	wantPrices := []string{"100", "100", "101", "102"}
+	for i, w := range wantPrices {
+		if in[i].UnitPrice != w {
+			t.Fatalf("pos %d: got %s want %s", i, in[i].UnitPrice, w)
+		}
+	}
+	// Tie at 100: larger inventory (20) sorts before 5.
+	if in[0].AvailableCount != 20 {
+		t.Fatalf("tie-break failed: got avail=%d want 20", in[0].AvailableCount)
+	}
+}
 
 func TestAssertSameKindCounterparties(t *testing.T) {
 	cases := []struct {
