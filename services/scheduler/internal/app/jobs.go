@@ -59,6 +59,7 @@ func (a *App) buildJobs() []job {
 			a.daily("trading-actuary-reset", 23, 59, a.tradingActuaryReset),
 			a.monthlyEnd("trading-tax", 23, 55, a.tradingTax),
 			a.daily("trading-fund-perf", 23, 50, a.tradingFundPerf),
+			a.interval("trading-price-alerts", config.Duration("PRICE_ALERT_TICK", time.Minute), true, a.tradingPriceAlerts),
 		)
 	}
 	if a.exchange != nil {
@@ -282,6 +283,17 @@ func (a *App) tradingFundPerf(ctx context.Context) error {
 		return err
 	}
 	a.log.Info("fund performance snapshot ran", "funds", r.GetFunds())
+	return nil
+}
+
+func (a *App) tradingPriceAlerts(ctx context.Context) error {
+	r, err := a.trading.RunPriceAlertSweep(ctx, &tradingpb.RunPriceAlertSweepRequest{})
+	if err != nil {
+		return err
+	}
+	if r.GetTriggered() > 0 {
+		a.log.Info("price alert sweep ran", "triggered", r.GetTriggered())
+	}
 	return nil
 }
 

@@ -79,6 +79,10 @@ const (
 	TradingService_RunMarketDataRefresh_FullMethodName       = "/banka.trading.v1.TradingService/RunMarketDataRefresh"
 	TradingService_RunStockHistoryBackfill_FullMethodName    = "/banka.trading.v1.TradingService/RunStockHistoryBackfill"
 	TradingService_RunFundPerformanceSnapshot_FullMethodName = "/banka.trading.v1.TradingService/RunFundPerformanceSnapshot"
+	TradingService_CreatePriceAlert_FullMethodName           = "/banka.trading.v1.TradingService/CreatePriceAlert"
+	TradingService_ListPriceAlerts_FullMethodName            = "/banka.trading.v1.TradingService/ListPriceAlerts"
+	TradingService_DeletePriceAlert_FullMethodName           = "/banka.trading.v1.TradingService/DeletePriceAlert"
+	TradingService_RunPriceAlertSweep_FullMethodName         = "/banka.trading.v1.TradingService/RunPriceAlertSweep"
 )
 
 // TradingServiceClient is the client API for TradingService service.
@@ -237,6 +241,16 @@ type TradingServiceClient interface {
 	// RunFundPerformanceSnapshot writes one perf snapshot per active fund.
 	// Admin-only.
 	RunFundPerformanceSnapshot(ctx context.Context, in *RunFundPerformanceSnapshotRequest, opts ...grpc.CallOption) (*RunFundPerformanceSnapshotResponse, error)
+	// CreatePriceAlert registers a one-shot price alert for the caller.
+	CreatePriceAlert(ctx context.Context, in *CreatePriceAlertRequest, opts ...grpc.CallOption) (*PriceAlert, error)
+	// ListPriceAlerts returns the caller's own alerts (active + past).
+	ListPriceAlerts(ctx context.Context, in *ListPriceAlertsRequest, opts ...grpc.CallOption) (*ListPriceAlertsResponse, error)
+	// DeletePriceAlert deactivates one of the caller's alerts (owner-scoped).
+	DeletePriceAlert(ctx context.Context, in *DeletePriceAlertRequest, opts ...grpc.CallOption) (*DeletePriceAlertResponse, error)
+	// RunPriceAlertSweep checks every active alert against its security's
+	// current price, firing + deactivating crossings. Internal-only —
+	// driven by the scheduler on a fast cadence.
+	RunPriceAlertSweep(ctx context.Context, in *RunPriceAlertSweepRequest, opts ...grpc.CallOption) (*RunPriceAlertSweepResponse, error)
 }
 
 type tradingServiceClient struct {
@@ -837,6 +851,46 @@ func (c *tradingServiceClient) RunFundPerformanceSnapshot(ctx context.Context, i
 	return out, nil
 }
 
+func (c *tradingServiceClient) CreatePriceAlert(ctx context.Context, in *CreatePriceAlertRequest, opts ...grpc.CallOption) (*PriceAlert, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(PriceAlert)
+	err := c.cc.Invoke(ctx, TradingService_CreatePriceAlert_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *tradingServiceClient) ListPriceAlerts(ctx context.Context, in *ListPriceAlertsRequest, opts ...grpc.CallOption) (*ListPriceAlertsResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(ListPriceAlertsResponse)
+	err := c.cc.Invoke(ctx, TradingService_ListPriceAlerts_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *tradingServiceClient) DeletePriceAlert(ctx context.Context, in *DeletePriceAlertRequest, opts ...grpc.CallOption) (*DeletePriceAlertResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(DeletePriceAlertResponse)
+	err := c.cc.Invoke(ctx, TradingService_DeletePriceAlert_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *tradingServiceClient) RunPriceAlertSweep(ctx context.Context, in *RunPriceAlertSweepRequest, opts ...grpc.CallOption) (*RunPriceAlertSweepResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(RunPriceAlertSweepResponse)
+	err := c.cc.Invoke(ctx, TradingService_RunPriceAlertSweep_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
 // TradingServiceServer is the server API for TradingService service.
 // All implementations should embed UnimplementedTradingServiceServer
 // for forward compatibility.
@@ -993,6 +1047,16 @@ type TradingServiceServer interface {
 	// RunFundPerformanceSnapshot writes one perf snapshot per active fund.
 	// Admin-only.
 	RunFundPerformanceSnapshot(context.Context, *RunFundPerformanceSnapshotRequest) (*RunFundPerformanceSnapshotResponse, error)
+	// CreatePriceAlert registers a one-shot price alert for the caller.
+	CreatePriceAlert(context.Context, *CreatePriceAlertRequest) (*PriceAlert, error)
+	// ListPriceAlerts returns the caller's own alerts (active + past).
+	ListPriceAlerts(context.Context, *ListPriceAlertsRequest) (*ListPriceAlertsResponse, error)
+	// DeletePriceAlert deactivates one of the caller's alerts (owner-scoped).
+	DeletePriceAlert(context.Context, *DeletePriceAlertRequest) (*DeletePriceAlertResponse, error)
+	// RunPriceAlertSweep checks every active alert against its security's
+	// current price, firing + deactivating crossings. Internal-only —
+	// driven by the scheduler on a fast cadence.
+	RunPriceAlertSweep(context.Context, *RunPriceAlertSweepRequest) (*RunPriceAlertSweepResponse, error)
 }
 
 // UnimplementedTradingServiceServer should be embedded to have
@@ -1178,6 +1242,18 @@ func (UnimplementedTradingServiceServer) RunStockHistoryBackfill(context.Context
 }
 func (UnimplementedTradingServiceServer) RunFundPerformanceSnapshot(context.Context, *RunFundPerformanceSnapshotRequest) (*RunFundPerformanceSnapshotResponse, error) {
 	return nil, status.Error(codes.Unimplemented, "method RunFundPerformanceSnapshot not implemented")
+}
+func (UnimplementedTradingServiceServer) CreatePriceAlert(context.Context, *CreatePriceAlertRequest) (*PriceAlert, error) {
+	return nil, status.Error(codes.Unimplemented, "method CreatePriceAlert not implemented")
+}
+func (UnimplementedTradingServiceServer) ListPriceAlerts(context.Context, *ListPriceAlertsRequest) (*ListPriceAlertsResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method ListPriceAlerts not implemented")
+}
+func (UnimplementedTradingServiceServer) DeletePriceAlert(context.Context, *DeletePriceAlertRequest) (*DeletePriceAlertResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method DeletePriceAlert not implemented")
+}
+func (UnimplementedTradingServiceServer) RunPriceAlertSweep(context.Context, *RunPriceAlertSweepRequest) (*RunPriceAlertSweepResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method RunPriceAlertSweep not implemented")
 }
 func (UnimplementedTradingServiceServer) testEmbeddedByValue() {}
 
@@ -2261,6 +2337,78 @@ func _TradingService_RunFundPerformanceSnapshot_Handler(srv interface{}, ctx con
 	return interceptor(ctx, in, info, handler)
 }
 
+func _TradingService_CreatePriceAlert_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(CreatePriceAlertRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(TradingServiceServer).CreatePriceAlert(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: TradingService_CreatePriceAlert_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(TradingServiceServer).CreatePriceAlert(ctx, req.(*CreatePriceAlertRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _TradingService_ListPriceAlerts_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(ListPriceAlertsRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(TradingServiceServer).ListPriceAlerts(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: TradingService_ListPriceAlerts_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(TradingServiceServer).ListPriceAlerts(ctx, req.(*ListPriceAlertsRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _TradingService_DeletePriceAlert_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(DeletePriceAlertRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(TradingServiceServer).DeletePriceAlert(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: TradingService_DeletePriceAlert_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(TradingServiceServer).DeletePriceAlert(ctx, req.(*DeletePriceAlertRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _TradingService_RunPriceAlertSweep_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(RunPriceAlertSweepRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(TradingServiceServer).RunPriceAlertSweep(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: TradingService_RunPriceAlertSweep_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(TradingServiceServer).RunPriceAlertSweep(ctx, req.(*RunPriceAlertSweepRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
 // TradingService_ServiceDesc is the grpc.ServiceDesc for TradingService service.
 // It's only intended for direct use with grpc.RegisterService,
 // and not to be introspected or modified (even as a copy)
@@ -2503,6 +2651,22 @@ var TradingService_ServiceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "RunFundPerformanceSnapshot",
 			Handler:    _TradingService_RunFundPerformanceSnapshot_Handler,
+		},
+		{
+			MethodName: "CreatePriceAlert",
+			Handler:    _TradingService_CreatePriceAlert_Handler,
+		},
+		{
+			MethodName: "ListPriceAlerts",
+			Handler:    _TradingService_ListPriceAlerts_Handler,
+		},
+		{
+			MethodName: "DeletePriceAlert",
+			Handler:    _TradingService_DeletePriceAlert_Handler,
+		},
+		{
+			MethodName: "RunPriceAlertSweep",
+			Handler:    _TradingService_RunPriceAlertSweep_Handler,
 		},
 	},
 	Streams:  []grpc.StreamDesc{},

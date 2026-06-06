@@ -4392,6 +4392,91 @@
         ]
       }
     },
+    "/api/v1/price-alerts": {
+      "get": {
+        "summary": "ListPriceAlerts returns the caller's own alerts (active + past).",
+        "operationId": "TradingService_ListPriceAlerts",
+        "responses": {
+          "200": {
+            "description": "A successful response.",
+            "schema": {
+              "$ref": "#/definitions/v1ListPriceAlertsResponse"
+            }
+          },
+          "default": {
+            "description": "An unexpected error response.",
+            "schema": {
+              "$ref": "#/definitions/rpcStatus"
+            }
+          }
+        },
+        "tags": [
+          "TradingService"
+        ]
+      },
+      "post": {
+        "summary": "CreatePriceAlert registers a one-shot price alert for the caller.",
+        "operationId": "TradingService_CreatePriceAlert",
+        "responses": {
+          "200": {
+            "description": "A successful response.",
+            "schema": {
+              "$ref": "#/definitions/v1PriceAlert"
+            }
+          },
+          "default": {
+            "description": "An unexpected error response.",
+            "schema": {
+              "$ref": "#/definitions/rpcStatus"
+            }
+          }
+        },
+        "parameters": [
+          {
+            "name": "body",
+            "in": "body",
+            "required": true,
+            "schema": {
+              "$ref": "#/definitions/v1CreatePriceAlertRequest"
+            }
+          }
+        ],
+        "tags": [
+          "TradingService"
+        ]
+      }
+    },
+    "/api/v1/price-alerts/{id}": {
+      "delete": {
+        "summary": "DeletePriceAlert deactivates one of the caller's alerts (owner-scoped).",
+        "operationId": "TradingService_DeletePriceAlert",
+        "responses": {
+          "200": {
+            "description": "A successful response.",
+            "schema": {
+              "$ref": "#/definitions/v1DeletePriceAlertResponse"
+            }
+          },
+          "default": {
+            "description": "An unexpected error response.",
+            "schema": {
+              "$ref": "#/definitions/rpcStatus"
+            }
+          }
+        },
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "type": "string"
+          }
+        ],
+        "tags": [
+          "TradingService"
+        ]
+      }
+    },
     "/api/v1/profit/actuaries": {
       "get": {
         "operationId": "TradingService_ListActuaryPerformances",
@@ -6351,6 +6436,20 @@
         }
       }
     },
+    "v1CreatePriceAlertRequest": {
+      "type": "object",
+      "properties": {
+        "securityId": {
+          "type": "string"
+        },
+        "threshold": {
+          "type": "string"
+        },
+        "condition": {
+          "$ref": "#/definitions/v1PriceAlertCondition"
+        }
+      }
+    },
     "v1CreateTransferRequest": {
       "type": "object",
       "properties": {
@@ -6417,6 +6516,9 @@
           "type": "string"
         }
       }
+    },
+    "v1DeletePriceAlertResponse": {
+      "type": "object"
     },
     "v1Direction": {
       "type": "string",
@@ -7801,6 +7903,18 @@
         }
       }
     },
+    "v1ListPriceAlertsResponse": {
+      "type": "object",
+      "properties": {
+        "alerts": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "$ref": "#/definitions/v1PriceAlert"
+          }
+        }
+      }
+    },
     "v1ListPublicHoldingsResponse": {
       "type": "object",
       "properties": {
@@ -8674,6 +8788,51 @@
           "$ref": "#/definitions/v1TransactionStatus"
         }
       }
+    },
+    "v1PriceAlert": {
+      "type": "object",
+      "properties": {
+        "id": {
+          "type": "string"
+        },
+        "userId": {
+          "type": "string"
+        },
+        "userKind": {
+          "$ref": "#/definitions/bankaTradingV1UserKind"
+        },
+        "securityId": {
+          "type": "string"
+        },
+        "threshold": {
+          "type": "string",
+          "title": "decimal, in the listing currency"
+        },
+        "condition": {
+          "$ref": "#/definitions/v1PriceAlertCondition"
+        },
+        "isActive": {
+          "type": "boolean"
+        },
+        "createdAt": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "triggeredAt": {
+          "type": "string",
+          "format": "date-time"
+        }
+      }
+    },
+    "v1PriceAlertCondition": {
+      "type": "string",
+      "enum": [
+        "PRICE_ALERT_CONDITION_UNSPECIFIED",
+        "PRICE_ALERT_CONDITION_ABOVE",
+        "PRICE_ALERT_CONDITION_BELOW"
+      ],
+      "default": "PRICE_ALERT_CONDITION_UNSPECIFIED",
+      "description": "PriceAlertCondition discriminates the threshold-crossing direction.\n\n - PRICE_ALERT_CONDITION_ABOVE: ABOVE fires when the current price rises to or above the threshold.\n - PRICE_ALERT_CONDITION_BELOW: BELOW fires when the current price falls to or below the threshold."
     },
     "v1PublicHoldingItem": {
       "type": "object",

@@ -481,6 +481,38 @@ service TradingService {
       body: "*"
     };
   }
+
+  // -----------------------------------------------------------------
+  // Price alerts (todoSpec C3 S26-S29).
+  //
+  // A user sets a one-shot threshold on a security; when the sweep
+  // observes the price crossing it (ABOVE: price >= threshold, BELOW:
+  // price <= threshold) it sends one notification and deactivates the
+  // alert.
+  // -----------------------------------------------------------------
+
+  // CreatePriceAlert registers a one-shot price alert for the caller.
+  rpc CreatePriceAlert(CreatePriceAlertRequest) returns (PriceAlert) {
+    option (google.api.http) = {
+      post: "/api/v1/price-alerts"
+      body: "*"
+    };
+  }
+
+  // ListPriceAlerts returns the caller's own alerts (active + past).
+  rpc ListPriceAlerts(ListPriceAlertsRequest) returns (ListPriceAlertsResponse) {
+    option (google.api.http) = {get: "/api/v1/price-alerts"};
+  }
+
+  // DeletePriceAlert deactivates one of the caller's alerts (owner-scoped).
+  rpc DeletePriceAlert(DeletePriceAlertRequest) returns (DeletePriceAlertResponse) {
+    option (google.api.http) = {delete: "/api/v1/price-alerts/{id}"};
+  }
+
+  // RunPriceAlertSweep checks every active alert against its security's
+  // current price, firing + deactivating crossings. Internal-only —
+  // driven by the scheduler on a fast cadence.
+  rpc RunPriceAlertSweep(RunPriceAlertSweepRequest) returns (RunPriceAlertSweepResponse);
 }
 
 // =====================================================================
@@ -1727,4 +1759,56 @@ message RunFundPerformanceSnapshotRequest {}
 
 message RunFundPerformanceSnapshotResponse {
   int32 funds = 1;
+}
+
+// =====================================================================
+// Price alerts (todoSpec C3 S26-S29)
+// =====================================================================
+
+// PriceAlertCondition discriminates the threshold-crossing direction.
+enum PriceAlertCondition {
+  PRICE_ALERT_CONDITION_UNSPECIFIED = 0;
+  // ABOVE fires when the current price rises to or above the threshold.
+  PRICE_ALERT_CONDITION_ABOVE = 1;
+  // BELOW fires when the current price falls to or below the threshold.
+  PRICE_ALERT_CONDITION_BELOW = 2;
+}
+
+message PriceAlert {
+  string id = 1;
+  string user_id = 2;
+  UserKind user_kind = 3;
+  string security_id = 4;
+  string threshold = 5; // decimal, in the listing currency
+  PriceAlertCondition condition = 6;
+  bool is_active = 7;
+  google.protobuf.Timestamp created_at = 8;
+  google.protobuf.Timestamp triggered_at = 9;
+}
+
+message CreatePriceAlertRequest {
+  string security_id = 1 [(buf.validate.field).string.uuid = true];
+  string threshold = 2 [(buf.validate.field).string.min_len = 1];
+  PriceAlertCondition condition = 3 [(buf.validate.field).enum = {
+    defined_only: true
+    not_in: [0]
+  }];
+}
+
+message ListPriceAlertsRequest {}
+
+message ListPriceAlertsResponse {
+  repeated PriceAlert alerts = 1;
+}
+
+message DeletePriceAlertRequest {
+  string id = 1 [(buf.validate.field).string.uuid = true];
+}
+
+message DeletePriceAlertResponse {}
+
+message RunPriceAlertSweepRequest {}
+
+message RunPriceAlertSweepResponse {
+  int32 triggered = 1;
 }

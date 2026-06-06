@@ -674,3 +674,38 @@ type RealizedGain struct {
 	TaxedAt      *time.Time
 	TaxOpID      string
 }
+
+// PriceAlertCondition discriminates the threshold-crossing direction
+// (todoSpec C3 S26-S29). Values match the price_alerts.condition check
+// constraint.
+type PriceAlertCondition string
+
+const (
+	// PriceAlertAbove fires when the security's current price rises to or
+	// above the threshold (price >= threshold).
+	PriceAlertAbove PriceAlertCondition = "ABOVE"
+	// PriceAlertBelow fires when the security's current price falls to or
+	// below the threshold (price <= threshold).
+	PriceAlertBelow PriceAlertCondition = "BELOW"
+)
+
+// Valid reports whether c is a recognised condition.
+func (c PriceAlertCondition) Valid() bool {
+	return c == PriceAlertAbove || c == PriceAlertBelow
+}
+
+// PriceAlert is a one-shot price-threshold notification on a security.
+// When the sweep observes the crossing it sends one notification and
+// flips IsActive to false (TriggeredAt stamped). Threshold is a decimal
+// string in the security's listing currency.
+type PriceAlert struct {
+	ID          string
+	UserID      string
+	UserKind    UserKind
+	SecurityID  string
+	Threshold   string
+	Condition   PriceAlertCondition
+	IsActive    bool
+	CreatedAt   time.Time
+	TriggeredAt *time.Time
+}
