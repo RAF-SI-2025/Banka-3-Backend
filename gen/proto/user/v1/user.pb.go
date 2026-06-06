@@ -2359,6 +2359,396 @@ func (x *ListVerificationHistoryResponse) GetEvents() []*VerificationEvent {
 	return nil
 }
 
+// AuditEntry is one recorded administrative action.
+type AuditEntry struct {
+	state protoimpl.MessageState `protogen:"open.v1"`
+	Id    string                 `protobuf:"bytes,1,opt,name=id,proto3" json:"id,omitempty"`
+	// action is a stable machine key, e.g. "employee.create",
+	// "employee.update", "permission.change", "limit.change",
+	// "order.approve", "order.decline", "tax.run".
+	Action    string `protobuf:"bytes,2,opt,name=action,proto3" json:"action,omitempty"`
+	ActorId   string `protobuf:"bytes,3,opt,name=actor_id,json=actorId,proto3" json:"actor_id,omitempty"`
+	ActorKind string `protobuf:"bytes,4,opt,name=actor_kind,json=actorKind,proto3" json:"actor_kind,omitempty"`
+	// actor_name is denormalized at write time for display + name filter.
+	ActorName string `protobuf:"bytes,5,opt,name=actor_name,json=actorName,proto3" json:"actor_name,omitempty"`
+	// target_id/target_label identify the affected entity (employee id,
+	// order id, …) — text, not always a UUID.
+	TargetId    string `protobuf:"bytes,6,opt,name=target_id,json=targetId,proto3" json:"target_id,omitempty"`
+	TargetLabel string `protobuf:"bytes,7,opt,name=target_label,json=targetLabel,proto3" json:"target_label,omitempty"`
+	OldValue    string `protobuf:"bytes,8,opt,name=old_value,json=oldValue,proto3" json:"old_value,omitempty"`
+	NewValue    string `protobuf:"bytes,9,opt,name=new_value,json=newValue,proto3" json:"new_value,omitempty"`
+	// note is a freeform human-readable summary line.
+	Note          string                 `protobuf:"bytes,10,opt,name=note,proto3" json:"note,omitempty"`
+	CreatedAt     *timestamppb.Timestamp `protobuf:"bytes,11,opt,name=created_at,json=createdAt,proto3" json:"created_at,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *AuditEntry) Reset() {
+	*x = AuditEntry{}
+	mi := &file_user_v1_user_proto_msgTypes[31]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *AuditEntry) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*AuditEntry) ProtoMessage() {}
+
+func (x *AuditEntry) ProtoReflect() protoreflect.Message {
+	mi := &file_user_v1_user_proto_msgTypes[31]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use AuditEntry.ProtoReflect.Descriptor instead.
+func (*AuditEntry) Descriptor() ([]byte, []int) {
+	return file_user_v1_user_proto_rawDescGZIP(), []int{31}
+}
+
+func (x *AuditEntry) GetId() string {
+	if x != nil {
+		return x.Id
+	}
+	return ""
+}
+
+func (x *AuditEntry) GetAction() string {
+	if x != nil {
+		return x.Action
+	}
+	return ""
+}
+
+func (x *AuditEntry) GetActorId() string {
+	if x != nil {
+		return x.ActorId
+	}
+	return ""
+}
+
+func (x *AuditEntry) GetActorKind() string {
+	if x != nil {
+		return x.ActorKind
+	}
+	return ""
+}
+
+func (x *AuditEntry) GetActorName() string {
+	if x != nil {
+		return x.ActorName
+	}
+	return ""
+}
+
+func (x *AuditEntry) GetTargetId() string {
+	if x != nil {
+		return x.TargetId
+	}
+	return ""
+}
+
+func (x *AuditEntry) GetTargetLabel() string {
+	if x != nil {
+		return x.TargetLabel
+	}
+	return ""
+}
+
+func (x *AuditEntry) GetOldValue() string {
+	if x != nil {
+		return x.OldValue
+	}
+	return ""
+}
+
+func (x *AuditEntry) GetNewValue() string {
+	if x != nil {
+		return x.NewValue
+	}
+	return ""
+}
+
+func (x *AuditEntry) GetNote() string {
+	if x != nil {
+		return x.Note
+	}
+	return ""
+}
+
+func (x *AuditEntry) GetCreatedAt() *timestamppb.Timestamp {
+	if x != nil {
+		return x.CreatedAt
+	}
+	return nil
+}
+
+type RecordAuditEntryRequest struct {
+	state  protoimpl.MessageState `protogen:"open.v1"`
+	Action string                 `protobuf:"bytes,1,opt,name=action,proto3" json:"action,omitempty"`
+	// actor_id/actor_kind may be empty — the server falls back to the
+	// calling principal's identity.
+	ActorId       string `protobuf:"bytes,2,opt,name=actor_id,json=actorId,proto3" json:"actor_id,omitempty"`
+	ActorKind     string `protobuf:"bytes,3,opt,name=actor_kind,json=actorKind,proto3" json:"actor_kind,omitempty"`
+	TargetId      string `protobuf:"bytes,4,opt,name=target_id,json=targetId,proto3" json:"target_id,omitempty"`
+	TargetLabel   string `protobuf:"bytes,5,opt,name=target_label,json=targetLabel,proto3" json:"target_label,omitempty"`
+	OldValue      string `protobuf:"bytes,6,opt,name=old_value,json=oldValue,proto3" json:"old_value,omitempty"`
+	NewValue      string `protobuf:"bytes,7,opt,name=new_value,json=newValue,proto3" json:"new_value,omitempty"`
+	Note          string `protobuf:"bytes,8,opt,name=note,proto3" json:"note,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *RecordAuditEntryRequest) Reset() {
+	*x = RecordAuditEntryRequest{}
+	mi := &file_user_v1_user_proto_msgTypes[32]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *RecordAuditEntryRequest) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*RecordAuditEntryRequest) ProtoMessage() {}
+
+func (x *RecordAuditEntryRequest) ProtoReflect() protoreflect.Message {
+	mi := &file_user_v1_user_proto_msgTypes[32]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use RecordAuditEntryRequest.ProtoReflect.Descriptor instead.
+func (*RecordAuditEntryRequest) Descriptor() ([]byte, []int) {
+	return file_user_v1_user_proto_rawDescGZIP(), []int{32}
+}
+
+func (x *RecordAuditEntryRequest) GetAction() string {
+	if x != nil {
+		return x.Action
+	}
+	return ""
+}
+
+func (x *RecordAuditEntryRequest) GetActorId() string {
+	if x != nil {
+		return x.ActorId
+	}
+	return ""
+}
+
+func (x *RecordAuditEntryRequest) GetActorKind() string {
+	if x != nil {
+		return x.ActorKind
+	}
+	return ""
+}
+
+func (x *RecordAuditEntryRequest) GetTargetId() string {
+	if x != nil {
+		return x.TargetId
+	}
+	return ""
+}
+
+func (x *RecordAuditEntryRequest) GetTargetLabel() string {
+	if x != nil {
+		return x.TargetLabel
+	}
+	return ""
+}
+
+func (x *RecordAuditEntryRequest) GetOldValue() string {
+	if x != nil {
+		return x.OldValue
+	}
+	return ""
+}
+
+func (x *RecordAuditEntryRequest) GetNewValue() string {
+	if x != nil {
+		return x.NewValue
+	}
+	return ""
+}
+
+func (x *RecordAuditEntryRequest) GetNote() string {
+	if x != nil {
+		return x.Note
+	}
+	return ""
+}
+
+type ListAuditLogRequest struct {
+	state protoimpl.MessageState `protogen:"open.v1"`
+	// action filters to an exact action key (optional).
+	Action string `protobuf:"bytes,1,opt,name=action,proto3" json:"action,omitempty"`
+	// actor matches actor_id exactly OR actor_name (case-insensitive
+	// substring) — optional.
+	Actor string `protobuf:"bytes,2,opt,name=actor,proto3" json:"actor,omitempty"`
+	// from/to are inclusive RFC3339 bounds (optional, either may be set).
+	From          string `protobuf:"bytes,3,opt,name=from,proto3" json:"from,omitempty"`
+	To            string `protobuf:"bytes,4,opt,name=to,proto3" json:"to,omitempty"`
+	Page          int32  `protobuf:"varint,5,opt,name=page,proto3" json:"page,omitempty"`
+	PageSize      int32  `protobuf:"varint,6,opt,name=page_size,json=pageSize,proto3" json:"page_size,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *ListAuditLogRequest) Reset() {
+	*x = ListAuditLogRequest{}
+	mi := &file_user_v1_user_proto_msgTypes[33]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *ListAuditLogRequest) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*ListAuditLogRequest) ProtoMessage() {}
+
+func (x *ListAuditLogRequest) ProtoReflect() protoreflect.Message {
+	mi := &file_user_v1_user_proto_msgTypes[33]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use ListAuditLogRequest.ProtoReflect.Descriptor instead.
+func (*ListAuditLogRequest) Descriptor() ([]byte, []int) {
+	return file_user_v1_user_proto_rawDescGZIP(), []int{33}
+}
+
+func (x *ListAuditLogRequest) GetAction() string {
+	if x != nil {
+		return x.Action
+	}
+	return ""
+}
+
+func (x *ListAuditLogRequest) GetActor() string {
+	if x != nil {
+		return x.Actor
+	}
+	return ""
+}
+
+func (x *ListAuditLogRequest) GetFrom() string {
+	if x != nil {
+		return x.From
+	}
+	return ""
+}
+
+func (x *ListAuditLogRequest) GetTo() string {
+	if x != nil {
+		return x.To
+	}
+	return ""
+}
+
+func (x *ListAuditLogRequest) GetPage() int32 {
+	if x != nil {
+		return x.Page
+	}
+	return 0
+}
+
+func (x *ListAuditLogRequest) GetPageSize() int32 {
+	if x != nil {
+		return x.PageSize
+	}
+	return 0
+}
+
+type ListAuditLogResponse struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	Items         []*AuditEntry          `protobuf:"bytes,1,rep,name=items,proto3" json:"items,omitempty"`
+	Page          int32                  `protobuf:"varint,2,opt,name=page,proto3" json:"page,omitempty"`
+	PageSize      int32                  `protobuf:"varint,3,opt,name=page_size,json=pageSize,proto3" json:"page_size,omitempty"`
+	Total         int64                  `protobuf:"varint,4,opt,name=total,proto3" json:"total,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *ListAuditLogResponse) Reset() {
+	*x = ListAuditLogResponse{}
+	mi := &file_user_v1_user_proto_msgTypes[34]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *ListAuditLogResponse) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*ListAuditLogResponse) ProtoMessage() {}
+
+func (x *ListAuditLogResponse) ProtoReflect() protoreflect.Message {
+	mi := &file_user_v1_user_proto_msgTypes[34]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use ListAuditLogResponse.ProtoReflect.Descriptor instead.
+func (*ListAuditLogResponse) Descriptor() ([]byte, []int) {
+	return file_user_v1_user_proto_rawDescGZIP(), []int{34}
+}
+
+func (x *ListAuditLogResponse) GetItems() []*AuditEntry {
+	if x != nil {
+		return x.Items
+	}
+	return nil
+}
+
+func (x *ListAuditLogResponse) GetPage() int32 {
+	if x != nil {
+		return x.Page
+	}
+	return 0
+}
+
+func (x *ListAuditLogResponse) GetPageSize() int32 {
+	if x != nil {
+		return x.PageSize
+	}
+	return 0
+}
+
+func (x *ListAuditLogResponse) GetTotal() int64 {
+	if x != nil {
+		return x.Total
+	}
+	return 0
+}
+
 var File_user_v1_user_proto protoreflect.FileDescriptor
 
 const file_user_v1_user_proto_rawDesc = "" +
@@ -2570,7 +2960,47 @@ const file_user_v1_user_proto_rawDesc = "" +
 	"\vresolved_at\x18\x05 \x01(\v2\x1a.google.protobuf.TimestampR\n" +
 	"resolvedAt\"[\n" +
 	"\x1fListVerificationHistoryResponse\x128\n" +
-	"\x06events\x18\x01 \x03(\v2 .banka.user.v1.VerificationEventR\x06events*S\n" +
+	"\x06events\x18\x01 \x03(\v2 .banka.user.v1.VerificationEventR\x06events\"\xd6\x02\n" +
+	"\n" +
+	"AuditEntry\x12\x0e\n" +
+	"\x02id\x18\x01 \x01(\tR\x02id\x12\x16\n" +
+	"\x06action\x18\x02 \x01(\tR\x06action\x12\x19\n" +
+	"\bactor_id\x18\x03 \x01(\tR\aactorId\x12\x1d\n" +
+	"\n" +
+	"actor_kind\x18\x04 \x01(\tR\tactorKind\x12\x1d\n" +
+	"\n" +
+	"actor_name\x18\x05 \x01(\tR\tactorName\x12\x1b\n" +
+	"\ttarget_id\x18\x06 \x01(\tR\btargetId\x12!\n" +
+	"\ftarget_label\x18\a \x01(\tR\vtargetLabel\x12\x1b\n" +
+	"\told_value\x18\b \x01(\tR\boldValue\x12\x1b\n" +
+	"\tnew_value\x18\t \x01(\tR\bnewValue\x12\x12\n" +
+	"\x04note\x18\n" +
+	" \x01(\tR\x04note\x129\n" +
+	"\n" +
+	"created_at\x18\v \x01(\v2\x1a.google.protobuf.TimestampR\tcreatedAt\"\x82\x02\n" +
+	"\x17RecordAuditEntryRequest\x12\x1f\n" +
+	"\x06action\x18\x01 \x01(\tB\a\xbaH\x04r\x02\x10\x01R\x06action\x12\x19\n" +
+	"\bactor_id\x18\x02 \x01(\tR\aactorId\x12\x1d\n" +
+	"\n" +
+	"actor_kind\x18\x03 \x01(\tR\tactorKind\x12\x1b\n" +
+	"\ttarget_id\x18\x04 \x01(\tR\btargetId\x12!\n" +
+	"\ftarget_label\x18\x05 \x01(\tR\vtargetLabel\x12\x1b\n" +
+	"\told_value\x18\x06 \x01(\tR\boldValue\x12\x1b\n" +
+	"\tnew_value\x18\a \x01(\tR\bnewValue\x12\x12\n" +
+	"\x04note\x18\b \x01(\tR\x04note\"\xad\x01\n" +
+	"\x13ListAuditLogRequest\x12\x16\n" +
+	"\x06action\x18\x01 \x01(\tR\x06action\x12\x14\n" +
+	"\x05actor\x18\x02 \x01(\tR\x05actor\x12\x12\n" +
+	"\x04from\x18\x03 \x01(\tR\x04from\x12\x0e\n" +
+	"\x02to\x18\x04 \x01(\tR\x02to\x12\x1b\n" +
+	"\x04page\x18\x05 \x01(\x05B\a\xbaH\x04\x1a\x02(\x00R\x04page\x12'\n" +
+	"\tpage_size\x18\x06 \x01(\x05B\n" +
+	"\xbaH\a\x1a\x05\x18\xc8\x01(\x00R\bpageSize\"\x8e\x01\n" +
+	"\x14ListAuditLogResponse\x12/\n" +
+	"\x05items\x18\x01 \x03(\v2\x19.banka.user.v1.AuditEntryR\x05items\x12\x12\n" +
+	"\x04page\x18\x02 \x01(\x05R\x04page\x12\x1b\n" +
+	"\tpage_size\x18\x03 \x01(\x05R\bpageSize\x12\x14\n" +
+	"\x05total\x18\x04 \x01(\x03R\x05total*S\n" +
 	"\bUserKind\x12\x19\n" +
 	"\x15USER_KIND_UNSPECIFIED\x10\x00\x12\x16\n" +
 	"\x12USER_KIND_EMPLOYEE\x10\x01\x12\x14\n" +
@@ -2579,7 +3009,7 @@ const file_user_v1_user_proto_rawDesc = "" +
 	"\x12GENDER_UNSPECIFIED\x10\x00\x12\x0f\n" +
 	"\vGENDER_MALE\x10\x01\x12\x11\n" +
 	"\rGENDER_FEMALE\x10\x02\x12\x10\n" +
-	"\fGENDER_OTHER\x10\x032\xbc\x13\n" +
+	"\fGENDER_OTHER\x10\x032\x84\x15\n" +
 	"\vUserService\x12a\n" +
 	"\x05Login\x12\x1b.banka.user.v1.LoginRequest\x1a\x1c.banka.user.v1.LoginResponse\"\x1d\x82\xd3\xe4\x93\x02\x17:\x01*\"\x12/api/v1/auth/login\x12i\n" +
 	"\aRefresh\x12\x1d.banka.user.v1.RefreshRequest\x1a\x1e.banka.user.v1.RefreshResponse\"\x1f\x82\xd3\xe4\x93\x02\x19:\x01*\"\x14/api/v1/auth/refresh\x12^\n" +
@@ -2602,7 +3032,9 @@ const file_user_v1_user_proto_rawDesc = "" +
 	"\x11GetSessionVersion\x12'.banka.user.v1.GetSessionVersionRequest\x1a(.banka.user.v1.GetSessionVersionResponse\x12`\n" +
 	"\x17RecordVerificationEvent\x12-.banka.user.v1.RecordVerificationEventRequest\x1a\x16.google.protobuf.Empty\x12b\n" +
 	"\x18ResolveVerificationEvent\x12..banka.user.v1.ResolveVerificationEventRequest\x1a\x16.google.protobuf.Empty\x12x\n" +
-	"\x17ListVerificationHistory\x12-.banka.user.v1.ListVerificationHistoryRequest\x1a..banka.user.v1.ListVerificationHistoryResponseB\xb5\x01\n" +
+	"\x17ListVerificationHistory\x12-.banka.user.v1.ListVerificationHistoryRequest\x1a..banka.user.v1.ListVerificationHistoryResponse\x12R\n" +
+	"\x10RecordAuditEntry\x12&.banka.user.v1.RecordAuditEntryRequest\x1a\x16.google.protobuf.Empty\x12r\n" +
+	"\fListAuditLog\x12\".banka.user.v1.ListAuditLogRequest\x1a#.banka.user.v1.ListAuditLogResponse\"\x19\x82\xd3\xe4\x93\x02\x13\x12\x11/api/v1/audit-logB\xb5\x01\n" +
 	"\x11com.banka.user.v1B\tUserProtoP\x01Z?github.com/RAF-SI-2025/Banka-3-Backend/gen/proto/user/v1;userv1\xa2\x02\x03BUX\xaa\x02\rBanka.User.V1\xca\x02\rBanka\\User\\V1\xe2\x02\x19Banka\\User\\V1\\GPBMetadata\xea\x02\x0fBanka::User::V1b\x06proto3"
 
 var (
@@ -2618,7 +3050,7 @@ func file_user_v1_user_proto_rawDescGZIP() []byte {
 }
 
 var file_user_v1_user_proto_enumTypes = make([]protoimpl.EnumInfo, 2)
-var file_user_v1_user_proto_msgTypes = make([]protoimpl.MessageInfo, 31)
+var file_user_v1_user_proto_msgTypes = make([]protoimpl.MessageInfo, 35)
 var file_user_v1_user_proto_goTypes = []any{
 	(UserKind)(0),                           // 0: banka.user.v1.UserKind
 	(Gender)(0),                             // 1: banka.user.v1.Gender
@@ -2653,16 +3085,20 @@ var file_user_v1_user_proto_goTypes = []any{
 	(*ListVerificationHistoryRequest)(nil),  // 30: banka.user.v1.ListVerificationHistoryRequest
 	(*VerificationEvent)(nil),               // 31: banka.user.v1.VerificationEvent
 	(*ListVerificationHistoryResponse)(nil), // 32: banka.user.v1.ListVerificationHistoryResponse
-	(*timestamppb.Timestamp)(nil),           // 33: google.protobuf.Timestamp
-	(*emptypb.Empty)(nil),                   // 34: google.protobuf.Empty
+	(*AuditEntry)(nil),                      // 33: banka.user.v1.AuditEntry
+	(*RecordAuditEntryRequest)(nil),         // 34: banka.user.v1.RecordAuditEntryRequest
+	(*ListAuditLogRequest)(nil),             // 35: banka.user.v1.ListAuditLogRequest
+	(*ListAuditLogResponse)(nil),            // 36: banka.user.v1.ListAuditLogResponse
+	(*timestamppb.Timestamp)(nil),           // 37: google.protobuf.Timestamp
+	(*emptypb.Empty)(nil),                   // 38: google.protobuf.Empty
 }
 var file_user_v1_user_proto_depIdxs = []int32{
 	1,  // 0: banka.user.v1.Employee.gender:type_name -> banka.user.v1.Gender
-	33, // 1: banka.user.v1.Employee.created_at:type_name -> google.protobuf.Timestamp
-	33, // 2: banka.user.v1.Employee.updated_at:type_name -> google.protobuf.Timestamp
+	37, // 1: banka.user.v1.Employee.created_at:type_name -> google.protobuf.Timestamp
+	37, // 2: banka.user.v1.Employee.updated_at:type_name -> google.protobuf.Timestamp
 	1,  // 3: banka.user.v1.Client.gender:type_name -> banka.user.v1.Gender
-	33, // 4: banka.user.v1.Client.created_at:type_name -> google.protobuf.Timestamp
-	33, // 5: banka.user.v1.Client.updated_at:type_name -> google.protobuf.Timestamp
+	37, // 4: banka.user.v1.Client.created_at:type_name -> google.protobuf.Timestamp
+	37, // 5: banka.user.v1.Client.updated_at:type_name -> google.protobuf.Timestamp
 	0,  // 6: banka.user.v1.LoginResponse.user_kind:type_name -> banka.user.v1.UserKind
 	2,  // 7: banka.user.v1.MeResponse.employee:type_name -> banka.user.v1.Employee
 	3,  // 8: banka.user.v1.MeResponse.client:type_name -> banka.user.v1.Client
@@ -2673,58 +3109,64 @@ var file_user_v1_user_proto_depIdxs = []int32{
 	3,  // 13: banka.user.v1.ListClientsResponse.clients:type_name -> banka.user.v1.Client
 	1,  // 14: banka.user.v1.UpdateClientRequest.gender:type_name -> banka.user.v1.Gender
 	0,  // 15: banka.user.v1.GetSessionVersionRequest.user_kind:type_name -> banka.user.v1.UserKind
-	33, // 16: banka.user.v1.VerificationEvent.created_at:type_name -> google.protobuf.Timestamp
-	33, // 17: banka.user.v1.VerificationEvent.resolved_at:type_name -> google.protobuf.Timestamp
+	37, // 16: banka.user.v1.VerificationEvent.created_at:type_name -> google.protobuf.Timestamp
+	37, // 17: banka.user.v1.VerificationEvent.resolved_at:type_name -> google.protobuf.Timestamp
 	31, // 18: banka.user.v1.ListVerificationHistoryResponse.events:type_name -> banka.user.v1.VerificationEvent
-	4,  // 19: banka.user.v1.UserService.Login:input_type -> banka.user.v1.LoginRequest
-	6,  // 20: banka.user.v1.UserService.Refresh:input_type -> banka.user.v1.RefreshRequest
-	8,  // 21: banka.user.v1.UserService.Logout:input_type -> banka.user.v1.LogoutRequest
-	34, // 22: banka.user.v1.UserService.Me:input_type -> google.protobuf.Empty
-	10, // 23: banka.user.v1.UserService.ActivateAccount:input_type -> banka.user.v1.ActivateAccountRequest
-	11, // 24: banka.user.v1.UserService.ResendActivation:input_type -> banka.user.v1.ResendActivationRequest
-	12, // 25: banka.user.v1.UserService.RequestPasswordReset:input_type -> banka.user.v1.RequestPasswordResetRequest
-	13, // 26: banka.user.v1.UserService.ConfirmPasswordReset:input_type -> banka.user.v1.ConfirmPasswordResetRequest
-	14, // 27: banka.user.v1.UserService.CreateEmployee:input_type -> banka.user.v1.CreateEmployeeRequest
-	15, // 28: banka.user.v1.UserService.ListEmployees:input_type -> banka.user.v1.ListEmployeesRequest
-	17, // 29: banka.user.v1.UserService.GetEmployee:input_type -> banka.user.v1.GetEmployeeRequest
-	18, // 30: banka.user.v1.UserService.UpdateEmployee:input_type -> banka.user.v1.UpdateEmployeeRequest
-	19, // 31: banka.user.v1.UserService.SetEmployeeActive:input_type -> banka.user.v1.SetEmployeeActiveRequest
-	20, // 32: banka.user.v1.UserService.SetEmployeePermissions:input_type -> banka.user.v1.SetEmployeePermissionsRequest
-	21, // 33: banka.user.v1.UserService.CreateClient:input_type -> banka.user.v1.CreateClientRequest
-	22, // 34: banka.user.v1.UserService.ListClients:input_type -> banka.user.v1.ListClientsRequest
-	24, // 35: banka.user.v1.UserService.GetClient:input_type -> banka.user.v1.GetClientRequest
-	25, // 36: banka.user.v1.UserService.UpdateClient:input_type -> banka.user.v1.UpdateClientRequest
-	26, // 37: banka.user.v1.UserService.GetSessionVersion:input_type -> banka.user.v1.GetSessionVersionRequest
-	28, // 38: banka.user.v1.UserService.RecordVerificationEvent:input_type -> banka.user.v1.RecordVerificationEventRequest
-	29, // 39: banka.user.v1.UserService.ResolveVerificationEvent:input_type -> banka.user.v1.ResolveVerificationEventRequest
-	30, // 40: banka.user.v1.UserService.ListVerificationHistory:input_type -> banka.user.v1.ListVerificationHistoryRequest
-	5,  // 41: banka.user.v1.UserService.Login:output_type -> banka.user.v1.LoginResponse
-	7,  // 42: banka.user.v1.UserService.Refresh:output_type -> banka.user.v1.RefreshResponse
-	34, // 43: banka.user.v1.UserService.Logout:output_type -> google.protobuf.Empty
-	9,  // 44: banka.user.v1.UserService.Me:output_type -> banka.user.v1.MeResponse
-	34, // 45: banka.user.v1.UserService.ActivateAccount:output_type -> google.protobuf.Empty
-	34, // 46: banka.user.v1.UserService.ResendActivation:output_type -> google.protobuf.Empty
-	34, // 47: banka.user.v1.UserService.RequestPasswordReset:output_type -> google.protobuf.Empty
-	34, // 48: banka.user.v1.UserService.ConfirmPasswordReset:output_type -> google.protobuf.Empty
-	2,  // 49: banka.user.v1.UserService.CreateEmployee:output_type -> banka.user.v1.Employee
-	16, // 50: banka.user.v1.UserService.ListEmployees:output_type -> banka.user.v1.ListEmployeesResponse
-	2,  // 51: banka.user.v1.UserService.GetEmployee:output_type -> banka.user.v1.Employee
-	2,  // 52: banka.user.v1.UserService.UpdateEmployee:output_type -> banka.user.v1.Employee
-	2,  // 53: banka.user.v1.UserService.SetEmployeeActive:output_type -> banka.user.v1.Employee
-	2,  // 54: banka.user.v1.UserService.SetEmployeePermissions:output_type -> banka.user.v1.Employee
-	3,  // 55: banka.user.v1.UserService.CreateClient:output_type -> banka.user.v1.Client
-	23, // 56: banka.user.v1.UserService.ListClients:output_type -> banka.user.v1.ListClientsResponse
-	3,  // 57: banka.user.v1.UserService.GetClient:output_type -> banka.user.v1.Client
-	3,  // 58: banka.user.v1.UserService.UpdateClient:output_type -> banka.user.v1.Client
-	27, // 59: banka.user.v1.UserService.GetSessionVersion:output_type -> banka.user.v1.GetSessionVersionResponse
-	34, // 60: banka.user.v1.UserService.RecordVerificationEvent:output_type -> google.protobuf.Empty
-	34, // 61: banka.user.v1.UserService.ResolveVerificationEvent:output_type -> google.protobuf.Empty
-	32, // 62: banka.user.v1.UserService.ListVerificationHistory:output_type -> banka.user.v1.ListVerificationHistoryResponse
-	41, // [41:63] is the sub-list for method output_type
-	19, // [19:41] is the sub-list for method input_type
-	19, // [19:19] is the sub-list for extension type_name
-	19, // [19:19] is the sub-list for extension extendee
-	0,  // [0:19] is the sub-list for field type_name
+	37, // 19: banka.user.v1.AuditEntry.created_at:type_name -> google.protobuf.Timestamp
+	33, // 20: banka.user.v1.ListAuditLogResponse.items:type_name -> banka.user.v1.AuditEntry
+	4,  // 21: banka.user.v1.UserService.Login:input_type -> banka.user.v1.LoginRequest
+	6,  // 22: banka.user.v1.UserService.Refresh:input_type -> banka.user.v1.RefreshRequest
+	8,  // 23: banka.user.v1.UserService.Logout:input_type -> banka.user.v1.LogoutRequest
+	38, // 24: banka.user.v1.UserService.Me:input_type -> google.protobuf.Empty
+	10, // 25: banka.user.v1.UserService.ActivateAccount:input_type -> banka.user.v1.ActivateAccountRequest
+	11, // 26: banka.user.v1.UserService.ResendActivation:input_type -> banka.user.v1.ResendActivationRequest
+	12, // 27: banka.user.v1.UserService.RequestPasswordReset:input_type -> banka.user.v1.RequestPasswordResetRequest
+	13, // 28: banka.user.v1.UserService.ConfirmPasswordReset:input_type -> banka.user.v1.ConfirmPasswordResetRequest
+	14, // 29: banka.user.v1.UserService.CreateEmployee:input_type -> banka.user.v1.CreateEmployeeRequest
+	15, // 30: banka.user.v1.UserService.ListEmployees:input_type -> banka.user.v1.ListEmployeesRequest
+	17, // 31: banka.user.v1.UserService.GetEmployee:input_type -> banka.user.v1.GetEmployeeRequest
+	18, // 32: banka.user.v1.UserService.UpdateEmployee:input_type -> banka.user.v1.UpdateEmployeeRequest
+	19, // 33: banka.user.v1.UserService.SetEmployeeActive:input_type -> banka.user.v1.SetEmployeeActiveRequest
+	20, // 34: banka.user.v1.UserService.SetEmployeePermissions:input_type -> banka.user.v1.SetEmployeePermissionsRequest
+	21, // 35: banka.user.v1.UserService.CreateClient:input_type -> banka.user.v1.CreateClientRequest
+	22, // 36: banka.user.v1.UserService.ListClients:input_type -> banka.user.v1.ListClientsRequest
+	24, // 37: banka.user.v1.UserService.GetClient:input_type -> banka.user.v1.GetClientRequest
+	25, // 38: banka.user.v1.UserService.UpdateClient:input_type -> banka.user.v1.UpdateClientRequest
+	26, // 39: banka.user.v1.UserService.GetSessionVersion:input_type -> banka.user.v1.GetSessionVersionRequest
+	28, // 40: banka.user.v1.UserService.RecordVerificationEvent:input_type -> banka.user.v1.RecordVerificationEventRequest
+	29, // 41: banka.user.v1.UserService.ResolveVerificationEvent:input_type -> banka.user.v1.ResolveVerificationEventRequest
+	30, // 42: banka.user.v1.UserService.ListVerificationHistory:input_type -> banka.user.v1.ListVerificationHistoryRequest
+	34, // 43: banka.user.v1.UserService.RecordAuditEntry:input_type -> banka.user.v1.RecordAuditEntryRequest
+	35, // 44: banka.user.v1.UserService.ListAuditLog:input_type -> banka.user.v1.ListAuditLogRequest
+	5,  // 45: banka.user.v1.UserService.Login:output_type -> banka.user.v1.LoginResponse
+	7,  // 46: banka.user.v1.UserService.Refresh:output_type -> banka.user.v1.RefreshResponse
+	38, // 47: banka.user.v1.UserService.Logout:output_type -> google.protobuf.Empty
+	9,  // 48: banka.user.v1.UserService.Me:output_type -> banka.user.v1.MeResponse
+	38, // 49: banka.user.v1.UserService.ActivateAccount:output_type -> google.protobuf.Empty
+	38, // 50: banka.user.v1.UserService.ResendActivation:output_type -> google.protobuf.Empty
+	38, // 51: banka.user.v1.UserService.RequestPasswordReset:output_type -> google.protobuf.Empty
+	38, // 52: banka.user.v1.UserService.ConfirmPasswordReset:output_type -> google.protobuf.Empty
+	2,  // 53: banka.user.v1.UserService.CreateEmployee:output_type -> banka.user.v1.Employee
+	16, // 54: banka.user.v1.UserService.ListEmployees:output_type -> banka.user.v1.ListEmployeesResponse
+	2,  // 55: banka.user.v1.UserService.GetEmployee:output_type -> banka.user.v1.Employee
+	2,  // 56: banka.user.v1.UserService.UpdateEmployee:output_type -> banka.user.v1.Employee
+	2,  // 57: banka.user.v1.UserService.SetEmployeeActive:output_type -> banka.user.v1.Employee
+	2,  // 58: banka.user.v1.UserService.SetEmployeePermissions:output_type -> banka.user.v1.Employee
+	3,  // 59: banka.user.v1.UserService.CreateClient:output_type -> banka.user.v1.Client
+	23, // 60: banka.user.v1.UserService.ListClients:output_type -> banka.user.v1.ListClientsResponse
+	3,  // 61: banka.user.v1.UserService.GetClient:output_type -> banka.user.v1.Client
+	3,  // 62: banka.user.v1.UserService.UpdateClient:output_type -> banka.user.v1.Client
+	27, // 63: banka.user.v1.UserService.GetSessionVersion:output_type -> banka.user.v1.GetSessionVersionResponse
+	38, // 64: banka.user.v1.UserService.RecordVerificationEvent:output_type -> google.protobuf.Empty
+	38, // 65: banka.user.v1.UserService.ResolveVerificationEvent:output_type -> google.protobuf.Empty
+	32, // 66: banka.user.v1.UserService.ListVerificationHistory:output_type -> banka.user.v1.ListVerificationHistoryResponse
+	38, // 67: banka.user.v1.UserService.RecordAuditEntry:output_type -> google.protobuf.Empty
+	36, // 68: banka.user.v1.UserService.ListAuditLog:output_type -> banka.user.v1.ListAuditLogResponse
+	45, // [45:69] is the sub-list for method output_type
+	21, // [21:45] is the sub-list for method input_type
+	21, // [21:21] is the sub-list for extension type_name
+	21, // [21:21] is the sub-list for extension extendee
+	0,  // [0:21] is the sub-list for field type_name
 }
 
 func init() { file_user_v1_user_proto_init() }
@@ -2743,7 +3185,7 @@ func file_user_v1_user_proto_init() {
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
 			RawDescriptor: unsafe.Slice(unsafe.StringData(file_user_v1_user_proto_rawDesc), len(file_user_v1_user_proto_rawDesc)),
 			NumEnums:      2,
-			NumMessages:   31,
+			NumMessages:   35,
 			NumExtensions: 0,
 			NumServices:   1,
 		},

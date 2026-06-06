@@ -81,6 +81,9 @@ func (s *Service) CreateEmployee(ctx context.Context, in CreateEmployeeInput) (*
 		s.Log.Error("send activation email failed", "employee_id", emp.ID, "error", err)
 	}
 
+	s.recordAudit(ctx, "employee.create", emp.ID,
+		strings.TrimSpace(emp.FirstName+" "+emp.LastName), "", "", "Kreiran zaposleni")
+
 	return emp, nil
 }
 
@@ -137,6 +140,9 @@ func (s *Service) UpdateEmployee(ctx context.Context, in UpdateEmployeeInput) (*
 		return nil, err
 	}
 	if changes := diffEmployee(&before, updated); len(changes) > 0 {
+		s.recordAudit(ctx, "employee.update", updated.ID,
+			strings.TrimSpace(updated.FirstName+" "+updated.LastName), "", "",
+			strings.Join(changes, "; "))
 		// Send to whichever email is reachable: if email itself changed,
 		// notify the new address — that's where future correspondence
 		// goes — and the old one too so the previous account holder sees
@@ -250,6 +256,10 @@ func (s *Service) SetEmployeePermissions(ctx context.Context, id string, perms [
 	if err != nil {
 		return nil, err
 	}
+	s.recordAudit(ctx, "permission.change", updated.ID,
+		strings.TrimSpace(updated.FirstName+" "+updated.LastName),
+		strings.Join(target.Permissions, ", "), strings.Join(perms, ", "),
+		"Izmena permisija")
 	s.invalidateSessionCache(ctx, domain.KindEmployee, id)
 	return updated, nil
 }
