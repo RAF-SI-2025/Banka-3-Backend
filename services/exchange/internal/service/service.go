@@ -4,6 +4,7 @@ package service
 import (
 	"context"
 	"log/slog"
+	"time"
 
 	"github.com/RAF-SI-2025/Banka-3-Backend/pkg/apperr"
 	"github.com/RAF-SI-2025/Banka-3-Backend/pkg/auth"
@@ -68,6 +69,30 @@ func (s *Service) ListRates(ctx context.Context, from domain.Currency) ([]*domai
 		return nil, apperr.Validation("unsupported currency: " + string(from))
 	}
 	return s.Store.ListRates(ctx, from)
+}
+
+// defaultHistoryDays is the look-back window when the caller passes
+// days <= 0 — the mobile "kursna lista u zadnjih mesec dana".
+const defaultHistoryDays = 30
+
+// ListRateHistory returns the recorded history for from→to over the last
+// `days` days (default 30), newest first. Authenticated callers only,
+// like ListRates — no specific permission (clients view the board).
+func (s *Service) ListRateHistory(ctx context.Context, from, to domain.Currency, days int) ([]*domain.RateHistoryPoint, error) {
+	if _, ok := auth.PrincipalFrom(ctx); !ok {
+		return nil, apperr.Unauthenticated("not authenticated")
+	}
+	if !from.Supported() || !to.Supported() {
+		return nil, apperr.Validation("unsupported currency")
+	}
+	if from == to {
+		return nil, apperr.Validation("from and to must differ")
+	}
+	if days <= 0 {
+		days = defaultHistoryDays
+	}
+	since := time.Now().AddDate(0, 0, -days)
+	return s.Store.ListRateHistory(ctx, from, to, since)
 }
 
 // Quote returns the most recent rate for from→to. Internal: callers

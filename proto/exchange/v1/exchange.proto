@@ -27,6 +27,14 @@ service ExchangeService {
     option (google.api.http) = {get: "/api/v1/exchange/rates"};
   }
 
+  // ListRateHistory returns the recorded history for a single pair over
+  // the last N days, newest first. Backs the mobile "kursna lista u
+  // zadnjih mesec dana" view. Append-only history accrues from the feed
+  // (see fx_rate_history); the latest-only ListRates is unaffected.
+  rpc ListRateHistory(ListRateHistoryRequest) returns (ListRateHistoryResponse) {
+    option (google.api.http) = {get: "/api/v1/exchange/rates/history"};
+  }
+
   // Quote returns the most recent rate for from→to. Internal: callers
   // are expected to be other services, not end users. (External quotes
   // come from ListRates so the FE can render the menjačnica board.)
@@ -83,6 +91,27 @@ message ListRatesRequest {
 
 message ListRatesResponse {
   repeated Rate rates = 1;
+}
+
+message ListRateHistoryRequest {
+  Currency from = 1;
+  Currency to = 2;
+  // days is the look-back window; defaults to 30 (last month) when 0 or
+  // negative. Bound from the ?days= query param.
+  int32 days = 3;
+}
+
+message RateHistoryPoint {
+  string bid = 1;
+  string ask = 2;
+  google.protobuf.Timestamp recorded_at = 3;
+}
+
+message ListRateHistoryResponse {
+  Currency from = 1;
+  Currency to = 2;
+  // points are ordered newest first.
+  repeated RateHistoryPoint points = 3;
 }
 
 message QuoteRequest {

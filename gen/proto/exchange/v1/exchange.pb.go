@@ -329,6 +329,189 @@ func (x *ListRatesResponse) GetRates() []*Rate {
 	return nil
 }
 
+type ListRateHistoryRequest struct {
+	state protoimpl.MessageState `protogen:"open.v1"`
+	From  Currency               `protobuf:"varint,1,opt,name=from,proto3,enum=banka.exchange.v1.Currency" json:"from,omitempty"`
+	To    Currency               `protobuf:"varint,2,opt,name=to,proto3,enum=banka.exchange.v1.Currency" json:"to,omitempty"`
+	// days is the look-back window; defaults to 30 (last month) when 0 or
+	// negative. Bound from the ?days= query param.
+	Days          int32 `protobuf:"varint,3,opt,name=days,proto3" json:"days,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *ListRateHistoryRequest) Reset() {
+	*x = ListRateHistoryRequest{}
+	mi := &file_exchange_v1_exchange_proto_msgTypes[4]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *ListRateHistoryRequest) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*ListRateHistoryRequest) ProtoMessage() {}
+
+func (x *ListRateHistoryRequest) ProtoReflect() protoreflect.Message {
+	mi := &file_exchange_v1_exchange_proto_msgTypes[4]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use ListRateHistoryRequest.ProtoReflect.Descriptor instead.
+func (*ListRateHistoryRequest) Descriptor() ([]byte, []int) {
+	return file_exchange_v1_exchange_proto_rawDescGZIP(), []int{4}
+}
+
+func (x *ListRateHistoryRequest) GetFrom() Currency {
+	if x != nil {
+		return x.From
+	}
+	return Currency_CURRENCY_UNSPECIFIED
+}
+
+func (x *ListRateHistoryRequest) GetTo() Currency {
+	if x != nil {
+		return x.To
+	}
+	return Currency_CURRENCY_UNSPECIFIED
+}
+
+func (x *ListRateHistoryRequest) GetDays() int32 {
+	if x != nil {
+		return x.Days
+	}
+	return 0
+}
+
+type RateHistoryPoint struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	Bid           string                 `protobuf:"bytes,1,opt,name=bid,proto3" json:"bid,omitempty"`
+	Ask           string                 `protobuf:"bytes,2,opt,name=ask,proto3" json:"ask,omitempty"`
+	RecordedAt    *timestamppb.Timestamp `protobuf:"bytes,3,opt,name=recorded_at,json=recordedAt,proto3" json:"recorded_at,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *RateHistoryPoint) Reset() {
+	*x = RateHistoryPoint{}
+	mi := &file_exchange_v1_exchange_proto_msgTypes[5]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *RateHistoryPoint) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*RateHistoryPoint) ProtoMessage() {}
+
+func (x *RateHistoryPoint) ProtoReflect() protoreflect.Message {
+	mi := &file_exchange_v1_exchange_proto_msgTypes[5]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use RateHistoryPoint.ProtoReflect.Descriptor instead.
+func (*RateHistoryPoint) Descriptor() ([]byte, []int) {
+	return file_exchange_v1_exchange_proto_rawDescGZIP(), []int{5}
+}
+
+func (x *RateHistoryPoint) GetBid() string {
+	if x != nil {
+		return x.Bid
+	}
+	return ""
+}
+
+func (x *RateHistoryPoint) GetAsk() string {
+	if x != nil {
+		return x.Ask
+	}
+	return ""
+}
+
+func (x *RateHistoryPoint) GetRecordedAt() *timestamppb.Timestamp {
+	if x != nil {
+		return x.RecordedAt
+	}
+	return nil
+}
+
+type ListRateHistoryResponse struct {
+	state protoimpl.MessageState `protogen:"open.v1"`
+	From  Currency               `protobuf:"varint,1,opt,name=from,proto3,enum=banka.exchange.v1.Currency" json:"from,omitempty"`
+	To    Currency               `protobuf:"varint,2,opt,name=to,proto3,enum=banka.exchange.v1.Currency" json:"to,omitempty"`
+	// points are ordered newest first.
+	Points        []*RateHistoryPoint `protobuf:"bytes,3,rep,name=points,proto3" json:"points,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *ListRateHistoryResponse) Reset() {
+	*x = ListRateHistoryResponse{}
+	mi := &file_exchange_v1_exchange_proto_msgTypes[6]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *ListRateHistoryResponse) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*ListRateHistoryResponse) ProtoMessage() {}
+
+func (x *ListRateHistoryResponse) ProtoReflect() protoreflect.Message {
+	mi := &file_exchange_v1_exchange_proto_msgTypes[6]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use ListRateHistoryResponse.ProtoReflect.Descriptor instead.
+func (*ListRateHistoryResponse) Descriptor() ([]byte, []int) {
+	return file_exchange_v1_exchange_proto_rawDescGZIP(), []int{6}
+}
+
+func (x *ListRateHistoryResponse) GetFrom() Currency {
+	if x != nil {
+		return x.From
+	}
+	return Currency_CURRENCY_UNSPECIFIED
+}
+
+func (x *ListRateHistoryResponse) GetTo() Currency {
+	if x != nil {
+		return x.To
+	}
+	return Currency_CURRENCY_UNSPECIFIED
+}
+
+func (x *ListRateHistoryResponse) GetPoints() []*RateHistoryPoint {
+	if x != nil {
+		return x.Points
+	}
+	return nil
+}
+
 type QuoteRequest struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
 	From          Currency               `protobuf:"varint,1,opt,name=from,proto3,enum=banka.exchange.v1.Currency" json:"from,omitempty"`
@@ -339,7 +522,7 @@ type QuoteRequest struct {
 
 func (x *QuoteRequest) Reset() {
 	*x = QuoteRequest{}
-	mi := &file_exchange_v1_exchange_proto_msgTypes[4]
+	mi := &file_exchange_v1_exchange_proto_msgTypes[7]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -351,7 +534,7 @@ func (x *QuoteRequest) String() string {
 func (*QuoteRequest) ProtoMessage() {}
 
 func (x *QuoteRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_exchange_v1_exchange_proto_msgTypes[4]
+	mi := &file_exchange_v1_exchange_proto_msgTypes[7]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -364,7 +547,7 @@ func (x *QuoteRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use QuoteRequest.ProtoReflect.Descriptor instead.
 func (*QuoteRequest) Descriptor() ([]byte, []int) {
-	return file_exchange_v1_exchange_proto_rawDescGZIP(), []int{4}
+	return file_exchange_v1_exchange_proto_rawDescGZIP(), []int{7}
 }
 
 func (x *QuoteRequest) GetFrom() Currency {
@@ -389,7 +572,7 @@ type RefreshFXRatesRequest struct {
 
 func (x *RefreshFXRatesRequest) Reset() {
 	*x = RefreshFXRatesRequest{}
-	mi := &file_exchange_v1_exchange_proto_msgTypes[5]
+	mi := &file_exchange_v1_exchange_proto_msgTypes[8]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -401,7 +584,7 @@ func (x *RefreshFXRatesRequest) String() string {
 func (*RefreshFXRatesRequest) ProtoMessage() {}
 
 func (x *RefreshFXRatesRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_exchange_v1_exchange_proto_msgTypes[5]
+	mi := &file_exchange_v1_exchange_proto_msgTypes[8]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -414,7 +597,7 @@ func (x *RefreshFXRatesRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use RefreshFXRatesRequest.ProtoReflect.Descriptor instead.
 func (*RefreshFXRatesRequest) Descriptor() ([]byte, []int) {
-	return file_exchange_v1_exchange_proto_rawDescGZIP(), []int{5}
+	return file_exchange_v1_exchange_proto_rawDescGZIP(), []int{8}
 }
 
 type RefreshFXRatesResponse struct {
@@ -427,7 +610,7 @@ type RefreshFXRatesResponse struct {
 
 func (x *RefreshFXRatesResponse) Reset() {
 	*x = RefreshFXRatesResponse{}
-	mi := &file_exchange_v1_exchange_proto_msgTypes[6]
+	mi := &file_exchange_v1_exchange_proto_msgTypes[9]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -439,7 +622,7 @@ func (x *RefreshFXRatesResponse) String() string {
 func (*RefreshFXRatesResponse) ProtoMessage() {}
 
 func (x *RefreshFXRatesResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_exchange_v1_exchange_proto_msgTypes[6]
+	mi := &file_exchange_v1_exchange_proto_msgTypes[9]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -452,7 +635,7 @@ func (x *RefreshFXRatesResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use RefreshFXRatesResponse.ProtoReflect.Descriptor instead.
 func (*RefreshFXRatesResponse) Descriptor() ([]byte, []int) {
-	return file_exchange_v1_exchange_proto_rawDescGZIP(), []int{6}
+	return file_exchange_v1_exchange_proto_rawDescGZIP(), []int{9}
 }
 
 func (x *RefreshFXRatesResponse) GetWritten() int32 {
@@ -482,7 +665,20 @@ const file_exchange_v1_exchange_proto_rawDesc = "" +
 	"\x10ListRatesRequest\x12/\n" +
 	"\x04from\x18\x01 \x01(\x0e2\x1b.banka.exchange.v1.CurrencyR\x04from\"B\n" +
 	"\x11ListRatesResponse\x12-\n" +
-	"\x05rates\x18\x01 \x03(\v2\x17.banka.exchange.v1.RateR\x05rates\"l\n" +
+	"\x05rates\x18\x01 \x03(\v2\x17.banka.exchange.v1.RateR\x05rates\"\x8a\x01\n" +
+	"\x16ListRateHistoryRequest\x12/\n" +
+	"\x04from\x18\x01 \x01(\x0e2\x1b.banka.exchange.v1.CurrencyR\x04from\x12+\n" +
+	"\x02to\x18\x02 \x01(\x0e2\x1b.banka.exchange.v1.CurrencyR\x02to\x12\x12\n" +
+	"\x04days\x18\x03 \x01(\x05R\x04days\"s\n" +
+	"\x10RateHistoryPoint\x12\x10\n" +
+	"\x03bid\x18\x01 \x01(\tR\x03bid\x12\x10\n" +
+	"\x03ask\x18\x02 \x01(\tR\x03ask\x12;\n" +
+	"\vrecorded_at\x18\x03 \x01(\v2\x1a.google.protobuf.TimestampR\n" +
+	"recordedAt\"\xb4\x01\n" +
+	"\x17ListRateHistoryResponse\x12/\n" +
+	"\x04from\x18\x01 \x01(\x0e2\x1b.banka.exchange.v1.CurrencyR\x04from\x12+\n" +
+	"\x02to\x18\x02 \x01(\x0e2\x1b.banka.exchange.v1.CurrencyR\x02to\x12;\n" +
+	"\x06points\x18\x03 \x03(\v2#.banka.exchange.v1.RateHistoryPointR\x06points\"l\n" +
 	"\fQuoteRequest\x12/\n" +
 	"\x04from\x18\x01 \x01(\x0e2\x1b.banka.exchange.v1.CurrencyR\x04from\x12+\n" +
 	"\x02to\x18\x02 \x01(\x0e2\x1b.banka.exchange.v1.CurrencyR\x02to\"\x17\n" +
@@ -498,11 +694,12 @@ const file_exchange_v1_exchange_proto_rawDesc = "" +
 	"\fCURRENCY_GBP\x10\x05\x12\x10\n" +
 	"\fCURRENCY_JPY\x10\x06\x12\x10\n" +
 	"\fCURRENCY_CAD\x10\a\x12\x10\n" +
-	"\fCURRENCY_AUD\x10\b2\xcf\x03\n" +
+	"\fCURRENCY_AUD\x10\b2\xe2\x04\n" +
 	"\x0fExchangeService\x12n\n" +
 	"\n" +
 	"UpsertRate\x12$.banka.exchange.v1.UpsertRateRequest\x1a\x17.banka.exchange.v1.Rate\"!\x82\xd3\xe4\x93\x02\x1b:\x01*\x1a\x16/api/v1/exchange/rates\x12v\n" +
-	"\tListRates\x12#.banka.exchange.v1.ListRatesRequest\x1a$.banka.exchange.v1.ListRatesResponse\"\x1e\x82\xd3\xe4\x93\x02\x18\x12\x16/api/v1/exchange/rates\x12A\n" +
+	"\tListRates\x12#.banka.exchange.v1.ListRatesRequest\x1a$.banka.exchange.v1.ListRatesResponse\"\x1e\x82\xd3\xe4\x93\x02\x18\x12\x16/api/v1/exchange/rates\x12\x90\x01\n" +
+	"\x0fListRateHistory\x12).banka.exchange.v1.ListRateHistoryRequest\x1a*.banka.exchange.v1.ListRateHistoryResponse\"&\x82\xd3\xe4\x93\x02 \x12\x1e/api/v1/exchange/rates/history\x12A\n" +
 	"\x05Quote\x12\x1f.banka.exchange.v1.QuoteRequest\x1a\x17.banka.exchange.v1.Rate\x12\x90\x01\n" +
 	"\x0eRefreshFXRates\x12(.banka.exchange.v1.RefreshFXRatesRequest\x1a).banka.exchange.v1.RefreshFXRatesResponse\")\x82\xd3\xe4\x93\x02#:\x01*\"\x1e/api/v1/exchange/rates/refreshB\xd5\x01\n" +
 	"\x15com.banka.exchange.v1B\rExchangeProtoP\x01ZGgithub.com/RAF-SI-2025/Banka-3-Backend/gen/proto/exchange/v1;exchangev1\xa2\x02\x03BEX\xaa\x02\x11Banka.Exchange.V1\xca\x02\x11Banka\\Exchange\\V1\xe2\x02\x1dBanka\\Exchange\\V1\\GPBMetadata\xea\x02\x13Banka::Exchange::V1b\x06proto3"
@@ -520,41 +717,52 @@ func file_exchange_v1_exchange_proto_rawDescGZIP() []byte {
 }
 
 var file_exchange_v1_exchange_proto_enumTypes = make([]protoimpl.EnumInfo, 1)
-var file_exchange_v1_exchange_proto_msgTypes = make([]protoimpl.MessageInfo, 7)
+var file_exchange_v1_exchange_proto_msgTypes = make([]protoimpl.MessageInfo, 10)
 var file_exchange_v1_exchange_proto_goTypes = []any{
-	(Currency)(0),                  // 0: banka.exchange.v1.Currency
-	(*Rate)(nil),                   // 1: banka.exchange.v1.Rate
-	(*UpsertRateRequest)(nil),      // 2: banka.exchange.v1.UpsertRateRequest
-	(*ListRatesRequest)(nil),       // 3: banka.exchange.v1.ListRatesRequest
-	(*ListRatesResponse)(nil),      // 4: banka.exchange.v1.ListRatesResponse
-	(*QuoteRequest)(nil),           // 5: banka.exchange.v1.QuoteRequest
-	(*RefreshFXRatesRequest)(nil),  // 6: banka.exchange.v1.RefreshFXRatesRequest
-	(*RefreshFXRatesResponse)(nil), // 7: banka.exchange.v1.RefreshFXRatesResponse
-	(*timestamppb.Timestamp)(nil),  // 8: google.protobuf.Timestamp
+	(Currency)(0),                   // 0: banka.exchange.v1.Currency
+	(*Rate)(nil),                    // 1: banka.exchange.v1.Rate
+	(*UpsertRateRequest)(nil),       // 2: banka.exchange.v1.UpsertRateRequest
+	(*ListRatesRequest)(nil),        // 3: banka.exchange.v1.ListRatesRequest
+	(*ListRatesResponse)(nil),       // 4: banka.exchange.v1.ListRatesResponse
+	(*ListRateHistoryRequest)(nil),  // 5: banka.exchange.v1.ListRateHistoryRequest
+	(*RateHistoryPoint)(nil),        // 6: banka.exchange.v1.RateHistoryPoint
+	(*ListRateHistoryResponse)(nil), // 7: banka.exchange.v1.ListRateHistoryResponse
+	(*QuoteRequest)(nil),            // 8: banka.exchange.v1.QuoteRequest
+	(*RefreshFXRatesRequest)(nil),   // 9: banka.exchange.v1.RefreshFXRatesRequest
+	(*RefreshFXRatesResponse)(nil),  // 10: banka.exchange.v1.RefreshFXRatesResponse
+	(*timestamppb.Timestamp)(nil),   // 11: google.protobuf.Timestamp
 }
 var file_exchange_v1_exchange_proto_depIdxs = []int32{
 	0,  // 0: banka.exchange.v1.Rate.from:type_name -> banka.exchange.v1.Currency
 	0,  // 1: banka.exchange.v1.Rate.to:type_name -> banka.exchange.v1.Currency
-	8,  // 2: banka.exchange.v1.Rate.updated_at:type_name -> google.protobuf.Timestamp
+	11, // 2: banka.exchange.v1.Rate.updated_at:type_name -> google.protobuf.Timestamp
 	0,  // 3: banka.exchange.v1.UpsertRateRequest.from:type_name -> banka.exchange.v1.Currency
 	0,  // 4: banka.exchange.v1.UpsertRateRequest.to:type_name -> banka.exchange.v1.Currency
 	0,  // 5: banka.exchange.v1.ListRatesRequest.from:type_name -> banka.exchange.v1.Currency
 	1,  // 6: banka.exchange.v1.ListRatesResponse.rates:type_name -> banka.exchange.v1.Rate
-	0,  // 7: banka.exchange.v1.QuoteRequest.from:type_name -> banka.exchange.v1.Currency
-	0,  // 8: banka.exchange.v1.QuoteRequest.to:type_name -> banka.exchange.v1.Currency
-	2,  // 9: banka.exchange.v1.ExchangeService.UpsertRate:input_type -> banka.exchange.v1.UpsertRateRequest
-	3,  // 10: banka.exchange.v1.ExchangeService.ListRates:input_type -> banka.exchange.v1.ListRatesRequest
-	5,  // 11: banka.exchange.v1.ExchangeService.Quote:input_type -> banka.exchange.v1.QuoteRequest
-	6,  // 12: banka.exchange.v1.ExchangeService.RefreshFXRates:input_type -> banka.exchange.v1.RefreshFXRatesRequest
-	1,  // 13: banka.exchange.v1.ExchangeService.UpsertRate:output_type -> banka.exchange.v1.Rate
-	4,  // 14: banka.exchange.v1.ExchangeService.ListRates:output_type -> banka.exchange.v1.ListRatesResponse
-	1,  // 15: banka.exchange.v1.ExchangeService.Quote:output_type -> banka.exchange.v1.Rate
-	7,  // 16: banka.exchange.v1.ExchangeService.RefreshFXRates:output_type -> banka.exchange.v1.RefreshFXRatesResponse
-	13, // [13:17] is the sub-list for method output_type
-	9,  // [9:13] is the sub-list for method input_type
-	9,  // [9:9] is the sub-list for extension type_name
-	9,  // [9:9] is the sub-list for extension extendee
-	0,  // [0:9] is the sub-list for field type_name
+	0,  // 7: banka.exchange.v1.ListRateHistoryRequest.from:type_name -> banka.exchange.v1.Currency
+	0,  // 8: banka.exchange.v1.ListRateHistoryRequest.to:type_name -> banka.exchange.v1.Currency
+	11, // 9: banka.exchange.v1.RateHistoryPoint.recorded_at:type_name -> google.protobuf.Timestamp
+	0,  // 10: banka.exchange.v1.ListRateHistoryResponse.from:type_name -> banka.exchange.v1.Currency
+	0,  // 11: banka.exchange.v1.ListRateHistoryResponse.to:type_name -> banka.exchange.v1.Currency
+	6,  // 12: banka.exchange.v1.ListRateHistoryResponse.points:type_name -> banka.exchange.v1.RateHistoryPoint
+	0,  // 13: banka.exchange.v1.QuoteRequest.from:type_name -> banka.exchange.v1.Currency
+	0,  // 14: banka.exchange.v1.QuoteRequest.to:type_name -> banka.exchange.v1.Currency
+	2,  // 15: banka.exchange.v1.ExchangeService.UpsertRate:input_type -> banka.exchange.v1.UpsertRateRequest
+	3,  // 16: banka.exchange.v1.ExchangeService.ListRates:input_type -> banka.exchange.v1.ListRatesRequest
+	5,  // 17: banka.exchange.v1.ExchangeService.ListRateHistory:input_type -> banka.exchange.v1.ListRateHistoryRequest
+	8,  // 18: banka.exchange.v1.ExchangeService.Quote:input_type -> banka.exchange.v1.QuoteRequest
+	9,  // 19: banka.exchange.v1.ExchangeService.RefreshFXRates:input_type -> banka.exchange.v1.RefreshFXRatesRequest
+	1,  // 20: banka.exchange.v1.ExchangeService.UpsertRate:output_type -> banka.exchange.v1.Rate
+	4,  // 21: banka.exchange.v1.ExchangeService.ListRates:output_type -> banka.exchange.v1.ListRatesResponse
+	7,  // 22: banka.exchange.v1.ExchangeService.ListRateHistory:output_type -> banka.exchange.v1.ListRateHistoryResponse
+	1,  // 23: banka.exchange.v1.ExchangeService.Quote:output_type -> banka.exchange.v1.Rate
+	10, // 24: banka.exchange.v1.ExchangeService.RefreshFXRates:output_type -> banka.exchange.v1.RefreshFXRatesResponse
+	20, // [20:25] is the sub-list for method output_type
+	15, // [15:20] is the sub-list for method input_type
+	15, // [15:15] is the sub-list for extension type_name
+	15, // [15:15] is the sub-list for extension extendee
+	0,  // [0:15] is the sub-list for field type_name
 }
 
 func init() { file_exchange_v1_exchange_proto_init() }
@@ -568,7 +776,7 @@ func file_exchange_v1_exchange_proto_init() {
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
 			RawDescriptor: unsafe.Slice(unsafe.StringData(file_exchange_v1_exchange_proto_rawDesc), len(file_exchange_v1_exchange_proto_rawDesc)),
 			NumEnums:      1,
-			NumMessages:   7,
+			NumMessages:   10,
 			NumExtensions: 0,
 			NumServices:   1,
 		},
