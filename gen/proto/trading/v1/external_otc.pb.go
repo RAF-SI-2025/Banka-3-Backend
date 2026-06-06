@@ -298,6 +298,109 @@ func (ExternalOTCContractStatus) EnumDescriptor() ([]byte, []int) {
 	return file_trading_v1_external_otc_proto_rawDescGZIP(), []int{4}
 }
 
+// ExternalOTCSettlementPhase is the 2PC phase the gateway is driving.
+type ExternalOTCSettlementPhase int32
+
+const (
+	ExternalOTCSettlementPhase_EXTERNAL_OTC_SETTLEMENT_PHASE_UNSPECIFIED ExternalOTCSettlementPhase = 0
+	ExternalOTCSettlementPhase_EXTERNAL_OTC_SETTLEMENT_PHASE_PREPARE     ExternalOTCSettlementPhase = 1
+	ExternalOTCSettlementPhase_EXTERNAL_OTC_SETTLEMENT_PHASE_COMMIT      ExternalOTCSettlementPhase = 2
+	ExternalOTCSettlementPhase_EXTERNAL_OTC_SETTLEMENT_PHASE_ROLLBACK    ExternalOTCSettlementPhase = 3
+)
+
+// Enum value maps for ExternalOTCSettlementPhase.
+var (
+	ExternalOTCSettlementPhase_name = map[int32]string{
+		0: "EXTERNAL_OTC_SETTLEMENT_PHASE_UNSPECIFIED",
+		1: "EXTERNAL_OTC_SETTLEMENT_PHASE_PREPARE",
+		2: "EXTERNAL_OTC_SETTLEMENT_PHASE_COMMIT",
+		3: "EXTERNAL_OTC_SETTLEMENT_PHASE_ROLLBACK",
+	}
+	ExternalOTCSettlementPhase_value = map[string]int32{
+		"EXTERNAL_OTC_SETTLEMENT_PHASE_UNSPECIFIED": 0,
+		"EXTERNAL_OTC_SETTLEMENT_PHASE_PREPARE":     1,
+		"EXTERNAL_OTC_SETTLEMENT_PHASE_COMMIT":      2,
+		"EXTERNAL_OTC_SETTLEMENT_PHASE_ROLLBACK":    3,
+	}
+)
+
+func (x ExternalOTCSettlementPhase) Enum() *ExternalOTCSettlementPhase {
+	p := new(ExternalOTCSettlementPhase)
+	*p = x
+	return p
+}
+
+func (x ExternalOTCSettlementPhase) String() string {
+	return protoimpl.X.EnumStringOf(x.Descriptor(), protoreflect.EnumNumber(x))
+}
+
+func (ExternalOTCSettlementPhase) Descriptor() protoreflect.EnumDescriptor {
+	return file_trading_v1_external_otc_proto_enumTypes[5].Descriptor()
+}
+
+func (ExternalOTCSettlementPhase) Type() protoreflect.EnumType {
+	return &file_trading_v1_external_otc_proto_enumTypes[5]
+}
+
+func (x ExternalOTCSettlementPhase) Number() protoreflect.EnumNumber {
+	return protoreflect.EnumNumber(x)
+}
+
+// Deprecated: Use ExternalOTCSettlementPhase.Descriptor instead.
+func (ExternalOTCSettlementPhase) EnumDescriptor() ([]byte, []int) {
+	return file_trading_v1_external_otc_proto_rawDescGZIP(), []int{5}
+}
+
+// ExternalOTCSettlementKind discriminates the settlement flavour.
+type ExternalOTCSettlementKind int32
+
+const (
+	ExternalOTCSettlementKind_EXTERNAL_OTC_SETTLEMENT_KIND_UNSPECIFIED ExternalOTCSettlementKind = 0
+	ExternalOTCSettlementKind_EXTERNAL_OTC_SETTLEMENT_KIND_ACCEPT      ExternalOTCSettlementKind = 1
+	ExternalOTCSettlementKind_EXTERNAL_OTC_SETTLEMENT_KIND_EXERCISE    ExternalOTCSettlementKind = 2
+)
+
+// Enum value maps for ExternalOTCSettlementKind.
+var (
+	ExternalOTCSettlementKind_name = map[int32]string{
+		0: "EXTERNAL_OTC_SETTLEMENT_KIND_UNSPECIFIED",
+		1: "EXTERNAL_OTC_SETTLEMENT_KIND_ACCEPT",
+		2: "EXTERNAL_OTC_SETTLEMENT_KIND_EXERCISE",
+	}
+	ExternalOTCSettlementKind_value = map[string]int32{
+		"EXTERNAL_OTC_SETTLEMENT_KIND_UNSPECIFIED": 0,
+		"EXTERNAL_OTC_SETTLEMENT_KIND_ACCEPT":      1,
+		"EXTERNAL_OTC_SETTLEMENT_KIND_EXERCISE":    2,
+	}
+)
+
+func (x ExternalOTCSettlementKind) Enum() *ExternalOTCSettlementKind {
+	p := new(ExternalOTCSettlementKind)
+	*p = x
+	return p
+}
+
+func (x ExternalOTCSettlementKind) String() string {
+	return protoimpl.X.EnumStringOf(x.Descriptor(), protoreflect.EnumNumber(x))
+}
+
+func (ExternalOTCSettlementKind) Descriptor() protoreflect.EnumDescriptor {
+	return file_trading_v1_external_otc_proto_enumTypes[6].Descriptor()
+}
+
+func (ExternalOTCSettlementKind) Type() protoreflect.EnumType {
+	return &file_trading_v1_external_otc_proto_enumTypes[6]
+}
+
+func (x ExternalOTCSettlementKind) Number() protoreflect.EnumNumber {
+	return protoreflect.EnumNumber(x)
+}
+
+// Deprecated: Use ExternalOTCSettlementKind.Descriptor instead.
+func (ExternalOTCSettlementKind) EnumDescriptor() ([]byte, []int) {
+	return file_trading_v1_external_otc_proto_rawDescGZIP(), []int{6}
+}
+
 // ExternalPublicHolding is one row in the discovery aggregation —
 // flattened across partner banks.
 type ExternalPublicHolding struct {
@@ -2301,6 +2404,206 @@ func (x *ReceiveExternalOTCExerciseNoticeResponse) GetContract() *ExternalOTCCon
 	return nil
 }
 
+type SettleExternalOTCOptionRequest struct {
+	state protoimpl.MessageState     `protogen:"open.v1"`
+	Phase ExternalOTCSettlementPhase `protobuf:"varint,1,opt,name=phase,proto3,enum=banka.trading.v1.ExternalOTCSettlementPhase" json:"phase,omitempty"`
+	// kind/option_ref/... are read on PREPARE; COMMIT/ROLLBACK look the
+	// settlement up by (sender_bank_code, transaction_id).
+	Kind           ExternalOTCSettlementKind `protobuf:"varint,2,opt,name=kind,proto3,enum=banka.trading.v1.ExternalOTCSettlementKind" json:"kind,omitempty"`
+	SenderBankCode string                    `protobuf:"bytes,3,opt,name=sender_bank_code,json=senderBankCode,proto3" json:"sender_bank_code,omitempty"`
+	TransactionId  string                    `protobuf:"bytes,4,opt,name=transaction_id,json=transactionId,proto3" json:"transaction_id,omitempty"`
+	// option_ref is the negotiationId (accept) or contractId (exercise),
+	// both minted by us, with our routing number.
+	OptionRef string `protobuf:"bytes,5,opt,name=option_ref,json=optionRef,proto3" json:"option_ref,omitempty"`
+	// seller_user_ref is our seller PERSON id (accept).
+	SellerUserRef string `protobuf:"bytes,6,opt,name=seller_user_ref,json=sellerUserRef,proto3" json:"seller_user_ref,omitempty"`
+	// cash leg credited to our side: premium (accept) / strike (exercise).
+	CashAmount   string `protobuf:"bytes,7,opt,name=cash_amount,json=cashAmount,proto3" json:"cash_amount,omitempty"`
+	CashCurrency string `protobuf:"bytes,8,opt,name=cash_currency,json=cashCurrency,proto3" json:"cash_currency,omitempty"`
+	// share leg (exercise).
+	Ticker        string `protobuf:"bytes,9,opt,name=ticker,proto3" json:"ticker,omitempty"`
+	Quantity      int64  `protobuf:"varint,10,opt,name=quantity,proto3" json:"quantity,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *SettleExternalOTCOptionRequest) Reset() {
+	*x = SettleExternalOTCOptionRequest{}
+	mi := &file_trading_v1_external_otc_proto_msgTypes[26]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *SettleExternalOTCOptionRequest) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*SettleExternalOTCOptionRequest) ProtoMessage() {}
+
+func (x *SettleExternalOTCOptionRequest) ProtoReflect() protoreflect.Message {
+	mi := &file_trading_v1_external_otc_proto_msgTypes[26]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use SettleExternalOTCOptionRequest.ProtoReflect.Descriptor instead.
+func (*SettleExternalOTCOptionRequest) Descriptor() ([]byte, []int) {
+	return file_trading_v1_external_otc_proto_rawDescGZIP(), []int{26}
+}
+
+func (x *SettleExternalOTCOptionRequest) GetPhase() ExternalOTCSettlementPhase {
+	if x != nil {
+		return x.Phase
+	}
+	return ExternalOTCSettlementPhase_EXTERNAL_OTC_SETTLEMENT_PHASE_UNSPECIFIED
+}
+
+func (x *SettleExternalOTCOptionRequest) GetKind() ExternalOTCSettlementKind {
+	if x != nil {
+		return x.Kind
+	}
+	return ExternalOTCSettlementKind_EXTERNAL_OTC_SETTLEMENT_KIND_UNSPECIFIED
+}
+
+func (x *SettleExternalOTCOptionRequest) GetSenderBankCode() string {
+	if x != nil {
+		return x.SenderBankCode
+	}
+	return ""
+}
+
+func (x *SettleExternalOTCOptionRequest) GetTransactionId() string {
+	if x != nil {
+		return x.TransactionId
+	}
+	return ""
+}
+
+func (x *SettleExternalOTCOptionRequest) GetOptionRef() string {
+	if x != nil {
+		return x.OptionRef
+	}
+	return ""
+}
+
+func (x *SettleExternalOTCOptionRequest) GetSellerUserRef() string {
+	if x != nil {
+		return x.SellerUserRef
+	}
+	return ""
+}
+
+func (x *SettleExternalOTCOptionRequest) GetCashAmount() string {
+	if x != nil {
+		return x.CashAmount
+	}
+	return ""
+}
+
+func (x *SettleExternalOTCOptionRequest) GetCashCurrency() string {
+	if x != nil {
+		return x.CashCurrency
+	}
+	return ""
+}
+
+func (x *SettleExternalOTCOptionRequest) GetTicker() string {
+	if x != nil {
+		return x.Ticker
+	}
+	return ""
+}
+
+func (x *SettleExternalOTCOptionRequest) GetQuantity() int64 {
+	if x != nil {
+		return x.Quantity
+	}
+	return 0
+}
+
+type SettleExternalOTCOptionResponse struct {
+	state protoimpl.MessageState `protogen:"open.v1"`
+	// accepted is the YES/NO vote on PREPARE, or success on COMMIT/ROLLBACK.
+	Accepted bool `protobuf:"varint,1,opt,name=accepted,proto3" json:"accepted,omitempty"`
+	// reason carries a NoVoteReason code (NO_SUCH_ACCOUNT, INSUFFICIENT_ASSET,
+	// OPTION_NEGOTIATION_NOT_FOUND, OPTION_USED_OR_EXPIRED, ...) when accepted
+	// is false.
+	Reason string `protobuf:"bytes,2,opt,name=reason,proto3" json:"reason,omitempty"`
+	// handled is false when no settlement is recorded for this tx, so the
+	// gateway can fall back to the bank cash 2PC on COMMIT/ROLLBACK.
+	Handled bool `protobuf:"varint,3,opt,name=handled,proto3" json:"handled,omitempty"`
+	// seller_account_number is our seller's settlement account, returned on
+	// PREPARE so the gateway can drive the premium/strike cash leg through
+	// the bank inbound 2PC.
+	SellerAccountNumber string `protobuf:"bytes,4,opt,name=seller_account_number,json=sellerAccountNumber,proto3" json:"seller_account_number,omitempty"`
+	unknownFields       protoimpl.UnknownFields
+	sizeCache           protoimpl.SizeCache
+}
+
+func (x *SettleExternalOTCOptionResponse) Reset() {
+	*x = SettleExternalOTCOptionResponse{}
+	mi := &file_trading_v1_external_otc_proto_msgTypes[27]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *SettleExternalOTCOptionResponse) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*SettleExternalOTCOptionResponse) ProtoMessage() {}
+
+func (x *SettleExternalOTCOptionResponse) ProtoReflect() protoreflect.Message {
+	mi := &file_trading_v1_external_otc_proto_msgTypes[27]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use SettleExternalOTCOptionResponse.ProtoReflect.Descriptor instead.
+func (*SettleExternalOTCOptionResponse) Descriptor() ([]byte, []int) {
+	return file_trading_v1_external_otc_proto_rawDescGZIP(), []int{27}
+}
+
+func (x *SettleExternalOTCOptionResponse) GetAccepted() bool {
+	if x != nil {
+		return x.Accepted
+	}
+	return false
+}
+
+func (x *SettleExternalOTCOptionResponse) GetReason() string {
+	if x != nil {
+		return x.Reason
+	}
+	return ""
+}
+
+func (x *SettleExternalOTCOptionResponse) GetHandled() bool {
+	if x != nil {
+		return x.Handled
+	}
+	return false
+}
+
+func (x *SettleExternalOTCOptionResponse) GetSellerAccountNumber() string {
+	if x != nil {
+		return x.SellerAccountNumber
+	}
+	return ""
+}
+
 var File_trading_v1_external_otc_proto protoreflect.FileDescriptor
 
 const file_trading_v1_external_otc_proto_rawDesc = "" +
@@ -2482,7 +2785,26 @@ const file_trading_v1_external_otc_proto_rawDesc = "" +
 	"\x12sender_contract_id\x18\x02 \x01(\tB\a\xbaH\x04r\x02\x10\x01R\x10senderContractId\x12-\n" +
 	"\x0eexercise_op_id\x18\x03 \x01(\tB\a\xbaH\x04r\x02\x10\x01R\fexerciseOpId\"m\n" +
 	"(ReceiveExternalOTCExerciseNoticeResponse\x12A\n" +
-	"\bcontract\x18\x01 \x01(\v2%.banka.trading.v1.ExternalOTCContractR\bcontract*\x88\x01\n" +
+	"\bcontract\x18\x01 \x01(\v2%.banka.trading.v1.ExternalOTCContractR\bcontract\"\xc9\x03\n" +
+	"\x1eSettleExternalOTCOptionRequest\x12B\n" +
+	"\x05phase\x18\x01 \x01(\x0e2,.banka.trading.v1.ExternalOTCSettlementPhaseR\x05phase\x12?\n" +
+	"\x04kind\x18\x02 \x01(\x0e2+.banka.trading.v1.ExternalOTCSettlementKindR\x04kind\x121\n" +
+	"\x10sender_bank_code\x18\x03 \x01(\tB\a\xbaH\x04r\x02\x10\x01R\x0esenderBankCode\x12.\n" +
+	"\x0etransaction_id\x18\x04 \x01(\tB\a\xbaH\x04r\x02\x10\x01R\rtransactionId\x12\x1d\n" +
+	"\n" +
+	"option_ref\x18\x05 \x01(\tR\toptionRef\x12&\n" +
+	"\x0fseller_user_ref\x18\x06 \x01(\tR\rsellerUserRef\x12\x1f\n" +
+	"\vcash_amount\x18\a \x01(\tR\n" +
+	"cashAmount\x12#\n" +
+	"\rcash_currency\x18\b \x01(\tR\fcashCurrency\x12\x16\n" +
+	"\x06ticker\x18\t \x01(\tR\x06ticker\x12\x1a\n" +
+	"\bquantity\x18\n" +
+	" \x01(\x03R\bquantity\"\xa3\x01\n" +
+	"\x1fSettleExternalOTCOptionResponse\x12\x1a\n" +
+	"\baccepted\x18\x01 \x01(\bR\baccepted\x12\x16\n" +
+	"\x06reason\x18\x02 \x01(\tR\x06reason\x12\x18\n" +
+	"\ahandled\x18\x03 \x01(\bR\ahandled\x122\n" +
+	"\x15seller_account_number\x18\x04 \x01(\tR\x13sellerAccountNumber*\x88\x01\n" +
 	"\x14ExternalOTCDirection\x12&\n" +
 	"\"EXTERNAL_OTC_DIRECTION_UNSPECIFIED\x10\x00\x12#\n" +
 	"\x1fEXTERNAL_OTC_DIRECTION_OUTGOING\x10\x01\x12#\n" +
@@ -2508,7 +2830,16 @@ const file_trading_v1_external_otc_proto_rawDesc = "" +
 	"#EXTERNAL_OTC_CONTRACT_STATUS_ACTIVE\x10\x01\x12*\n" +
 	"&EXTERNAL_OTC_CONTRACT_STATUS_EXERCISED\x10\x02\x12(\n" +
 	"$EXTERNAL_OTC_CONTRACT_STATUS_EXPIRED\x10\x03\x12)\n" +
-	"%EXTERNAL_OTC_CONTRACT_STATUS_SETTLING\x10\x042\xf9\x11\n" +
+	"%EXTERNAL_OTC_CONTRACT_STATUS_SETTLING\x10\x04*\xcc\x01\n" +
+	"\x1aExternalOTCSettlementPhase\x12-\n" +
+	")EXTERNAL_OTC_SETTLEMENT_PHASE_UNSPECIFIED\x10\x00\x12)\n" +
+	"%EXTERNAL_OTC_SETTLEMENT_PHASE_PREPARE\x10\x01\x12(\n" +
+	"$EXTERNAL_OTC_SETTLEMENT_PHASE_COMMIT\x10\x02\x12*\n" +
+	"&EXTERNAL_OTC_SETTLEMENT_PHASE_ROLLBACK\x10\x03*\x9d\x01\n" +
+	"\x19ExternalOTCSettlementKind\x12,\n" +
+	"(EXTERNAL_OTC_SETTLEMENT_KIND_UNSPECIFIED\x10\x00\x12'\n" +
+	"#EXTERNAL_OTC_SETTLEMENT_KIND_ACCEPT\x10\x01\x12)\n" +
+	"%EXTERNAL_OTC_SETTLEMENT_KIND_EXERCISE\x10\x022\xf9\x12\n" +
 	"\x12ExternalOTCService\x12\xaf\x01\n" +
 	"\x1aListExternalPublicHoldings\x123.banka.trading.v1.ListExternalPublicHoldingsRequest\x1a4.banka.trading.v1.ListExternalPublicHoldingsResponse\"&\x82\xd3\xe4\x93\x02 \x12\x1e/api/v1/otc/external-discovery\x12\xa3\x01\n" +
 	"\x16CreateExternalOTCOffer\x12/.banka.trading.v1.CreateExternalOTCOfferRequest\x1a0.banka.trading.v1.CreateExternalOTCOfferResponse\"&\x82\xd3\xe4\x93\x02 :\x01*\"\x1b/api/v1/otc/external-offers\x12\xa0\x01\n" +
@@ -2523,7 +2854,8 @@ const file_trading_v1_external_otc_proto_rawDesc = "" +
 	"\x19ReceiveExternalOTCCounter\x122.banka.trading.v1.ReceiveExternalOTCCounterRequest\x1a#.banka.trading.v1.ExternalOTCThread\x12t\n" +
 	"\x1aReceiveExternalOTCWithdraw\x121.banka.trading.v1.ReceiveExternalOTCActionRequest\x1a#.banka.trading.v1.ExternalOTCThread\x12r\n" +
 	"\x18ReceiveExternalOTCAccept\x121.banka.trading.v1.ReceiveExternalOTCActionRequest\x1a#.banka.trading.v1.ExternalOTCThread\x12\x99\x01\n" +
-	" ReceiveExternalOTCExerciseNotice\x129.banka.trading.v1.ReceiveExternalOTCExerciseNoticeRequest\x1a:.banka.trading.v1.ReceiveExternalOTCExerciseNoticeResponseB\xd1\x01\n" +
+	" ReceiveExternalOTCExerciseNotice\x129.banka.trading.v1.ReceiveExternalOTCExerciseNoticeRequest\x1a:.banka.trading.v1.ReceiveExternalOTCExerciseNoticeResponse\x12~\n" +
+	"\x17SettleExternalOTCOption\x120.banka.trading.v1.SettleExternalOTCOptionRequest\x1a1.banka.trading.v1.SettleExternalOTCOptionResponseB\xd1\x01\n" +
 	"\x14com.banka.trading.v1B\x10ExternalOtcProtoP\x01ZEgithub.com/RAF-SI-2025/Banka-3-Backend/gen/proto/trading/v1;tradingv1\xa2\x02\x03BTX\xaa\x02\x10Banka.Trading.V1\xca\x02\x10Banka\\Trading\\V1\xe2\x02\x1cBanka\\Trading\\V1\\GPBMetadata\xea\x02\x12Banka::Trading::V1b\x06proto3"
 
 var (
@@ -2538,123 +2870,131 @@ func file_trading_v1_external_otc_proto_rawDescGZIP() []byte {
 	return file_trading_v1_external_otc_proto_rawDescData
 }
 
-var file_trading_v1_external_otc_proto_enumTypes = make([]protoimpl.EnumInfo, 5)
-var file_trading_v1_external_otc_proto_msgTypes = make([]protoimpl.MessageInfo, 26)
+var file_trading_v1_external_otc_proto_enumTypes = make([]protoimpl.EnumInfo, 7)
+var file_trading_v1_external_otc_proto_msgTypes = make([]protoimpl.MessageInfo, 28)
 var file_trading_v1_external_otc_proto_goTypes = []any{
 	(ExternalOTCDirection)(0),                        // 0: banka.trading.v1.ExternalOTCDirection
 	(ExternalOTCSide)(0),                             // 1: banka.trading.v1.ExternalOTCSide
 	(ExternalOTCRole)(0),                             // 2: banka.trading.v1.ExternalOTCRole
 	(ExternalOTCThreadStatus)(0),                     // 3: banka.trading.v1.ExternalOTCThreadStatus
 	(ExternalOTCContractStatus)(0),                   // 4: banka.trading.v1.ExternalOTCContractStatus
-	(*ExternalPublicHolding)(nil),                    // 5: banka.trading.v1.ExternalPublicHolding
-	(*ExternalOTCThread)(nil),                        // 6: banka.trading.v1.ExternalOTCThread
-	(*ExternalOTCIteration)(nil),                     // 7: banka.trading.v1.ExternalOTCIteration
-	(*ExternalOTCContract)(nil),                      // 8: banka.trading.v1.ExternalOTCContract
-	(*ListExternalPublicHoldingsRequest)(nil),        // 9: banka.trading.v1.ListExternalPublicHoldingsRequest
-	(*ListExternalPublicHoldingsResponse)(nil),       // 10: banka.trading.v1.ListExternalPublicHoldingsResponse
-	(*CreateExternalOTCOfferRequest)(nil),            // 11: banka.trading.v1.CreateExternalOTCOfferRequest
-	(*CreateExternalOTCOfferResponse)(nil),           // 12: banka.trading.v1.CreateExternalOTCOfferResponse
-	(*ListExternalOTCThreadsRequest)(nil),            // 13: banka.trading.v1.ListExternalOTCThreadsRequest
-	(*ListExternalOTCThreadsResponse)(nil),           // 14: banka.trading.v1.ListExternalOTCThreadsResponse
-	(*GetExternalOTCThreadRequest)(nil),              // 15: banka.trading.v1.GetExternalOTCThreadRequest
-	(*GetExternalOTCThreadResponse)(nil),             // 16: banka.trading.v1.GetExternalOTCThreadResponse
-	(*CounterExternalOTCOfferRequest)(nil),           // 17: banka.trading.v1.CounterExternalOTCOfferRequest
-	(*WithdrawExternalOTCOfferRequest)(nil),          // 18: banka.trading.v1.WithdrawExternalOTCOfferRequest
-	(*AcceptExternalOTCOfferRequest)(nil),            // 19: banka.trading.v1.AcceptExternalOTCOfferRequest
-	(*AcceptExternalOTCOfferResponse)(nil),           // 20: banka.trading.v1.AcceptExternalOTCOfferResponse
-	(*ListExternalOTCContractsRequest)(nil),          // 21: banka.trading.v1.ListExternalOTCContractsRequest
-	(*ListExternalOTCContractsResponse)(nil),         // 22: banka.trading.v1.ListExternalOTCContractsResponse
-	(*ExerciseExternalOTCContractRequest)(nil),       // 23: banka.trading.v1.ExerciseExternalOTCContractRequest
-	(*ExerciseExternalOTCContractResponse)(nil),      // 24: banka.trading.v1.ExerciseExternalOTCContractResponse
-	(*ReceiveExternalOTCOfferRequest)(nil),           // 25: banka.trading.v1.ReceiveExternalOTCOfferRequest
-	(*ReceiveExternalOTCOfferResponse)(nil),          // 26: banka.trading.v1.ReceiveExternalOTCOfferResponse
-	(*ReceiveExternalOTCCounterRequest)(nil),         // 27: banka.trading.v1.ReceiveExternalOTCCounterRequest
-	(*ReceiveExternalOTCActionRequest)(nil),          // 28: banka.trading.v1.ReceiveExternalOTCActionRequest
-	(*ReceiveExternalOTCExerciseNoticeRequest)(nil),  // 29: banka.trading.v1.ReceiveExternalOTCExerciseNoticeRequest
-	(*ReceiveExternalOTCExerciseNoticeResponse)(nil), // 30: banka.trading.v1.ReceiveExternalOTCExerciseNoticeResponse
-	(SecurityType)(0),                                // 31: banka.trading.v1.SecurityType
-	(Currency)(0),                                    // 32: banka.trading.v1.Currency
-	(UserKind)(0),                                    // 33: banka.trading.v1.UserKind
-	(*timestamppb.Timestamp)(nil),                    // 34: google.protobuf.Timestamp
+	(ExternalOTCSettlementPhase)(0),                  // 5: banka.trading.v1.ExternalOTCSettlementPhase
+	(ExternalOTCSettlementKind)(0),                   // 6: banka.trading.v1.ExternalOTCSettlementKind
+	(*ExternalPublicHolding)(nil),                    // 7: banka.trading.v1.ExternalPublicHolding
+	(*ExternalOTCThread)(nil),                        // 8: banka.trading.v1.ExternalOTCThread
+	(*ExternalOTCIteration)(nil),                     // 9: banka.trading.v1.ExternalOTCIteration
+	(*ExternalOTCContract)(nil),                      // 10: banka.trading.v1.ExternalOTCContract
+	(*ListExternalPublicHoldingsRequest)(nil),        // 11: banka.trading.v1.ListExternalPublicHoldingsRequest
+	(*ListExternalPublicHoldingsResponse)(nil),       // 12: banka.trading.v1.ListExternalPublicHoldingsResponse
+	(*CreateExternalOTCOfferRequest)(nil),            // 13: banka.trading.v1.CreateExternalOTCOfferRequest
+	(*CreateExternalOTCOfferResponse)(nil),           // 14: banka.trading.v1.CreateExternalOTCOfferResponse
+	(*ListExternalOTCThreadsRequest)(nil),            // 15: banka.trading.v1.ListExternalOTCThreadsRequest
+	(*ListExternalOTCThreadsResponse)(nil),           // 16: banka.trading.v1.ListExternalOTCThreadsResponse
+	(*GetExternalOTCThreadRequest)(nil),              // 17: banka.trading.v1.GetExternalOTCThreadRequest
+	(*GetExternalOTCThreadResponse)(nil),             // 18: banka.trading.v1.GetExternalOTCThreadResponse
+	(*CounterExternalOTCOfferRequest)(nil),           // 19: banka.trading.v1.CounterExternalOTCOfferRequest
+	(*WithdrawExternalOTCOfferRequest)(nil),          // 20: banka.trading.v1.WithdrawExternalOTCOfferRequest
+	(*AcceptExternalOTCOfferRequest)(nil),            // 21: banka.trading.v1.AcceptExternalOTCOfferRequest
+	(*AcceptExternalOTCOfferResponse)(nil),           // 22: banka.trading.v1.AcceptExternalOTCOfferResponse
+	(*ListExternalOTCContractsRequest)(nil),          // 23: banka.trading.v1.ListExternalOTCContractsRequest
+	(*ListExternalOTCContractsResponse)(nil),         // 24: banka.trading.v1.ListExternalOTCContractsResponse
+	(*ExerciseExternalOTCContractRequest)(nil),       // 25: banka.trading.v1.ExerciseExternalOTCContractRequest
+	(*ExerciseExternalOTCContractResponse)(nil),      // 26: banka.trading.v1.ExerciseExternalOTCContractResponse
+	(*ReceiveExternalOTCOfferRequest)(nil),           // 27: banka.trading.v1.ReceiveExternalOTCOfferRequest
+	(*ReceiveExternalOTCOfferResponse)(nil),          // 28: banka.trading.v1.ReceiveExternalOTCOfferResponse
+	(*ReceiveExternalOTCCounterRequest)(nil),         // 29: banka.trading.v1.ReceiveExternalOTCCounterRequest
+	(*ReceiveExternalOTCActionRequest)(nil),          // 30: banka.trading.v1.ReceiveExternalOTCActionRequest
+	(*ReceiveExternalOTCExerciseNoticeRequest)(nil),  // 31: banka.trading.v1.ReceiveExternalOTCExerciseNoticeRequest
+	(*ReceiveExternalOTCExerciseNoticeResponse)(nil), // 32: banka.trading.v1.ReceiveExternalOTCExerciseNoticeResponse
+	(*SettleExternalOTCOptionRequest)(nil),           // 33: banka.trading.v1.SettleExternalOTCOptionRequest
+	(*SettleExternalOTCOptionResponse)(nil),          // 34: banka.trading.v1.SettleExternalOTCOptionResponse
+	(SecurityType)(0),                                // 35: banka.trading.v1.SecurityType
+	(Currency)(0),                                    // 36: banka.trading.v1.Currency
+	(UserKind)(0),                                    // 37: banka.trading.v1.UserKind
+	(*timestamppb.Timestamp)(nil),                    // 38: google.protobuf.Timestamp
 }
 var file_trading_v1_external_otc_proto_depIdxs = []int32{
-	31, // 0: banka.trading.v1.ExternalPublicHolding.security_type:type_name -> banka.trading.v1.SecurityType
-	32, // 1: banka.trading.v1.ExternalPublicHolding.currency:type_name -> banka.trading.v1.Currency
+	35, // 0: banka.trading.v1.ExternalPublicHolding.security_type:type_name -> banka.trading.v1.SecurityType
+	36, // 1: banka.trading.v1.ExternalPublicHolding.currency:type_name -> banka.trading.v1.Currency
 	0,  // 2: banka.trading.v1.ExternalOTCThread.direction:type_name -> banka.trading.v1.ExternalOTCDirection
-	33, // 3: banka.trading.v1.ExternalOTCThread.local_user_kind:type_name -> banka.trading.v1.UserKind
+	37, // 3: banka.trading.v1.ExternalOTCThread.local_user_kind:type_name -> banka.trading.v1.UserKind
 	2,  // 4: banka.trading.v1.ExternalOTCThread.local_role:type_name -> banka.trading.v1.ExternalOTCRole
-	32, // 5: banka.trading.v1.ExternalOTCThread.currency:type_name -> banka.trading.v1.Currency
-	34, // 6: banka.trading.v1.ExternalOTCThread.settlement_date:type_name -> google.protobuf.Timestamp
+	36, // 5: banka.trading.v1.ExternalOTCThread.currency:type_name -> banka.trading.v1.Currency
+	38, // 6: banka.trading.v1.ExternalOTCThread.settlement_date:type_name -> google.protobuf.Timestamp
 	1,  // 7: banka.trading.v1.ExternalOTCThread.modified_by_side:type_name -> banka.trading.v1.ExternalOTCSide
 	3,  // 8: banka.trading.v1.ExternalOTCThread.status:type_name -> banka.trading.v1.ExternalOTCThreadStatus
-	34, // 9: banka.trading.v1.ExternalOTCThread.created_at:type_name -> google.protobuf.Timestamp
-	34, // 10: banka.trading.v1.ExternalOTCThread.updated_at:type_name -> google.protobuf.Timestamp
+	38, // 9: banka.trading.v1.ExternalOTCThread.created_at:type_name -> google.protobuf.Timestamp
+	38, // 10: banka.trading.v1.ExternalOTCThread.updated_at:type_name -> google.protobuf.Timestamp
 	1,  // 11: banka.trading.v1.ExternalOTCIteration.proposed_by_side:type_name -> banka.trading.v1.ExternalOTCSide
-	34, // 12: banka.trading.v1.ExternalOTCIteration.settlement_date:type_name -> google.protobuf.Timestamp
-	34, // 13: banka.trading.v1.ExternalOTCIteration.created_at:type_name -> google.protobuf.Timestamp
+	38, // 12: banka.trading.v1.ExternalOTCIteration.settlement_date:type_name -> google.protobuf.Timestamp
+	38, // 13: banka.trading.v1.ExternalOTCIteration.created_at:type_name -> google.protobuf.Timestamp
 	0,  // 14: banka.trading.v1.ExternalOTCContract.direction:type_name -> banka.trading.v1.ExternalOTCDirection
-	33, // 15: banka.trading.v1.ExternalOTCContract.local_user_kind:type_name -> banka.trading.v1.UserKind
+	37, // 15: banka.trading.v1.ExternalOTCContract.local_user_kind:type_name -> banka.trading.v1.UserKind
 	2,  // 16: banka.trading.v1.ExternalOTCContract.local_role:type_name -> banka.trading.v1.ExternalOTCRole
-	32, // 17: banka.trading.v1.ExternalOTCContract.currency:type_name -> banka.trading.v1.Currency
-	34, // 18: banka.trading.v1.ExternalOTCContract.settlement_date:type_name -> google.protobuf.Timestamp
+	36, // 17: banka.trading.v1.ExternalOTCContract.currency:type_name -> banka.trading.v1.Currency
+	38, // 18: banka.trading.v1.ExternalOTCContract.settlement_date:type_name -> google.protobuf.Timestamp
 	1,  // 19: banka.trading.v1.ExternalOTCContract.accepted_by_side:type_name -> banka.trading.v1.ExternalOTCSide
 	4,  // 20: banka.trading.v1.ExternalOTCContract.status:type_name -> banka.trading.v1.ExternalOTCContractStatus
-	34, // 21: banka.trading.v1.ExternalOTCContract.exercised_at:type_name -> google.protobuf.Timestamp
-	34, // 22: banka.trading.v1.ExternalOTCContract.created_at:type_name -> google.protobuf.Timestamp
-	34, // 23: banka.trading.v1.ExternalOTCContract.updated_at:type_name -> google.protobuf.Timestamp
-	5,  // 24: banka.trading.v1.ListExternalPublicHoldingsResponse.items:type_name -> banka.trading.v1.ExternalPublicHolding
-	31, // 25: banka.trading.v1.CreateExternalOTCOfferRequest.security_type:type_name -> banka.trading.v1.SecurityType
-	32, // 26: banka.trading.v1.CreateExternalOTCOfferRequest.currency:type_name -> banka.trading.v1.Currency
-	34, // 27: banka.trading.v1.CreateExternalOTCOfferRequest.settlement_date:type_name -> google.protobuf.Timestamp
-	6,  // 28: banka.trading.v1.CreateExternalOTCOfferResponse.local_mirror:type_name -> banka.trading.v1.ExternalOTCThread
+	38, // 21: banka.trading.v1.ExternalOTCContract.exercised_at:type_name -> google.protobuf.Timestamp
+	38, // 22: banka.trading.v1.ExternalOTCContract.created_at:type_name -> google.protobuf.Timestamp
+	38, // 23: banka.trading.v1.ExternalOTCContract.updated_at:type_name -> google.protobuf.Timestamp
+	7,  // 24: banka.trading.v1.ListExternalPublicHoldingsResponse.items:type_name -> banka.trading.v1.ExternalPublicHolding
+	35, // 25: banka.trading.v1.CreateExternalOTCOfferRequest.security_type:type_name -> banka.trading.v1.SecurityType
+	36, // 26: banka.trading.v1.CreateExternalOTCOfferRequest.currency:type_name -> banka.trading.v1.Currency
+	38, // 27: banka.trading.v1.CreateExternalOTCOfferRequest.settlement_date:type_name -> google.protobuf.Timestamp
+	8,  // 28: banka.trading.v1.CreateExternalOTCOfferResponse.local_mirror:type_name -> banka.trading.v1.ExternalOTCThread
 	3,  // 29: banka.trading.v1.ListExternalOTCThreadsRequest.status:type_name -> banka.trading.v1.ExternalOTCThreadStatus
-	6,  // 30: banka.trading.v1.ListExternalOTCThreadsResponse.threads:type_name -> banka.trading.v1.ExternalOTCThread
-	6,  // 31: banka.trading.v1.GetExternalOTCThreadResponse.thread:type_name -> banka.trading.v1.ExternalOTCThread
-	7,  // 32: banka.trading.v1.GetExternalOTCThreadResponse.iterations:type_name -> banka.trading.v1.ExternalOTCIteration
-	8,  // 33: banka.trading.v1.GetExternalOTCThreadResponse.contract:type_name -> banka.trading.v1.ExternalOTCContract
-	34, // 34: banka.trading.v1.CounterExternalOTCOfferRequest.settlement_date:type_name -> google.protobuf.Timestamp
-	6,  // 35: banka.trading.v1.AcceptExternalOTCOfferResponse.thread:type_name -> banka.trading.v1.ExternalOTCThread
-	8,  // 36: banka.trading.v1.AcceptExternalOTCOfferResponse.contract:type_name -> banka.trading.v1.ExternalOTCContract
+	8,  // 30: banka.trading.v1.ListExternalOTCThreadsResponse.threads:type_name -> banka.trading.v1.ExternalOTCThread
+	8,  // 31: banka.trading.v1.GetExternalOTCThreadResponse.thread:type_name -> banka.trading.v1.ExternalOTCThread
+	9,  // 32: banka.trading.v1.GetExternalOTCThreadResponse.iterations:type_name -> banka.trading.v1.ExternalOTCIteration
+	10, // 33: banka.trading.v1.GetExternalOTCThreadResponse.contract:type_name -> banka.trading.v1.ExternalOTCContract
+	38, // 34: banka.trading.v1.CounterExternalOTCOfferRequest.settlement_date:type_name -> google.protobuf.Timestamp
+	8,  // 35: banka.trading.v1.AcceptExternalOTCOfferResponse.thread:type_name -> banka.trading.v1.ExternalOTCThread
+	10, // 36: banka.trading.v1.AcceptExternalOTCOfferResponse.contract:type_name -> banka.trading.v1.ExternalOTCContract
 	4,  // 37: banka.trading.v1.ListExternalOTCContractsRequest.status:type_name -> banka.trading.v1.ExternalOTCContractStatus
-	8,  // 38: banka.trading.v1.ListExternalOTCContractsResponse.contracts:type_name -> banka.trading.v1.ExternalOTCContract
-	8,  // 39: banka.trading.v1.ExerciseExternalOTCContractResponse.contract:type_name -> banka.trading.v1.ExternalOTCContract
-	34, // 40: banka.trading.v1.ReceiveExternalOTCOfferRequest.settlement_date:type_name -> google.protobuf.Timestamp
-	6,  // 41: banka.trading.v1.ReceiveExternalOTCOfferResponse.local_mirror:type_name -> banka.trading.v1.ExternalOTCThread
-	34, // 42: banka.trading.v1.ReceiveExternalOTCCounterRequest.settlement_date:type_name -> google.protobuf.Timestamp
-	8,  // 43: banka.trading.v1.ReceiveExternalOTCExerciseNoticeResponse.contract:type_name -> banka.trading.v1.ExternalOTCContract
-	9,  // 44: banka.trading.v1.ExternalOTCService.ListExternalPublicHoldings:input_type -> banka.trading.v1.ListExternalPublicHoldingsRequest
-	11, // 45: banka.trading.v1.ExternalOTCService.CreateExternalOTCOffer:input_type -> banka.trading.v1.CreateExternalOTCOfferRequest
-	13, // 46: banka.trading.v1.ExternalOTCService.ListExternalOTCThreads:input_type -> banka.trading.v1.ListExternalOTCThreadsRequest
-	15, // 47: banka.trading.v1.ExternalOTCService.GetExternalOTCThread:input_type -> banka.trading.v1.GetExternalOTCThreadRequest
-	17, // 48: banka.trading.v1.ExternalOTCService.CounterExternalOTCOffer:input_type -> banka.trading.v1.CounterExternalOTCOfferRequest
-	18, // 49: banka.trading.v1.ExternalOTCService.WithdrawExternalOTCOffer:input_type -> banka.trading.v1.WithdrawExternalOTCOfferRequest
-	19, // 50: banka.trading.v1.ExternalOTCService.AcceptExternalOTCOffer:input_type -> banka.trading.v1.AcceptExternalOTCOfferRequest
-	21, // 51: banka.trading.v1.ExternalOTCService.ListExternalOTCContracts:input_type -> banka.trading.v1.ListExternalOTCContractsRequest
-	23, // 52: banka.trading.v1.ExternalOTCService.ExerciseExternalOTCContract:input_type -> banka.trading.v1.ExerciseExternalOTCContractRequest
-	25, // 53: banka.trading.v1.ExternalOTCService.ReceiveExternalOTCOffer:input_type -> banka.trading.v1.ReceiveExternalOTCOfferRequest
-	27, // 54: banka.trading.v1.ExternalOTCService.ReceiveExternalOTCCounter:input_type -> banka.trading.v1.ReceiveExternalOTCCounterRequest
-	28, // 55: banka.trading.v1.ExternalOTCService.ReceiveExternalOTCWithdraw:input_type -> banka.trading.v1.ReceiveExternalOTCActionRequest
-	28, // 56: banka.trading.v1.ExternalOTCService.ReceiveExternalOTCAccept:input_type -> banka.trading.v1.ReceiveExternalOTCActionRequest
-	29, // 57: banka.trading.v1.ExternalOTCService.ReceiveExternalOTCExerciseNotice:input_type -> banka.trading.v1.ReceiveExternalOTCExerciseNoticeRequest
-	10, // 58: banka.trading.v1.ExternalOTCService.ListExternalPublicHoldings:output_type -> banka.trading.v1.ListExternalPublicHoldingsResponse
-	12, // 59: banka.trading.v1.ExternalOTCService.CreateExternalOTCOffer:output_type -> banka.trading.v1.CreateExternalOTCOfferResponse
-	14, // 60: banka.trading.v1.ExternalOTCService.ListExternalOTCThreads:output_type -> banka.trading.v1.ListExternalOTCThreadsResponse
-	16, // 61: banka.trading.v1.ExternalOTCService.GetExternalOTCThread:output_type -> banka.trading.v1.GetExternalOTCThreadResponse
-	6,  // 62: banka.trading.v1.ExternalOTCService.CounterExternalOTCOffer:output_type -> banka.trading.v1.ExternalOTCThread
-	6,  // 63: banka.trading.v1.ExternalOTCService.WithdrawExternalOTCOffer:output_type -> banka.trading.v1.ExternalOTCThread
-	20, // 64: banka.trading.v1.ExternalOTCService.AcceptExternalOTCOffer:output_type -> banka.trading.v1.AcceptExternalOTCOfferResponse
-	22, // 65: banka.trading.v1.ExternalOTCService.ListExternalOTCContracts:output_type -> banka.trading.v1.ListExternalOTCContractsResponse
-	24, // 66: banka.trading.v1.ExternalOTCService.ExerciseExternalOTCContract:output_type -> banka.trading.v1.ExerciseExternalOTCContractResponse
-	26, // 67: banka.trading.v1.ExternalOTCService.ReceiveExternalOTCOffer:output_type -> banka.trading.v1.ReceiveExternalOTCOfferResponse
-	6,  // 68: banka.trading.v1.ExternalOTCService.ReceiveExternalOTCCounter:output_type -> banka.trading.v1.ExternalOTCThread
-	6,  // 69: banka.trading.v1.ExternalOTCService.ReceiveExternalOTCWithdraw:output_type -> banka.trading.v1.ExternalOTCThread
-	6,  // 70: banka.trading.v1.ExternalOTCService.ReceiveExternalOTCAccept:output_type -> banka.trading.v1.ExternalOTCThread
-	30, // 71: banka.trading.v1.ExternalOTCService.ReceiveExternalOTCExerciseNotice:output_type -> banka.trading.v1.ReceiveExternalOTCExerciseNoticeResponse
-	58, // [58:72] is the sub-list for method output_type
-	44, // [44:58] is the sub-list for method input_type
-	44, // [44:44] is the sub-list for extension type_name
-	44, // [44:44] is the sub-list for extension extendee
-	0,  // [0:44] is the sub-list for field type_name
+	10, // 38: banka.trading.v1.ListExternalOTCContractsResponse.contracts:type_name -> banka.trading.v1.ExternalOTCContract
+	10, // 39: banka.trading.v1.ExerciseExternalOTCContractResponse.contract:type_name -> banka.trading.v1.ExternalOTCContract
+	38, // 40: banka.trading.v1.ReceiveExternalOTCOfferRequest.settlement_date:type_name -> google.protobuf.Timestamp
+	8,  // 41: banka.trading.v1.ReceiveExternalOTCOfferResponse.local_mirror:type_name -> banka.trading.v1.ExternalOTCThread
+	38, // 42: banka.trading.v1.ReceiveExternalOTCCounterRequest.settlement_date:type_name -> google.protobuf.Timestamp
+	10, // 43: banka.trading.v1.ReceiveExternalOTCExerciseNoticeResponse.contract:type_name -> banka.trading.v1.ExternalOTCContract
+	5,  // 44: banka.trading.v1.SettleExternalOTCOptionRequest.phase:type_name -> banka.trading.v1.ExternalOTCSettlementPhase
+	6,  // 45: banka.trading.v1.SettleExternalOTCOptionRequest.kind:type_name -> banka.trading.v1.ExternalOTCSettlementKind
+	11, // 46: banka.trading.v1.ExternalOTCService.ListExternalPublicHoldings:input_type -> banka.trading.v1.ListExternalPublicHoldingsRequest
+	13, // 47: banka.trading.v1.ExternalOTCService.CreateExternalOTCOffer:input_type -> banka.trading.v1.CreateExternalOTCOfferRequest
+	15, // 48: banka.trading.v1.ExternalOTCService.ListExternalOTCThreads:input_type -> banka.trading.v1.ListExternalOTCThreadsRequest
+	17, // 49: banka.trading.v1.ExternalOTCService.GetExternalOTCThread:input_type -> banka.trading.v1.GetExternalOTCThreadRequest
+	19, // 50: banka.trading.v1.ExternalOTCService.CounterExternalOTCOffer:input_type -> banka.trading.v1.CounterExternalOTCOfferRequest
+	20, // 51: banka.trading.v1.ExternalOTCService.WithdrawExternalOTCOffer:input_type -> banka.trading.v1.WithdrawExternalOTCOfferRequest
+	21, // 52: banka.trading.v1.ExternalOTCService.AcceptExternalOTCOffer:input_type -> banka.trading.v1.AcceptExternalOTCOfferRequest
+	23, // 53: banka.trading.v1.ExternalOTCService.ListExternalOTCContracts:input_type -> banka.trading.v1.ListExternalOTCContractsRequest
+	25, // 54: banka.trading.v1.ExternalOTCService.ExerciseExternalOTCContract:input_type -> banka.trading.v1.ExerciseExternalOTCContractRequest
+	27, // 55: banka.trading.v1.ExternalOTCService.ReceiveExternalOTCOffer:input_type -> banka.trading.v1.ReceiveExternalOTCOfferRequest
+	29, // 56: banka.trading.v1.ExternalOTCService.ReceiveExternalOTCCounter:input_type -> banka.trading.v1.ReceiveExternalOTCCounterRequest
+	30, // 57: banka.trading.v1.ExternalOTCService.ReceiveExternalOTCWithdraw:input_type -> banka.trading.v1.ReceiveExternalOTCActionRequest
+	30, // 58: banka.trading.v1.ExternalOTCService.ReceiveExternalOTCAccept:input_type -> banka.trading.v1.ReceiveExternalOTCActionRequest
+	31, // 59: banka.trading.v1.ExternalOTCService.ReceiveExternalOTCExerciseNotice:input_type -> banka.trading.v1.ReceiveExternalOTCExerciseNoticeRequest
+	33, // 60: banka.trading.v1.ExternalOTCService.SettleExternalOTCOption:input_type -> banka.trading.v1.SettleExternalOTCOptionRequest
+	12, // 61: banka.trading.v1.ExternalOTCService.ListExternalPublicHoldings:output_type -> banka.trading.v1.ListExternalPublicHoldingsResponse
+	14, // 62: banka.trading.v1.ExternalOTCService.CreateExternalOTCOffer:output_type -> banka.trading.v1.CreateExternalOTCOfferResponse
+	16, // 63: banka.trading.v1.ExternalOTCService.ListExternalOTCThreads:output_type -> banka.trading.v1.ListExternalOTCThreadsResponse
+	18, // 64: banka.trading.v1.ExternalOTCService.GetExternalOTCThread:output_type -> banka.trading.v1.GetExternalOTCThreadResponse
+	8,  // 65: banka.trading.v1.ExternalOTCService.CounterExternalOTCOffer:output_type -> banka.trading.v1.ExternalOTCThread
+	8,  // 66: banka.trading.v1.ExternalOTCService.WithdrawExternalOTCOffer:output_type -> banka.trading.v1.ExternalOTCThread
+	22, // 67: banka.trading.v1.ExternalOTCService.AcceptExternalOTCOffer:output_type -> banka.trading.v1.AcceptExternalOTCOfferResponse
+	24, // 68: banka.trading.v1.ExternalOTCService.ListExternalOTCContracts:output_type -> banka.trading.v1.ListExternalOTCContractsResponse
+	26, // 69: banka.trading.v1.ExternalOTCService.ExerciseExternalOTCContract:output_type -> banka.trading.v1.ExerciseExternalOTCContractResponse
+	28, // 70: banka.trading.v1.ExternalOTCService.ReceiveExternalOTCOffer:output_type -> banka.trading.v1.ReceiveExternalOTCOfferResponse
+	8,  // 71: banka.trading.v1.ExternalOTCService.ReceiveExternalOTCCounter:output_type -> banka.trading.v1.ExternalOTCThread
+	8,  // 72: banka.trading.v1.ExternalOTCService.ReceiveExternalOTCWithdraw:output_type -> banka.trading.v1.ExternalOTCThread
+	8,  // 73: banka.trading.v1.ExternalOTCService.ReceiveExternalOTCAccept:output_type -> banka.trading.v1.ExternalOTCThread
+	32, // 74: banka.trading.v1.ExternalOTCService.ReceiveExternalOTCExerciseNotice:output_type -> banka.trading.v1.ReceiveExternalOTCExerciseNoticeResponse
+	34, // 75: banka.trading.v1.ExternalOTCService.SettleExternalOTCOption:output_type -> banka.trading.v1.SettleExternalOTCOptionResponse
+	61, // [61:76] is the sub-list for method output_type
+	46, // [46:61] is the sub-list for method input_type
+	46, // [46:46] is the sub-list for extension type_name
+	46, // [46:46] is the sub-list for extension extendee
+	0,  // [0:46] is the sub-list for field type_name
 }
 
 func init() { file_trading_v1_external_otc_proto_init() }
@@ -2668,8 +3008,8 @@ func file_trading_v1_external_otc_proto_init() {
 		File: protoimpl.DescBuilder{
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
 			RawDescriptor: unsafe.Slice(unsafe.StringData(file_trading_v1_external_otc_proto_rawDesc), len(file_trading_v1_external_otc_proto_rawDesc)),
-			NumEnums:      5,
-			NumMessages:   26,
+			NumEnums:      7,
+			NumMessages:   28,
 			NumExtensions: 0,
 			NumServices:   1,
 		},

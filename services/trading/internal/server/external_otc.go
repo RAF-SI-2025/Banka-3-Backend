@@ -226,6 +226,41 @@ func (s *Server) ReceiveExternalOTCExerciseNotice(ctx context.Context, in *tradi
 	return &tradingpb.ReceiveExternalOTCExerciseNoticeResponse{Contract: externalOTCContractToProto(c)}, nil
 }
 
+var settlementPhaseToString = map[tradingpb.ExternalOTCSettlementPhase]string{
+	tradingpb.ExternalOTCSettlementPhase_EXTERNAL_OTC_SETTLEMENT_PHASE_PREPARE:  "prepare",
+	tradingpb.ExternalOTCSettlementPhase_EXTERNAL_OTC_SETTLEMENT_PHASE_COMMIT:   "commit",
+	tradingpb.ExternalOTCSettlementPhase_EXTERNAL_OTC_SETTLEMENT_PHASE_ROLLBACK: "rollback",
+}
+
+var settlementKindToString = map[tradingpb.ExternalOTCSettlementKind]string{
+	tradingpb.ExternalOTCSettlementKind_EXTERNAL_OTC_SETTLEMENT_KIND_ACCEPT:   "accept",
+	tradingpb.ExternalOTCSettlementKind_EXTERNAL_OTC_SETTLEMENT_KIND_EXERCISE: "exercise",
+}
+
+func (s *Server) SettleExternalOTCOption(ctx context.Context, in *tradingpb.SettleExternalOTCOptionRequest) (*tradingpb.SettleExternalOTCOptionResponse, error) {
+	res, err := s.Svc.SettleExternalOTCOption(ctx, service.SettleExternalOTCOptionInput{
+		Phase:          settlementPhaseToString[in.GetPhase()],
+		Kind:           settlementKindToString[in.GetKind()],
+		SenderBankCode: in.GetSenderBankCode(),
+		TransactionID:  in.GetTransactionId(),
+		OptionRef:      in.GetOptionRef(),
+		SellerUserRef:  in.GetSellerUserRef(),
+		CashAmount:     in.GetCashAmount(),
+		CashCurrency:   in.GetCashCurrency(),
+		Ticker:         in.GetTicker(),
+		Quantity:       in.GetQuantity(),
+	})
+	if err != nil {
+		return nil, err
+	}
+	return &tradingpb.SettleExternalOTCOptionResponse{
+		Accepted:            res.Accepted,
+		Reason:              res.Reason,
+		Handled:             res.Handled,
+		SellerAccountNumber: res.SellerAccountNumber,
+	}, nil
+}
+
 // =====================================================================
 // Proto conversion helpers
 // =====================================================================

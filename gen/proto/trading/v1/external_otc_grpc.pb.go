@@ -33,6 +33,7 @@ const (
 	ExternalOTCService_ReceiveExternalOTCWithdraw_FullMethodName       = "/banka.trading.v1.ExternalOTCService/ReceiveExternalOTCWithdraw"
 	ExternalOTCService_ReceiveExternalOTCAccept_FullMethodName         = "/banka.trading.v1.ExternalOTCService/ReceiveExternalOTCAccept"
 	ExternalOTCService_ReceiveExternalOTCExerciseNotice_FullMethodName = "/banka.trading.v1.ExternalOTCService/ReceiveExternalOTCExerciseNotice"
+	ExternalOTCService_SettleExternalOTCOption_FullMethodName          = "/banka.trading.v1.ExternalOTCService/SettleExternalOTCOption"
 )
 
 // ExternalOTCServiceClient is the client API for ExternalOTCService service.
@@ -102,6 +103,22 @@ type ExternalOTCServiceClient interface {
 	// an option contract written by our user. We confirm the local
 	// settlement and acknowledge.
 	ReceiveExternalOTCExerciseNotice(ctx context.Context, in *ReceiveExternalOTCExerciseNoticeRequest, opts ...grpc.CallOption) (*ReceiveExternalOTCExerciseNoticeResponse, error)
+	// SettleExternalOTCOption performs the seller-side effects of a
+	// cross-bank OTC option settlement that arrived as a multi-posting
+	// NEW_TX on the gateway's /interbank surface (Banka-4 protocol-notes
+	// §2/§3). The gateway parses the envelope and drives the 2PC phases:
+	//
+	//	PREPARE  — accept: reserve the seller's shares; exercise: validate
+	//	           the contract + reservation. Returns the YES/NO vote.
+	//	COMMIT   — accept: credit premium + form/confirm the contract +
+	//	           lock the reservation; exercise: release reservation,
+	//	           transfer shares out, credit strike, mark exercised.
+	//	ROLLBACK — release the prepare-phase holds.
+	//
+	// Idempotent on (sender_bank_code, transaction_id). `handled` is false
+	// when no settlement exists for the tx, so COMMIT/ROLLBACK can fall
+	// back to the bank cash 2PC.
+	SettleExternalOTCOption(ctx context.Context, in *SettleExternalOTCOptionRequest, opts ...grpc.CallOption) (*SettleExternalOTCOptionResponse, error)
 }
 
 type externalOTCServiceClient struct {
@@ -252,6 +269,16 @@ func (c *externalOTCServiceClient) ReceiveExternalOTCExerciseNotice(ctx context.
 	return out, nil
 }
 
+func (c *externalOTCServiceClient) SettleExternalOTCOption(ctx context.Context, in *SettleExternalOTCOptionRequest, opts ...grpc.CallOption) (*SettleExternalOTCOptionResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(SettleExternalOTCOptionResponse)
+	err := c.cc.Invoke(ctx, ExternalOTCService_SettleExternalOTCOption_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
 // ExternalOTCServiceServer is the server API for ExternalOTCService service.
 // All implementations should embed UnimplementedExternalOTCServiceServer
 // for forward compatibility.
@@ -319,6 +346,22 @@ type ExternalOTCServiceServer interface {
 	// an option contract written by our user. We confirm the local
 	// settlement and acknowledge.
 	ReceiveExternalOTCExerciseNotice(context.Context, *ReceiveExternalOTCExerciseNoticeRequest) (*ReceiveExternalOTCExerciseNoticeResponse, error)
+	// SettleExternalOTCOption performs the seller-side effects of a
+	// cross-bank OTC option settlement that arrived as a multi-posting
+	// NEW_TX on the gateway's /interbank surface (Banka-4 protocol-notes
+	// §2/§3). The gateway parses the envelope and drives the 2PC phases:
+	//
+	//	PREPARE  — accept: reserve the seller's shares; exercise: validate
+	//	           the contract + reservation. Returns the YES/NO vote.
+	//	COMMIT   — accept: credit premium + form/confirm the contract +
+	//	           lock the reservation; exercise: release reservation,
+	//	           transfer shares out, credit strike, mark exercised.
+	//	ROLLBACK — release the prepare-phase holds.
+	//
+	// Idempotent on (sender_bank_code, transaction_id). `handled` is false
+	// when no settlement exists for the tx, so COMMIT/ROLLBACK can fall
+	// back to the bank cash 2PC.
+	SettleExternalOTCOption(context.Context, *SettleExternalOTCOptionRequest) (*SettleExternalOTCOptionResponse, error)
 }
 
 // UnimplementedExternalOTCServiceServer should be embedded to have
@@ -369,6 +412,9 @@ func (UnimplementedExternalOTCServiceServer) ReceiveExternalOTCAccept(context.Co
 }
 func (UnimplementedExternalOTCServiceServer) ReceiveExternalOTCExerciseNotice(context.Context, *ReceiveExternalOTCExerciseNoticeRequest) (*ReceiveExternalOTCExerciseNoticeResponse, error) {
 	return nil, status.Error(codes.Unimplemented, "method ReceiveExternalOTCExerciseNotice not implemented")
+}
+func (UnimplementedExternalOTCServiceServer) SettleExternalOTCOption(context.Context, *SettleExternalOTCOptionRequest) (*SettleExternalOTCOptionResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method SettleExternalOTCOption not implemented")
 }
 func (UnimplementedExternalOTCServiceServer) testEmbeddedByValue() {}
 
@@ -642,6 +688,24 @@ func _ExternalOTCService_ReceiveExternalOTCExerciseNotice_Handler(srv interface{
 	return interceptor(ctx, in, info, handler)
 }
 
+func _ExternalOTCService_SettleExternalOTCOption_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(SettleExternalOTCOptionRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(ExternalOTCServiceServer).SettleExternalOTCOption(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: ExternalOTCService_SettleExternalOTCOption_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(ExternalOTCServiceServer).SettleExternalOTCOption(ctx, req.(*SettleExternalOTCOptionRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
 // ExternalOTCService_ServiceDesc is the grpc.ServiceDesc for ExternalOTCService service.
 // It's only intended for direct use with grpc.RegisterService,
 // and not to be introspected or modified (even as a copy)
@@ -704,6 +768,10 @@ var ExternalOTCService_ServiceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "ReceiveExternalOTCExerciseNotice",
 			Handler:    _ExternalOTCService_ReceiveExternalOTCExerciseNotice_Handler,
+		},
+		{
+			MethodName: "SettleExternalOTCOption",
+			Handler:    _ExternalOTCService_SettleExternalOTCOption_Handler,
 		},
 	},
 	Streams:  []grpc.StreamDesc{},

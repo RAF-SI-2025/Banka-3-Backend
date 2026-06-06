@@ -311,10 +311,14 @@ func (p *PartnerBanka2) handleNewTX(w http.ResponseWriter, r *http.Request, key 
 		p.respondVoteNO(w, r, key, tx.TransactionID.ID, "UNBALANCED_TX", nil)
 		return
 	}
-	// Reject anything with non-MONAS asset. OTC option exercise lives on
-	// a separate path (the gateway's external-OTC saga). Bouncing here
-	// keeps the cash-payment path simple and gives Banka-2 a structured
-	// NO vote they can surface.
+	// Cross-bank OTC option settlement (accept/exercise) carries OPTION /
+	// STOCK postings the cash path can't represent — route it to trading.
+	if classifyB2Transaction(tx) != b2KindCash {
+		p.handleOTCSettlementNewTX(w, r, key, tx)
+		return
+	}
+	// Cash subset: reject any non-MONAS asset that slipped past the
+	// classifier (defensive — keeps the cash path single-currency).
 	for i := range tx.Postings {
 		if tx.Postings[i].Asset.Type != "MONAS" {
 			p.respondVoteNO(w, r, key, tx.TransactionID.ID, "UNACCEPTABLE_ASSET", &tx.Postings[i])
@@ -398,8 +402,113 @@ func (p *PartnerBanka2) handleNewTX(w http.ResponseWriter, r *http.Request, key 
 	p.respondVoteYES(w, r, key, tx.TransactionID.ID)
 }
 
+// handleOTCSettlementNewTX settles a cross-bank OTC accept/exercise that
+// arrived as a multi-posting NEW_TX. Share/contract effects go to trading
+// (SettleExternalOTCOption); the premium/strike cash leg credited to our
+// seller rides the bank inbound 2PC (the same path as a cash payment).
+func (p *PartnerBanka2) handleOTCSettlementNewTX(w http.ResponseWriter, r *http.Request, key b2IdempotenceKey, tx b2Transaction) {
+	if p.TradingOTC == nil {
+		p.respondVoteNO(w, r, key, tx.TransactionID.ID, "UNACCEPTABLE_ASSET", nil)
+		return
+	}
+	ourRouting, _ := strconv.Atoi(p.BankRoutingNumber)
+	if ourRouting == 0 {
+		ourRouting = 333
+	}
+	intent, err := parseB2OTCSettlement(tx, ourRouting)
+	if err != nil {
+		p.respondVoteNO(w, r, key, tx.TransactionID.ID, "UNACCEPTABLE_ASSET", nil)
+		return
+	}
+	kind := tradingpb.ExternalOTCSettlementKind_EXTERNAL_OTC_SETTLEMENT_KIND_ACCEPT
+	if intent.Kind == b2KindOTCExercise {
+		kind = tradingpb.ExternalOTCSettlementKind_EXTERNAL_OTC_SETTLEMENT_KIND_EXERCISE
+	}
+	ctx := partnerCtx(r.Context())
+
+	// 1. Trading prepare — reserve the seller's shares / validate the contract.
+	res, err := p.TradingOTC.SettleExternalOTCOption(ctx, &tradingpb.SettleExternalOTCOptionRequest{
+		Phase:          tradingpb.ExternalOTCSettlementPhase_EXTERNAL_OTC_SETTLEMENT_PHASE_PREPARE,
+		Kind:           kind,
+		SenderBankCode: strconv.Itoa(key.RoutingNumber),
+		TransactionId:  tx.TransactionID.ID,
+		OptionRef:      intent.OptionRef.ID,
+		SellerUserRef:  intent.SellerID.ID,
+		CashAmount:     intent.CashAmount,
+		CashCurrency:   intent.CashCurrency,
+		Ticker:         intent.Ticker,
+		Quantity:       intent.Quantity,
+	})
+	if err != nil {
+		p.respondVoteNO(w, r, key, tx.TransactionID.ID, banka2NoVoteFromGRPC(err), nil)
+		return
+	}
+	if !res.GetAccepted() {
+		reason := res.GetReason()
+		if reason == "" {
+			reason = "INSUFFICIENT_ASSET"
+		}
+		p.respondVoteNO(w, r, key, tx.TransactionID.ID, reason, nil)
+		return
+	}
+
+	// 2. Cash leg — premium (accept) / strike (exercise) credited to our
+	//    seller via the bank inbound 2PC.
+	if intent.CashAmount != "" && res.GetSellerAccountNumber() != "" {
+		prep, perr := p.Interbank.PreparePayment(ctx, &bankpb.PreparePaymentRequest{
+			SenderRoutingNumber: int32(key.RoutingNumber),
+			TransactionId:       tx.TransactionID.ID,
+			Direction:           bankpb.InterbankPaymentDirection_INTERBANK_PAYMENT_DIRECTION_INBOUND,
+			LocalAccountNumber:  res.GetSellerAccountNumber(),
+			RemoteAccountNumber: buyerAccountFromPostings(tx),
+			Currency:            currencyFromWire(intent.CashCurrency),
+			Amount:              intent.CashAmount,
+			Purpose:             "OTC " + strings.ToLower(kind.String()),
+		})
+		if perr != nil || prep.GetStatus() != bankpb.InterbankTxStatus_INTERBANK_TX_STATUS_PREPARED {
+			// Release the trading prepare (shares) so we don't strand them.
+			_, _ = p.TradingOTC.SettleExternalOTCOption(ctx, &tradingpb.SettleExternalOTCOptionRequest{
+				Phase:          tradingpb.ExternalOTCSettlementPhase_EXTERNAL_OTC_SETTLEMENT_PHASE_ROLLBACK,
+				SenderBankCode: strconv.Itoa(key.RoutingNumber),
+				TransactionId:  tx.TransactionID.ID,
+			})
+			reason := "INSUFFICIENT_ASSET"
+			if perr != nil {
+				reason = banka2NoVoteFromGRPC(perr)
+			}
+			p.respondVoteNO(w, r, key, tx.TransactionID.ID, reason, nil)
+			return
+		}
+	}
+	p.respondVoteYES(w, r, key, tx.TransactionID.ID)
+}
+
+// buyerAccountFromPostings returns the 18-digit ACCOUNT number in an OTC
+// settlement envelope (the buyer's settlement account at the other bank),
+// used only as the remote-account audit field on our cash leg.
+func buyerAccountFromPostings(tx b2Transaction) string {
+	for i := range tx.Postings {
+		if tx.Postings[i].Account.Type == "ACCOUNT" && tx.Postings[i].Account.Num != "" {
+			return tx.Postings[i].Account.Num
+		}
+	}
+	return ""
+}
+
 func (p *PartnerBanka2) handleCommitTX(w http.ResponseWriter, r *http.Request, key b2IdempotenceKey, body b2CommitTransaction) {
-	_, err := p.Interbank.CommitPayment(partnerCtx(r.Context()), &bankpb.CommitPaymentRequest{
+	ctx := partnerCtx(r.Context())
+	// OTC share/contract leg (no-op for a plain cash tx — handled=false).
+	if p.TradingOTC != nil {
+		if _, err := p.TradingOTC.SettleExternalOTCOption(ctx, &tradingpb.SettleExternalOTCOptionRequest{
+			Phase:          tradingpb.ExternalOTCSettlementPhase_EXTERNAL_OTC_SETTLEMENT_PHASE_COMMIT,
+			SenderBankCode: strconv.Itoa(key.RoutingNumber),
+			TransactionId:  body.TransactionID.ID,
+		}); err != nil {
+			writeGRPCError(w, err)
+			return
+		}
+	}
+	_, err := p.Interbank.CommitPayment(ctx, &bankpb.CommitPaymentRequest{
 		SenderRoutingNumber: int32(key.RoutingNumber),
 		TransactionId:       body.TransactionID.ID,
 	})
@@ -411,7 +520,18 @@ func (p *PartnerBanka2) handleCommitTX(w http.ResponseWriter, r *http.Request, k
 }
 
 func (p *PartnerBanka2) handleRollbackTX(w http.ResponseWriter, r *http.Request, key b2IdempotenceKey, body b2RollbackTransaction) {
-	_, err := p.Interbank.RollbackPayment(partnerCtx(r.Context()), &bankpb.RollbackPaymentRequest{
+	ctx := partnerCtx(r.Context())
+	if p.TradingOTC != nil {
+		if _, err := p.TradingOTC.SettleExternalOTCOption(ctx, &tradingpb.SettleExternalOTCOptionRequest{
+			Phase:          tradingpb.ExternalOTCSettlementPhase_EXTERNAL_OTC_SETTLEMENT_PHASE_ROLLBACK,
+			SenderBankCode: strconv.Itoa(key.RoutingNumber),
+			TransactionId:  body.TransactionID.ID,
+		}); err != nil {
+			writeGRPCError(w, err)
+			return
+		}
+	}
+	_, err := p.Interbank.RollbackPayment(ctx, &bankpb.RollbackPaymentRequest{
 		SenderRoutingNumber: int32(key.RoutingNumber),
 		TransactionId:       body.TransactionID.ID,
 		Reason:              "partner rollback",
