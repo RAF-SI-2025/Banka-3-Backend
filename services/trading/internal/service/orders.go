@@ -4,6 +4,7 @@ import (
 	"context"
 	"math/big"
 	"strings"
+	"time"
 
 	"github.com/RAF-SI-2025/Banka-3-Backend/pkg/apperr"
 	"github.com/RAF-SI-2025/Banka-3-Backend/pkg/auth"
@@ -289,8 +290,13 @@ type ListOrdersInput struct {
 	UserKind   domain.UserKind
 	UserID     string
 	SecurityID string
-	Page       int
-	PageSize   int
+	// OrderType narrows to a single type (todoSpec S34); From/To bound
+	// creation date inclusively (todoSpec S33). All optional.
+	OrderType string
+	From      *time.Time
+	To        *time.Time
+	Page      int
+	PageSize  int
 }
 
 // ListOrders returns matching orders. Visibility:
@@ -307,6 +313,9 @@ func (s *Service) ListOrders(ctx context.Context, in ListOrdersInput) ([]*domain
 		UserKind:   in.UserKind,
 		UserID:     in.UserID,
 		SecurityID: in.SecurityID,
+		OrderType:  in.OrderType,
+		From:       in.From,
+		To:         in.To,
 	}
 	if !supervisor {
 		// Force-narrow to the caller's own orders.

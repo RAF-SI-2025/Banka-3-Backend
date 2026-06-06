@@ -1049,6 +1049,20 @@ message Order {
   // resolved to at create time (client or employee).
   UserKind actor_kind = 26;
   string on_behalf_of_fund_id = 27;
+
+  // todoSpec S30/S31 — per-order execution aggregates, computed by
+  // aggregating order_executions (settled fills) for this order so the
+  // history list/detail can show the realized price, paid commission
+  // and execution date without an N+1 fetch per row. All three are
+  // empty/unset on an order with no settled fills yet.
+  //   - avg_execution_price: quantity-weighted average fill price,
+  //     decimal string in the security's currency.
+  //   - total_commission: sum of commission_amt across settled fills,
+  //     decimal string.
+  //   - last_execution_at: timestamp of the most recent settled fill.
+  string avg_execution_price = 28;
+  string total_commission = 29;
+  google.protobuf.Timestamp last_execution_at = 30;
 }
 
 message CreateOrderRequest {
@@ -1098,6 +1112,15 @@ message ListOrdersRequest {
   string security_id = 4;
   int32 page = 10;
   int32 page_size = 11;
+
+  // todoSpec S34 — narrow the history to a single order type
+  // ("market" | "limit" | "stop" | "stop_limit"). Empty = all types.
+  string order_type = 5;
+  // todoSpec S33 — filter by creation date. Both bounds inclusive
+  // against orders.created_at; either may be omitted. Mirrors the bank
+  // ListTransactions from/to convention (RFC3339 Timestamp params).
+  google.protobuf.Timestamp from = 6;
+  google.protobuf.Timestamp to = 7;
 }
 
 message ListOrdersResponse {

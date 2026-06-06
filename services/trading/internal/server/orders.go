@@ -40,14 +40,24 @@ func (s *Server) GetOrder(ctx context.Context, in *tradingpb.GetOrderRequest) (*
 }
 
 func (s *Server) ListOrders(ctx context.Context, in *tradingpb.ListOrdersRequest) (*tradingpb.ListOrdersResponse, error) {
-	rows, total, err := s.Svc.ListOrders(ctx, service.ListOrdersInput{
+	listIn := service.ListOrdersInput{
 		Status:     in.GetStatus(),
 		UserKind:   userKindFromProto(in.GetUserKind()),
 		UserID:     in.GetUserId(),
 		SecurityID: in.GetSecurityId(),
+		OrderType:  in.GetOrderType(),
 		Page:       int(in.GetPage()),
 		PageSize:   int(in.GetPageSize()),
-	})
+	}
+	if from := in.GetFrom(); from != nil {
+		t := from.AsTime()
+		listIn.From = &t
+	}
+	if to := in.GetTo(); to != nil {
+		t := to.AsTime()
+		listIn.To = &t
+	}
+	rows, total, err := s.Svc.ListOrders(ctx, listIn)
 	if err != nil {
 		return nil, err
 	}
@@ -124,9 +134,14 @@ func orderToProto(o *domain.Order) *tradingpb.Order {
 		CreatedAt:         timestamppb.New(o.CreatedAt),
 		ActorKind:         userKindToProto(o.ActorKind),
 		OnBehalfOfFundId:  o.OnBehalfOfFundID,
+		AvgExecutionPrice: o.AvgExecutionPrice,
+		TotalCommission:   o.TotalCommission,
 	}
 	if o.ApprovedAt != nil {
 		out.ApprovedAt = timestamppb.New(*o.ApprovedAt)
+	}
+	if o.LastExecutionAt != nil {
+		out.LastExecutionAt = timestamppb.New(*o.LastExecutionAt)
 	}
 	return out
 }

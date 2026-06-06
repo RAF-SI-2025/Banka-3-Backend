@@ -11,7 +11,9 @@ import (
 	"github.com/jackc/pgx/v5"
 )
 
-const orderCols = `
+// orderBaseColsUnqualified is the base column list with no table alias,
+// for use in RETURNING clauses (where Postgres forbids a table alias).
+const orderBaseColsUnqualified = `
     id, user_id, user_kind, security_id, order_type, direction,
     quantity, contract_size::text, price_per_unit::text,
     coalesce(limit_price::text, ''), coalesce(stop_price::text, ''),
@@ -21,6 +23,51 @@ const orderCols = `
     is_done, cancelled, triggered, after_hours,
     remaining_quantity, last_modification, created_at,
     actor_kind, coalesce(on_behalf_of_fund_id::text, '')`
+
+// orderBaseColsQualified mirrors the above but qualifies every column
+// with the `o` alias, for the read paths that LEFT JOIN the execution
+// aggregate subquery.
+const orderBaseColsQualified = `
+    o.id, o.user_id, o.user_kind, o.security_id, o.order_type, o.direction,
+    o.quantity, o.contract_size::text, o.price_per_unit::text,
+    coalesce(o.limit_price::text, ''), coalesce(o.stop_price::text, ''),
+    o.all_or_none, o.margin, o.is_actuary, o.account_id,
+    o.status, coalesce(o.approved_by::text, ''),
+    o.approval_required, o.approved_at,
+    o.is_done, o.cancelled, o.triggered, o.after_hours,
+    o.remaining_quantity, o.last_modification, o.created_at,
+    o.actor_kind, coalesce(o.on_behalf_of_fund_id::text, '')`
+
+// orderCols projects the base columns plus three empty aggregate
+// placeholders so the RETURNING-based mutating queries (create / approve
+// / decline / cancel) share scanOrder's column shape. Those paths don't
+// need the execution aggregates — they're a read-surface concern.
+const orderCols = orderBaseColsUnqualified + `,
+    ''::text, ''::text, null::timestamptz`
+
+// orderReadCols projects the base columns plus the per-order execution
+// aggregates (todoSpec S30/S31), computed by a LEFT JOIN against a
+// pre-aggregated subquery over settled order_executions. Used by the
+// read paths (GetOrder / ListOrders) so the history list+detail render
+// realized price / paid commission / execution date without an N+1
+// fetch. avg_execution_price is quantity-weighted.
+const orderReadCols = orderBaseColsQualified + `,
+    coalesce(x.avg_execution_price::text, ''),
+    coalesce(x.total_commission::text, ''),
+    x.last_execution_at`
+
+// orderExecAggJoin is the aggregate subquery joined into the read paths.
+// Only settled fills count, matching ListExecutions / LatestExecutionAt.
+const orderExecAggJoin = `
+    left join (
+        select order_id,
+               sum(price_per_unit * quantity) / nullif(sum(quantity), 0) as avg_execution_price,
+               sum(commission_amt) as total_commission,
+               max(executed_at) as last_execution_at
+        from "trading".order_executions
+        where status = 'settled'
+        group by order_id
+    ) x on x.order_id = o.id`
 
 // CreateOrder inserts the order row and returns it. When the caller
 // auto-approved the order (status='approved' with ApprovedBy set), the
@@ -71,7 +118,7 @@ func (s *Store) CreateOrder(ctx context.Context, o *domain.Order) (*domain.Order
 
 // GetOrder returns one order or NotFound.
 func (s *Store) GetOrder(ctx context.Context, id string) (*domain.Order, error) {
-	q := `select ` + orderCols + ` from "trading".orders where id = $1`
+	q := `select ` + orderReadCols + ` from "trading".orders o` + orderExecAggJoin + ` where o.id = $1`
 	out, err := scanOrder(s.DB.QueryRow(ctx, q, id))
 	if err != nil {
 		if noRows(err) {
@@ -91,6 +138,13 @@ type OrderFilter struct {
 	UserKind   domain.UserKind
 	UserID     string
 	SecurityID string
+	// OrderType: "" → no filter; "market"/"limit"/"stop"/"stop_limit"
+	// (todoSpec S34). Validated case-insensitively against the known set.
+	OrderType string
+	// From/To: inclusive bounds on orders.created_at (todoSpec S33).
+	// Either may be nil.
+	From *time.Time
+	To   *time.Time
 }
 
 // ListOrders returns matching orders with paging.
@@ -131,6 +185,23 @@ func (s *Store) ListOrders(ctx context.Context, f OrderFilter, page, pageSize in
 	if f.SecurityID != "" {
 		add("security_id = ?", f.SecurityID)
 	}
+	// todoSpec S34 — order-type filter.
+	if ot := strings.ToLower(strings.TrimSpace(f.OrderType)); ot != "" && ot != "all" {
+		switch ot {
+		case "market", "limit", "stop", "stop_limit":
+			add("order_type = ?", ot)
+		default:
+			return nil, 0, apperr.Validation("nepoznat tip naloga filter: " + f.OrderType)
+		}
+	}
+	// todoSpec S33 — inclusive creation-date range, mirroring the bank
+	// ListTransactions from/to convention.
+	if f.From != nil {
+		add("created_at >= ?", *f.From)
+	}
+	if f.To != nil {
+		add("created_at <= ?", *f.To)
+	}
 
 	where := ""
 	if len(conds) > 0 {
@@ -142,8 +213,11 @@ func (s *Store) ListOrders(ctx context.Context, f OrderFilter, page, pageSize in
 		return nil, 0, apperr.Internal("count orders", err)
 	}
 
-	q := `select ` + orderCols + ` from "trading".orders` + where +
-		` order by created_at desc limit ` + intArg(len(args)+1) + ` offset ` + intArg(len(args)+2)
+	// Read path joins the execution-aggregate subquery (todoSpec
+	// S30/S31). The WHERE conditions reference unqualified columns that
+	// live only on `orders`, so they stay unambiguous under the alias.
+	q := `select ` + orderReadCols + ` from "trading".orders o` + orderExecAggJoin + where +
+		` order by o.created_at desc limit ` + intArg(len(args)+1) + ` offset ` + intArg(len(args)+2)
 	args = append(args, pageSize, (page-1)*pageSize)
 
 	rows, err := s.DB.Query(postgres.WithRead(ctx), q, args...)
@@ -298,6 +372,7 @@ func scanOrder(row pgx.Row) (*domain.Order, error) {
 		status     string
 		actor      string
 		approvedAt *time.Time
+		lastExecAt *time.Time
 	)
 	if err := row.Scan(
 		&o.ID, &o.UserID, &kind, &o.SecurityID, &typ, &dir,
@@ -309,6 +384,7 @@ func scanOrder(row pgx.Row) (*domain.Order, error) {
 		&o.IsDone, &o.Cancelled, &o.Triggered, &o.AfterHours,
 		&o.RemainingQuantity, &o.LastModification, &o.CreatedAt,
 		&actor, &o.OnBehalfOfFundID,
+		&o.AvgExecutionPrice, &o.TotalCommission, &lastExecAt,
 	); err != nil {
 		return nil, err
 	}
@@ -318,5 +394,6 @@ func scanOrder(row pgx.Row) (*domain.Order, error) {
 	o.Status = domain.OrderStatus(status)
 	o.ActorKind = domain.UserKind(actor)
 	o.ApprovedAt = approvedAt
+	o.LastExecutionAt = lastExecAt
 	return &o, nil
 }
