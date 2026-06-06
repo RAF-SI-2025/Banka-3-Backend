@@ -24,6 +24,7 @@ import (
 	"time"
 
 	"github.com/RAF-SI-2025/Banka-3-Backend/pkg/apperr"
+	"github.com/RAF-SI-2025/Banka-3-Backend/pkg/bizmetric"
 	"github.com/RAF-SI-2025/Banka-3-Backend/pkg/money"
 	"github.com/RAF-SI-2025/Banka-3-Backend/services/trading/internal/domain"
 	"github.com/jackc/pgx/v5"
@@ -496,11 +497,13 @@ func (s *Service) completeFill(
 	if err != nil {
 		s.Log.Error("fill book-keeping failed after bank settle",
 			"order_id", o.ID, "exec_id", pending.ID, "op_id", settledOpID, "err", err.Error())
+		bizmetric.TradeCompleted(ctx, string(o.Direction), string(sec.Type), "settle_failed")
 		return nil, err
 	}
 	pending.BankOpID = settledOpID
 	pending.Status = "settled"
 	exec = pending
+	bizmetric.TradeCompleted(ctx, string(o.Direction), string(sec.Type), "ok")
 	return exec, nil
 }
 

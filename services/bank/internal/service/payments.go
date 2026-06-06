@@ -2,11 +2,13 @@ package service
 
 import (
 	"context"
+	"errors"
 	"math/big"
 	"strings"
 
 	"github.com/RAF-SI-2025/Banka-3-Backend/pkg/apperr"
 	"github.com/RAF-SI-2025/Banka-3-Backend/pkg/auth"
+	"github.com/RAF-SI-2025/Banka-3-Backend/pkg/bizmetric"
 	"github.com/RAF-SI-2025/Banka-3-Backend/pkg/money"
 	"github.com/RAF-SI-2025/Banka-3-Backend/pkg/permissions"
 	"github.com/RAF-SI-2025/Banka-3-Backend/services/bank/internal/domain"
@@ -30,7 +32,25 @@ type CreatePaymentInput struct {
 // CreatePayment implements spec p.21 "Novo plaćanje". Same currency
 // produces a single ledger leg; FX produces two legs through the
 // bank's house accounts (menjačnica).
-func (s *Service) CreatePayment(ctx context.Context, in CreatePaymentInput) (*domain.PaymentResult, error) {
+func (s *Service) CreatePayment(ctx context.Context, in CreatePaymentInput) (res *domain.PaymentResult, err error) {
+	// banka_payments_total emit + structured log on every return.
+	var currency string
+	defer func() {
+		c := currency
+		if c == "" {
+			c = "unknown"
+		}
+		bizmetric.PaymentCompleted(ctx, "payment", c, paymentStatus(err))
+		if err != nil {
+			s.Log.Warn("CreatePayment failed",
+				"from_account", in.FromAccountID,
+				"to_account_no", in.ToAccountNumber,
+				"amount", in.Amount,
+				"currency", c,
+				"err", err.Error())
+		}
+	}()
+
 	if err := s.requirePermission(ctx, permissions.PaymentWrite); err != nil {
 		return nil, err
 	}
@@ -43,6 +63,7 @@ func (s *Service) CreatePayment(ctx context.Context, in CreatePaymentInput) (*do
 	if err != nil {
 		return nil, err
 	}
+	currency = string(from.Currency)
 	if from.OwnerClientID == to.OwnerClientID {
 		return nil, apperr.Validation("plaćanje je između različitih klijenata; za prebacivanje u okviru istog klijenta koristite Prenos")
 	}
@@ -95,7 +116,25 @@ type CreateTransferInput struct {
 	Purpose       string
 }
 
-func (s *Service) CreateTransfer(ctx context.Context, in CreateTransferInput) (*domain.PaymentResult, error) {
+func (s *Service) CreateTransfer(ctx context.Context, in CreateTransferInput) (res *domain.PaymentResult, err error) {
+	var currency, kindLabel string
+	defer func() {
+		c := currency
+		if c == "" {
+			c = "unknown"
+		}
+		k := kindLabel
+		if k == "" {
+			k = "transfer"
+		}
+		bizmetric.PaymentCompleted(ctx, k, c, paymentStatus(err))
+		if err != nil {
+			s.Log.Warn("CreateTransfer failed",
+				"from", in.FromAccountID, "to", in.ToAccountID,
+				"amount", in.Amount, "currency", c, "err", err.Error())
+		}
+	}()
+
 	if err := s.requirePermission(ctx, permissions.PaymentWrite); err != nil {
 		return nil, err
 	}
@@ -114,6 +153,7 @@ func (s *Service) CreateTransfer(ctx context.Context, in CreateTransferInput) (*
 	if err != nil {
 		return nil, err
 	}
+	currency = string(from.Currency)
 	to, err := s.Store.GetAccountByID(ctx, in.ToAccountID)
 	if err != nil {
 		return nil, err
@@ -138,8 +178,10 @@ func (s *Service) CreateTransfer(ctx context.Context, in CreateTransferInput) (*
 		// (TxKindExchange) so the FE filter ("Domaća plaćanja" vs
 		// "Menjačnica" tab on Pregled plaćanja) can render correctly.
 		kind := domain.TxKindTransfer
+		kindLabel = "transfer"
 		if from.Currency != to.Currency {
 			kind = domain.TxKindExchange
+			kindLabel = "exchange"
 		}
 		legs, err := s.executeMoneyMove(ctx, tx, from, to, amt, kind, op, p, paymentMeta{Purpose: in.Purpose}, 0)
 		if err != nil {
@@ -152,6 +194,19 @@ func (s *Service) CreateTransfer(ctx context.Context, in CreateTransferInput) (*
 		return nil, err
 	}
 	return result, nil
+}
+
+// paymentStatus maps a CreatePayment / CreateTransfer return into the
+// stable label set used by banka_payments_total's `status` attribute.
+func paymentStatus(err error) string {
+	if err == nil {
+		return "ok"
+	}
+	var ae *apperr.Error
+	if errors.As(err, &ae) {
+		return ae.Kind.String()
+	}
+	return "internal"
 }
 
 // =====================================================================
