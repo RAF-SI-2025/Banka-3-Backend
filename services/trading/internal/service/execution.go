@@ -413,12 +413,18 @@ func (s *Service) resumePendingFill(ctx context.Context, o *domain.Order, pendin
 // tolerates it) so this is safe for orders the supervisor cancelled
 // before the sweep got here.
 func (s *Service) abandonPendingFill(ctx context.Context, o *domain.Order, pending *domain.OrderExecution, errMsg string) error {
-	return s.Store.ExecuteAtomic(ctx, func(tx pgx.Tx) error {
+	if err := s.Store.ExecuteAtomic(ctx, func(tx pgx.Tx) error {
 		if err := s.Store.MarkPendingAbandoned(ctx, tx, pending.ID, errMsg); err != nil {
 			return err
 		}
 		return s.Store.CancelOrderTx(ctx, tx, o.ID)
-	})
+	}); err != nil {
+		return err
+	}
+	// S25: the system auto-cancelled the order (a fill hit a permanent
+	// settlement error and can't proceed). Carry the underlying reason.
+	s.notifyOrderAutoCancelled(ctx, o, errMsg)
+	return nil
 }
 
 // completeFill is the shared steps (2) + (3) of the saga. Both fresh
@@ -451,13 +457,16 @@ func (s *Service) completeFill(
 	// no longer gates on `cancelled = false` — once we have a pending
 	// row, the cancel must not strand bank-settled money.
 	var exec *domain.OrderExecution
+	var remainingAfter int32
 	err = s.Store.ExecuteAtomic(ctx, func(tx pgx.Tx) error {
 		if err := s.Store.MarkExecutionSettled(ctx, tx, pending.ID, settledOpID); err != nil {
 			return err
 		}
-		if _, err := s.Store.AdvanceOrderProgress(ctx, tx, o.ID, pending.Quantity); err != nil {
+		rem, err := s.Store.AdvanceOrderProgress(ctx, tx, o.ID, pending.Quantity)
+		if err != nil {
 			return err
 		}
+		remainingAfter = rem
 
 		// Spec p.42: forex pairs are not held — buying a pair means
 		// selling one currency and buying the other, with no portfolio
@@ -504,6 +513,16 @@ func (s *Service) completeFill(
 	pending.Status = "settled"
 	exec = pending
 	bizmetric.TradeCompleted(ctx, string(o.Direction), string(sec.Type), "ok")
+
+	// Order-fill notifications (todoSpec C3 S23/S24). Emitted after the
+	// booking tx commits so the row state matches what we announce.
+	if remainingAfter <= 0 {
+		// S23: order fully executed.
+		s.notifyOrderDone(ctx, o)
+	} else {
+		// S24: partial fill — include executed-this-fill and remaining.
+		s.notifyOrderPartialFill(ctx, o, pending.Quantity, remainingAfter)
+	}
 	return exec, nil
 }
 

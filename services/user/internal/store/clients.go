@@ -13,7 +13,8 @@ import (
 const clientColumns = `
     id, email, coalesce(password_hash, ''),
     first_name, last_name, date_of_birth, gender, phone, address,
-    active, permissions, session_version, created_at, updated_at
+    active, permissions, session_version, created_at, updated_at,
+    failed_login_attempts, locked_until
 `
 
 func scanClient(row interface{ Scan(...any) error }) (*domain.Client, error) {
@@ -23,6 +24,7 @@ func scanClient(row interface{ Scan(...any) error }) (*domain.Client, error) {
 		&c.ID, &c.Email, &c.PasswordHash,
 		&c.FirstName, &c.LastName, &c.DateOfBirth, &gender, &c.Phone, &c.Address,
 		&c.Active, &c.Permissions, &c.SessionVersion, &c.CreatedAt, &c.UpdatedAt,
+		&c.FailedLoginAttempts, &c.LockedUntil,
 	); err != nil {
 		return nil, err
 	}

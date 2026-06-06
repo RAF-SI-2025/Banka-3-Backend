@@ -674,3 +674,70 @@ type RealizedGain struct {
 	TaxedAt      *time.Time
 	TaxOpID      string
 }
+
+// PriceAlertCondition discriminates the threshold-crossing direction
+// (todoSpec C3 S26-S29). Values match the price_alerts.condition check
+// constraint.
+type PriceAlertCondition string
+
+const (
+	// PriceAlertAbove fires when the security's current price rises to or
+	// above the threshold (price >= threshold).
+	PriceAlertAbove PriceAlertCondition = "ABOVE"
+	// PriceAlertBelow fires when the security's current price falls to or
+	// below the threshold (price <= threshold).
+	PriceAlertBelow PriceAlertCondition = "BELOW"
+)
+
+// Valid reports whether c is a recognised condition.
+func (c PriceAlertCondition) Valid() bool {
+	return c == PriceAlertAbove || c == PriceAlertBelow
+}
+
+// PriceAlert is a one-shot price-threshold notification on a security.
+// When the sweep observes the crossing it sends one notification and
+// flips IsActive to false (TriggeredAt stamped). Threshold is a decimal
+// string in the security's listing currency.
+type PriceAlert struct {
+	ID          string
+	UserID      string
+	UserKind    UserKind
+	SecurityID  string
+	Threshold   string
+	Condition   PriceAlertCondition
+	IsActive    bool
+	CreatedAt   time.Time
+	TriggeredAt *time.Time
+}
+
+// Watchlist is a user-owned, named collection of securities the user
+// wants to keep an eye on (todoSpec C3 S35-S39). A user can have many
+// (S36). Items hang off the list and cascade-delete with it.
+type Watchlist struct {
+	ID        string
+	UserID    string
+	UserKind  UserKind
+	Name      string
+	CreatedAt time.Time
+	Items     []*WatchlistItem
+}
+
+// WatchlistItem is one security on a watchlist. The decorated fields
+// (Ticker, Name, SecurityType, Price, DailyChange, Currency) are
+// joined in at the service layer from the security + its listing so the
+// FE can render the header row (current price + daily change, S35) and
+// filter by security type (S39) without extra round-trips. They are
+// empty when no listing/security row resolves.
+type WatchlistItem struct {
+	ID         string
+	SecurityID string
+	CreatedAt  time.Time
+
+	// Decorated (not persisted on watchlist_items).
+	Ticker       string
+	Name         string
+	SecurityType SecurityType
+	Currency     Currency
+	Price        string
+	DailyChange  string
+}

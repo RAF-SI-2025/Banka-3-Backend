@@ -43,8 +43,12 @@ type Employee struct {
 	Active         bool
 	Permissions    []string
 	SessionVersion int64
-	CreatedAt      time.Time
-	UpdatedAt      time.Time
+
+	FailedLoginAttempts int
+	LockedUntil         *time.Time
+
+	CreatedAt time.Time
+	UpdatedAt time.Time
 }
 
 // Activated reports whether the employee has set their password.
@@ -65,8 +69,12 @@ type Client struct {
 	Active         bool
 	Permissions    []string
 	SessionVersion int64
-	CreatedAt      time.Time
-	UpdatedAt      time.Time
+
+	FailedLoginAttempts int
+	LockedUntil         *time.Time
+
+	CreatedAt time.Time
+	UpdatedAt time.Time
 }
 
 // VerificationEvent is one row of a user's verification request

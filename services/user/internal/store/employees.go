@@ -14,7 +14,7 @@ const employeeColumns = `
     id, email, username, coalesce(password_hash, ''),
     first_name, last_name, date_of_birth, gender, phone, address,
     position, department, active, permissions, session_version,
-    created_at, updated_at
+    created_at, updated_at, failed_login_attempts, locked_until
 `
 
 func scanEmployee(row interface{ Scan(...any) error }) (*domain.Employee, error) {
@@ -24,7 +24,7 @@ func scanEmployee(row interface{ Scan(...any) error }) (*domain.Employee, error)
 		&e.ID, &e.Email, &e.Username, &e.PasswordHash,
 		&e.FirstName, &e.LastName, &e.DateOfBirth, &gender, &e.Phone, &e.Address,
 		&e.Position, &e.Department, &e.Active, &e.Permissions, &e.SessionVersion,
-		&e.CreatedAt, &e.UpdatedAt,
+		&e.CreatedAt, &e.UpdatedAt, &e.FailedLoginAttempts, &e.LockedUntil,
 	); err != nil {
 		return nil, err
 	}
