@@ -144,6 +144,16 @@ func (s *Service) SubmitCrossBankPayment(ctx context.Context, in SubmitCrossBank
 	if err != nil {
 		return nil, err
 	}
+	// Retry queue (todoSpec): a saga left parked (status=running) means a
+	// transient failure — typically the partner bank being unavailable at
+	// prepare_partner. Enqueue a retry entry so the 5s/30s worker drives
+	// it to completion (or aborts + notifies the client after 30s). The
+	// saga's own attempt budget would eventually fail the row but without
+	// releasing the local reservation, so the retry queue owns that
+	// give-up path. Idempotent on txID.
+	if row.Status == saga.StatusRunning {
+		s.enqueueInterbankRetry(ctx, txID, in.RemoteBankCode, p.UserID, domain.UserKind(p.UserKind))
+	}
 	return &SubmitCrossBankPaymentResult{
 		TransactionID: txID,
 		Status:        string(row.Status),

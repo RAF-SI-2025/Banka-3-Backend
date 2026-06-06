@@ -815,6 +815,65 @@ type RecurringOrder struct {
 	UpdatedAt time.Time
 }
 
+// InterbankRetryStatus is the lifecycle of one retry-queue entry.
+type InterbankRetryStatus string
+
+const (
+	// InterbankRetryPending — still being retried (or due for retry).
+	InterbankRetryPending InterbankRetryStatus = "pending"
+	// InterbankRetrySucceeded — the underlying saga completed.
+	InterbankRetrySucceeded InterbankRetryStatus = "succeeded"
+	// InterbankRetryFailed — the 30s deadline passed without success;
+	// the saga was rolled back and the client notified.
+	InterbankRetryFailed InterbankRetryStatus = "failed"
+)
+
+// InterbankRetryEntry is one parked cross-bank payment awaiting retry
+// (celina 5 — todoSpec "Retry queue"). When a partner bank is
+// unavailable the originating request enqueues one of these; a 5s worker
+// re-drives the underlying saga until it completes or the 30s deadline
+// elapses, at which point the entry fails and the client is notified.
+type InterbankRetryEntry struct {
+	ID              string
+	TransactionID   string
+	PartnerBankCode string
+	Operation       string
+	UserID          string
+	UserKind        UserKind
+	AttemptCount    int32
+	NextRetryAt     time.Time
+	DeadlineAt      time.Time
+	Status          InterbankRetryStatus
+	LastError       string
+	CreatedAt       time.Time
+	UpdatedAt       time.Time
+}
+
+// ScheduledInterbankPayment is a client-scheduled cross-bank cash
+// payment (celina 5 — todoSpec "Scheduled/periodic inter-bank
+// payments"). It runs once on a future date or repeats on a cadence;
+// each due run drives the existing SubmitCrossBankPayment path.
+// Spec example: "Svakog prvog u mesecu poslati 400 EUR na dati račun."
+type ScheduledInterbankPayment struct {
+	ID                string
+	UserID            string
+	UserKind          UserKind
+	SourceAccountID   string
+	DestBankCode      string
+	DestAccountNumber string
+	Currency          Currency
+	Amount            string
+	Purpose           string
+	Cadence           string
+	NextRun           time.Time
+	Active            bool
+	LastStatus        string
+	LastError         string
+	LastRunAt         *time.Time
+	CreatedAt         time.Time
+	UpdatedAt         time.Time
+}
+
 // Watchlist is a user-owned, named collection of securities the user
 // wants to keep an eye on (todoSpec C3 S35-S39). A user can have many
 // (S36). Items hang off the list and cascade-delete with it.

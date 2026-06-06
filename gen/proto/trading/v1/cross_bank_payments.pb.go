@@ -24,6 +24,889 @@ const (
 	_ = protoimpl.EnforceVersion(protoimpl.MaxVersion - 20)
 )
 
+type ListInterbankRetriesRequest struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *ListInterbankRetriesRequest) Reset() {
+	*x = ListInterbankRetriesRequest{}
+	mi := &file_trading_v1_cross_bank_payments_proto_msgTypes[0]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *ListInterbankRetriesRequest) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*ListInterbankRetriesRequest) ProtoMessage() {}
+
+func (x *ListInterbankRetriesRequest) ProtoReflect() protoreflect.Message {
+	mi := &file_trading_v1_cross_bank_payments_proto_msgTypes[0]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use ListInterbankRetriesRequest.ProtoReflect.Descriptor instead.
+func (*ListInterbankRetriesRequest) Descriptor() ([]byte, []int) {
+	return file_trading_v1_cross_bank_payments_proto_rawDescGZIP(), []int{0}
+}
+
+type ListInterbankRetriesResponse struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	Entries       []*InterbankRetryEntry `protobuf:"bytes,1,rep,name=entries,proto3" json:"entries,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *ListInterbankRetriesResponse) Reset() {
+	*x = ListInterbankRetriesResponse{}
+	mi := &file_trading_v1_cross_bank_payments_proto_msgTypes[1]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *ListInterbankRetriesResponse) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*ListInterbankRetriesResponse) ProtoMessage() {}
+
+func (x *ListInterbankRetriesResponse) ProtoReflect() protoreflect.Message {
+	mi := &file_trading_v1_cross_bank_payments_proto_msgTypes[1]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use ListInterbankRetriesResponse.ProtoReflect.Descriptor instead.
+func (*ListInterbankRetriesResponse) Descriptor() ([]byte, []int) {
+	return file_trading_v1_cross_bank_payments_proto_rawDescGZIP(), []int{1}
+}
+
+func (x *ListInterbankRetriesResponse) GetEntries() []*InterbankRetryEntry {
+	if x != nil {
+		return x.Entries
+	}
+	return nil
+}
+
+type InterbankRetryEntry struct {
+	state           protoimpl.MessageState `protogen:"open.v1"`
+	Id              string                 `protobuf:"bytes,1,opt,name=id,proto3" json:"id,omitempty"`
+	TransactionId   string                 `protobuf:"bytes,2,opt,name=transaction_id,json=transactionId,proto3" json:"transaction_id,omitempty"`
+	PartnerBankCode string                 `protobuf:"bytes,3,opt,name=partner_bank_code,json=partnerBankCode,proto3" json:"partner_bank_code,omitempty"`
+	Operation       string                 `protobuf:"bytes,4,opt,name=operation,proto3" json:"operation,omitempty"`
+	AttemptCount    int32                  `protobuf:"varint,5,opt,name=attempt_count,json=attemptCount,proto3" json:"attempt_count,omitempty"`
+	NextRetryAt     *timestamppb.Timestamp `protobuf:"bytes,6,opt,name=next_retry_at,json=nextRetryAt,proto3" json:"next_retry_at,omitempty"`
+	DeadlineAt      *timestamppb.Timestamp `protobuf:"bytes,7,opt,name=deadline_at,json=deadlineAt,proto3" json:"deadline_at,omitempty"`
+	Status          string                 `protobuf:"bytes,8,opt,name=status,proto3" json:"status,omitempty"` // pending | succeeded | failed
+	LastError       string                 `protobuf:"bytes,9,opt,name=last_error,json=lastError,proto3" json:"last_error,omitempty"`
+	CreatedAt       *timestamppb.Timestamp `protobuf:"bytes,10,opt,name=created_at,json=createdAt,proto3" json:"created_at,omitempty"`
+	UpdatedAt       *timestamppb.Timestamp `protobuf:"bytes,11,opt,name=updated_at,json=updatedAt,proto3" json:"updated_at,omitempty"`
+	unknownFields   protoimpl.UnknownFields
+	sizeCache       protoimpl.SizeCache
+}
+
+func (x *InterbankRetryEntry) Reset() {
+	*x = InterbankRetryEntry{}
+	mi := &file_trading_v1_cross_bank_payments_proto_msgTypes[2]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *InterbankRetryEntry) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*InterbankRetryEntry) ProtoMessage() {}
+
+func (x *InterbankRetryEntry) ProtoReflect() protoreflect.Message {
+	mi := &file_trading_v1_cross_bank_payments_proto_msgTypes[2]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use InterbankRetryEntry.ProtoReflect.Descriptor instead.
+func (*InterbankRetryEntry) Descriptor() ([]byte, []int) {
+	return file_trading_v1_cross_bank_payments_proto_rawDescGZIP(), []int{2}
+}
+
+func (x *InterbankRetryEntry) GetId() string {
+	if x != nil {
+		return x.Id
+	}
+	return ""
+}
+
+func (x *InterbankRetryEntry) GetTransactionId() string {
+	if x != nil {
+		return x.TransactionId
+	}
+	return ""
+}
+
+func (x *InterbankRetryEntry) GetPartnerBankCode() string {
+	if x != nil {
+		return x.PartnerBankCode
+	}
+	return ""
+}
+
+func (x *InterbankRetryEntry) GetOperation() string {
+	if x != nil {
+		return x.Operation
+	}
+	return ""
+}
+
+func (x *InterbankRetryEntry) GetAttemptCount() int32 {
+	if x != nil {
+		return x.AttemptCount
+	}
+	return 0
+}
+
+func (x *InterbankRetryEntry) GetNextRetryAt() *timestamppb.Timestamp {
+	if x != nil {
+		return x.NextRetryAt
+	}
+	return nil
+}
+
+func (x *InterbankRetryEntry) GetDeadlineAt() *timestamppb.Timestamp {
+	if x != nil {
+		return x.DeadlineAt
+	}
+	return nil
+}
+
+func (x *InterbankRetryEntry) GetStatus() string {
+	if x != nil {
+		return x.Status
+	}
+	return ""
+}
+
+func (x *InterbankRetryEntry) GetLastError() string {
+	if x != nil {
+		return x.LastError
+	}
+	return ""
+}
+
+func (x *InterbankRetryEntry) GetCreatedAt() *timestamppb.Timestamp {
+	if x != nil {
+		return x.CreatedAt
+	}
+	return nil
+}
+
+func (x *InterbankRetryEntry) GetUpdatedAt() *timestamppb.Timestamp {
+	if x != nil {
+		return x.UpdatedAt
+	}
+	return nil
+}
+
+type RunInterbankRetryTickRequest struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *RunInterbankRetryTickRequest) Reset() {
+	*x = RunInterbankRetryTickRequest{}
+	mi := &file_trading_v1_cross_bank_payments_proto_msgTypes[3]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *RunInterbankRetryTickRequest) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*RunInterbankRetryTickRequest) ProtoMessage() {}
+
+func (x *RunInterbankRetryTickRequest) ProtoReflect() protoreflect.Message {
+	mi := &file_trading_v1_cross_bank_payments_proto_msgTypes[3]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use RunInterbankRetryTickRequest.ProtoReflect.Descriptor instead.
+func (*RunInterbankRetryTickRequest) Descriptor() ([]byte, []int) {
+	return file_trading_v1_cross_bank_payments_proto_rawDescGZIP(), []int{3}
+}
+
+type RunInterbankRetryTickResponse struct {
+	state protoimpl.MessageState `protogen:"open.v1"`
+	// settled is the number of entries that reached a terminal state this
+	// tick (succeeded + failed).
+	Settled       int32 `protobuf:"varint,1,opt,name=settled,proto3" json:"settled,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *RunInterbankRetryTickResponse) Reset() {
+	*x = RunInterbankRetryTickResponse{}
+	mi := &file_trading_v1_cross_bank_payments_proto_msgTypes[4]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *RunInterbankRetryTickResponse) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*RunInterbankRetryTickResponse) ProtoMessage() {}
+
+func (x *RunInterbankRetryTickResponse) ProtoReflect() protoreflect.Message {
+	mi := &file_trading_v1_cross_bank_payments_proto_msgTypes[4]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use RunInterbankRetryTickResponse.ProtoReflect.Descriptor instead.
+func (*RunInterbankRetryTickResponse) Descriptor() ([]byte, []int) {
+	return file_trading_v1_cross_bank_payments_proto_rawDescGZIP(), []int{4}
+}
+
+func (x *RunInterbankRetryTickResponse) GetSettled() int32 {
+	if x != nil {
+		return x.Settled
+	}
+	return 0
+}
+
+type ScheduledInterbankPayment struct {
+	state             protoimpl.MessageState `protogen:"open.v1"`
+	Id                string                 `protobuf:"bytes,1,opt,name=id,proto3" json:"id,omitempty"`
+	UserId            string                 `protobuf:"bytes,2,opt,name=user_id,json=userId,proto3" json:"user_id,omitempty"`
+	SourceAccountId   string                 `protobuf:"bytes,3,opt,name=source_account_id,json=sourceAccountId,proto3" json:"source_account_id,omitempty"`
+	DestBankCode      string                 `protobuf:"bytes,4,opt,name=dest_bank_code,json=destBankCode,proto3" json:"dest_bank_code,omitempty"`
+	DestAccountNumber string                 `protobuf:"bytes,5,opt,name=dest_account_number,json=destAccountNumber,proto3" json:"dest_account_number,omitempty"`
+	Currency          Currency               `protobuf:"varint,6,opt,name=currency,proto3,enum=banka.trading.v1.Currency" json:"currency,omitempty"`
+	Amount            string                 `protobuf:"bytes,7,opt,name=amount,proto3" json:"amount,omitempty"`
+	Purpose           string                 `protobuf:"bytes,8,opt,name=purpose,proto3" json:"purpose,omitempty"`
+	// cadence is one of ONCE / DAILY / WEEKLY / MONTHLY (pkg/schedule.Cadence).
+	Cadence       string                 `protobuf:"bytes,9,opt,name=cadence,proto3" json:"cadence,omitempty"`
+	NextRun       *timestamppb.Timestamp `protobuf:"bytes,10,opt,name=next_run,json=nextRun,proto3" json:"next_run,omitempty"`
+	Active        bool                   `protobuf:"varint,11,opt,name=active,proto3" json:"active,omitempty"`
+	LastStatus    string                 `protobuf:"bytes,12,opt,name=last_status,json=lastStatus,proto3" json:"last_status,omitempty"` // most recent run's outcome (running|completed|failed)
+	LastError     string                 `protobuf:"bytes,13,opt,name=last_error,json=lastError,proto3" json:"last_error,omitempty"`
+	LastRunAt     *timestamppb.Timestamp `protobuf:"bytes,14,opt,name=last_run_at,json=lastRunAt,proto3" json:"last_run_at,omitempty"`
+	CreatedAt     *timestamppb.Timestamp `protobuf:"bytes,15,opt,name=created_at,json=createdAt,proto3" json:"created_at,omitempty"`
+	UpdatedAt     *timestamppb.Timestamp `protobuf:"bytes,16,opt,name=updated_at,json=updatedAt,proto3" json:"updated_at,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *ScheduledInterbankPayment) Reset() {
+	*x = ScheduledInterbankPayment{}
+	mi := &file_trading_v1_cross_bank_payments_proto_msgTypes[5]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *ScheduledInterbankPayment) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*ScheduledInterbankPayment) ProtoMessage() {}
+
+func (x *ScheduledInterbankPayment) ProtoReflect() protoreflect.Message {
+	mi := &file_trading_v1_cross_bank_payments_proto_msgTypes[5]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use ScheduledInterbankPayment.ProtoReflect.Descriptor instead.
+func (*ScheduledInterbankPayment) Descriptor() ([]byte, []int) {
+	return file_trading_v1_cross_bank_payments_proto_rawDescGZIP(), []int{5}
+}
+
+func (x *ScheduledInterbankPayment) GetId() string {
+	if x != nil {
+		return x.Id
+	}
+	return ""
+}
+
+func (x *ScheduledInterbankPayment) GetUserId() string {
+	if x != nil {
+		return x.UserId
+	}
+	return ""
+}
+
+func (x *ScheduledInterbankPayment) GetSourceAccountId() string {
+	if x != nil {
+		return x.SourceAccountId
+	}
+	return ""
+}
+
+func (x *ScheduledInterbankPayment) GetDestBankCode() string {
+	if x != nil {
+		return x.DestBankCode
+	}
+	return ""
+}
+
+func (x *ScheduledInterbankPayment) GetDestAccountNumber() string {
+	if x != nil {
+		return x.DestAccountNumber
+	}
+	return ""
+}
+
+func (x *ScheduledInterbankPayment) GetCurrency() Currency {
+	if x != nil {
+		return x.Currency
+	}
+	return Currency_CURRENCY_UNSPECIFIED
+}
+
+func (x *ScheduledInterbankPayment) GetAmount() string {
+	if x != nil {
+		return x.Amount
+	}
+	return ""
+}
+
+func (x *ScheduledInterbankPayment) GetPurpose() string {
+	if x != nil {
+		return x.Purpose
+	}
+	return ""
+}
+
+func (x *ScheduledInterbankPayment) GetCadence() string {
+	if x != nil {
+		return x.Cadence
+	}
+	return ""
+}
+
+func (x *ScheduledInterbankPayment) GetNextRun() *timestamppb.Timestamp {
+	if x != nil {
+		return x.NextRun
+	}
+	return nil
+}
+
+func (x *ScheduledInterbankPayment) GetActive() bool {
+	if x != nil {
+		return x.Active
+	}
+	return false
+}
+
+func (x *ScheduledInterbankPayment) GetLastStatus() string {
+	if x != nil {
+		return x.LastStatus
+	}
+	return ""
+}
+
+func (x *ScheduledInterbankPayment) GetLastError() string {
+	if x != nil {
+		return x.LastError
+	}
+	return ""
+}
+
+func (x *ScheduledInterbankPayment) GetLastRunAt() *timestamppb.Timestamp {
+	if x != nil {
+		return x.LastRunAt
+	}
+	return nil
+}
+
+func (x *ScheduledInterbankPayment) GetCreatedAt() *timestamppb.Timestamp {
+	if x != nil {
+		return x.CreatedAt
+	}
+	return nil
+}
+
+func (x *ScheduledInterbankPayment) GetUpdatedAt() *timestamppb.Timestamp {
+	if x != nil {
+		return x.UpdatedAt
+	}
+	return nil
+}
+
+type CreateScheduledInterbankPaymentRequest struct {
+	state             protoimpl.MessageState `protogen:"open.v1"`
+	SourceAccountId   string                 `protobuf:"bytes,1,opt,name=source_account_id,json=sourceAccountId,proto3" json:"source_account_id,omitempty"`
+	DestBankCode      string                 `protobuf:"bytes,2,opt,name=dest_bank_code,json=destBankCode,proto3" json:"dest_bank_code,omitempty"`
+	DestAccountNumber string                 `protobuf:"bytes,3,opt,name=dest_account_number,json=destAccountNumber,proto3" json:"dest_account_number,omitempty"`
+	Currency          Currency               `protobuf:"varint,4,opt,name=currency,proto3,enum=banka.trading.v1.Currency" json:"currency,omitempty"`
+	Amount            string                 `protobuf:"bytes,5,opt,name=amount,proto3" json:"amount,omitempty"`
+	Purpose           string                 `protobuf:"bytes,6,opt,name=purpose,proto3" json:"purpose,omitempty"`
+	// cadence is one of ONCE / DAILY / WEEKLY / MONTHLY.
+	Cadence string `protobuf:"bytes,7,opt,name=cadence,proto3" json:"cadence,omitempty"`
+	// start_date (RFC3339) anchors the first run. Required for ONCE
+	// (validated to be in the future); optional for recurring cadences.
+	StartDate     string `protobuf:"bytes,8,opt,name=start_date,json=startDate,proto3" json:"start_date,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *CreateScheduledInterbankPaymentRequest) Reset() {
+	*x = CreateScheduledInterbankPaymentRequest{}
+	mi := &file_trading_v1_cross_bank_payments_proto_msgTypes[6]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *CreateScheduledInterbankPaymentRequest) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*CreateScheduledInterbankPaymentRequest) ProtoMessage() {}
+
+func (x *CreateScheduledInterbankPaymentRequest) ProtoReflect() protoreflect.Message {
+	mi := &file_trading_v1_cross_bank_payments_proto_msgTypes[6]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use CreateScheduledInterbankPaymentRequest.ProtoReflect.Descriptor instead.
+func (*CreateScheduledInterbankPaymentRequest) Descriptor() ([]byte, []int) {
+	return file_trading_v1_cross_bank_payments_proto_rawDescGZIP(), []int{6}
+}
+
+func (x *CreateScheduledInterbankPaymentRequest) GetSourceAccountId() string {
+	if x != nil {
+		return x.SourceAccountId
+	}
+	return ""
+}
+
+func (x *CreateScheduledInterbankPaymentRequest) GetDestBankCode() string {
+	if x != nil {
+		return x.DestBankCode
+	}
+	return ""
+}
+
+func (x *CreateScheduledInterbankPaymentRequest) GetDestAccountNumber() string {
+	if x != nil {
+		return x.DestAccountNumber
+	}
+	return ""
+}
+
+func (x *CreateScheduledInterbankPaymentRequest) GetCurrency() Currency {
+	if x != nil {
+		return x.Currency
+	}
+	return Currency_CURRENCY_UNSPECIFIED
+}
+
+func (x *CreateScheduledInterbankPaymentRequest) GetAmount() string {
+	if x != nil {
+		return x.Amount
+	}
+	return ""
+}
+
+func (x *CreateScheduledInterbankPaymentRequest) GetPurpose() string {
+	if x != nil {
+		return x.Purpose
+	}
+	return ""
+}
+
+func (x *CreateScheduledInterbankPaymentRequest) GetCadence() string {
+	if x != nil {
+		return x.Cadence
+	}
+	return ""
+}
+
+func (x *CreateScheduledInterbankPaymentRequest) GetStartDate() string {
+	if x != nil {
+		return x.StartDate
+	}
+	return ""
+}
+
+type ListScheduledInterbankPaymentsRequest struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *ListScheduledInterbankPaymentsRequest) Reset() {
+	*x = ListScheduledInterbankPaymentsRequest{}
+	mi := &file_trading_v1_cross_bank_payments_proto_msgTypes[7]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *ListScheduledInterbankPaymentsRequest) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*ListScheduledInterbankPaymentsRequest) ProtoMessage() {}
+
+func (x *ListScheduledInterbankPaymentsRequest) ProtoReflect() protoreflect.Message {
+	mi := &file_trading_v1_cross_bank_payments_proto_msgTypes[7]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use ListScheduledInterbankPaymentsRequest.ProtoReflect.Descriptor instead.
+func (*ListScheduledInterbankPaymentsRequest) Descriptor() ([]byte, []int) {
+	return file_trading_v1_cross_bank_payments_proto_rawDescGZIP(), []int{7}
+}
+
+type ListScheduledInterbankPaymentsResponse struct {
+	state             protoimpl.MessageState       `protogen:"open.v1"`
+	ScheduledPayments []*ScheduledInterbankPayment `protobuf:"bytes,1,rep,name=scheduled_payments,json=scheduledPayments,proto3" json:"scheduled_payments,omitempty"`
+	unknownFields     protoimpl.UnknownFields
+	sizeCache         protoimpl.SizeCache
+}
+
+func (x *ListScheduledInterbankPaymentsResponse) Reset() {
+	*x = ListScheduledInterbankPaymentsResponse{}
+	mi := &file_trading_v1_cross_bank_payments_proto_msgTypes[8]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *ListScheduledInterbankPaymentsResponse) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*ListScheduledInterbankPaymentsResponse) ProtoMessage() {}
+
+func (x *ListScheduledInterbankPaymentsResponse) ProtoReflect() protoreflect.Message {
+	mi := &file_trading_v1_cross_bank_payments_proto_msgTypes[8]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use ListScheduledInterbankPaymentsResponse.ProtoReflect.Descriptor instead.
+func (*ListScheduledInterbankPaymentsResponse) Descriptor() ([]byte, []int) {
+	return file_trading_v1_cross_bank_payments_proto_rawDescGZIP(), []int{8}
+}
+
+func (x *ListScheduledInterbankPaymentsResponse) GetScheduledPayments() []*ScheduledInterbankPayment {
+	if x != nil {
+		return x.ScheduledPayments
+	}
+	return nil
+}
+
+type PauseScheduledInterbankPaymentRequest struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	Id            string                 `protobuf:"bytes,1,opt,name=id,proto3" json:"id,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *PauseScheduledInterbankPaymentRequest) Reset() {
+	*x = PauseScheduledInterbankPaymentRequest{}
+	mi := &file_trading_v1_cross_bank_payments_proto_msgTypes[9]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *PauseScheduledInterbankPaymentRequest) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*PauseScheduledInterbankPaymentRequest) ProtoMessage() {}
+
+func (x *PauseScheduledInterbankPaymentRequest) ProtoReflect() protoreflect.Message {
+	mi := &file_trading_v1_cross_bank_payments_proto_msgTypes[9]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use PauseScheduledInterbankPaymentRequest.ProtoReflect.Descriptor instead.
+func (*PauseScheduledInterbankPaymentRequest) Descriptor() ([]byte, []int) {
+	return file_trading_v1_cross_bank_payments_proto_rawDescGZIP(), []int{9}
+}
+
+func (x *PauseScheduledInterbankPaymentRequest) GetId() string {
+	if x != nil {
+		return x.Id
+	}
+	return ""
+}
+
+type ResumeScheduledInterbankPaymentRequest struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	Id            string                 `protobuf:"bytes,1,opt,name=id,proto3" json:"id,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *ResumeScheduledInterbankPaymentRequest) Reset() {
+	*x = ResumeScheduledInterbankPaymentRequest{}
+	mi := &file_trading_v1_cross_bank_payments_proto_msgTypes[10]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *ResumeScheduledInterbankPaymentRequest) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*ResumeScheduledInterbankPaymentRequest) ProtoMessage() {}
+
+func (x *ResumeScheduledInterbankPaymentRequest) ProtoReflect() protoreflect.Message {
+	mi := &file_trading_v1_cross_bank_payments_proto_msgTypes[10]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use ResumeScheduledInterbankPaymentRequest.ProtoReflect.Descriptor instead.
+func (*ResumeScheduledInterbankPaymentRequest) Descriptor() ([]byte, []int) {
+	return file_trading_v1_cross_bank_payments_proto_rawDescGZIP(), []int{10}
+}
+
+func (x *ResumeScheduledInterbankPaymentRequest) GetId() string {
+	if x != nil {
+		return x.Id
+	}
+	return ""
+}
+
+type CancelScheduledInterbankPaymentRequest struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	Id            string                 `protobuf:"bytes,1,opt,name=id,proto3" json:"id,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *CancelScheduledInterbankPaymentRequest) Reset() {
+	*x = CancelScheduledInterbankPaymentRequest{}
+	mi := &file_trading_v1_cross_bank_payments_proto_msgTypes[11]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *CancelScheduledInterbankPaymentRequest) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*CancelScheduledInterbankPaymentRequest) ProtoMessage() {}
+
+func (x *CancelScheduledInterbankPaymentRequest) ProtoReflect() protoreflect.Message {
+	mi := &file_trading_v1_cross_bank_payments_proto_msgTypes[11]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use CancelScheduledInterbankPaymentRequest.ProtoReflect.Descriptor instead.
+func (*CancelScheduledInterbankPaymentRequest) Descriptor() ([]byte, []int) {
+	return file_trading_v1_cross_bank_payments_proto_rawDescGZIP(), []int{11}
+}
+
+func (x *CancelScheduledInterbankPaymentRequest) GetId() string {
+	if x != nil {
+		return x.Id
+	}
+	return ""
+}
+
+type CancelScheduledInterbankPaymentResponse struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *CancelScheduledInterbankPaymentResponse) Reset() {
+	*x = CancelScheduledInterbankPaymentResponse{}
+	mi := &file_trading_v1_cross_bank_payments_proto_msgTypes[12]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *CancelScheduledInterbankPaymentResponse) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*CancelScheduledInterbankPaymentResponse) ProtoMessage() {}
+
+func (x *CancelScheduledInterbankPaymentResponse) ProtoReflect() protoreflect.Message {
+	mi := &file_trading_v1_cross_bank_payments_proto_msgTypes[12]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use CancelScheduledInterbankPaymentResponse.ProtoReflect.Descriptor instead.
+func (*CancelScheduledInterbankPaymentResponse) Descriptor() ([]byte, []int) {
+	return file_trading_v1_cross_bank_payments_proto_rawDescGZIP(), []int{12}
+}
+
+type RunDueInterbankPaymentsRequest struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *RunDueInterbankPaymentsRequest) Reset() {
+	*x = RunDueInterbankPaymentsRequest{}
+	mi := &file_trading_v1_cross_bank_payments_proto_msgTypes[13]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *RunDueInterbankPaymentsRequest) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*RunDueInterbankPaymentsRequest) ProtoMessage() {}
+
+func (x *RunDueInterbankPaymentsRequest) ProtoReflect() protoreflect.Message {
+	mi := &file_trading_v1_cross_bank_payments_proto_msgTypes[13]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use RunDueInterbankPaymentsRequest.ProtoReflect.Descriptor instead.
+func (*RunDueInterbankPaymentsRequest) Descriptor() ([]byte, []int) {
+	return file_trading_v1_cross_bank_payments_proto_rawDescGZIP(), []int{13}
+}
+
+type RunDueInterbankPaymentsResponse struct {
+	state protoimpl.MessageState `protogen:"open.v1"`
+	// submitted is the number of payments successfully submitted this run.
+	Submitted     int32 `protobuf:"varint,1,opt,name=submitted,proto3" json:"submitted,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *RunDueInterbankPaymentsResponse) Reset() {
+	*x = RunDueInterbankPaymentsResponse{}
+	mi := &file_trading_v1_cross_bank_payments_proto_msgTypes[14]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *RunDueInterbankPaymentsResponse) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*RunDueInterbankPaymentsResponse) ProtoMessage() {}
+
+func (x *RunDueInterbankPaymentsResponse) ProtoReflect() protoreflect.Message {
+	mi := &file_trading_v1_cross_bank_payments_proto_msgTypes[14]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use RunDueInterbankPaymentsResponse.ProtoReflect.Descriptor instead.
+func (*RunDueInterbankPaymentsResponse) Descriptor() ([]byte, []int) {
+	return file_trading_v1_cross_bank_payments_proto_rawDescGZIP(), []int{14}
+}
+
+func (x *RunDueInterbankPaymentsResponse) GetSubmitted() int32 {
+	if x != nil {
+		return x.Submitted
+	}
+	return 0
+}
+
 type SubmitCrossBankPaymentRequest struct {
 	state protoimpl.MessageState `protogen:"open.v1"`
 	// Stable across retries; combined with (user_id, source_account_id)
@@ -44,7 +927,7 @@ type SubmitCrossBankPaymentRequest struct {
 
 func (x *SubmitCrossBankPaymentRequest) Reset() {
 	*x = SubmitCrossBankPaymentRequest{}
-	mi := &file_trading_v1_cross_bank_payments_proto_msgTypes[0]
+	mi := &file_trading_v1_cross_bank_payments_proto_msgTypes[15]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -56,7 +939,7 @@ func (x *SubmitCrossBankPaymentRequest) String() string {
 func (*SubmitCrossBankPaymentRequest) ProtoMessage() {}
 
 func (x *SubmitCrossBankPaymentRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_trading_v1_cross_bank_payments_proto_msgTypes[0]
+	mi := &file_trading_v1_cross_bank_payments_proto_msgTypes[15]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -69,7 +952,7 @@ func (x *SubmitCrossBankPaymentRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use SubmitCrossBankPaymentRequest.ProtoReflect.Descriptor instead.
 func (*SubmitCrossBankPaymentRequest) Descriptor() ([]byte, []int) {
-	return file_trading_v1_cross_bank_payments_proto_rawDescGZIP(), []int{0}
+	return file_trading_v1_cross_bank_payments_proto_rawDescGZIP(), []int{15}
 }
 
 func (x *SubmitCrossBankPaymentRequest) GetIdempotencyKey() string {
@@ -132,7 +1015,7 @@ type SubmitCrossBankPaymentResponse struct {
 
 func (x *SubmitCrossBankPaymentResponse) Reset() {
 	*x = SubmitCrossBankPaymentResponse{}
-	mi := &file_trading_v1_cross_bank_payments_proto_msgTypes[1]
+	mi := &file_trading_v1_cross_bank_payments_proto_msgTypes[16]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -144,7 +1027,7 @@ func (x *SubmitCrossBankPaymentResponse) String() string {
 func (*SubmitCrossBankPaymentResponse) ProtoMessage() {}
 
 func (x *SubmitCrossBankPaymentResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_trading_v1_cross_bank_payments_proto_msgTypes[1]
+	mi := &file_trading_v1_cross_bank_payments_proto_msgTypes[16]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -157,7 +1040,7 @@ func (x *SubmitCrossBankPaymentResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use SubmitCrossBankPaymentResponse.ProtoReflect.Descriptor instead.
 func (*SubmitCrossBankPaymentResponse) Descriptor() ([]byte, []int) {
-	return file_trading_v1_cross_bank_payments_proto_rawDescGZIP(), []int{1}
+	return file_trading_v1_cross_bank_payments_proto_rawDescGZIP(), []int{16}
 }
 
 func (x *SubmitCrossBankPaymentResponse) GetTransactionId() string {
@@ -190,7 +1073,7 @@ type GetCrossBankPaymentRequest struct {
 
 func (x *GetCrossBankPaymentRequest) Reset() {
 	*x = GetCrossBankPaymentRequest{}
-	mi := &file_trading_v1_cross_bank_payments_proto_msgTypes[2]
+	mi := &file_trading_v1_cross_bank_payments_proto_msgTypes[17]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -202,7 +1085,7 @@ func (x *GetCrossBankPaymentRequest) String() string {
 func (*GetCrossBankPaymentRequest) ProtoMessage() {}
 
 func (x *GetCrossBankPaymentRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_trading_v1_cross_bank_payments_proto_msgTypes[2]
+	mi := &file_trading_v1_cross_bank_payments_proto_msgTypes[17]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -215,7 +1098,7 @@ func (x *GetCrossBankPaymentRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use GetCrossBankPaymentRequest.ProtoReflect.Descriptor instead.
 func (*GetCrossBankPaymentRequest) Descriptor() ([]byte, []int) {
-	return file_trading_v1_cross_bank_payments_proto_rawDescGZIP(), []int{2}
+	return file_trading_v1_cross_bank_payments_proto_rawDescGZIP(), []int{17}
 }
 
 func (x *GetCrossBankPaymentRequest) GetTransactionId() string {
@@ -247,7 +1130,7 @@ type CrossBankPayment struct {
 
 func (x *CrossBankPayment) Reset() {
 	*x = CrossBankPayment{}
-	mi := &file_trading_v1_cross_bank_payments_proto_msgTypes[3]
+	mi := &file_trading_v1_cross_bank_payments_proto_msgTypes[18]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -259,7 +1142,7 @@ func (x *CrossBankPayment) String() string {
 func (*CrossBankPayment) ProtoMessage() {}
 
 func (x *CrossBankPayment) ProtoReflect() protoreflect.Message {
-	mi := &file_trading_v1_cross_bank_payments_proto_msgTypes[3]
+	mi := &file_trading_v1_cross_bank_payments_proto_msgTypes[18]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -272,7 +1155,7 @@ func (x *CrossBankPayment) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use CrossBankPayment.ProtoReflect.Descriptor instead.
 func (*CrossBankPayment) Descriptor() ([]byte, []int) {
-	return file_trading_v1_cross_bank_payments_proto_rawDescGZIP(), []int{3}
+	return file_trading_v1_cross_bank_payments_proto_rawDescGZIP(), []int{18}
 }
 
 func (x *CrossBankPayment) GetTransactionId() string {
@@ -377,7 +1260,76 @@ var File_trading_v1_cross_bank_payments_proto protoreflect.FileDescriptor
 
 const file_trading_v1_cross_bank_payments_proto_rawDesc = "" +
 	"\n" +
-	"$trading/v1/cross_bank_payments.proto\x12\x10banka.trading.v1\x1a\x1bbuf/validate/validate.proto\x1a\x1cgoogle/api/annotations.proto\x1a\x1fgoogle/protobuf/timestamp.proto\x1a\x18trading/v1/trading.proto\"\xf7\x02\n" +
+	"$trading/v1/cross_bank_payments.proto\x12\x10banka.trading.v1\x1a\x1bbuf/validate/validate.proto\x1a\x1cgoogle/api/annotations.proto\x1a\x1fgoogle/protobuf/timestamp.proto\x1a\x18trading/v1/trading.proto\"\x1d\n" +
+	"\x1bListInterbankRetriesRequest\"_\n" +
+	"\x1cListInterbankRetriesResponse\x12?\n" +
+	"\aentries\x18\x01 \x03(\v2%.banka.trading.v1.InterbankRetryEntryR\aentries\"\xe5\x03\n" +
+	"\x13InterbankRetryEntry\x12\x0e\n" +
+	"\x02id\x18\x01 \x01(\tR\x02id\x12%\n" +
+	"\x0etransaction_id\x18\x02 \x01(\tR\rtransactionId\x12*\n" +
+	"\x11partner_bank_code\x18\x03 \x01(\tR\x0fpartnerBankCode\x12\x1c\n" +
+	"\toperation\x18\x04 \x01(\tR\toperation\x12#\n" +
+	"\rattempt_count\x18\x05 \x01(\x05R\fattemptCount\x12>\n" +
+	"\rnext_retry_at\x18\x06 \x01(\v2\x1a.google.protobuf.TimestampR\vnextRetryAt\x12;\n" +
+	"\vdeadline_at\x18\a \x01(\v2\x1a.google.protobuf.TimestampR\n" +
+	"deadlineAt\x12\x16\n" +
+	"\x06status\x18\b \x01(\tR\x06status\x12\x1d\n" +
+	"\n" +
+	"last_error\x18\t \x01(\tR\tlastError\x129\n" +
+	"\n" +
+	"created_at\x18\n" +
+	" \x01(\v2\x1a.google.protobuf.TimestampR\tcreatedAt\x129\n" +
+	"\n" +
+	"updated_at\x18\v \x01(\v2\x1a.google.protobuf.TimestampR\tupdatedAt\"\x1e\n" +
+	"\x1cRunInterbankRetryTickRequest\"9\n" +
+	"\x1dRunInterbankRetryTickResponse\x12\x18\n" +
+	"\asettled\x18\x01 \x01(\x05R\asettled\"\x8b\x05\n" +
+	"\x19ScheduledInterbankPayment\x12\x0e\n" +
+	"\x02id\x18\x01 \x01(\tR\x02id\x12\x17\n" +
+	"\auser_id\x18\x02 \x01(\tR\x06userId\x12*\n" +
+	"\x11source_account_id\x18\x03 \x01(\tR\x0fsourceAccountId\x12$\n" +
+	"\x0edest_bank_code\x18\x04 \x01(\tR\fdestBankCode\x12.\n" +
+	"\x13dest_account_number\x18\x05 \x01(\tR\x11destAccountNumber\x126\n" +
+	"\bcurrency\x18\x06 \x01(\x0e2\x1a.banka.trading.v1.CurrencyR\bcurrency\x12\x16\n" +
+	"\x06amount\x18\a \x01(\tR\x06amount\x12\x18\n" +
+	"\apurpose\x18\b \x01(\tR\apurpose\x12\x18\n" +
+	"\acadence\x18\t \x01(\tR\acadence\x125\n" +
+	"\bnext_run\x18\n" +
+	" \x01(\v2\x1a.google.protobuf.TimestampR\anextRun\x12\x16\n" +
+	"\x06active\x18\v \x01(\bR\x06active\x12\x1f\n" +
+	"\vlast_status\x18\f \x01(\tR\n" +
+	"lastStatus\x12\x1d\n" +
+	"\n" +
+	"last_error\x18\r \x01(\tR\tlastError\x12:\n" +
+	"\vlast_run_at\x18\x0e \x01(\v2\x1a.google.protobuf.TimestampR\tlastRunAt\x129\n" +
+	"\n" +
+	"created_at\x18\x0f \x01(\v2\x1a.google.protobuf.TimestampR\tcreatedAt\x129\n" +
+	"\n" +
+	"updated_at\x18\x10 \x01(\v2\x1a.google.protobuf.TimestampR\tupdatedAt\"\x88\x03\n" +
+	"&CreateScheduledInterbankPaymentRequest\x124\n" +
+	"\x11source_account_id\x18\x01 \x01(\tB\b\xbaH\x05r\x03\xb0\x01\x01R\x0fsourceAccountId\x12-\n" +
+	"\x0edest_bank_code\x18\x02 \x01(\tB\a\xbaH\x04r\x02\x10\x01R\fdestBankCode\x128\n" +
+	"\x13dest_account_number\x18\x03 \x01(\tB\b\xbaH\x05r\x03\x98\x01\x12R\x11destAccountNumber\x12B\n" +
+	"\bcurrency\x18\x04 \x01(\x0e2\x1a.banka.trading.v1.CurrencyB\n" +
+	"\xbaH\a\x82\x01\x04\x10\x01 \x00R\bcurrency\x12\x1f\n" +
+	"\x06amount\x18\x05 \x01(\tB\a\xbaH\x04r\x02\x10\x01R\x06amount\x12\x18\n" +
+	"\apurpose\x18\x06 \x01(\tR\apurpose\x12!\n" +
+	"\acadence\x18\a \x01(\tB\a\xbaH\x04r\x02\x10\x01R\acadence\x12\x1d\n" +
+	"\n" +
+	"start_date\x18\b \x01(\tR\tstartDate\"'\n" +
+	"%ListScheduledInterbankPaymentsRequest\"\x84\x01\n" +
+	"&ListScheduledInterbankPaymentsResponse\x12Z\n" +
+	"\x12scheduled_payments\x18\x01 \x03(\v2+.banka.trading.v1.ScheduledInterbankPaymentR\x11scheduledPayments\"A\n" +
+	"%PauseScheduledInterbankPaymentRequest\x12\x18\n" +
+	"\x02id\x18\x01 \x01(\tB\b\xbaH\x05r\x03\xb0\x01\x01R\x02id\"B\n" +
+	"&ResumeScheduledInterbankPaymentRequest\x12\x18\n" +
+	"\x02id\x18\x01 \x01(\tB\b\xbaH\x05r\x03\xb0\x01\x01R\x02id\"B\n" +
+	"&CancelScheduledInterbankPaymentRequest\x12\x18\n" +
+	"\x02id\x18\x01 \x01(\tB\b\xbaH\x05r\x03\xb0\x01\x01R\x02id\")\n" +
+	"'CancelScheduledInterbankPaymentResponse\" \n" +
+	"\x1eRunDueInterbankPaymentsRequest\"?\n" +
+	"\x1fRunDueInterbankPaymentsResponse\x12\x1c\n" +
+	"\tsubmitted\x18\x01 \x01(\x05R\tsubmitted\"\xf7\x02\n" +
 	"\x1dSubmitCrossBankPaymentRequest\x120\n" +
 	"\x0fidempotency_key\x18\x01 \x01(\tB\a\xbaH\x04r\x02\x10\x01R\x0eidempotencyKey\x124\n" +
 	"\x11source_account_id\x18\x02 \x01(\tB\b\xbaH\x05r\x03\xb0\x01\x01R\x0fsourceAccountId\x121\n" +
@@ -411,10 +1363,18 @@ const file_trading_v1_cross_bank_payments_proto_rawDesc = "" +
 	"\x15remote_account_number\x18\x17 \x01(\tR\x13remoteAccountNumber\x126\n" +
 	"\bcurrency\x18\x18 \x01(\x0e2\x1a.banka.trading.v1.CurrencyR\bcurrency\x12\x16\n" +
 	"\x06amount\x18\x19 \x01(\tR\x06amount\x12\x18\n" +
-	"\apurpose\x18\x1a \x01(\tR\apurpose2\xdd\x02\n" +
+	"\apurpose\x18\x1a \x01(\tR\apurpose2\xd9\r\n" +
 	"\x17CrossBankPaymentService\x12\xa2\x01\n" +
 	"\x16SubmitCrossBankPayment\x12/.banka.trading.v1.SubmitCrossBankPaymentRequest\x1a0.banka.trading.v1.SubmitCrossBankPaymentResponse\"%\x82\xd3\xe4\x93\x02\x1f:\x01*\"\x1a/api/v1/payments/interbank\x12\x9c\x01\n" +
-	"\x13GetCrossBankPayment\x12,.banka.trading.v1.GetCrossBankPaymentRequest\x1a\".banka.trading.v1.CrossBankPayment\"3\x82\xd3\xe4\x93\x02-\x12+/api/v1/payments/interbank/{transaction_id}B\xd7\x01\n" +
+	"\x13GetCrossBankPayment\x12,.banka.trading.v1.GetCrossBankPaymentRequest\x1a\".banka.trading.v1.CrossBankPayment\"3\x82\xd3\xe4\x93\x02-\x12+/api/v1/payments/interbank/{transaction_id}\x12\xa1\x01\n" +
+	"\x14ListInterbankRetries\x12-.banka.trading.v1.ListInterbankRetriesRequest\x1a..banka.trading.v1.ListInterbankRetriesResponse\"*\x82\xd3\xe4\x93\x02$\x12\"/api/v1/payments/interbank/retries\x12x\n" +
+	"\x15RunInterbankRetryTick\x12..banka.trading.v1.RunInterbankRetryTickRequest\x1a/.banka.trading.v1.RunInterbankRetryTickResponse\x12\xba\x01\n" +
+	"\x1fCreateScheduledInterbankPayment\x128.banka.trading.v1.CreateScheduledInterbankPaymentRequest\x1a+.banka.trading.v1.ScheduledInterbankPayment\"0\x82\xd3\xe4\x93\x02*:\x01*\"%/api/v1/cross-bank-payments/scheduled\x12\xc2\x01\n" +
+	"\x1eListScheduledInterbankPayments\x127.banka.trading.v1.ListScheduledInterbankPaymentsRequest\x1a8.banka.trading.v1.ListScheduledInterbankPaymentsResponse\"-\x82\xd3\xe4\x93\x02'\x12%/api/v1/cross-bank-payments/scheduled\x12\xc3\x01\n" +
+	"\x1ePauseScheduledInterbankPayment\x127.banka.trading.v1.PauseScheduledInterbankPaymentRequest\x1a+.banka.trading.v1.ScheduledInterbankPayment\";\x82\xd3\xe4\x93\x025:\x01*\"0/api/v1/cross-bank-payments/scheduled/{id}/pause\x12\xc6\x01\n" +
+	"\x1fResumeScheduledInterbankPayment\x128.banka.trading.v1.ResumeScheduledInterbankPaymentRequest\x1a+.banka.trading.v1.ScheduledInterbankPayment\"<\x82\xd3\xe4\x93\x026:\x01*\"1/api/v1/cross-bank-payments/scheduled/{id}/resume\x12\xca\x01\n" +
+	"\x1fCancelScheduledInterbankPayment\x128.banka.trading.v1.CancelScheduledInterbankPaymentRequest\x1a9.banka.trading.v1.CancelScheduledInterbankPaymentResponse\"2\x82\xd3\xe4\x93\x02,**/api/v1/cross-bank-payments/scheduled/{id}\x12~\n" +
+	"\x17RunDueInterbankPayments\x120.banka.trading.v1.RunDueInterbankPaymentsRequest\x1a1.banka.trading.v1.RunDueInterbankPaymentsResponseB\xd7\x01\n" +
 	"\x14com.banka.trading.v1B\x16CrossBankPaymentsProtoP\x01ZEgithub.com/RAF-SI-2025/Banka-3-Backend/gen/proto/trading/v1;tradingv1\xa2\x02\x03BTX\xaa\x02\x10Banka.Trading.V1\xca\x02\x10Banka\\Trading\\V1\xe2\x02\x1cBanka\\Trading\\V1\\GPBMetadata\xea\x02\x12Banka::Trading::V1b\x06proto3"
 
 var (
@@ -429,29 +1389,72 @@ func file_trading_v1_cross_bank_payments_proto_rawDescGZIP() []byte {
 	return file_trading_v1_cross_bank_payments_proto_rawDescData
 }
 
-var file_trading_v1_cross_bank_payments_proto_msgTypes = make([]protoimpl.MessageInfo, 4)
+var file_trading_v1_cross_bank_payments_proto_msgTypes = make([]protoimpl.MessageInfo, 19)
 var file_trading_v1_cross_bank_payments_proto_goTypes = []any{
-	(*SubmitCrossBankPaymentRequest)(nil),  // 0: banka.trading.v1.SubmitCrossBankPaymentRequest
-	(*SubmitCrossBankPaymentResponse)(nil), // 1: banka.trading.v1.SubmitCrossBankPaymentResponse
-	(*GetCrossBankPaymentRequest)(nil),     // 2: banka.trading.v1.GetCrossBankPaymentRequest
-	(*CrossBankPayment)(nil),               // 3: banka.trading.v1.CrossBankPayment
-	(Currency)(0),                          // 4: banka.trading.v1.Currency
-	(*timestamppb.Timestamp)(nil),          // 5: google.protobuf.Timestamp
+	(*ListInterbankRetriesRequest)(nil),             // 0: banka.trading.v1.ListInterbankRetriesRequest
+	(*ListInterbankRetriesResponse)(nil),            // 1: banka.trading.v1.ListInterbankRetriesResponse
+	(*InterbankRetryEntry)(nil),                     // 2: banka.trading.v1.InterbankRetryEntry
+	(*RunInterbankRetryTickRequest)(nil),            // 3: banka.trading.v1.RunInterbankRetryTickRequest
+	(*RunInterbankRetryTickResponse)(nil),           // 4: banka.trading.v1.RunInterbankRetryTickResponse
+	(*ScheduledInterbankPayment)(nil),               // 5: banka.trading.v1.ScheduledInterbankPayment
+	(*CreateScheduledInterbankPaymentRequest)(nil),  // 6: banka.trading.v1.CreateScheduledInterbankPaymentRequest
+	(*ListScheduledInterbankPaymentsRequest)(nil),   // 7: banka.trading.v1.ListScheduledInterbankPaymentsRequest
+	(*ListScheduledInterbankPaymentsResponse)(nil),  // 8: banka.trading.v1.ListScheduledInterbankPaymentsResponse
+	(*PauseScheduledInterbankPaymentRequest)(nil),   // 9: banka.trading.v1.PauseScheduledInterbankPaymentRequest
+	(*ResumeScheduledInterbankPaymentRequest)(nil),  // 10: banka.trading.v1.ResumeScheduledInterbankPaymentRequest
+	(*CancelScheduledInterbankPaymentRequest)(nil),  // 11: banka.trading.v1.CancelScheduledInterbankPaymentRequest
+	(*CancelScheduledInterbankPaymentResponse)(nil), // 12: banka.trading.v1.CancelScheduledInterbankPaymentResponse
+	(*RunDueInterbankPaymentsRequest)(nil),          // 13: banka.trading.v1.RunDueInterbankPaymentsRequest
+	(*RunDueInterbankPaymentsResponse)(nil),         // 14: banka.trading.v1.RunDueInterbankPaymentsResponse
+	(*SubmitCrossBankPaymentRequest)(nil),           // 15: banka.trading.v1.SubmitCrossBankPaymentRequest
+	(*SubmitCrossBankPaymentResponse)(nil),          // 16: banka.trading.v1.SubmitCrossBankPaymentResponse
+	(*GetCrossBankPaymentRequest)(nil),              // 17: banka.trading.v1.GetCrossBankPaymentRequest
+	(*CrossBankPayment)(nil),                        // 18: banka.trading.v1.CrossBankPayment
+	(*timestamppb.Timestamp)(nil),                   // 19: google.protobuf.Timestamp
+	(Currency)(0),                                   // 20: banka.trading.v1.Currency
 }
 var file_trading_v1_cross_bank_payments_proto_depIdxs = []int32{
-	4, // 0: banka.trading.v1.SubmitCrossBankPaymentRequest.currency:type_name -> banka.trading.v1.Currency
-	5, // 1: banka.trading.v1.CrossBankPayment.created_at:type_name -> google.protobuf.Timestamp
-	5, // 2: banka.trading.v1.CrossBankPayment.updated_at:type_name -> google.protobuf.Timestamp
-	4, // 3: banka.trading.v1.CrossBankPayment.currency:type_name -> banka.trading.v1.Currency
-	0, // 4: banka.trading.v1.CrossBankPaymentService.SubmitCrossBankPayment:input_type -> banka.trading.v1.SubmitCrossBankPaymentRequest
-	2, // 5: banka.trading.v1.CrossBankPaymentService.GetCrossBankPayment:input_type -> banka.trading.v1.GetCrossBankPaymentRequest
-	1, // 6: banka.trading.v1.CrossBankPaymentService.SubmitCrossBankPayment:output_type -> banka.trading.v1.SubmitCrossBankPaymentResponse
-	3, // 7: banka.trading.v1.CrossBankPaymentService.GetCrossBankPayment:output_type -> banka.trading.v1.CrossBankPayment
-	6, // [6:8] is the sub-list for method output_type
-	4, // [4:6] is the sub-list for method input_type
-	4, // [4:4] is the sub-list for extension type_name
-	4, // [4:4] is the sub-list for extension extendee
-	0, // [0:4] is the sub-list for field type_name
+	2,  // 0: banka.trading.v1.ListInterbankRetriesResponse.entries:type_name -> banka.trading.v1.InterbankRetryEntry
+	19, // 1: banka.trading.v1.InterbankRetryEntry.next_retry_at:type_name -> google.protobuf.Timestamp
+	19, // 2: banka.trading.v1.InterbankRetryEntry.deadline_at:type_name -> google.protobuf.Timestamp
+	19, // 3: banka.trading.v1.InterbankRetryEntry.created_at:type_name -> google.protobuf.Timestamp
+	19, // 4: banka.trading.v1.InterbankRetryEntry.updated_at:type_name -> google.protobuf.Timestamp
+	20, // 5: banka.trading.v1.ScheduledInterbankPayment.currency:type_name -> banka.trading.v1.Currency
+	19, // 6: banka.trading.v1.ScheduledInterbankPayment.next_run:type_name -> google.protobuf.Timestamp
+	19, // 7: banka.trading.v1.ScheduledInterbankPayment.last_run_at:type_name -> google.protobuf.Timestamp
+	19, // 8: banka.trading.v1.ScheduledInterbankPayment.created_at:type_name -> google.protobuf.Timestamp
+	19, // 9: banka.trading.v1.ScheduledInterbankPayment.updated_at:type_name -> google.protobuf.Timestamp
+	20, // 10: banka.trading.v1.CreateScheduledInterbankPaymentRequest.currency:type_name -> banka.trading.v1.Currency
+	5,  // 11: banka.trading.v1.ListScheduledInterbankPaymentsResponse.scheduled_payments:type_name -> banka.trading.v1.ScheduledInterbankPayment
+	20, // 12: banka.trading.v1.SubmitCrossBankPaymentRequest.currency:type_name -> banka.trading.v1.Currency
+	19, // 13: banka.trading.v1.CrossBankPayment.created_at:type_name -> google.protobuf.Timestamp
+	19, // 14: banka.trading.v1.CrossBankPayment.updated_at:type_name -> google.protobuf.Timestamp
+	20, // 15: banka.trading.v1.CrossBankPayment.currency:type_name -> banka.trading.v1.Currency
+	15, // 16: banka.trading.v1.CrossBankPaymentService.SubmitCrossBankPayment:input_type -> banka.trading.v1.SubmitCrossBankPaymentRequest
+	17, // 17: banka.trading.v1.CrossBankPaymentService.GetCrossBankPayment:input_type -> banka.trading.v1.GetCrossBankPaymentRequest
+	0,  // 18: banka.trading.v1.CrossBankPaymentService.ListInterbankRetries:input_type -> banka.trading.v1.ListInterbankRetriesRequest
+	3,  // 19: banka.trading.v1.CrossBankPaymentService.RunInterbankRetryTick:input_type -> banka.trading.v1.RunInterbankRetryTickRequest
+	6,  // 20: banka.trading.v1.CrossBankPaymentService.CreateScheduledInterbankPayment:input_type -> banka.trading.v1.CreateScheduledInterbankPaymentRequest
+	7,  // 21: banka.trading.v1.CrossBankPaymentService.ListScheduledInterbankPayments:input_type -> banka.trading.v1.ListScheduledInterbankPaymentsRequest
+	9,  // 22: banka.trading.v1.CrossBankPaymentService.PauseScheduledInterbankPayment:input_type -> banka.trading.v1.PauseScheduledInterbankPaymentRequest
+	10, // 23: banka.trading.v1.CrossBankPaymentService.ResumeScheduledInterbankPayment:input_type -> banka.trading.v1.ResumeScheduledInterbankPaymentRequest
+	11, // 24: banka.trading.v1.CrossBankPaymentService.CancelScheduledInterbankPayment:input_type -> banka.trading.v1.CancelScheduledInterbankPaymentRequest
+	13, // 25: banka.trading.v1.CrossBankPaymentService.RunDueInterbankPayments:input_type -> banka.trading.v1.RunDueInterbankPaymentsRequest
+	16, // 26: banka.trading.v1.CrossBankPaymentService.SubmitCrossBankPayment:output_type -> banka.trading.v1.SubmitCrossBankPaymentResponse
+	18, // 27: banka.trading.v1.CrossBankPaymentService.GetCrossBankPayment:output_type -> banka.trading.v1.CrossBankPayment
+	1,  // 28: banka.trading.v1.CrossBankPaymentService.ListInterbankRetries:output_type -> banka.trading.v1.ListInterbankRetriesResponse
+	4,  // 29: banka.trading.v1.CrossBankPaymentService.RunInterbankRetryTick:output_type -> banka.trading.v1.RunInterbankRetryTickResponse
+	5,  // 30: banka.trading.v1.CrossBankPaymentService.CreateScheduledInterbankPayment:output_type -> banka.trading.v1.ScheduledInterbankPayment
+	8,  // 31: banka.trading.v1.CrossBankPaymentService.ListScheduledInterbankPayments:output_type -> banka.trading.v1.ListScheduledInterbankPaymentsResponse
+	5,  // 32: banka.trading.v1.CrossBankPaymentService.PauseScheduledInterbankPayment:output_type -> banka.trading.v1.ScheduledInterbankPayment
+	5,  // 33: banka.trading.v1.CrossBankPaymentService.ResumeScheduledInterbankPayment:output_type -> banka.trading.v1.ScheduledInterbankPayment
+	12, // 34: banka.trading.v1.CrossBankPaymentService.CancelScheduledInterbankPayment:output_type -> banka.trading.v1.CancelScheduledInterbankPaymentResponse
+	14, // 35: banka.trading.v1.CrossBankPaymentService.RunDueInterbankPayments:output_type -> banka.trading.v1.RunDueInterbankPaymentsResponse
+	26, // [26:36] is the sub-list for method output_type
+	16, // [16:26] is the sub-list for method input_type
+	16, // [16:16] is the sub-list for extension type_name
+	16, // [16:16] is the sub-list for extension extendee
+	0,  // [0:16] is the sub-list for field type_name
 }
 
 func init() { file_trading_v1_cross_bank_payments_proto_init() }
@@ -466,7 +1469,7 @@ func file_trading_v1_cross_bank_payments_proto_init() {
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
 			RawDescriptor: unsafe.Slice(unsafe.StringData(file_trading_v1_cross_bank_payments_proto_rawDesc), len(file_trading_v1_cross_bank_payments_proto_rawDesc)),
 			NumEnums:      0,
-			NumMessages:   4,
+			NumMessages:   19,
 			NumExtensions: 0,
 			NumServices:   1,
 		},

@@ -1454,6 +1454,169 @@
         ]
       }
     },
+    "/api/v1/cross-bank-payments/scheduled": {
+      "get": {
+        "summary": "ListScheduledInterbankPayments returns the caller's own scheduled\npayments (active + paused).",
+        "operationId": "CrossBankPaymentService_ListScheduledInterbankPayments",
+        "responses": {
+          "200": {
+            "description": "A successful response.",
+            "schema": {
+              "$ref": "#/definitions/v1ListScheduledInterbankPaymentsResponse"
+            }
+          },
+          "default": {
+            "description": "An unexpected error response.",
+            "schema": {
+              "$ref": "#/definitions/rpcStatus"
+            }
+          }
+        },
+        "tags": [
+          "CrossBankPaymentService"
+        ]
+      },
+      "post": {
+        "summary": "CreateScheduledInterbankPayment schedules a cross-bank payment to run\nonce on a future date or to repeat on a cadence. Spec example:\n\"Svakog prvog u mesecu poslati 400 EUR na dati račun.\"",
+        "operationId": "CrossBankPaymentService_CreateScheduledInterbankPayment",
+        "responses": {
+          "200": {
+            "description": "A successful response.",
+            "schema": {
+              "$ref": "#/definitions/v1ScheduledInterbankPayment"
+            }
+          },
+          "default": {
+            "description": "An unexpected error response.",
+            "schema": {
+              "$ref": "#/definitions/rpcStatus"
+            }
+          }
+        },
+        "parameters": [
+          {
+            "name": "body",
+            "in": "body",
+            "required": true,
+            "schema": {
+              "$ref": "#/definitions/v1CreateScheduledInterbankPaymentRequest"
+            }
+          }
+        ],
+        "tags": [
+          "CrossBankPaymentService"
+        ]
+      }
+    },
+    "/api/v1/cross-bank-payments/scheduled/{id}": {
+      "delete": {
+        "summary": "CancelScheduledInterbankPayment deletes a scheduled payment permanently.",
+        "operationId": "CrossBankPaymentService_CancelScheduledInterbankPayment",
+        "responses": {
+          "200": {
+            "description": "A successful response.",
+            "schema": {
+              "$ref": "#/definitions/v1CancelScheduledInterbankPaymentResponse"
+            }
+          },
+          "default": {
+            "description": "An unexpected error response.",
+            "schema": {
+              "$ref": "#/definitions/rpcStatus"
+            }
+          }
+        },
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "type": "string"
+          }
+        ],
+        "tags": [
+          "CrossBankPaymentService"
+        ]
+      }
+    },
+    "/api/v1/cross-bank-payments/scheduled/{id}/pause": {
+      "post": {
+        "summary": "PauseScheduledInterbankPayment flips active=false so the sweep skips it.",
+        "operationId": "CrossBankPaymentService_PauseScheduledInterbankPayment",
+        "responses": {
+          "200": {
+            "description": "A successful response.",
+            "schema": {
+              "$ref": "#/definitions/v1ScheduledInterbankPayment"
+            }
+          },
+          "default": {
+            "description": "An unexpected error response.",
+            "schema": {
+              "$ref": "#/definitions/rpcStatus"
+            }
+          }
+        },
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "type": "string"
+          },
+          {
+            "name": "body",
+            "in": "body",
+            "required": true,
+            "schema": {
+              "$ref": "#/definitions/CrossBankPaymentServicePauseScheduledInterbankPaymentBody"
+            }
+          }
+        ],
+        "tags": [
+          "CrossBankPaymentService"
+        ]
+      }
+    },
+    "/api/v1/cross-bank-payments/scheduled/{id}/resume": {
+      "post": {
+        "summary": "ResumeScheduledInterbankPayment flips active=true so the sweep resumes it.",
+        "operationId": "CrossBankPaymentService_ResumeScheduledInterbankPayment",
+        "responses": {
+          "200": {
+            "description": "A successful response.",
+            "schema": {
+              "$ref": "#/definitions/v1ScheduledInterbankPayment"
+            }
+          },
+          "default": {
+            "description": "An unexpected error response.",
+            "schema": {
+              "$ref": "#/definitions/rpcStatus"
+            }
+          }
+        },
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "type": "string"
+          },
+          {
+            "name": "body",
+            "in": "body",
+            "required": true,
+            "schema": {
+              "$ref": "#/definitions/CrossBankPaymentServiceResumeScheduledInterbankPaymentBody"
+            }
+          }
+        ],
+        "tags": [
+          "CrossBankPaymentService"
+        ]
+      }
+    },
     "/api/v1/dividends": {
       "get": {
         "summary": "ListDividendPayouts returns the caller's received-dividend history\n(todoSpec C3 S59), optionally scoped to one security for the\nper-position view. Supervisors/admin may pass user_id to inspect\nanother holder.",
@@ -4947,6 +5110,29 @@
         ]
       }
     },
+    "/api/v1/payments/interbank/retries": {
+      "get": {
+        "summary": "ListInterbankRetries returns the caller's own retry-queue entries.\nWhen a partner bank is unavailable the cross-bank payment is parked\nand retried every 5s; after 30s without success it fails and the\nclient is notified. This surfaces those entries for transparency.",
+        "operationId": "CrossBankPaymentService_ListInterbankRetries",
+        "responses": {
+          "200": {
+            "description": "A successful response.",
+            "schema": {
+              "$ref": "#/definitions/v1ListInterbankRetriesResponse"
+            }
+          },
+          "default": {
+            "description": "An unexpected error response.",
+            "schema": {
+              "$ref": "#/definitions/rpcStatus"
+            }
+          }
+        },
+        "tags": [
+          "CrossBankPaymentService"
+        ]
+      }
+    },
     "/api/v1/payments/interbank/{transactionId}": {
       "get": {
         "summary": "GetCrossBankPayment fetches a saga row by transaction_id.\nAuth: only the originator (or admin) sees their payment.",
@@ -6285,6 +6471,12 @@
         }
       }
     },
+    "CrossBankPaymentServicePauseScheduledInterbankPaymentBody": {
+      "type": "object"
+    },
+    "CrossBankPaymentServiceResumeScheduledInterbankPaymentBody": {
+      "type": "object"
+    },
     "ExternalOTCServiceAcceptExternalOTCOfferBody": {
       "type": "object"
     },
@@ -7078,6 +7270,9 @@
     "v1CancelRecurringOrderResponse": {
       "type": "object"
     },
+    "v1CancelScheduledInterbankPaymentResponse": {
+      "type": "object"
+    },
     "v1Card": {
       "type": "object",
       "properties": {
@@ -7665,6 +7860,37 @@
         "startDate": {
           "type": "string",
           "description": "start_date optionally anchors the first NextRun (RFC3339). When\nempty the first run is one cadence interval from now."
+        }
+      }
+    },
+    "v1CreateScheduledInterbankPaymentRequest": {
+      "type": "object",
+      "properties": {
+        "sourceAccountId": {
+          "type": "string"
+        },
+        "destBankCode": {
+          "type": "string"
+        },
+        "destAccountNumber": {
+          "type": "string"
+        },
+        "currency": {
+          "$ref": "#/definitions/bankaTradingV1Currency"
+        },
+        "amount": {
+          "type": "string"
+        },
+        "purpose": {
+          "type": "string"
+        },
+        "cadence": {
+          "type": "string",
+          "description": "cadence is one of ONCE / DAILY / WEEKLY / MONTHLY."
+        },
+        "startDate": {
+          "type": "string",
+          "description": "start_date (RFC3339) anchors the first run. Required for ONCE\n(validated to be in the future); optional for recurring cadences."
         }
       }
     },
@@ -8952,6 +9178,50 @@
       },
       "description": "InterbankMessage is the supervisor projection of a recorded inbound\npartner message (the comms / audit history). message_type is the\nstored \"NEW_TX\" / \"COMMIT_TX\" / \"ROLLBACK_TX\" string."
     },
+    "v1InterbankRetryEntry": {
+      "type": "object",
+      "properties": {
+        "id": {
+          "type": "string"
+        },
+        "transactionId": {
+          "type": "string"
+        },
+        "partnerBankCode": {
+          "type": "string"
+        },
+        "operation": {
+          "type": "string"
+        },
+        "attemptCount": {
+          "type": "integer",
+          "format": "int32"
+        },
+        "nextRetryAt": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "deadlineAt": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "status": {
+          "type": "string",
+          "title": "pending | succeeded | failed"
+        },
+        "lastError": {
+          "type": "string"
+        },
+        "createdAt": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "updatedAt": {
+          "type": "string",
+          "format": "date-time"
+        }
+      }
+    },
     "v1InterbankTransaction": {
       "type": "object",
       "properties": {
@@ -9388,6 +9658,18 @@
         }
       }
     },
+    "v1ListInterbankRetriesResponse": {
+      "type": "object",
+      "properties": {
+        "entries": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "$ref": "#/definitions/v1InterbankRetryEntry"
+          }
+        }
+      }
+    },
     "v1ListInterbankTransactionsResponse": {
       "type": "object",
       "properties": {
@@ -9630,6 +9912,18 @@
           "items": {
             "type": "object",
             "$ref": "#/definitions/v1RecurringOrder"
+          }
+        }
+      }
+    },
+    "v1ListScheduledInterbankPaymentsResponse": {
+      "type": "object",
+      "properties": {
+        "scheduledPayments": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "$ref": "#/definitions/v1ScheduledInterbankPayment"
           }
         }
       }
@@ -11174,6 +11468,65 @@
           "type": "string",
           "format": "date-time",
           "description": "Future date the payment should execute on. Server rejects a\nnon-future value (spec: \"Sistem proverava da li je datum u\nbudućnosti\")."
+        }
+      }
+    },
+    "v1ScheduledInterbankPayment": {
+      "type": "object",
+      "properties": {
+        "id": {
+          "type": "string"
+        },
+        "userId": {
+          "type": "string"
+        },
+        "sourceAccountId": {
+          "type": "string"
+        },
+        "destBankCode": {
+          "type": "string"
+        },
+        "destAccountNumber": {
+          "type": "string"
+        },
+        "currency": {
+          "$ref": "#/definitions/bankaTradingV1Currency"
+        },
+        "amount": {
+          "type": "string"
+        },
+        "purpose": {
+          "type": "string"
+        },
+        "cadence": {
+          "type": "string",
+          "description": "cadence is one of ONCE / DAILY / WEEKLY / MONTHLY (pkg/schedule.Cadence)."
+        },
+        "nextRun": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "active": {
+          "type": "boolean"
+        },
+        "lastStatus": {
+          "type": "string",
+          "title": "most recent run's outcome (running|completed|failed)"
+        },
+        "lastError": {
+          "type": "string"
+        },
+        "lastRunAt": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "createdAt": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "updatedAt": {
+          "type": "string",
+          "format": "date-time"
         }
       }
     },

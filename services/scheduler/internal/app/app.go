@@ -29,11 +29,14 @@ import (
 // App holds the scheduler's dependencies: the service clients it drives
 // and a fixed location for calendar jobs.
 type App struct {
-	log      *slog.Logger
-	loc      *time.Location
-	bank     bankpb.BankServiceClient
-	trading  tradingpb.TradingServiceClient
-	exchange exchangepb.ExchangeServiceClient
+	log     *slog.Logger
+	loc     *time.Location
+	bank    bankpb.BankServiceClient
+	trading tradingpb.TradingServiceClient
+	// crossBank drives celina-5 cross-bank payment jobs (retry queue +
+	// scheduled inter-bank payments). Shares the trading connection.
+	crossBank tradingpb.CrossBankPaymentServiceClient
+	exchange  exchangepb.ExchangeServiceClient
 }
 
 // Run blocks until the process is signalled to terminate.
@@ -80,6 +83,7 @@ func Run() error {
 	}
 	if c := dial("trading", config.String("TRADING_GRPC_ADDR", "")); c != nil {
 		a.trading = tradingpb.NewTradingServiceClient(c)
+		a.crossBank = tradingpb.NewCrossBankPaymentServiceClient(c)
 	}
 	if c := dial("exchange", config.String("EXCHANGE_GRPC_ADDR", "")); c != nil {
 		a.exchange = exchangepb.NewExchangeServiceClient(c)
