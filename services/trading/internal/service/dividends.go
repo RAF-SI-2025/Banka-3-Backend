@@ -141,6 +141,14 @@ func (s *Service) computeDividend(c *store.DividendCandidate) (*big.Rat, bool) {
 // bank, writes the tax row (clients only), and records the payout.
 // Returns the payout converted to RSD (best-effort, for the run total).
 func (s *Service) payOneDividend(ctx context.Context, c *store.DividendCandidate, gross *big.Rat, year, quarter int) (*big.Rat, error) {
+	// Fund-owned holdings take the dedicated fund path (S69-S72): credit
+	// the fund's RSD account, attribute across investors, optionally
+	// reinvest. The mechanism reuses SettleDividend + the dividend_payouts
+	// record (S72); only the routing differs.
+	if c.UserKind == domain.KindFund {
+		return s.payFundDividend(ctx, c, gross, year, quarter)
+	}
+
 	isClient := c.UserKind == domain.KindClient
 
 	destAccountID, destForBank, err := s.resolveDividendAccount(ctx, c, isClient)

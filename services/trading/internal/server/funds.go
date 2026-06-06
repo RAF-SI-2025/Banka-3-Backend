@@ -198,8 +198,57 @@ func decoratedFundToProto(d *service.DecoratedFund) *tradingpb.Fund {
 		ProfitRsd:           d.ProfitRSD,
 		UnitPriceRsd:        d.UnitPriceRSD,
 		Status:              fundStatusToProto(f.Status),
+		ReinvestDividends:   f.ReinvestDividends,
 		CreatedAt:           timestamppb.New(f.CreatedAt),
 		UpdatedAt:           timestamppb.New(f.UpdatedAt),
+	}
+}
+
+func (s *Server) SetFundReinvest(ctx context.Context, in *tradingpb.SetFundReinvestRequest) (*tradingpb.Fund, error) {
+	f, err := s.Svc.SetFundReinvestDividends(ctx, in.GetId(), in.GetReinvestDividends())
+	if err != nil {
+		return nil, err
+	}
+	// The toggle response carries only the row's own columns; the
+	// derived RSD figures are filled by the next GetFund/ListFunds read.
+	dec := &service.DecoratedFund{
+		Fund:             f,
+		LiquidRSD:        "0",
+		HoldingsValueRSD: "0",
+		TotalValueRSD:    "0",
+		ProfitRSD:        "0",
+		UnitPriceRSD:     "1",
+	}
+	return decoratedFundToProto(dec), nil
+}
+
+func (s *Server) ListFundDividends(ctx context.Context, in *tradingpb.ListFundDividendsRequest) (*tradingpb.ListFundDividendsResponse, error) {
+	rows, err := s.Svc.ListFundDividends(ctx, in.GetId())
+	if err != nil {
+		return nil, err
+	}
+	out := &tradingpb.ListFundDividendsResponse{
+		Distributions: make([]*tradingpb.FundDividendDistribution, 0, len(rows)),
+	}
+	for _, d := range rows {
+		out.Distributions = append(out.Distributions, fundDividendDistToProto(d))
+	}
+	return out, nil
+}
+
+func fundDividendDistToProto(d *domain.FundDividendDistribution) *tradingpb.FundDividendDistribution {
+	if d == nil {
+		return nil
+	}
+	return &tradingpb.FundDividendDistribution{
+		Id:               d.ID,
+		FundId:           d.FundID,
+		DividendPayoutId: d.DividendPayoutID,
+		ClientId:         d.ClientID,
+		ShareUnits:       d.ShareUnits,
+		FundTotalUnits:   d.FundTotalUnits,
+		AmountRsd:        d.AmountRSD,
+		CreatedAt:        timestamppb.New(d.CreatedAt),
 	}
 }
 

@@ -2142,6 +2142,37 @@
         ]
       }
     },
+    "/api/v1/funds/{id}/dividends": {
+      "get": {
+        "summary": "ListFundDividends returns the per-client dividend-distribution\nhistory for a fund (todoSpec C4 S71).",
+        "operationId": "TradingService_ListFundDividends",
+        "responses": {
+          "200": {
+            "description": "A successful response.",
+            "schema": {
+              "$ref": "#/definitions/v1ListFundDividendsResponse"
+            }
+          },
+          "default": {
+            "description": "An unexpected error response.",
+            "schema": {
+              "$ref": "#/definitions/rpcStatus"
+            }
+          }
+        },
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "type": "string"
+          }
+        ],
+        "tags": [
+          "TradingService"
+        ]
+      }
+    },
     "/api/v1/funds/{id}/invest": {
       "post": {
         "summary": "InvestInFund runs the fund_invest SAGA: reserves the source\naccount, transfers to the fund's bank account (FX hop if needed),\nupserts the client_fund_positions row (units math) and writes a\nclient_fund_transactions row. Verification-gated (FOUND-9).",
@@ -2213,6 +2244,45 @@
             "required": false,
             "type": "integer",
             "format": "int32"
+          }
+        ],
+        "tags": [
+          "TradingService"
+        ]
+      }
+    },
+    "/api/v1/funds/{id}/reinvest": {
+      "patch": {
+        "summary": "SetFundReinvest toggles the fund's dividend-reinvestment flag\n(todoSpec C4 S70). Manager-only (admin counts). When enabled the\nquarterly dividend cron auto-places a MARKET BUY for any dividend the\nfund receives.",
+        "operationId": "TradingService_SetFundReinvest",
+        "responses": {
+          "200": {
+            "description": "A successful response.",
+            "schema": {
+              "$ref": "#/definitions/v1Fund"
+            }
+          },
+          "default": {
+            "description": "An unexpected error response.",
+            "schema": {
+              "$ref": "#/definitions/rpcStatus"
+            }
+          }
+        },
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "type": "string"
+          },
+          {
+            "name": "body",
+            "in": "body",
+            "required": true,
+            "schema": {
+              "$ref": "#/definitions/TradingServiceSetFundReinvestBody"
+            }
           }
         ],
         "tags": [
@@ -5837,6 +5907,14 @@
         }
       }
     },
+    "TradingServiceSetFundReinvestBody": {
+      "type": "object",
+      "properties": {
+        "reinvestDividends": {
+          "type": "boolean"
+        }
+      }
+    },
     "TradingServiceSetPublicCountBody": {
       "type": "object",
       "properties": {
@@ -7701,9 +7779,44 @@
         "updatedAt": {
           "type": "string",
           "format": "date-time"
+        },
+        "reinvestDividends": {
+          "type": "boolean",
+          "description": "When true, the quarterly dividend cron auto-places a MARKET BUY for\nany dividend the fund receives (todoSpec C4 S70 — compounding)."
         }
       },
       "description": "Fund is one investment-fund row. total_value_rsd + profit_rsd are\ncomputed at read time (liquid_rsd + holdings_value_rsd; profit =\ntotal_value − Σ total_invested_rsd across positions)."
+    },
+    "v1FundDividendDistribution": {
+      "type": "object",
+      "properties": {
+        "id": {
+          "type": "string"
+        },
+        "fundId": {
+          "type": "string"
+        },
+        "dividendPayoutId": {
+          "type": "string"
+        },
+        "clientId": {
+          "type": "string"
+        },
+        "shareUnits": {
+          "type": "string"
+        },
+        "fundTotalUnits": {
+          "type": "string"
+        },
+        "amountRsd": {
+          "type": "string"
+        },
+        "createdAt": {
+          "type": "string",
+          "format": "date-time"
+        }
+      },
+      "description": "FundDividendDistribution attributes one fund dividend across the\nfund's investors proportional to their unit share at payout time\n(todoSpec C4 S71)."
     },
     "v1FundHolding": {
       "type": "object",
@@ -8329,6 +8442,18 @@
           "items": {
             "type": "object",
             "$ref": "#/definitions/v1ExternalPublicHolding"
+          }
+        }
+      }
+    },
+    "v1ListFundDividendsResponse": {
+      "type": "object",
+      "properties": {
+        "distributions": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "$ref": "#/definitions/v1FundDividendDistribution"
           }
         }
       }
