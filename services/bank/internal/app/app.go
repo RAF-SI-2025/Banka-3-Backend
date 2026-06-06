@@ -129,7 +129,10 @@ func Run() error {
 			return fmt.Errorf("dial notification: %w", err)
 		}
 		defer conn.Close()
-		svc.Notifier = &notifClientAdapter{c: notifpb.NewNotificationServiceClient(conn)}
+		notifAdapter := &notifClientAdapter{c: notifpb.NewNotificationServiceClient(conn)}
+		svc.Notifier = notifAdapter
+		// Same adapter/connection also drives the in-app feed (S19).
+		svc.InApp = notifAdapter
 	} else {
 		emailCfg := email.Config{
 			Host:     config.String("SMTP_HOST", ""),

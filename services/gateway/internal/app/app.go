@@ -25,6 +25,7 @@ import (
 
 	bankpb "github.com/RAF-SI-2025/Banka-3-Backend/gen/proto/bank/v1"
 	exchangepb "github.com/RAF-SI-2025/Banka-3-Backend/gen/proto/exchange/v1"
+	notifpb "github.com/RAF-SI-2025/Banka-3-Backend/gen/proto/notification/v1"
 	tradingpb "github.com/RAF-SI-2025/Banka-3-Backend/gen/proto/trading/v1"
 	userpb "github.com/RAF-SI-2025/Banka-3-Backend/gen/proto/user/v1"
 	"github.com/RAF-SI-2025/Banka-3-Backend/services/gateway/internal/auth"
@@ -221,6 +222,14 @@ func Run() error {
 				return err
 			}
 		}
+		if cs.NotificationConn != nil {
+			// In-app notification feed (List / MarkRead). SendEmail +
+			// CreateNotification have no HTTP annotation, so only the
+			// read/ack routes are exposed here.
+			if err := notifpb.RegisterNotificationServiceHandler(ctx, mux, cs.NotificationConn); err != nil {
+				return err
+			}
+		}
 		return nil
 	}
 	httpHandler, err := r.Mount(ctx, gwMux, registerGW)
@@ -240,7 +249,7 @@ func Run() error {
 	// down to user/bank/trading/exchange.
 	httpAddr := fmt.Sprintf(":%d", config.Int("HTTP_PORT", 8080))
 	httpSrv := &http.Server{
-		Addr:              httpAddr,
+		Addr: httpAddr,
 		// accessLog sits inside otelhttp so its span timing still
 		// reflects the full handler. Log lines correlate with Tempo
 		// traces via the W3C traceparent on the request context.

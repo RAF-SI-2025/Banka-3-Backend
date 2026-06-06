@@ -23,10 +23,13 @@ const (
 	// (the rewrite surface). This is what mock-partner and any team
 	// running this codebase will speak.
 	ProtocolNative Protocol = "native"
-	// ProtocolBanka2 — the partner speaks the older Banka2 shape
-	// (/public-stock, /user/{routing}/{id}). Detection works; outbound
-	// methods are stubbed (BE-4c) until a coursemate fixes their bank
-	// code so we can integrate.
+	// ProtocolBanka2 — the partner speaks the canonical si-tx-proto /
+	// Banka-4 shape: every endpoint under /interbank
+	// (/interbank/public-stock, /interbank/negotiations/…,
+	// /interbank/user/{routing}/{id}) and the §2 2PC envelope at
+	// POST /interbank. The peer base URL is the partner's root; we append
+	// the /interbank/… paths. (Named "banka2" for historical reasons —
+	// the shape was first reverse-engineered from a Banka-2 Spring bank.)
 	ProtocolBanka2 Protocol = "banka2"
 )
 
@@ -96,7 +99,7 @@ func (c *Client) probe(ctx context.Context, bankCode string) Protocol {
 	if c.probeOK(ctx, "GET", base+"/bank/api/v1/otc/public", false) {
 		return ProtocolNative
 	}
-	if c.probeOK(ctx, "GET", base+"/public-stock", true) {
+	if c.probeOK(ctx, "GET", base+"/interbank/public-stock", true) {
 		return ProtocolBanka2
 	}
 	return ProtocolUnknown

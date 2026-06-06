@@ -17,6 +17,7 @@ import (
 	pkgredis "github.com/RAF-SI-2025/Banka-3-Backend/pkg/redis"
 	"github.com/RAF-SI-2025/Banka-3-Backend/pkg/shutdown"
 	"github.com/RAF-SI-2025/Banka-3-Backend/services/notification/internal/server"
+	"github.com/RAF-SI-2025/Banka-3-Backend/services/notification/internal/store"
 	"google.golang.org/grpc"
 
 	"golang.org/x/sync/errgroup"
@@ -66,7 +67,7 @@ func Run() error {
 		From:     config.String("SMTP_FROM", "no-reply@banka.local"),
 		UseTLS:   config.Bool("SMTP_USE_TLS", false),
 	}, log)
-	notifSrv := server.New(sender, log)
+	notifSrv := server.New(sender, store.New(pool), log)
 
 	g, gctx := errgroup.WithContext(ctx)
 	g.Go(func() error {

@@ -17,15 +17,16 @@ import (
 // Banka-2-Backend/banka2_bek/src/main/java/rs/raf/banka2_bek/interbank.
 //
 // Differences from our native shape:
-//   * paths are at root (no /bank/api/v1/ prefix)
+//   * every endpoint is under /interbank on the partner's root base URL
+//     (/interbank/public-stock, /interbank/negotiations/…), matching
+//     Banka-4's mount; the §2 2PC envelope is POST {base}/interbank
 //   * counter uses PUT, withdraw uses DELETE, accept uses GET
 //   * money is { currency: "USD", amount: 150 } (BigDecimal, not string)
 //   * settlement_date is OffsetDateTime / RFC3339
 //   * ids are tuples { routingNumber: int, id: string }
-//   * 2PC is one POST /interbank with a Message envelope
 //
-// We expose only the OTC subset here; the 2PC envelope is built when
-// BE-4d/payments lands (one bank-to-bank, not one route per verb).
+// The 2PC envelope itself lives in payments.go; this file is the OTC
+// subset (discover / create-offer / counter / withdraw / accept).
 // =====================================================================
 
 // banka2PublicStock mirrors rs.raf.banka2_bek.interbank.protocol.PublicStock.
@@ -69,7 +70,7 @@ type banka2OtcOffer struct {
 // =====================================================================
 
 func (c *Client) discoverBanka2(ctx context.Context, bankCode, tickerFilter string) ([]*service.PartnerHolding, error) {
-	url := c.baseURL(bankCode) + "/public-stock"
+	url := c.baseURL(bankCode) + "/interbank/public-stock"
 	status, body, err := c.doJSON(ctx, "GET", url, nil)
 	if err != nil {
 		return nil, err
@@ -127,7 +128,7 @@ func (c *Client) createOfferBanka2(ctx context.Context, in service.PartnerCreate
 		LastModifiedBy: banka2ForeignID{RoutingNumber: ownRouting, ID: in.LocalUserRef},
 	}
 
-	url := c.baseURL(in.RemoteBankCode) + "/negotiations"
+	url := c.baseURL(in.RemoteBankCode) + "/interbank/negotiations"
 	status, respBody, err := c.doJSON(ctx, "POST", url, body)
 	if err != nil {
 		return nil, err
@@ -151,7 +152,7 @@ func (c *Client) actionBanka2(ctx context.Context, in service.PartnerActionInput
 	ownRouting, _ := strconv.Atoi(c.cfg.OwnRoutingNumber)
 	partnerRouting, _ := strconv.Atoi(in.RemoteBankCode)
 	base := c.baseURL(in.RemoteBankCode)
-	path := fmt.Sprintf("/negotiations/%d/%s", partnerRouting, in.RemoteThreadID)
+	path := fmt.Sprintf("/interbank/negotiations/%d/%s", partnerRouting, in.RemoteThreadID)
 
 	switch verb {
 	case "counter":

@@ -70,24 +70,37 @@ func (p *PartnerBanka2) MountPartnerBanka2(mux *http.ServeMux) {
 		return
 	}
 	if p.Interbank != nil {
+		// §2 2PC envelope. Banka-4 and the canonical si-tx-proto layout
+		// POST this to {peerBase}/interbank.
 		mux.HandleFunc("POST /interbank", p.guard(p.handleEnvelope))
 	}
 	if p.TradingOTC != nil {
-		mux.HandleFunc("POST /negotiations", p.guard(p.handleCreateNegotiation))
-		mux.HandleFunc("GET /negotiations/{routing_number}/{thread_id}", p.guard(p.handleReadNegotiation))
-		mux.HandleFunc("PUT /negotiations/{routing_number}/{thread_id}", p.guard(p.handleCounterNegotiation))
-		mux.HandleFunc("DELETE /negotiations/{routing_number}/{thread_id}", p.guard(p.handleCloseNegotiation))
-		mux.HandleFunc("GET /negotiations/{routing_number}/{thread_id}/accept", p.guard(p.handleAcceptNegotiation))
+		// §3 OTC negotiation lifecycle. Mounted under BOTH layouts so a
+		// partner's peer base URL can be our root either way:
+		//   - "/negotiations…"            — older Banka-2 Spring shape
+		//   - "/interbank/negotiations…"  — Banka-4 / canonical si-tx-proto
+		//     (its peer client appends /interbank/… to the peer base URL)
+		// Same handlers regardless of prefix.
+		for _, pre := range []string{"", "/interbank"} {
+			mux.HandleFunc("POST "+pre+"/negotiations", p.guard(p.handleCreateNegotiation))
+			mux.HandleFunc("GET "+pre+"/negotiations/{routing_number}/{thread_id}", p.guard(p.handleReadNegotiation))
+			mux.HandleFunc("PUT "+pre+"/negotiations/{routing_number}/{thread_id}", p.guard(p.handleCounterNegotiation))
+			mux.HandleFunc("DELETE "+pre+"/negotiations/{routing_number}/{thread_id}", p.guard(p.handleCloseNegotiation))
+			mux.HandleFunc("GET "+pre+"/negotiations/{routing_number}/{thread_id}/accept", p.guard(p.handleAcceptNegotiation))
+		}
 	}
 	if p.Trading != nil {
 		// Discovery is unauthenticated by spec §3.1 (the data is public-
 		// by-definition) — matches our native /bank/api/v1/otc/public.
+		// Both layouts (root + /interbank) for the same reason as above.
 		mux.HandleFunc("GET /public-stock", p.handlePublicStock)
+		mux.HandleFunc("GET /interbank/public-stock", p.handlePublicStock)
 	}
 	if p.Users != nil {
-		// User-info lookup. Mounted at a non-colliding path; Banka-2
-		// operators must set interbank.partners[k].user-info-path to
-		// "/bank/api/v1/interbank/user/{rn}/{id}".
+		// §3.7 user-info lookup. Banka-4 / canonical clients call
+		// {peerBase}/interbank/user/{rn}/{id}. The legacy /bank/api/v1/…
+		// mount stays for Banka-2 operators that pin a custom user-info-path.
+		mux.HandleFunc("GET /interbank/user/{routing_number}/{user_id}", p.guard(p.handleUserInfo))
 		mux.HandleFunc("GET /bank/api/v1/interbank/user/{routing_number}/{user_id}", p.guard(p.handleUserInfo))
 	}
 }

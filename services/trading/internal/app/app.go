@@ -148,7 +148,12 @@ func Run() error {
 			return fmt.Errorf("dial notification: %w", err)
 		}
 		defer conn.Close()
-		emailSender = &notifEmailSender{c: notifpb.NewNotificationServiceClient(conn)}
+		notifClient := notifpb.NewNotificationServiceClient(conn)
+		emailSender = &notifEmailSender{c: notifClient}
+		// General-purpose fan-out (email + in-app) for C3 order/price-alert
+		// events. Shares the one notification client. In-app requires
+		// notification-svc, so it's only wired on this branch.
+		svc.Notifier = &notifierAdapter{c: notifClient}
 	} else {
 		emailSender = email.New(email.Config{
 			Host:     config.String("SMTP_HOST", ""),

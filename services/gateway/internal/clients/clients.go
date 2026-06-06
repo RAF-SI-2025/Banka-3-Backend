@@ -7,6 +7,7 @@ import (
 
 	bankpb "github.com/RAF-SI-2025/Banka-3-Backend/gen/proto/bank/v1"
 	exchangepb "github.com/RAF-SI-2025/Banka-3-Backend/gen/proto/exchange/v1"
+	notifpb "github.com/RAF-SI-2025/Banka-3-Backend/gen/proto/notification/v1"
 	tradingpb "github.com/RAF-SI-2025/Banka-3-Backend/gen/proto/trading/v1"
 	userpb "github.com/RAF-SI-2025/Banka-3-Backend/gen/proto/user/v1"
 
@@ -28,11 +29,15 @@ type Set struct {
 	// InterbankProtocol shares BankConn — same binary, second service
 	// (celina 5 2PC primitive).
 	InterbankProtocol bankpb.InterbankProtocolServiceClient
+	// Notification exposes the in-app notification feed (List/MarkRead)
+	// to the web + mobile clients (todoSpec S19).
+	Notification notifpb.NotificationServiceClient
 
-	UserConn     *grpc.ClientConn
-	BankConn     *grpc.ClientConn
-	ExchangeConn *grpc.ClientConn
-	TradingConn  *grpc.ClientConn
+	UserConn         *grpc.ClientConn
+	BankConn         *grpc.ClientConn
+	ExchangeConn     *grpc.ClientConn
+	TradingConn      *grpc.ClientConn
+	NotificationConn *grpc.ClientConn
 
 	conns []*grpc.ClientConn
 }
@@ -97,6 +102,16 @@ func Dial(addrs Addrs, opts ...Option) (*Set, error) {
 		s.TradingConn = c
 		s.Trading = tradingpb.NewTradingServiceClient(c)
 		s.ExternalOTC = tradingpb.NewExternalOTCServiceClient(c)
+		s.conns = append(s.conns, c)
+	}
+
+	if addrs.Notification != "" {
+		c, err := d.dial(addrs.Notification)
+		if err != nil {
+			return nil, fmt.Errorf("dial notification: %w", err)
+		}
+		s.NotificationConn = c
+		s.Notification = notifpb.NewNotificationServiceClient(c)
 		s.conns = append(s.conns, c)
 	}
 

@@ -208,6 +208,10 @@ func (s *Service) ExerciseOTCContract(ctx context.Context, in ExerciseOTCContrac
 func registerOTCExerciseSaga(reg *saga.Registry, svc *Service) {
 	def := saga.Definition[otcExerciseSagaPayload]{
 		Type: otcExerciseSagaType,
+		// SAGA_test.pdf: any forward error (transient infra included)
+		// rolls the exercise back to a clean Compensated terminal,
+		// rather than parking for a forward retry.
+		CompensateOnTransient: true,
 		Steps: []saga.Step[otcExerciseSagaPayload]{
 			{
 				Name: "reserve_buyer_strike",

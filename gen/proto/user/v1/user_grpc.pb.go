@@ -42,6 +42,8 @@ const (
 	UserService_RecordVerificationEvent_FullMethodName  = "/banka.user.v1.UserService/RecordVerificationEvent"
 	UserService_ResolveVerificationEvent_FullMethodName = "/banka.user.v1.UserService/ResolveVerificationEvent"
 	UserService_ListVerificationHistory_FullMethodName  = "/banka.user.v1.UserService/ListVerificationHistory"
+	UserService_RecordAuditEntry_FullMethodName         = "/banka.user.v1.UserService/RecordAuditEntry"
+	UserService_ListAuditLog_FullMethodName             = "/banka.user.v1.UserService/ListAuditLog"
 )
 
 // UserServiceClient is the client API for UserService service.
@@ -97,6 +99,16 @@ type UserServiceClient interface {
 	// history, newest first (spec p.84 — each request marked
 	// successful/unsuccessful).
 	ListVerificationHistory(ctx context.Context, in *ListVerificationHistoryRequest, opts ...grpc.CallOption) (*ListVerificationHistoryResponse, error)
+	// RecordAuditEntry appends one entry to the cross-cutting audit log
+	// (todoSpec "Audit log"). Internal-only (no gateway route): other
+	// services (trading, bank) call it to record limit changes, order
+	// approvals, manual tax runs, inter-bank messages, etc. The user
+	// service records its own employee/permission changes in-process.
+	RecordAuditEntry(ctx context.Context, in *RecordAuditEntryRequest, opts ...grpc.CallOption) (*emptypb.Empty, error)
+	// ListAuditLog returns audit entries newest-first, filterable by
+	// action type, actor (name/id substring), and date range. Restricted
+	// to admins + supervisors (clients are denied — S46).
+	ListAuditLog(ctx context.Context, in *ListAuditLogRequest, opts ...grpc.CallOption) (*ListAuditLogResponse, error)
 }
 
 type userServiceClient struct {
@@ -327,6 +339,26 @@ func (c *userServiceClient) ListVerificationHistory(ctx context.Context, in *Lis
 	return out, nil
 }
 
+func (c *userServiceClient) RecordAuditEntry(ctx context.Context, in *RecordAuditEntryRequest, opts ...grpc.CallOption) (*emptypb.Empty, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(emptypb.Empty)
+	err := c.cc.Invoke(ctx, UserService_RecordAuditEntry_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *userServiceClient) ListAuditLog(ctx context.Context, in *ListAuditLogRequest, opts ...grpc.CallOption) (*ListAuditLogResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(ListAuditLogResponse)
+	err := c.cc.Invoke(ctx, UserService_ListAuditLog_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
 // UserServiceServer is the server API for UserService service.
 // All implementations should embed UnimplementedUserServiceServer
 // for forward compatibility.
@@ -380,6 +412,16 @@ type UserServiceServer interface {
 	// history, newest first (spec p.84 — each request marked
 	// successful/unsuccessful).
 	ListVerificationHistory(context.Context, *ListVerificationHistoryRequest) (*ListVerificationHistoryResponse, error)
+	// RecordAuditEntry appends one entry to the cross-cutting audit log
+	// (todoSpec "Audit log"). Internal-only (no gateway route): other
+	// services (trading, bank) call it to record limit changes, order
+	// approvals, manual tax runs, inter-bank messages, etc. The user
+	// service records its own employee/permission changes in-process.
+	RecordAuditEntry(context.Context, *RecordAuditEntryRequest) (*emptypb.Empty, error)
+	// ListAuditLog returns audit entries newest-first, filterable by
+	// action type, actor (name/id substring), and date range. Restricted
+	// to admins + supervisors (clients are denied — S46).
+	ListAuditLog(context.Context, *ListAuditLogRequest) (*ListAuditLogResponse, error)
 }
 
 // UnimplementedUserServiceServer should be embedded to have
@@ -454,6 +496,12 @@ func (UnimplementedUserServiceServer) ResolveVerificationEvent(context.Context, 
 }
 func (UnimplementedUserServiceServer) ListVerificationHistory(context.Context, *ListVerificationHistoryRequest) (*ListVerificationHistoryResponse, error) {
 	return nil, status.Error(codes.Unimplemented, "method ListVerificationHistory not implemented")
+}
+func (UnimplementedUserServiceServer) RecordAuditEntry(context.Context, *RecordAuditEntryRequest) (*emptypb.Empty, error) {
+	return nil, status.Error(codes.Unimplemented, "method RecordAuditEntry not implemented")
+}
+func (UnimplementedUserServiceServer) ListAuditLog(context.Context, *ListAuditLogRequest) (*ListAuditLogResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method ListAuditLog not implemented")
 }
 func (UnimplementedUserServiceServer) testEmbeddedByValue() {}
 
@@ -871,6 +919,42 @@ func _UserService_ListVerificationHistory_Handler(srv interface{}, ctx context.C
 	return interceptor(ctx, in, info, handler)
 }
 
+func _UserService_RecordAuditEntry_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(RecordAuditEntryRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(UserServiceServer).RecordAuditEntry(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: UserService_RecordAuditEntry_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(UserServiceServer).RecordAuditEntry(ctx, req.(*RecordAuditEntryRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _UserService_ListAuditLog_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(ListAuditLogRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(UserServiceServer).ListAuditLog(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: UserService_ListAuditLog_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(UserServiceServer).ListAuditLog(ctx, req.(*ListAuditLogRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
 // UserService_ServiceDesc is the grpc.ServiceDesc for UserService service.
 // It's only intended for direct use with grpc.RegisterService,
 // and not to be introspected or modified (even as a copy)
@@ -965,6 +1049,14 @@ var UserService_ServiceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "ListVerificationHistory",
 			Handler:    _UserService_ListVerificationHistory_Handler,
+		},
+		{
+			MethodName: "RecordAuditEntry",
+			Handler:    _UserService_RecordAuditEntry_Handler,
+		},
+		{
+			MethodName: "ListAuditLog",
+			Handler:    _UserService_ListAuditLog_Handler,
 		},
 	},
 	Streams:  []grpc.StreamDesc{},

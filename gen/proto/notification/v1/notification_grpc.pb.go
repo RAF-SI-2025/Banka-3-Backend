@@ -19,8 +19,12 @@ import (
 const _ = grpc.SupportPackageIsVersion9
 
 const (
-	NotificationService_SendEmail_FullMethodName = "/banka.notification.v1.NotificationService/SendEmail"
-	NotificationService_Health_FullMethodName    = "/banka.notification.v1.NotificationService/Health"
+	NotificationService_SendEmail_FullMethodName                = "/banka.notification.v1.NotificationService/SendEmail"
+	NotificationService_CreateNotification_FullMethodName       = "/banka.notification.v1.NotificationService/CreateNotification"
+	NotificationService_ListNotifications_FullMethodName        = "/banka.notification.v1.NotificationService/ListNotifications"
+	NotificationService_MarkNotificationRead_FullMethodName     = "/banka.notification.v1.NotificationService/MarkNotificationRead"
+	NotificationService_MarkAllNotificationsRead_FullMethodName = "/banka.notification.v1.NotificationService/MarkAllNotificationsRead"
+	NotificationService_Health_FullMethodName                   = "/banka.notification.v1.NotificationService/Health"
 )
 
 // NotificationServiceClient is the client API for NotificationService service.
@@ -30,8 +34,10 @@ const (
 // NotificationService is the centralized email-dispatch surface for
 // Banka 3 (c4 PR4 NOTIFY-1). Other services dial this instead of
 // importing pkg/email directly so SMTP credentials and any future
-// per-recipient rate limiting live in one place. Internal-only —
-// not exposed via the gateway.
+// per-recipient rate limiting live in one place. The SendEmail /
+// CreateNotification RPCs are internal (service-to-service); the
+// List / MarkRead RPCs are gateway-exposed so the web + mobile clients
+// can render an in-app notification panel (todoSpec S19).
 type NotificationServiceClient interface {
 	// SendEmail is the generic dispatch entry point used by user-svc,
 	// bank-svc, and trading-svc adapters. `kind` is an opaque tag used
@@ -39,6 +45,21 @@ type NotificationServiceClient interface {
 	// still happens in the caller. Templates may migrate into
 	// notification-svc as typed event RPCs are added.
 	SendEmail(ctx context.Context, in *SendEmailRequest, opts ...grpc.CallOption) (*SendEmailResponse, error)
+	// CreateNotification persists one in-app notification row for a user.
+	// Internal-only (no gateway route): services call it from their event
+	// paths, typically alongside SendEmail. Best-effort on the caller's
+	// side — a notification must never fail the business operation.
+	CreateNotification(ctx context.Context, in *CreateNotificationRequest, opts ...grpc.CallOption) (*Notification, error)
+	// ListNotifications returns the caller's own notifications, newest
+	// first. The recipient is taken from the authenticated principal in
+	// gRPC metadata — never from the request — so a user can only read
+	// their own feed.
+	ListNotifications(ctx context.Context, in *ListNotificationsRequest, opts ...grpc.CallOption) (*ListNotificationsResponse, error)
+	// MarkNotificationRead flips one of the caller's notifications to read.
+	MarkNotificationRead(ctx context.Context, in *MarkNotificationReadRequest, opts ...grpc.CallOption) (*Notification, error)
+	// MarkAllNotificationsRead flips every unread notification of the
+	// caller to read and returns how many were affected.
+	MarkAllNotificationsRead(ctx context.Context, in *MarkAllNotificationsReadRequest, opts ...grpc.CallOption) (*MarkAllNotificationsReadResponse, error)
 	Health(ctx context.Context, in *HealthRequest, opts ...grpc.CallOption) (*HealthResponse, error)
 }
 
@@ -54,6 +75,46 @@ func (c *notificationServiceClient) SendEmail(ctx context.Context, in *SendEmail
 	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
 	out := new(SendEmailResponse)
 	err := c.cc.Invoke(ctx, NotificationService_SendEmail_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *notificationServiceClient) CreateNotification(ctx context.Context, in *CreateNotificationRequest, opts ...grpc.CallOption) (*Notification, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(Notification)
+	err := c.cc.Invoke(ctx, NotificationService_CreateNotification_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *notificationServiceClient) ListNotifications(ctx context.Context, in *ListNotificationsRequest, opts ...grpc.CallOption) (*ListNotificationsResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(ListNotificationsResponse)
+	err := c.cc.Invoke(ctx, NotificationService_ListNotifications_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *notificationServiceClient) MarkNotificationRead(ctx context.Context, in *MarkNotificationReadRequest, opts ...grpc.CallOption) (*Notification, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(Notification)
+	err := c.cc.Invoke(ctx, NotificationService_MarkNotificationRead_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *notificationServiceClient) MarkAllNotificationsRead(ctx context.Context, in *MarkAllNotificationsReadRequest, opts ...grpc.CallOption) (*MarkAllNotificationsReadResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(MarkAllNotificationsReadResponse)
+	err := c.cc.Invoke(ctx, NotificationService_MarkAllNotificationsRead_FullMethodName, in, out, cOpts...)
 	if err != nil {
 		return nil, err
 	}
@@ -77,8 +138,10 @@ func (c *notificationServiceClient) Health(ctx context.Context, in *HealthReques
 // NotificationService is the centralized email-dispatch surface for
 // Banka 3 (c4 PR4 NOTIFY-1). Other services dial this instead of
 // importing pkg/email directly so SMTP credentials and any future
-// per-recipient rate limiting live in one place. Internal-only —
-// not exposed via the gateway.
+// per-recipient rate limiting live in one place. The SendEmail /
+// CreateNotification RPCs are internal (service-to-service); the
+// List / MarkRead RPCs are gateway-exposed so the web + mobile clients
+// can render an in-app notification panel (todoSpec S19).
 type NotificationServiceServer interface {
 	// SendEmail is the generic dispatch entry point used by user-svc,
 	// bank-svc, and trading-svc adapters. `kind` is an opaque tag used
@@ -86,6 +149,21 @@ type NotificationServiceServer interface {
 	// still happens in the caller. Templates may migrate into
 	// notification-svc as typed event RPCs are added.
 	SendEmail(context.Context, *SendEmailRequest) (*SendEmailResponse, error)
+	// CreateNotification persists one in-app notification row for a user.
+	// Internal-only (no gateway route): services call it from their event
+	// paths, typically alongside SendEmail. Best-effort on the caller's
+	// side — a notification must never fail the business operation.
+	CreateNotification(context.Context, *CreateNotificationRequest) (*Notification, error)
+	// ListNotifications returns the caller's own notifications, newest
+	// first. The recipient is taken from the authenticated principal in
+	// gRPC metadata — never from the request — so a user can only read
+	// their own feed.
+	ListNotifications(context.Context, *ListNotificationsRequest) (*ListNotificationsResponse, error)
+	// MarkNotificationRead flips one of the caller's notifications to read.
+	MarkNotificationRead(context.Context, *MarkNotificationReadRequest) (*Notification, error)
+	// MarkAllNotificationsRead flips every unread notification of the
+	// caller to read and returns how many were affected.
+	MarkAllNotificationsRead(context.Context, *MarkAllNotificationsReadRequest) (*MarkAllNotificationsReadResponse, error)
 	Health(context.Context, *HealthRequest) (*HealthResponse, error)
 }
 
@@ -98,6 +176,18 @@ type UnimplementedNotificationServiceServer struct{}
 
 func (UnimplementedNotificationServiceServer) SendEmail(context.Context, *SendEmailRequest) (*SendEmailResponse, error) {
 	return nil, status.Error(codes.Unimplemented, "method SendEmail not implemented")
+}
+func (UnimplementedNotificationServiceServer) CreateNotification(context.Context, *CreateNotificationRequest) (*Notification, error) {
+	return nil, status.Error(codes.Unimplemented, "method CreateNotification not implemented")
+}
+func (UnimplementedNotificationServiceServer) ListNotifications(context.Context, *ListNotificationsRequest) (*ListNotificationsResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method ListNotifications not implemented")
+}
+func (UnimplementedNotificationServiceServer) MarkNotificationRead(context.Context, *MarkNotificationReadRequest) (*Notification, error) {
+	return nil, status.Error(codes.Unimplemented, "method MarkNotificationRead not implemented")
+}
+func (UnimplementedNotificationServiceServer) MarkAllNotificationsRead(context.Context, *MarkAllNotificationsReadRequest) (*MarkAllNotificationsReadResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method MarkAllNotificationsRead not implemented")
 }
 func (UnimplementedNotificationServiceServer) Health(context.Context, *HealthRequest) (*HealthResponse, error) {
 	return nil, status.Error(codes.Unimplemented, "method Health not implemented")
@@ -140,6 +230,78 @@ func _NotificationService_SendEmail_Handler(srv interface{}, ctx context.Context
 	return interceptor(ctx, in, info, handler)
 }
 
+func _NotificationService_CreateNotification_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(CreateNotificationRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(NotificationServiceServer).CreateNotification(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: NotificationService_CreateNotification_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(NotificationServiceServer).CreateNotification(ctx, req.(*CreateNotificationRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _NotificationService_ListNotifications_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(ListNotificationsRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(NotificationServiceServer).ListNotifications(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: NotificationService_ListNotifications_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(NotificationServiceServer).ListNotifications(ctx, req.(*ListNotificationsRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _NotificationService_MarkNotificationRead_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(MarkNotificationReadRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(NotificationServiceServer).MarkNotificationRead(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: NotificationService_MarkNotificationRead_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(NotificationServiceServer).MarkNotificationRead(ctx, req.(*MarkNotificationReadRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _NotificationService_MarkAllNotificationsRead_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(MarkAllNotificationsReadRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(NotificationServiceServer).MarkAllNotificationsRead(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: NotificationService_MarkAllNotificationsRead_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(NotificationServiceServer).MarkAllNotificationsRead(ctx, req.(*MarkAllNotificationsReadRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
 func _NotificationService_Health_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
 	in := new(HealthRequest)
 	if err := dec(in); err != nil {
@@ -168,6 +330,22 @@ var NotificationService_ServiceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "SendEmail",
 			Handler:    _NotificationService_SendEmail_Handler,
+		},
+		{
+			MethodName: "CreateNotification",
+			Handler:    _NotificationService_CreateNotification_Handler,
+		},
+		{
+			MethodName: "ListNotifications",
+			Handler:    _NotificationService_ListNotifications_Handler,
+		},
+		{
+			MethodName: "MarkNotificationRead",
+			Handler:    _NotificationService_MarkNotificationRead_Handler,
+		},
+		{
+			MethodName: "MarkAllNotificationsRead",
+			Handler:    _NotificationService_MarkAllNotificationsRead_Handler,
 		},
 		{
 			MethodName: "Health",

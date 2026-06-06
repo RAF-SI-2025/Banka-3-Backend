@@ -176,6 +176,20 @@ service UserService {
   // history, newest first (spec p.84 — each request marked
   // successful/unsuccessful).
   rpc ListVerificationHistory(ListVerificationHistoryRequest) returns (ListVerificationHistoryResponse);
+
+  // RecordAuditEntry appends one entry to the cross-cutting audit log
+  // (todoSpec "Audit log"). Internal-only (no gateway route): other
+  // services (trading, bank) call it to record limit changes, order
+  // approvals, manual tax runs, inter-bank messages, etc. The user
+  // service records its own employee/permission changes in-process.
+  rpc RecordAuditEntry(RecordAuditEntryRequest) returns (google.protobuf.Empty);
+
+  // ListAuditLog returns audit entries newest-first, filterable by
+  // action type, actor (name/id substring), and date range. Restricted
+  // to admins + supervisors (clients are denied — S46).
+  rpc ListAuditLog(ListAuditLogRequest) returns (ListAuditLogResponse) {
+    option (google.api.http) = {get: "/api/v1/audit-log"};
+  }
 }
 
 // =====================================================================
@@ -598,4 +612,63 @@ message VerificationEvent {
 
 message ListVerificationHistoryResponse {
   repeated VerificationEvent events = 1;
+}
+
+// =====================================================================
+// Audit log (todoSpec "Audit log")
+// =====================================================================
+
+// AuditEntry is one recorded administrative action.
+message AuditEntry {
+  string id = 1;
+  // action is a stable machine key, e.g. "employee.create",
+  // "employee.update", "permission.change", "limit.change",
+  // "order.approve", "order.decline", "tax.run".
+  string action = 2;
+  string actor_id = 3;
+  string actor_kind = 4;
+  // actor_name is denormalized at write time for display + name filter.
+  string actor_name = 5;
+  // target_id/target_label identify the affected entity (employee id,
+  // order id, …) — text, not always a UUID.
+  string target_id = 6;
+  string target_label = 7;
+  string old_value = 8;
+  string new_value = 9;
+  // note is a freeform human-readable summary line.
+  string note = 10;
+  google.protobuf.Timestamp created_at = 11;
+}
+
+message RecordAuditEntryRequest {
+  string action = 1 [(buf.validate.field).string.min_len = 1];
+  // actor_id/actor_kind may be empty — the server falls back to the
+  // calling principal's identity.
+  string actor_id = 2;
+  string actor_kind = 3;
+  string target_id = 4;
+  string target_label = 5;
+  string old_value = 6;
+  string new_value = 7;
+  string note = 8;
+}
+
+message ListAuditLogRequest {
+  // action filters to an exact action key (optional).
+  string action = 1;
+  // actor matches actor_id exactly OR actor_name (case-insensitive
+  // substring) — optional.
+  string actor = 2;
+  // from/to are inclusive RFC3339 bounds (optional, either may be set).
+  string from = 3;
+  string to = 4;
+  int32 page = 5 [(buf.validate.field).int32.gte = 0];
+  int32 page_size = 6 [(buf.validate.field).int32 = {gte: 0, lte: 200}];
+}
+
+message ListAuditLogResponse {
+  repeated AuditEntry items = 1;
+  int32 page = 2;
+  int32 page_size = 3;
+  int64 total = 4;
 }
