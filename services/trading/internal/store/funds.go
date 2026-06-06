@@ -18,7 +18,7 @@ import (
 const fundCols = `
     id, name, description, manager_user_id, bank_account_id,
     minimum_contribution::text, total_units::text, status,
-    created_at, updated_at`
+    reinvest_dividends, created_at, updated_at`
 
 func scanFund(row pgx.Row) (*domain.Fund, error) {
 	var f domain.Fund
@@ -26,7 +26,7 @@ func scanFund(row pgx.Row) (*domain.Fund, error) {
 	if err := row.Scan(
 		&f.ID, &f.Name, &f.Description, &f.ManagerUserID, &f.BankAccountID,
 		&f.MinimumContribution, &f.TotalUnits, &status,
-		&f.CreatedAt, &f.UpdatedAt,
+		&f.ReinvestDividends, &f.CreatedAt, &f.UpdatedAt,
 	); err != nil {
 		return nil, err
 	}
@@ -333,6 +333,96 @@ func (s *Store) SumPositionsInvestedRSD(ctx context.Context, fundID string) (str
 		return "", apperr.Internal("sum fund positions invested", err)
 	}
 	return out, nil
+}
+
+// SetFundReinvestDividends flips the reinvest_dividends flag (todoSpec
+// C4 S70). Returns the updated fund row.
+func (s *Store) SetFundReinvestDividends(ctx context.Context, fundID string, enabled bool) (*domain.Fund, error) {
+	const q = `update "trading".investment_funds
+	           set reinvest_dividends = $2, updated_at = now()
+	           where id = $1
+	           returning ` + fundCols
+	out, err := scanFund(s.DB.QueryRow(ctx, q, fundID, enabled))
+	if err != nil {
+		if noRows(err) {
+			return nil, apperr.NotFound("fond ne postoji")
+		}
+		return nil, apperr.Internal("set fund reinvest dividends", err)
+	}
+	return out, nil
+}
+
+// =====================================================================
+// Fund dividend distributions (S71 — per-client attribution)
+// =====================================================================
+
+const fundDividendDistCols = `
+    id, fund_id, dividend_payout_id, client_id,
+    share_units::text, fund_total_units::text, amount_rsd::text, created_at`
+
+func scanFundDividendDistribution(row pgx.Row) (*domain.FundDividendDistribution, error) {
+	var d domain.FundDividendDistribution
+	if err := row.Scan(
+		&d.ID, &d.FundID, &d.DividendPayoutID, &d.ClientID,
+		&d.ShareUnits, &d.FundTotalUnits, &d.AmountRSD, &d.CreatedAt,
+	); err != nil {
+		return nil, err
+	}
+	return &d, nil
+}
+
+// InsertFundDividendDistribution records one investor's proportional
+// slice of a fund dividend (S71). Idempotent on (dividend_payout_id,
+// client_id) — a retried cron run converges without double-recording.
+// On conflict the existing row is returned.
+func (s *Store) InsertFundDividendDistribution(ctx context.Context, tx pgx.Tx, d *domain.FundDividendDistribution) (*domain.FundDividendDistribution, error) {
+	const q = `
+        insert into "trading".fund_dividend_distributions
+            (fund_id, dividend_payout_id, client_id,
+             share_units, fund_total_units, amount_rsd)
+        values ($1, $2, $3, $4::numeric, $5::numeric, $6::numeric)
+        on conflict (dividend_payout_id, client_id) do nothing
+        returning ` + fundDividendDistCols
+	out, err := scanFundDividendDistribution(tx.QueryRow(ctx, q,
+		d.FundID, d.DividendPayoutID, d.ClientID,
+		d.ShareUnits, d.FundTotalUnits, d.AmountRSD))
+	if err != nil {
+		if noRows(err) {
+			// Lost the conflict — fetch the winning row.
+			const sel = `select ` + fundDividendDistCols + `
+			             from "trading".fund_dividend_distributions
+			             where dividend_payout_id = $1 and client_id = $2`
+			out, gerr := scanFundDividendDistribution(tx.QueryRow(ctx, sel, d.DividendPayoutID, d.ClientID))
+			if gerr != nil {
+				return nil, apperr.Internal("get fund dividend distribution", gerr)
+			}
+			return out, nil
+		}
+		return nil, apperr.Internal("insert fund dividend distribution", err)
+	}
+	return out, nil
+}
+
+// ListFundDividendDistributions returns the per-client distribution
+// rows for one fund, newest-first. Drives the FE fund-dividend history.
+func (s *Store) ListFundDividendDistributions(ctx context.Context, fundID string) ([]*domain.FundDividendDistribution, error) {
+	const q = `select ` + fundDividendDistCols + `
+	           from "trading".fund_dividend_distributions
+	           where fund_id = $1 order by created_at desc`
+	rows, err := s.DB.Query(postgres.WithRead(ctx), q, fundID)
+	if err != nil {
+		return nil, apperr.Internal("list fund dividend distributions", err)
+	}
+	defer rows.Close()
+	var out []*domain.FundDividendDistribution
+	for rows.Next() {
+		d, err := scanFundDividendDistribution(rows)
+		if err != nil {
+			return nil, apperr.Internal("scan fund dividend distribution", err)
+		}
+		out = append(out, d)
+	}
+	return out, rows.Err()
 }
 
 // =====================================================================

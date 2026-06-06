@@ -409,6 +409,23 @@ service TradingService {
     option (google.api.http) = {get: "/api/v1/funds/{id}/transactions"};
   }
 
+  // SetFundReinvest toggles the fund's dividend-reinvestment flag
+  // (todoSpec C4 S70). Manager-only (admin counts). When enabled the
+  // quarterly dividend cron auto-places a MARKET BUY for any dividend the
+  // fund receives.
+  rpc SetFundReinvest(SetFundReinvestRequest) returns (Fund) {
+    option (google.api.http) = {
+      patch: "/api/v1/funds/{id}/reinvest"
+      body: "*"
+    };
+  }
+
+  // ListFundDividends returns the per-client dividend-distribution
+  // history for a fund (todoSpec C4 S71).
+  rpc ListFundDividends(ListFundDividendsRequest) returns (ListFundDividendsResponse) {
+    option (google.api.http) = {get: "/api/v1/funds/{id}/dividends"};
+  }
+
   // -----------------------------------------------------------------
   // Profit Banke (c4 PR4 — spec p.76).
   //
@@ -1649,6 +1666,9 @@ message Fund {
   FundStatus status = 15;
   google.protobuf.Timestamp created_at = 16;
   google.protobuf.Timestamp updated_at = 17;
+  // When true, the quarterly dividend cron auto-places a MARKET BUY for
+  // any dividend the fund receives (todoSpec C4 S70 — compounding).
+  bool reinvest_dividends = 18;
 }
 
 message FundHolding {
@@ -1843,6 +1863,33 @@ message ListFundTransactionsResponse {
   int32 page = 2;
   int32 page_size = 3;
   int64 total = 4;
+}
+
+message SetFundReinvestRequest {
+  string id = 1;
+  bool reinvest_dividends = 2;
+}
+
+// FundDividendDistribution attributes one fund dividend across the
+// fund's investors proportional to their unit share at payout time
+// (todoSpec C4 S71).
+message FundDividendDistribution {
+  string id = 1;
+  string fund_id = 2;
+  string dividend_payout_id = 3;
+  string client_id = 4;
+  string share_units = 5;
+  string fund_total_units = 6;
+  string amount_rsd = 7;
+  google.protobuf.Timestamp created_at = 8;
+}
+
+message ListFundDividendsRequest {
+  string id = 1;
+}
+
+message ListFundDividendsResponse {
+  repeated FundDividendDistribution distributions = 1;
 }
 
 // =====================================================================

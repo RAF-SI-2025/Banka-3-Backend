@@ -619,8 +619,27 @@ type Fund struct {
 	MinimumContribution string
 	TotalUnits          string
 	Status              FundStatus
-	CreatedAt           time.Time
-	UpdatedAt           time.Time
+	// ReinvestDividends, when true, makes the quarterly dividend cron
+	// auto-place a MARKET BUY for any dividend the fund receives
+	// (todoSpec C4 S70). Default false — the dividend sits as liquid RSD.
+	ReinvestDividends bool
+	CreatedAt         time.Time
+	UpdatedAt         time.Time
+}
+
+// FundDividendDistribution attributes one fund dividend across the
+// fund's investors proportional to their unit share at payout time
+// (todoSpec C4 S71). The cash lands on the fund's account (S69); this
+// ledger makes the per-client economic slice auditable.
+type FundDividendDistribution struct {
+	ID               string
+	FundID           string
+	DividendPayoutID string
+	ClientID         string
+	ShareUnits       string
+	FundTotalUnits   string
+	AmountRSD        string
+	CreatedAt        time.Time
 }
 
 // FundPosition is one client's stake in one fund. units is the

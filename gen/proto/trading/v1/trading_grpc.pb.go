@@ -71,6 +71,8 @@ const (
 	TradingService_ListFundPositions_FullMethodName          = "/banka.trading.v1.TradingService/ListFundPositions"
 	TradingService_GetFundPerformance_FullMethodName         = "/banka.trading.v1.TradingService/GetFundPerformance"
 	TradingService_ListFundTransactions_FullMethodName       = "/banka.trading.v1.TradingService/ListFundTransactions"
+	TradingService_SetFundReinvest_FullMethodName            = "/banka.trading.v1.TradingService/SetFundReinvest"
+	TradingService_ListFundDividends_FullMethodName          = "/banka.trading.v1.TradingService/ListFundDividends"
 	TradingService_ListActuaryPerformances_FullMethodName    = "/banka.trading.v1.TradingService/ListActuaryPerformances"
 	TradingService_ListBankFundPositions_FullMethodName      = "/banka.trading.v1.TradingService/ListBankFundPositions"
 	TradingService_GetBankProfitTimeseries_FullMethodName    = "/banka.trading.v1.TradingService/GetBankProfitTimeseries"
@@ -242,6 +244,14 @@ type TradingServiceClient interface {
 	// ListFundTransactions returns the audit log of invest/withdraw rows
 	// for a fund. Supervisors see everything; clients see only their own.
 	ListFundTransactions(ctx context.Context, in *ListFundTransactionsRequest, opts ...grpc.CallOption) (*ListFundTransactionsResponse, error)
+	// SetFundReinvest toggles the fund's dividend-reinvestment flag
+	// (todoSpec C4 S70). Manager-only (admin counts). When enabled the
+	// quarterly dividend cron auto-places a MARKET BUY for any dividend the
+	// fund receives.
+	SetFundReinvest(ctx context.Context, in *SetFundReinvestRequest, opts ...grpc.CallOption) (*Fund, error)
+	// ListFundDividends returns the per-client dividend-distribution
+	// history for a fund (todoSpec C4 S71).
+	ListFundDividends(ctx context.Context, in *ListFundDividendsRequest, opts ...grpc.CallOption) (*ListFundDividendsResponse, error)
 	ListActuaryPerformances(ctx context.Context, in *ListActuaryPerformancesRequest, opts ...grpc.CallOption) (*ListActuaryPerformancesResponse, error)
 	ListBankFundPositions(ctx context.Context, in *ListBankFundPositionsRequest, opts ...grpc.CallOption) (*ListBankFundPositionsResponse, error)
 	// GetBankProfitTimeseries buckets realized bank profit over a time
@@ -830,6 +840,26 @@ func (c *tradingServiceClient) ListFundTransactions(ctx context.Context, in *Lis
 	return out, nil
 }
 
+func (c *tradingServiceClient) SetFundReinvest(ctx context.Context, in *SetFundReinvestRequest, opts ...grpc.CallOption) (*Fund, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(Fund)
+	err := c.cc.Invoke(ctx, TradingService_SetFundReinvest_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *tradingServiceClient) ListFundDividends(ctx context.Context, in *ListFundDividendsRequest, opts ...grpc.CallOption) (*ListFundDividendsResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(ListFundDividendsResponse)
+	err := c.cc.Invoke(ctx, TradingService_ListFundDividends_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
 func (c *tradingServiceClient) ListActuaryPerformances(ctx context.Context, in *ListActuaryPerformancesRequest, opts ...grpc.CallOption) (*ListActuaryPerformancesResponse, error) {
 	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
 	out := new(ListActuaryPerformancesResponse)
@@ -1233,6 +1263,14 @@ type TradingServiceServer interface {
 	// ListFundTransactions returns the audit log of invest/withdraw rows
 	// for a fund. Supervisors see everything; clients see only their own.
 	ListFundTransactions(context.Context, *ListFundTransactionsRequest) (*ListFundTransactionsResponse, error)
+	// SetFundReinvest toggles the fund's dividend-reinvestment flag
+	// (todoSpec C4 S70). Manager-only (admin counts). When enabled the
+	// quarterly dividend cron auto-places a MARKET BUY for any dividend the
+	// fund receives.
+	SetFundReinvest(context.Context, *SetFundReinvestRequest) (*Fund, error)
+	// ListFundDividends returns the per-client dividend-distribution
+	// history for a fund (todoSpec C4 S71).
+	ListFundDividends(context.Context, *ListFundDividendsRequest) (*ListFundDividendsResponse, error)
 	ListActuaryPerformances(context.Context, *ListActuaryPerformancesRequest) (*ListActuaryPerformancesResponse, error)
 	ListBankFundPositions(context.Context, *ListBankFundPositionsRequest) (*ListBankFundPositionsResponse, error)
 	// GetBankProfitTimeseries buckets realized bank profit over a time
@@ -1462,6 +1500,12 @@ func (UnimplementedTradingServiceServer) GetFundPerformance(context.Context, *Ge
 }
 func (UnimplementedTradingServiceServer) ListFundTransactions(context.Context, *ListFundTransactionsRequest) (*ListFundTransactionsResponse, error) {
 	return nil, status.Error(codes.Unimplemented, "method ListFundTransactions not implemented")
+}
+func (UnimplementedTradingServiceServer) SetFundReinvest(context.Context, *SetFundReinvestRequest) (*Fund, error) {
+	return nil, status.Error(codes.Unimplemented, "method SetFundReinvest not implemented")
+}
+func (UnimplementedTradingServiceServer) ListFundDividends(context.Context, *ListFundDividendsRequest) (*ListFundDividendsResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method ListFundDividends not implemented")
 }
 func (UnimplementedTradingServiceServer) ListActuaryPerformances(context.Context, *ListActuaryPerformancesRequest) (*ListActuaryPerformancesResponse, error) {
 	return nil, status.Error(codes.Unimplemented, "method ListActuaryPerformances not implemented")
@@ -2479,6 +2523,42 @@ func _TradingService_ListFundTransactions_Handler(srv interface{}, ctx context.C
 	return interceptor(ctx, in, info, handler)
 }
 
+func _TradingService_SetFundReinvest_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(SetFundReinvestRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(TradingServiceServer).SetFundReinvest(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: TradingService_SetFundReinvest_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(TradingServiceServer).SetFundReinvest(ctx, req.(*SetFundReinvestRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _TradingService_ListFundDividends_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(ListFundDividendsRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(TradingServiceServer).ListFundDividends(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: TradingService_ListFundDividends_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(TradingServiceServer).ListFundDividends(ctx, req.(*ListFundDividendsRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
 func _TradingService_ListActuaryPerformances_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
 	in := new(ListActuaryPerformancesRequest)
 	if err := dec(in); err != nil {
@@ -3157,6 +3237,14 @@ var TradingService_ServiceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "ListFundTransactions",
 			Handler:    _TradingService_ListFundTransactions_Handler,
+		},
+		{
+			MethodName: "SetFundReinvest",
+			Handler:    _TradingService_SetFundReinvest_Handler,
+		},
+		{
+			MethodName: "ListFundDividends",
+			Handler:    _TradingService_ListFundDividends_Handler,
 		},
 		{
 			MethodName: "ListActuaryPerformances",

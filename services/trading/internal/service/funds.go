@@ -246,6 +246,45 @@ func (s *Service) CreateFund(ctx context.Context, in CreateFundInput) (*tdomain.
 	return s.Store.InsertFund(ctx, f)
 }
 
+// SetFundReinvestDividends toggles the fund's dividend-reinvestment flag
+// (todoSpec C4 S70). Manager-only (admin counts) — same gate as the
+// other fund-management actions. When enabled the quarterly dividend
+// cron auto-places a MARKET BUY for any dividend the fund receives.
+func (s *Service) SetFundReinvestDividends(ctx context.Context, fundID string, enabled bool) (*tdomain.Fund, error) {
+	p, err := s.requireSupervisor(ctx)
+	if err != nil {
+		return nil, err
+	}
+	if err := s.requireFundsManage(p); err != nil {
+		return nil, err
+	}
+	f, err := s.Store.GetFund(ctx, fundID)
+	if err != nil {
+		return nil, err
+	}
+	if err := requireFundManager(p, f); err != nil {
+		return nil, err
+	}
+	return s.Store.SetFundReinvestDividends(ctx, fundID, enabled)
+}
+
+// ListFundDividends returns the per-client distribution history for a
+// fund (S71). Gated like the other fund read paths.
+func (s *Service) ListFundDividends(ctx context.Context, fundID string) ([]*tdomain.FundDividendDistribution, error) {
+	p, err := s.requirePrincipal(ctx)
+	if err != nil {
+		return nil, err
+	}
+	if !permissions.HasAny(p.Permissions, permissions.Admin,
+		permissions.TradingClient, permissions.FundsReadSupervisor) {
+		return nil, apperr.PermissionDenied("nedovoljne permisije za fondove")
+	}
+	if _, err := s.Store.GetFund(ctx, fundID); err != nil {
+		return nil, err
+	}
+	return s.Store.ListFundDividendDistributions(ctx, fundID)
+}
+
 // =====================================================================
 // Decoration helpers
 // =====================================================================
