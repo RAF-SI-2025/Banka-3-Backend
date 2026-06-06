@@ -674,6 +674,12 @@ func TestIntegration_CreatePayment_FX(t *testing.T) {
 	if len(res.Transactions) < 2 {
 		t.Errorf("FX payment should write at least 2 transaction legs, got %d", len(res.Transactions))
 	}
+	if got := res.Transactions[0].Purpose; got != "Plaćanje preko valute" {
+		t.Errorf("source leg purpose: %q, want %q", got, "Plaćanje preko valute")
+	}
+	if got := res.Transactions[1].Purpose; got != "Plaćanje preko valute" {
+		t.Errorf("destination leg purpose: %q, want %q", got, "Plaćanje preko valute")
+	}
 
 	srcAfter, _ := svc.Store.GetAccountByID(ctx, src.ID)
 	dstAfter, _ := svc.Store.GetAccountByID(ctx, dst.ID)
