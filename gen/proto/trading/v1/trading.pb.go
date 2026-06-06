@@ -3358,8 +3358,21 @@ type Order struct {
 	// resolved to at create time (client or employee).
 	ActorKind        UserKind `protobuf:"varint,26,opt,name=actor_kind,json=actorKind,proto3,enum=banka.trading.v1.UserKind" json:"actor_kind,omitempty"`
 	OnBehalfOfFundId string   `protobuf:"bytes,27,opt,name=on_behalf_of_fund_id,json=onBehalfOfFundId,proto3" json:"on_behalf_of_fund_id,omitempty"`
-	unknownFields    protoimpl.UnknownFields
-	sizeCache        protoimpl.SizeCache
+	// todoSpec S30/S31 — per-order execution aggregates, computed by
+	// aggregating order_executions (settled fills) for this order so the
+	// history list/detail can show the realized price, paid commission
+	// and execution date without an N+1 fetch per row. All three are
+	// empty/unset on an order with no settled fills yet.
+	//   - avg_execution_price: quantity-weighted average fill price,
+	//     decimal string in the security's currency.
+	//   - total_commission: sum of commission_amt across settled fills,
+	//     decimal string.
+	//   - last_execution_at: timestamp of the most recent settled fill.
+	AvgExecutionPrice string                 `protobuf:"bytes,28,opt,name=avg_execution_price,json=avgExecutionPrice,proto3" json:"avg_execution_price,omitempty"`
+	TotalCommission   string                 `protobuf:"bytes,29,opt,name=total_commission,json=totalCommission,proto3" json:"total_commission,omitempty"`
+	LastExecutionAt   *timestamppb.Timestamp `protobuf:"bytes,30,opt,name=last_execution_at,json=lastExecutionAt,proto3" json:"last_execution_at,omitempty"`
+	unknownFields     protoimpl.UnknownFields
+	sizeCache         protoimpl.SizeCache
 }
 
 func (x *Order) Reset() {
@@ -3581,6 +3594,27 @@ func (x *Order) GetOnBehalfOfFundId() string {
 	return ""
 }
 
+func (x *Order) GetAvgExecutionPrice() string {
+	if x != nil {
+		return x.AvgExecutionPrice
+	}
+	return ""
+}
+
+func (x *Order) GetTotalCommission() string {
+	if x != nil {
+		return x.TotalCommission
+	}
+	return ""
+}
+
+func (x *Order) GetLastExecutionAt() *timestamppb.Timestamp {
+	if x != nil {
+		return x.LastExecutionAt
+	}
+	return nil
+}
+
 type CreateOrderRequest struct {
 	state      protoimpl.MessageState `protogen:"open.v1"`
 	SecurityId string                 `protobuf:"bytes,1,opt,name=security_id,json=securityId,proto3" json:"security_id,omitempty"`
@@ -3763,12 +3797,20 @@ func (x *CreateOrderResponse) GetExchangeClosed() bool {
 type ListOrdersRequest struct {
 	state protoimpl.MessageState `protogen:"open.v1"`
 	// status: "all", "pending", "approved", "declined", "done".
-	Status        string   `protobuf:"bytes,1,opt,name=status,proto3" json:"status,omitempty"`
-	UserKind      UserKind `protobuf:"varint,2,opt,name=user_kind,json=userKind,proto3,enum=banka.trading.v1.UserKind" json:"user_kind,omitempty"` // employee/client filter (supervisor view)
-	UserId        string   `protobuf:"bytes,3,opt,name=user_id,json=userId,proto3" json:"user_id,omitempty"`                                       // narrow to a single trader
-	SecurityId    string   `protobuf:"bytes,4,opt,name=security_id,json=securityId,proto3" json:"security_id,omitempty"`
-	Page          int32    `protobuf:"varint,10,opt,name=page,proto3" json:"page,omitempty"`
-	PageSize      int32    `protobuf:"varint,11,opt,name=page_size,json=pageSize,proto3" json:"page_size,omitempty"`
+	Status     string   `protobuf:"bytes,1,opt,name=status,proto3" json:"status,omitempty"`
+	UserKind   UserKind `protobuf:"varint,2,opt,name=user_kind,json=userKind,proto3,enum=banka.trading.v1.UserKind" json:"user_kind,omitempty"` // employee/client filter (supervisor view)
+	UserId     string   `protobuf:"bytes,3,opt,name=user_id,json=userId,proto3" json:"user_id,omitempty"`                                       // narrow to a single trader
+	SecurityId string   `protobuf:"bytes,4,opt,name=security_id,json=securityId,proto3" json:"security_id,omitempty"`
+	Page       int32    `protobuf:"varint,10,opt,name=page,proto3" json:"page,omitempty"`
+	PageSize   int32    `protobuf:"varint,11,opt,name=page_size,json=pageSize,proto3" json:"page_size,omitempty"`
+	// todoSpec S34 — narrow the history to a single order type
+	// ("market" | "limit" | "stop" | "stop_limit"). Empty = all types.
+	OrderType string `protobuf:"bytes,5,opt,name=order_type,json=orderType,proto3" json:"order_type,omitempty"`
+	// todoSpec S33 — filter by creation date. Both bounds inclusive
+	// against orders.created_at; either may be omitted. Mirrors the bank
+	// ListTransactions from/to convention (RFC3339 Timestamp params).
+	From          *timestamppb.Timestamp `protobuf:"bytes,6,opt,name=from,proto3" json:"from,omitempty"`
+	To            *timestamppb.Timestamp `protobuf:"bytes,7,opt,name=to,proto3" json:"to,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -3843,6 +3885,27 @@ func (x *ListOrdersRequest) GetPageSize() int32 {
 		return x.PageSize
 	}
 	return 0
+}
+
+func (x *ListOrdersRequest) GetOrderType() string {
+	if x != nil {
+		return x.OrderType
+	}
+	return ""
+}
+
+func (x *ListOrdersRequest) GetFrom() *timestamppb.Timestamp {
+	if x != nil {
+		return x.From
+	}
+	return nil
+}
+
+func (x *ListOrdersRequest) GetTo() *timestamppb.Timestamp {
+	if x != nil {
+		return x.To
+	}
+	return nil
 }
 
 type ListOrdersResponse struct {
@@ -11175,7 +11238,7 @@ const file_trading_v1_trading_proto_rawDesc = "" +
 	"\fshared_price\x18\x02 \x01(\tR\vsharedPrice\x124\n" +
 	"\x04rows\x18\x03 \x03(\v2 .banka.trading.v1.OptionChainRowR\x04rows\"T\n" +
 	"\x16GetOptionChainResponse\x12:\n" +
-	"\x06groups\x18\x01 \x03(\v2\".banka.trading.v1.OptionChainGroupR\x06groups\"\xd5\b\n" +
+	"\x06groups\x18\x01 \x03(\v2\".banka.trading.v1.OptionChainGroupR\x06groups\"\xf8\t\n" +
 	"\x05Order\x12\x0e\n" +
 	"\x02id\x18\x01 \x01(\tR\x02id\x12\x17\n" +
 	"\auser_id\x18\x02 \x01(\tR\x06userId\x127\n" +
@@ -11214,7 +11277,10 @@ const file_trading_v1_trading_proto_rawDesc = "" +
 	"created_at\x18\x19 \x01(\v2\x1a.google.protobuf.TimestampR\tcreatedAt\x129\n" +
 	"\n" +
 	"actor_kind\x18\x1a \x01(\x0e2\x1a.banka.trading.v1.UserKindR\tactorKind\x12.\n" +
-	"\x14on_behalf_of_fund_id\x18\x1b \x01(\tR\x10onBehalfOfFundId\"\xd1\x03\n" +
+	"\x14on_behalf_of_fund_id\x18\x1b \x01(\tR\x10onBehalfOfFundId\x12.\n" +
+	"\x13avg_execution_price\x18\x1c \x01(\tR\x11avgExecutionPrice\x12)\n" +
+	"\x10total_commission\x18\x1d \x01(\tR\x0ftotalCommission\x12F\n" +
+	"\x11last_execution_at\x18\x1e \x01(\v2\x1a.google.protobuf.TimestampR\x0flastExecutionAt\"\xd1\x03\n" +
 	"\x12CreateOrderRequest\x12)\n" +
 	"\vsecurity_id\x18\x01 \x01(\tB\b\xbaH\x05r\x03\xb0\x01\x01R\n" +
 	"securityId\x12F\n" +
@@ -11236,7 +11302,7 @@ const file_trading_v1_trading_proto_rawDesc = "" +
 	" \x01(\tB\v\xbaH\b\xd8\x01\x01r\x03\xb0\x01\x01R\x10onBehalfOfFundId\"m\n" +
 	"\x13CreateOrderResponse\x12-\n" +
 	"\x05order\x18\x01 \x01(\v2\x17.banka.trading.v1.OrderR\x05order\x12'\n" +
-	"\x0fexchange_closed\x18\x02 \x01(\bR\x0eexchangeClosed\"\xcf\x01\n" +
+	"\x0fexchange_closed\x18\x02 \x01(\bR\x0eexchangeClosed\"\xca\x02\n" +
 	"\x11ListOrdersRequest\x12\x16\n" +
 	"\x06status\x18\x01 \x01(\tR\x06status\x127\n" +
 	"\tuser_kind\x18\x02 \x01(\x0e2\x1a.banka.trading.v1.UserKindR\buserKind\x12\x17\n" +
@@ -11245,7 +11311,11 @@ const file_trading_v1_trading_proto_rawDesc = "" +
 	"securityId\x12\x12\n" +
 	"\x04page\x18\n" +
 	" \x01(\x05R\x04page\x12\x1b\n" +
-	"\tpage_size\x18\v \x01(\x05R\bpageSize\"\x8c\x01\n" +
+	"\tpage_size\x18\v \x01(\x05R\bpageSize\x12\x1d\n" +
+	"\n" +
+	"order_type\x18\x05 \x01(\tR\torderType\x12.\n" +
+	"\x04from\x18\x06 \x01(\v2\x1a.google.protobuf.TimestampR\x04from\x12*\n" +
+	"\x02to\x18\a \x01(\v2\x1a.google.protobuf.TimestampR\x02to\"\x8c\x01\n" +
 	"\x12ListOrdersResponse\x12/\n" +
 	"\x06orders\x18\x01 \x03(\v2\x17.banka.trading.v1.OrderR\x06orders\x12\x12\n" +
 	"\x04page\x18\x02 \x01(\x05R\x04page\x12\x1b\n" +
@@ -12199,265 +12269,268 @@ var file_trading_v1_trading_proto_depIdxs = []int32{
 	160, // 45: banka.trading.v1.Order.last_modification:type_name -> google.protobuf.Timestamp
 	160, // 46: banka.trading.v1.Order.created_at:type_name -> google.protobuf.Timestamp
 	7,   // 47: banka.trading.v1.Order.actor_kind:type_name -> banka.trading.v1.UserKind
-	3,   // 48: banka.trading.v1.CreateOrderRequest.order_type:type_name -> banka.trading.v1.OrderType
-	4,   // 49: banka.trading.v1.CreateOrderRequest.direction:type_name -> banka.trading.v1.Direction
-	46,  // 50: banka.trading.v1.CreateOrderResponse.order:type_name -> banka.trading.v1.Order
-	7,   // 51: banka.trading.v1.ListOrdersRequest.user_kind:type_name -> banka.trading.v1.UserKind
-	46,  // 52: banka.trading.v1.ListOrdersResponse.orders:type_name -> banka.trading.v1.Order
-	7,   // 53: banka.trading.v1.Holding.user_kind:type_name -> banka.trading.v1.UserKind
-	28,  // 54: banka.trading.v1.Holding.security:type_name -> banka.trading.v1.Security
-	160, // 55: banka.trading.v1.Holding.acquired_at:type_name -> google.protobuf.Timestamp
-	160, // 56: banka.trading.v1.Holding.updated_at:type_name -> google.protobuf.Timestamp
-	7,   // 57: banka.trading.v1.ListHoldingsRequest.user_kind:type_name -> banka.trading.v1.UserKind
-	1,   // 58: banka.trading.v1.ListHoldingsRequest.type:type_name -> banka.trading.v1.SecurityType
-	55,  // 59: banka.trading.v1.ListHoldingsResponse.holdings:type_name -> banka.trading.v1.Holding
-	55,  // 60: banka.trading.v1.ExerciseOptionResponse.option_holding:type_name -> banka.trading.v1.Holding
-	55,  // 61: banka.trading.v1.ExerciseOptionResponse.underlying_holding:type_name -> banka.trading.v1.Holding
-	0,   // 62: banka.trading.v1.ExerciseOptionResponse.realized_gain_currency:type_name -> banka.trading.v1.Currency
-	7,   // 63: banka.trading.v1.TaxPosition.user_kind:type_name -> banka.trading.v1.UserKind
-	7,   // 64: banka.trading.v1.ListTaxPositionsRequest.user_kind:type_name -> banka.trading.v1.UserKind
-	61,  // 65: banka.trading.v1.ListTaxPositionsResponse.positions:type_name -> banka.trading.v1.TaxPosition
-	7,   // 66: banka.trading.v1.RunTaxRequest.user_kind:type_name -> banka.trading.v1.UserKind
-	160, // 67: banka.trading.v1.RealizedPnLRow.sale_at:type_name -> google.protobuf.Timestamp
-	0,   // 68: banka.trading.v1.RealizedPnLRow.currency:type_name -> banka.trading.v1.Currency
-	160, // 69: banka.trading.v1.RealizedPnLRow.taxed_at:type_name -> google.protobuf.Timestamp
-	7,   // 70: banka.trading.v1.ListRealizedPnLRequest.user_kind:type_name -> banka.trading.v1.UserKind
-	160, // 71: banka.trading.v1.ListRealizedPnLRequest.from:type_name -> google.protobuf.Timestamp
-	160, // 72: banka.trading.v1.ListRealizedPnLRequest.to:type_name -> google.protobuf.Timestamp
-	66,  // 73: banka.trading.v1.ListRealizedPnLResponse.rows:type_name -> banka.trading.v1.RealizedPnLRow
-	7,   // 74: banka.trading.v1.PublicHoldingItem.seller_kind:type_name -> banka.trading.v1.UserKind
-	28,  // 75: banka.trading.v1.PublicHoldingItem.security:type_name -> banka.trading.v1.Security
-	0,   // 76: banka.trading.v1.PublicHoldingItem.currency:type_name -> banka.trading.v1.Currency
-	160, // 77: banka.trading.v1.PublicHoldingItem.last_updated:type_name -> google.protobuf.Timestamp
-	69,  // 78: banka.trading.v1.ListPublicHoldingsResponse.items:type_name -> banka.trading.v1.PublicHoldingItem
-	7,   // 79: banka.trading.v1.OTCOffer.buyer_kind:type_name -> banka.trading.v1.UserKind
-	7,   // 80: banka.trading.v1.OTCOffer.seller_kind:type_name -> banka.trading.v1.UserKind
-	0,   // 81: banka.trading.v1.OTCOffer.currency:type_name -> banka.trading.v1.Currency
-	160, // 82: banka.trading.v1.OTCOffer.settlement_date:type_name -> google.protobuf.Timestamp
-	8,   // 83: banka.trading.v1.OTCOffer.status:type_name -> banka.trading.v1.OTCStatus
-	160, // 84: banka.trading.v1.OTCOffer.created_at:type_name -> google.protobuf.Timestamp
-	160, // 85: banka.trading.v1.OTCOffer.updated_at:type_name -> google.protobuf.Timestamp
-	160, // 86: banka.trading.v1.CreateOTCOfferRequest.settlement_date:type_name -> google.protobuf.Timestamp
-	160, // 87: banka.trading.v1.CounterOfferOTCRequest.settlement_date:type_name -> google.protobuf.Timestamp
-	7,   // 88: banka.trading.v1.ListOTCThreadsRequest.party_user_kind:type_name -> banka.trading.v1.UserKind
-	72,  // 89: banka.trading.v1.ListOTCThreadsResponse.threads:type_name -> banka.trading.v1.OTCOffer
-	72,  // 90: banka.trading.v1.GetOTCThreadResponse.iterations:type_name -> banka.trading.v1.OTCOffer
-	82,  // 91: banka.trading.v1.GetOTCThreadResponse.contract:type_name -> banka.trading.v1.OTCContract
-	82,  // 92: banka.trading.v1.AcceptOTCOfferResponse.contract:type_name -> banka.trading.v1.OTCContract
-	7,   // 93: banka.trading.v1.OTCContract.buyer_kind:type_name -> banka.trading.v1.UserKind
-	7,   // 94: banka.trading.v1.OTCContract.seller_kind:type_name -> banka.trading.v1.UserKind
-	0,   // 95: banka.trading.v1.OTCContract.currency:type_name -> banka.trading.v1.Currency
-	160, // 96: banka.trading.v1.OTCContract.settlement_date:type_name -> google.protobuf.Timestamp
-	9,   // 97: banka.trading.v1.OTCContract.status:type_name -> banka.trading.v1.OTCContractStatus
-	160, // 98: banka.trading.v1.OTCContract.exercised_at:type_name -> google.protobuf.Timestamp
-	160, // 99: banka.trading.v1.OTCContract.created_at:type_name -> google.protobuf.Timestamp
-	160, // 100: banka.trading.v1.OTCContract.updated_at:type_name -> google.protobuf.Timestamp
-	7,   // 101: banka.trading.v1.ListOTCContractsRequest.party_user_kind:type_name -> banka.trading.v1.UserKind
-	82,  // 102: banka.trading.v1.ListOTCContractsResponse.contracts:type_name -> banka.trading.v1.OTCContract
-	82,  // 103: banka.trading.v1.ExerciseOTCContractResponse.contract:type_name -> banka.trading.v1.OTCContract
-	10,  // 104: banka.trading.v1.Fund.status:type_name -> banka.trading.v1.FundStatus
-	160, // 105: banka.trading.v1.Fund.created_at:type_name -> google.protobuf.Timestamp
-	160, // 106: banka.trading.v1.Fund.updated_at:type_name -> google.protobuf.Timestamp
-	28,  // 107: banka.trading.v1.FundHolding.security:type_name -> banka.trading.v1.Security
-	0,   // 108: banka.trading.v1.FundHolding.currency:type_name -> banka.trading.v1.Currency
-	160, // 109: banka.trading.v1.FundHolding.acquired_at:type_name -> google.protobuf.Timestamp
-	160, // 110: banka.trading.v1.FundHolding.updated_at:type_name -> google.protobuf.Timestamp
-	160, // 111: banka.trading.v1.FundPosition.created_at:type_name -> google.protobuf.Timestamp
-	160, // 112: banka.trading.v1.FundPosition.updated_at:type_name -> google.protobuf.Timestamp
-	11,  // 113: banka.trading.v1.FundTransaction.status:type_name -> banka.trading.v1.FundTransactionStatus
-	160, // 114: banka.trading.v1.FundTransaction.created_at:type_name -> google.protobuf.Timestamp
-	160, // 115: banka.trading.v1.FundTransaction.updated_at:type_name -> google.protobuf.Timestamp
-	160, // 116: banka.trading.v1.FundPerformanceSnapshot.snapshot_at:type_name -> google.protobuf.Timestamp
-	88,  // 117: banka.trading.v1.ListFundsResponse.funds:type_name -> banka.trading.v1.Fund
-	88,  // 118: banka.trading.v1.GetFundResponse.fund:type_name -> banka.trading.v1.Fund
-	89,  // 119: banka.trading.v1.GetFundResponse.holdings:type_name -> banka.trading.v1.FundHolding
-	90,  // 120: banka.trading.v1.GetFundResponse.position:type_name -> banka.trading.v1.FundPosition
-	91,  // 121: banka.trading.v1.FundTransactionResponse.transaction:type_name -> banka.trading.v1.FundTransaction
-	90,  // 122: banka.trading.v1.ListFundPositionsResponse.positions:type_name -> banka.trading.v1.FundPosition
-	92,  // 123: banka.trading.v1.GetFundPerformanceResponse.snapshots:type_name -> banka.trading.v1.FundPerformanceSnapshot
-	91,  // 124: banka.trading.v1.ListFundTransactionsResponse.transactions:type_name -> banka.trading.v1.FundTransaction
-	2,   // 125: banka.trading.v1.ActuaryPerformance.type:type_name -> banka.trading.v1.ActuaryType
-	107, // 126: banka.trading.v1.ListActuaryPerformancesResponse.rows:type_name -> banka.trading.v1.ActuaryPerformance
-	90,  // 127: banka.trading.v1.BankFundPosition.position:type_name -> banka.trading.v1.FundPosition
-	110, // 128: banka.trading.v1.ListBankFundPositionsResponse.rows:type_name -> banka.trading.v1.BankFundPosition
-	160, // 129: banka.trading.v1.GetBankProfitTimeseriesRequest.from:type_name -> google.protobuf.Timestamp
-	160, // 130: banka.trading.v1.GetBankProfitTimeseriesRequest.to:type_name -> google.protobuf.Timestamp
-	160, // 131: banka.trading.v1.BankProfitBucket.period_start:type_name -> google.protobuf.Timestamp
-	114, // 132: banka.trading.v1.GetBankProfitTimeseriesResponse.buckets:type_name -> banka.trading.v1.BankProfitBucket
-	7,   // 133: banka.trading.v1.PriceAlert.user_kind:type_name -> banka.trading.v1.UserKind
-	12,  // 134: banka.trading.v1.PriceAlert.condition:type_name -> banka.trading.v1.PriceAlertCondition
-	160, // 135: banka.trading.v1.PriceAlert.created_at:type_name -> google.protobuf.Timestamp
-	160, // 136: banka.trading.v1.PriceAlert.triggered_at:type_name -> google.protobuf.Timestamp
-	12,  // 137: banka.trading.v1.CreatePriceAlertRequest.condition:type_name -> banka.trading.v1.PriceAlertCondition
-	132, // 138: banka.trading.v1.ListPriceAlertsResponse.alerts:type_name -> banka.trading.v1.PriceAlert
-	160, // 139: banka.trading.v1.WatchlistItem.created_at:type_name -> google.protobuf.Timestamp
-	1,   // 140: banka.trading.v1.WatchlistItem.security_type:type_name -> banka.trading.v1.SecurityType
-	0,   // 141: banka.trading.v1.WatchlistItem.currency:type_name -> banka.trading.v1.Currency
-	7,   // 142: banka.trading.v1.Watchlist.user_kind:type_name -> banka.trading.v1.UserKind
-	160, // 143: banka.trading.v1.Watchlist.created_at:type_name -> google.protobuf.Timestamp
-	140, // 144: banka.trading.v1.Watchlist.items:type_name -> banka.trading.v1.WatchlistItem
-	141, // 145: banka.trading.v1.ListWatchlistsResponse.watchlists:type_name -> banka.trading.v1.Watchlist
-	7,   // 146: banka.trading.v1.RecurringOrder.user_kind:type_name -> banka.trading.v1.UserKind
-	4,   // 147: banka.trading.v1.RecurringOrder.direction:type_name -> banka.trading.v1.Direction
-	13,  // 148: banka.trading.v1.RecurringOrder.mode:type_name -> banka.trading.v1.RecurringMode
-	160, // 149: banka.trading.v1.RecurringOrder.next_run:type_name -> google.protobuf.Timestamp
-	160, // 150: banka.trading.v1.RecurringOrder.created_at:type_name -> google.protobuf.Timestamp
-	160, // 151: banka.trading.v1.RecurringOrder.updated_at:type_name -> google.protobuf.Timestamp
-	13,  // 152: banka.trading.v1.CreateRecurringOrderRequest.mode:type_name -> banka.trading.v1.RecurringMode
-	150, // 153: banka.trading.v1.ListRecurringOrdersResponse.recurring_orders:type_name -> banka.trading.v1.RecurringOrder
-	15,  // 154: banka.trading.v1.TradingService.GetActuaryInfo:input_type -> banka.trading.v1.GetActuaryInfoRequest
-	16,  // 155: banka.trading.v1.TradingService.ListActuaries:input_type -> banka.trading.v1.ListActuariesRequest
-	18,  // 156: banka.trading.v1.TradingService.UpsertActuaryInfo:input_type -> banka.trading.v1.UpsertActuaryInfoRequest
-	19,  // 157: banka.trading.v1.TradingService.UpdateActuaryLimit:input_type -> banka.trading.v1.UpdateActuaryLimitRequest
-	20,  // 158: banka.trading.v1.TradingService.ResetActuaryUsedLimit:input_type -> banka.trading.v1.ResetActuaryUsedLimitRequest
-	21,  // 159: banka.trading.v1.TradingService.SetActuaryNeedApproval:input_type -> banka.trading.v1.SetActuaryNeedApprovalRequest
-	161, // 160: banka.trading.v1.TradingService.RunDailyResetActuaries:input_type -> google.protobuf.Empty
-	24,  // 161: banka.trading.v1.TradingService.ListExchanges:input_type -> banka.trading.v1.ListExchangesRequest
-	26,  // 162: banka.trading.v1.TradingService.UpsertExchange:input_type -> banka.trading.v1.UpsertExchangeRequest
-	27,  // 163: banka.trading.v1.TradingService.SetExchangeOverride:input_type -> banka.trading.v1.SetExchangeOverrideRequest
-	29,  // 164: banka.trading.v1.TradingService.UpsertSecurity:input_type -> banka.trading.v1.UpsertSecurityRequest
-	30,  // 165: banka.trading.v1.TradingService.ListSecurities:input_type -> banka.trading.v1.ListSecuritiesRequest
-	33,  // 166: banka.trading.v1.TradingService.GetSecurity:input_type -> banka.trading.v1.GetSecurityRequest
-	35,  // 167: banka.trading.v1.TradingService.UpsertListing:input_type -> banka.trading.v1.UpsertListingRequest
-	36,  // 168: banka.trading.v1.TradingService.ListListings:input_type -> banka.trading.v1.ListListingsRequest
-	38,  // 169: banka.trading.v1.TradingService.GetListing:input_type -> banka.trading.v1.GetListingRequest
-	42,  // 170: banka.trading.v1.TradingService.GetOptionChain:input_type -> banka.trading.v1.GetOptionChainRequest
-	39,  // 171: banka.trading.v1.TradingService.GetListingDailyHistory:input_type -> banka.trading.v1.GetListingDailyHistoryRequest
-	47,  // 172: banka.trading.v1.TradingService.CreateOrder:input_type -> banka.trading.v1.CreateOrderRequest
-	49,  // 173: banka.trading.v1.TradingService.ListOrders:input_type -> banka.trading.v1.ListOrdersRequest
-	51,  // 174: banka.trading.v1.TradingService.GetOrder:input_type -> banka.trading.v1.GetOrderRequest
-	52,  // 175: banka.trading.v1.TradingService.ApproveOrder:input_type -> banka.trading.v1.ApproveOrderRequest
-	53,  // 176: banka.trading.v1.TradingService.DeclineOrder:input_type -> banka.trading.v1.DeclineOrderRequest
-	54,  // 177: banka.trading.v1.TradingService.CancelOrder:input_type -> banka.trading.v1.CancelOrderRequest
-	56,  // 178: banka.trading.v1.TradingService.ListHoldings:input_type -> banka.trading.v1.ListHoldingsRequest
-	58,  // 179: banka.trading.v1.TradingService.SetPublicCount:input_type -> banka.trading.v1.SetPublicCountRequest
-	59,  // 180: banka.trading.v1.TradingService.ExerciseOption:input_type -> banka.trading.v1.ExerciseOptionRequest
-	62,  // 181: banka.trading.v1.TradingService.ListTaxPositions:input_type -> banka.trading.v1.ListTaxPositionsRequest
-	64,  // 182: banka.trading.v1.TradingService.RunTax:input_type -> banka.trading.v1.RunTaxRequest
-	67,  // 183: banka.trading.v1.TradingService.ListRealizedPnL:input_type -> banka.trading.v1.ListRealizedPnLRequest
-	70,  // 184: banka.trading.v1.TradingService.ListPublicHoldings:input_type -> banka.trading.v1.ListPublicHoldingsRequest
-	73,  // 185: banka.trading.v1.TradingService.CreateOTCOffer:input_type -> banka.trading.v1.CreateOTCOfferRequest
-	74,  // 186: banka.trading.v1.TradingService.CounterOfferOTC:input_type -> banka.trading.v1.CounterOfferOTCRequest
-	75,  // 187: banka.trading.v1.TradingService.WithdrawOTCOffer:input_type -> banka.trading.v1.WithdrawOTCOfferRequest
-	76,  // 188: banka.trading.v1.TradingService.ListOTCThreads:input_type -> banka.trading.v1.ListOTCThreadsRequest
-	78,  // 189: banka.trading.v1.TradingService.GetOTCThread:input_type -> banka.trading.v1.GetOTCThreadRequest
-	80,  // 190: banka.trading.v1.TradingService.AcceptOTCOffer:input_type -> banka.trading.v1.AcceptOTCOfferRequest
-	83,  // 191: banka.trading.v1.TradingService.ListOTCContracts:input_type -> banka.trading.v1.ListOTCContractsRequest
-	85,  // 192: banka.trading.v1.TradingService.GetOTCContract:input_type -> banka.trading.v1.GetOTCContractRequest
-	86,  // 193: banka.trading.v1.TradingService.ExerciseOTCContract:input_type -> banka.trading.v1.ExerciseOTCContractRequest
-	93,  // 194: banka.trading.v1.TradingService.ListFunds:input_type -> banka.trading.v1.ListFundsRequest
-	95,  // 195: banka.trading.v1.TradingService.GetFund:input_type -> banka.trading.v1.GetFundRequest
-	97,  // 196: banka.trading.v1.TradingService.CreateFund:input_type -> banka.trading.v1.CreateFundRequest
-	98,  // 197: banka.trading.v1.TradingService.InvestInFund:input_type -> banka.trading.v1.InvestInFundRequest
-	99,  // 198: banka.trading.v1.TradingService.WithdrawFromFund:input_type -> banka.trading.v1.WithdrawFromFundRequest
-	101, // 199: banka.trading.v1.TradingService.ListFundPositions:input_type -> banka.trading.v1.ListFundPositionsRequest
-	103, // 200: banka.trading.v1.TradingService.GetFundPerformance:input_type -> banka.trading.v1.GetFundPerformanceRequest
-	105, // 201: banka.trading.v1.TradingService.ListFundTransactions:input_type -> banka.trading.v1.ListFundTransactionsRequest
-	108, // 202: banka.trading.v1.TradingService.ListActuaryPerformances:input_type -> banka.trading.v1.ListActuaryPerformancesRequest
-	111, // 203: banka.trading.v1.TradingService.ListBankFundPositions:input_type -> banka.trading.v1.ListBankFundPositionsRequest
-	113, // 204: banka.trading.v1.TradingService.GetBankProfitTimeseries:input_type -> banka.trading.v1.GetBankProfitTimeseriesRequest
-	116, // 205: banka.trading.v1.TradingService.ReassignSupervisorAssets:input_type -> banka.trading.v1.ReassignSupervisorAssetsRequest
-	118, // 206: banka.trading.v1.TradingService.RunExecutionTick:input_type -> banka.trading.v1.RunExecutionTickRequest
-	120, // 207: banka.trading.v1.TradingService.RunSagaRecoveryTick:input_type -> banka.trading.v1.RunSagaRecoveryTickRequest
-	122, // 208: banka.trading.v1.TradingService.RunOTCExpirySweep:input_type -> banka.trading.v1.RunOTCExpirySweepRequest
-	124, // 209: banka.trading.v1.TradingService.RunOptionsRefresh:input_type -> banka.trading.v1.RunOptionsRefreshRequest
-	126, // 210: banka.trading.v1.TradingService.RunMarketDataRefresh:input_type -> banka.trading.v1.RunMarketDataRefreshRequest
-	128, // 211: banka.trading.v1.TradingService.RunStockHistoryBackfill:input_type -> banka.trading.v1.RunStockHistoryBackfillRequest
-	130, // 212: banka.trading.v1.TradingService.RunFundPerformanceSnapshot:input_type -> banka.trading.v1.RunFundPerformanceSnapshotRequest
-	133, // 213: banka.trading.v1.TradingService.CreatePriceAlert:input_type -> banka.trading.v1.CreatePriceAlertRequest
-	134, // 214: banka.trading.v1.TradingService.ListPriceAlerts:input_type -> banka.trading.v1.ListPriceAlertsRequest
-	136, // 215: banka.trading.v1.TradingService.DeletePriceAlert:input_type -> banka.trading.v1.DeletePriceAlertRequest
-	138, // 216: banka.trading.v1.TradingService.RunPriceAlertSweep:input_type -> banka.trading.v1.RunPriceAlertSweepRequest
-	142, // 217: banka.trading.v1.TradingService.CreateWatchlist:input_type -> banka.trading.v1.CreateWatchlistRequest
-	143, // 218: banka.trading.v1.TradingService.ListWatchlists:input_type -> banka.trading.v1.ListWatchlistsRequest
-	145, // 219: banka.trading.v1.TradingService.DeleteWatchlist:input_type -> banka.trading.v1.DeleteWatchlistRequest
-	147, // 220: banka.trading.v1.TradingService.AddToWatchlist:input_type -> banka.trading.v1.AddToWatchlistRequest
-	148, // 221: banka.trading.v1.TradingService.RemoveFromWatchlist:input_type -> banka.trading.v1.RemoveFromWatchlistRequest
-	151, // 222: banka.trading.v1.TradingService.CreateRecurringOrder:input_type -> banka.trading.v1.CreateRecurringOrderRequest
-	152, // 223: banka.trading.v1.TradingService.ListRecurringOrders:input_type -> banka.trading.v1.ListRecurringOrdersRequest
-	154, // 224: banka.trading.v1.TradingService.PauseRecurringOrder:input_type -> banka.trading.v1.PauseRecurringOrderRequest
-	155, // 225: banka.trading.v1.TradingService.ResumeRecurringOrder:input_type -> banka.trading.v1.ResumeRecurringOrderRequest
-	156, // 226: banka.trading.v1.TradingService.CancelRecurringOrder:input_type -> banka.trading.v1.CancelRecurringOrderRequest
-	158, // 227: banka.trading.v1.TradingService.RunRecurringOrders:input_type -> banka.trading.v1.RunRecurringOrdersRequest
-	14,  // 228: banka.trading.v1.TradingService.GetActuaryInfo:output_type -> banka.trading.v1.ActuaryInfo
-	17,  // 229: banka.trading.v1.TradingService.ListActuaries:output_type -> banka.trading.v1.ListActuariesResponse
-	14,  // 230: banka.trading.v1.TradingService.UpsertActuaryInfo:output_type -> banka.trading.v1.ActuaryInfo
-	14,  // 231: banka.trading.v1.TradingService.UpdateActuaryLimit:output_type -> banka.trading.v1.ActuaryInfo
-	14,  // 232: banka.trading.v1.TradingService.ResetActuaryUsedLimit:output_type -> banka.trading.v1.ActuaryInfo
-	14,  // 233: banka.trading.v1.TradingService.SetActuaryNeedApproval:output_type -> banka.trading.v1.ActuaryInfo
-	22,  // 234: banka.trading.v1.TradingService.RunDailyResetActuaries:output_type -> banka.trading.v1.RunDailyResetActuariesResponse
-	25,  // 235: banka.trading.v1.TradingService.ListExchanges:output_type -> banka.trading.v1.ListExchangesResponse
-	23,  // 236: banka.trading.v1.TradingService.UpsertExchange:output_type -> banka.trading.v1.Exchange
-	23,  // 237: banka.trading.v1.TradingService.SetExchangeOverride:output_type -> banka.trading.v1.Exchange
-	28,  // 238: banka.trading.v1.TradingService.UpsertSecurity:output_type -> banka.trading.v1.Security
-	31,  // 239: banka.trading.v1.TradingService.ListSecurities:output_type -> banka.trading.v1.ListSecuritiesResponse
-	32,  // 240: banka.trading.v1.TradingService.GetSecurity:output_type -> banka.trading.v1.SecurityWithListing
-	34,  // 241: banka.trading.v1.TradingService.UpsertListing:output_type -> banka.trading.v1.Listing
-	37,  // 242: banka.trading.v1.TradingService.ListListings:output_type -> banka.trading.v1.ListListingsResponse
-	34,  // 243: banka.trading.v1.TradingService.GetListing:output_type -> banka.trading.v1.Listing
-	45,  // 244: banka.trading.v1.TradingService.GetOptionChain:output_type -> banka.trading.v1.GetOptionChainResponse
-	41,  // 245: banka.trading.v1.TradingService.GetListingDailyHistory:output_type -> banka.trading.v1.GetListingDailyHistoryResponse
-	48,  // 246: banka.trading.v1.TradingService.CreateOrder:output_type -> banka.trading.v1.CreateOrderResponse
-	50,  // 247: banka.trading.v1.TradingService.ListOrders:output_type -> banka.trading.v1.ListOrdersResponse
-	46,  // 248: banka.trading.v1.TradingService.GetOrder:output_type -> banka.trading.v1.Order
-	46,  // 249: banka.trading.v1.TradingService.ApproveOrder:output_type -> banka.trading.v1.Order
-	46,  // 250: banka.trading.v1.TradingService.DeclineOrder:output_type -> banka.trading.v1.Order
-	46,  // 251: banka.trading.v1.TradingService.CancelOrder:output_type -> banka.trading.v1.Order
-	57,  // 252: banka.trading.v1.TradingService.ListHoldings:output_type -> banka.trading.v1.ListHoldingsResponse
-	55,  // 253: banka.trading.v1.TradingService.SetPublicCount:output_type -> banka.trading.v1.Holding
-	60,  // 254: banka.trading.v1.TradingService.ExerciseOption:output_type -> banka.trading.v1.ExerciseOptionResponse
-	63,  // 255: banka.trading.v1.TradingService.ListTaxPositions:output_type -> banka.trading.v1.ListTaxPositionsResponse
-	65,  // 256: banka.trading.v1.TradingService.RunTax:output_type -> banka.trading.v1.RunTaxResponse
-	68,  // 257: banka.trading.v1.TradingService.ListRealizedPnL:output_type -> banka.trading.v1.ListRealizedPnLResponse
-	71,  // 258: banka.trading.v1.TradingService.ListPublicHoldings:output_type -> banka.trading.v1.ListPublicHoldingsResponse
-	72,  // 259: banka.trading.v1.TradingService.CreateOTCOffer:output_type -> banka.trading.v1.OTCOffer
-	72,  // 260: banka.trading.v1.TradingService.CounterOfferOTC:output_type -> banka.trading.v1.OTCOffer
-	72,  // 261: banka.trading.v1.TradingService.WithdrawOTCOffer:output_type -> banka.trading.v1.OTCOffer
-	77,  // 262: banka.trading.v1.TradingService.ListOTCThreads:output_type -> banka.trading.v1.ListOTCThreadsResponse
-	79,  // 263: banka.trading.v1.TradingService.GetOTCThread:output_type -> banka.trading.v1.GetOTCThreadResponse
-	81,  // 264: banka.trading.v1.TradingService.AcceptOTCOffer:output_type -> banka.trading.v1.AcceptOTCOfferResponse
-	84,  // 265: banka.trading.v1.TradingService.ListOTCContracts:output_type -> banka.trading.v1.ListOTCContractsResponse
-	82,  // 266: banka.trading.v1.TradingService.GetOTCContract:output_type -> banka.trading.v1.OTCContract
-	87,  // 267: banka.trading.v1.TradingService.ExerciseOTCContract:output_type -> banka.trading.v1.ExerciseOTCContractResponse
-	94,  // 268: banka.trading.v1.TradingService.ListFunds:output_type -> banka.trading.v1.ListFundsResponse
-	96,  // 269: banka.trading.v1.TradingService.GetFund:output_type -> banka.trading.v1.GetFundResponse
-	88,  // 270: banka.trading.v1.TradingService.CreateFund:output_type -> banka.trading.v1.Fund
-	100, // 271: banka.trading.v1.TradingService.InvestInFund:output_type -> banka.trading.v1.FundTransactionResponse
-	100, // 272: banka.trading.v1.TradingService.WithdrawFromFund:output_type -> banka.trading.v1.FundTransactionResponse
-	102, // 273: banka.trading.v1.TradingService.ListFundPositions:output_type -> banka.trading.v1.ListFundPositionsResponse
-	104, // 274: banka.trading.v1.TradingService.GetFundPerformance:output_type -> banka.trading.v1.GetFundPerformanceResponse
-	106, // 275: banka.trading.v1.TradingService.ListFundTransactions:output_type -> banka.trading.v1.ListFundTransactionsResponse
-	109, // 276: banka.trading.v1.TradingService.ListActuaryPerformances:output_type -> banka.trading.v1.ListActuaryPerformancesResponse
-	112, // 277: banka.trading.v1.TradingService.ListBankFundPositions:output_type -> banka.trading.v1.ListBankFundPositionsResponse
-	115, // 278: banka.trading.v1.TradingService.GetBankProfitTimeseries:output_type -> banka.trading.v1.GetBankProfitTimeseriesResponse
-	117, // 279: banka.trading.v1.TradingService.ReassignSupervisorAssets:output_type -> banka.trading.v1.ReassignSupervisorAssetsResponse
-	119, // 280: banka.trading.v1.TradingService.RunExecutionTick:output_type -> banka.trading.v1.RunExecutionTickResponse
-	121, // 281: banka.trading.v1.TradingService.RunSagaRecoveryTick:output_type -> banka.trading.v1.RunSagaRecoveryTickResponse
-	123, // 282: banka.trading.v1.TradingService.RunOTCExpirySweep:output_type -> banka.trading.v1.RunOTCExpirySweepResponse
-	125, // 283: banka.trading.v1.TradingService.RunOptionsRefresh:output_type -> banka.trading.v1.RunOptionsRefreshResponse
-	127, // 284: banka.trading.v1.TradingService.RunMarketDataRefresh:output_type -> banka.trading.v1.RunMarketDataRefreshResponse
-	129, // 285: banka.trading.v1.TradingService.RunStockHistoryBackfill:output_type -> banka.trading.v1.RunStockHistoryBackfillResponse
-	131, // 286: banka.trading.v1.TradingService.RunFundPerformanceSnapshot:output_type -> banka.trading.v1.RunFundPerformanceSnapshotResponse
-	132, // 287: banka.trading.v1.TradingService.CreatePriceAlert:output_type -> banka.trading.v1.PriceAlert
-	135, // 288: banka.trading.v1.TradingService.ListPriceAlerts:output_type -> banka.trading.v1.ListPriceAlertsResponse
-	137, // 289: banka.trading.v1.TradingService.DeletePriceAlert:output_type -> banka.trading.v1.DeletePriceAlertResponse
-	139, // 290: banka.trading.v1.TradingService.RunPriceAlertSweep:output_type -> banka.trading.v1.RunPriceAlertSweepResponse
-	141, // 291: banka.trading.v1.TradingService.CreateWatchlist:output_type -> banka.trading.v1.Watchlist
-	144, // 292: banka.trading.v1.TradingService.ListWatchlists:output_type -> banka.trading.v1.ListWatchlistsResponse
-	146, // 293: banka.trading.v1.TradingService.DeleteWatchlist:output_type -> banka.trading.v1.DeleteWatchlistResponse
-	140, // 294: banka.trading.v1.TradingService.AddToWatchlist:output_type -> banka.trading.v1.WatchlistItem
-	149, // 295: banka.trading.v1.TradingService.RemoveFromWatchlist:output_type -> banka.trading.v1.RemoveFromWatchlistResponse
-	150, // 296: banka.trading.v1.TradingService.CreateRecurringOrder:output_type -> banka.trading.v1.RecurringOrder
-	153, // 297: banka.trading.v1.TradingService.ListRecurringOrders:output_type -> banka.trading.v1.ListRecurringOrdersResponse
-	150, // 298: banka.trading.v1.TradingService.PauseRecurringOrder:output_type -> banka.trading.v1.RecurringOrder
-	150, // 299: banka.trading.v1.TradingService.ResumeRecurringOrder:output_type -> banka.trading.v1.RecurringOrder
-	157, // 300: banka.trading.v1.TradingService.CancelRecurringOrder:output_type -> banka.trading.v1.CancelRecurringOrderResponse
-	159, // 301: banka.trading.v1.TradingService.RunRecurringOrders:output_type -> banka.trading.v1.RunRecurringOrdersResponse
-	228, // [228:302] is the sub-list for method output_type
-	154, // [154:228] is the sub-list for method input_type
-	154, // [154:154] is the sub-list for extension type_name
-	154, // [154:154] is the sub-list for extension extendee
-	0,   // [0:154] is the sub-list for field type_name
+	160, // 48: banka.trading.v1.Order.last_execution_at:type_name -> google.protobuf.Timestamp
+	3,   // 49: banka.trading.v1.CreateOrderRequest.order_type:type_name -> banka.trading.v1.OrderType
+	4,   // 50: banka.trading.v1.CreateOrderRequest.direction:type_name -> banka.trading.v1.Direction
+	46,  // 51: banka.trading.v1.CreateOrderResponse.order:type_name -> banka.trading.v1.Order
+	7,   // 52: banka.trading.v1.ListOrdersRequest.user_kind:type_name -> banka.trading.v1.UserKind
+	160, // 53: banka.trading.v1.ListOrdersRequest.from:type_name -> google.protobuf.Timestamp
+	160, // 54: banka.trading.v1.ListOrdersRequest.to:type_name -> google.protobuf.Timestamp
+	46,  // 55: banka.trading.v1.ListOrdersResponse.orders:type_name -> banka.trading.v1.Order
+	7,   // 56: banka.trading.v1.Holding.user_kind:type_name -> banka.trading.v1.UserKind
+	28,  // 57: banka.trading.v1.Holding.security:type_name -> banka.trading.v1.Security
+	160, // 58: banka.trading.v1.Holding.acquired_at:type_name -> google.protobuf.Timestamp
+	160, // 59: banka.trading.v1.Holding.updated_at:type_name -> google.protobuf.Timestamp
+	7,   // 60: banka.trading.v1.ListHoldingsRequest.user_kind:type_name -> banka.trading.v1.UserKind
+	1,   // 61: banka.trading.v1.ListHoldingsRequest.type:type_name -> banka.trading.v1.SecurityType
+	55,  // 62: banka.trading.v1.ListHoldingsResponse.holdings:type_name -> banka.trading.v1.Holding
+	55,  // 63: banka.trading.v1.ExerciseOptionResponse.option_holding:type_name -> banka.trading.v1.Holding
+	55,  // 64: banka.trading.v1.ExerciseOptionResponse.underlying_holding:type_name -> banka.trading.v1.Holding
+	0,   // 65: banka.trading.v1.ExerciseOptionResponse.realized_gain_currency:type_name -> banka.trading.v1.Currency
+	7,   // 66: banka.trading.v1.TaxPosition.user_kind:type_name -> banka.trading.v1.UserKind
+	7,   // 67: banka.trading.v1.ListTaxPositionsRequest.user_kind:type_name -> banka.trading.v1.UserKind
+	61,  // 68: banka.trading.v1.ListTaxPositionsResponse.positions:type_name -> banka.trading.v1.TaxPosition
+	7,   // 69: banka.trading.v1.RunTaxRequest.user_kind:type_name -> banka.trading.v1.UserKind
+	160, // 70: banka.trading.v1.RealizedPnLRow.sale_at:type_name -> google.protobuf.Timestamp
+	0,   // 71: banka.trading.v1.RealizedPnLRow.currency:type_name -> banka.trading.v1.Currency
+	160, // 72: banka.trading.v1.RealizedPnLRow.taxed_at:type_name -> google.protobuf.Timestamp
+	7,   // 73: banka.trading.v1.ListRealizedPnLRequest.user_kind:type_name -> banka.trading.v1.UserKind
+	160, // 74: banka.trading.v1.ListRealizedPnLRequest.from:type_name -> google.protobuf.Timestamp
+	160, // 75: banka.trading.v1.ListRealizedPnLRequest.to:type_name -> google.protobuf.Timestamp
+	66,  // 76: banka.trading.v1.ListRealizedPnLResponse.rows:type_name -> banka.trading.v1.RealizedPnLRow
+	7,   // 77: banka.trading.v1.PublicHoldingItem.seller_kind:type_name -> banka.trading.v1.UserKind
+	28,  // 78: banka.trading.v1.PublicHoldingItem.security:type_name -> banka.trading.v1.Security
+	0,   // 79: banka.trading.v1.PublicHoldingItem.currency:type_name -> banka.trading.v1.Currency
+	160, // 80: banka.trading.v1.PublicHoldingItem.last_updated:type_name -> google.protobuf.Timestamp
+	69,  // 81: banka.trading.v1.ListPublicHoldingsResponse.items:type_name -> banka.trading.v1.PublicHoldingItem
+	7,   // 82: banka.trading.v1.OTCOffer.buyer_kind:type_name -> banka.trading.v1.UserKind
+	7,   // 83: banka.trading.v1.OTCOffer.seller_kind:type_name -> banka.trading.v1.UserKind
+	0,   // 84: banka.trading.v1.OTCOffer.currency:type_name -> banka.trading.v1.Currency
+	160, // 85: banka.trading.v1.OTCOffer.settlement_date:type_name -> google.protobuf.Timestamp
+	8,   // 86: banka.trading.v1.OTCOffer.status:type_name -> banka.trading.v1.OTCStatus
+	160, // 87: banka.trading.v1.OTCOffer.created_at:type_name -> google.protobuf.Timestamp
+	160, // 88: banka.trading.v1.OTCOffer.updated_at:type_name -> google.protobuf.Timestamp
+	160, // 89: banka.trading.v1.CreateOTCOfferRequest.settlement_date:type_name -> google.protobuf.Timestamp
+	160, // 90: banka.trading.v1.CounterOfferOTCRequest.settlement_date:type_name -> google.protobuf.Timestamp
+	7,   // 91: banka.trading.v1.ListOTCThreadsRequest.party_user_kind:type_name -> banka.trading.v1.UserKind
+	72,  // 92: banka.trading.v1.ListOTCThreadsResponse.threads:type_name -> banka.trading.v1.OTCOffer
+	72,  // 93: banka.trading.v1.GetOTCThreadResponse.iterations:type_name -> banka.trading.v1.OTCOffer
+	82,  // 94: banka.trading.v1.GetOTCThreadResponse.contract:type_name -> banka.trading.v1.OTCContract
+	82,  // 95: banka.trading.v1.AcceptOTCOfferResponse.contract:type_name -> banka.trading.v1.OTCContract
+	7,   // 96: banka.trading.v1.OTCContract.buyer_kind:type_name -> banka.trading.v1.UserKind
+	7,   // 97: banka.trading.v1.OTCContract.seller_kind:type_name -> banka.trading.v1.UserKind
+	0,   // 98: banka.trading.v1.OTCContract.currency:type_name -> banka.trading.v1.Currency
+	160, // 99: banka.trading.v1.OTCContract.settlement_date:type_name -> google.protobuf.Timestamp
+	9,   // 100: banka.trading.v1.OTCContract.status:type_name -> banka.trading.v1.OTCContractStatus
+	160, // 101: banka.trading.v1.OTCContract.exercised_at:type_name -> google.protobuf.Timestamp
+	160, // 102: banka.trading.v1.OTCContract.created_at:type_name -> google.protobuf.Timestamp
+	160, // 103: banka.trading.v1.OTCContract.updated_at:type_name -> google.protobuf.Timestamp
+	7,   // 104: banka.trading.v1.ListOTCContractsRequest.party_user_kind:type_name -> banka.trading.v1.UserKind
+	82,  // 105: banka.trading.v1.ListOTCContractsResponse.contracts:type_name -> banka.trading.v1.OTCContract
+	82,  // 106: banka.trading.v1.ExerciseOTCContractResponse.contract:type_name -> banka.trading.v1.OTCContract
+	10,  // 107: banka.trading.v1.Fund.status:type_name -> banka.trading.v1.FundStatus
+	160, // 108: banka.trading.v1.Fund.created_at:type_name -> google.protobuf.Timestamp
+	160, // 109: banka.trading.v1.Fund.updated_at:type_name -> google.protobuf.Timestamp
+	28,  // 110: banka.trading.v1.FundHolding.security:type_name -> banka.trading.v1.Security
+	0,   // 111: banka.trading.v1.FundHolding.currency:type_name -> banka.trading.v1.Currency
+	160, // 112: banka.trading.v1.FundHolding.acquired_at:type_name -> google.protobuf.Timestamp
+	160, // 113: banka.trading.v1.FundHolding.updated_at:type_name -> google.protobuf.Timestamp
+	160, // 114: banka.trading.v1.FundPosition.created_at:type_name -> google.protobuf.Timestamp
+	160, // 115: banka.trading.v1.FundPosition.updated_at:type_name -> google.protobuf.Timestamp
+	11,  // 116: banka.trading.v1.FundTransaction.status:type_name -> banka.trading.v1.FundTransactionStatus
+	160, // 117: banka.trading.v1.FundTransaction.created_at:type_name -> google.protobuf.Timestamp
+	160, // 118: banka.trading.v1.FundTransaction.updated_at:type_name -> google.protobuf.Timestamp
+	160, // 119: banka.trading.v1.FundPerformanceSnapshot.snapshot_at:type_name -> google.protobuf.Timestamp
+	88,  // 120: banka.trading.v1.ListFundsResponse.funds:type_name -> banka.trading.v1.Fund
+	88,  // 121: banka.trading.v1.GetFundResponse.fund:type_name -> banka.trading.v1.Fund
+	89,  // 122: banka.trading.v1.GetFundResponse.holdings:type_name -> banka.trading.v1.FundHolding
+	90,  // 123: banka.trading.v1.GetFundResponse.position:type_name -> banka.trading.v1.FundPosition
+	91,  // 124: banka.trading.v1.FundTransactionResponse.transaction:type_name -> banka.trading.v1.FundTransaction
+	90,  // 125: banka.trading.v1.ListFundPositionsResponse.positions:type_name -> banka.trading.v1.FundPosition
+	92,  // 126: banka.trading.v1.GetFundPerformanceResponse.snapshots:type_name -> banka.trading.v1.FundPerformanceSnapshot
+	91,  // 127: banka.trading.v1.ListFundTransactionsResponse.transactions:type_name -> banka.trading.v1.FundTransaction
+	2,   // 128: banka.trading.v1.ActuaryPerformance.type:type_name -> banka.trading.v1.ActuaryType
+	107, // 129: banka.trading.v1.ListActuaryPerformancesResponse.rows:type_name -> banka.trading.v1.ActuaryPerformance
+	90,  // 130: banka.trading.v1.BankFundPosition.position:type_name -> banka.trading.v1.FundPosition
+	110, // 131: banka.trading.v1.ListBankFundPositionsResponse.rows:type_name -> banka.trading.v1.BankFundPosition
+	160, // 132: banka.trading.v1.GetBankProfitTimeseriesRequest.from:type_name -> google.protobuf.Timestamp
+	160, // 133: banka.trading.v1.GetBankProfitTimeseriesRequest.to:type_name -> google.protobuf.Timestamp
+	160, // 134: banka.trading.v1.BankProfitBucket.period_start:type_name -> google.protobuf.Timestamp
+	114, // 135: banka.trading.v1.GetBankProfitTimeseriesResponse.buckets:type_name -> banka.trading.v1.BankProfitBucket
+	7,   // 136: banka.trading.v1.PriceAlert.user_kind:type_name -> banka.trading.v1.UserKind
+	12,  // 137: banka.trading.v1.PriceAlert.condition:type_name -> banka.trading.v1.PriceAlertCondition
+	160, // 138: banka.trading.v1.PriceAlert.created_at:type_name -> google.protobuf.Timestamp
+	160, // 139: banka.trading.v1.PriceAlert.triggered_at:type_name -> google.protobuf.Timestamp
+	12,  // 140: banka.trading.v1.CreatePriceAlertRequest.condition:type_name -> banka.trading.v1.PriceAlertCondition
+	132, // 141: banka.trading.v1.ListPriceAlertsResponse.alerts:type_name -> banka.trading.v1.PriceAlert
+	160, // 142: banka.trading.v1.WatchlistItem.created_at:type_name -> google.protobuf.Timestamp
+	1,   // 143: banka.trading.v1.WatchlistItem.security_type:type_name -> banka.trading.v1.SecurityType
+	0,   // 144: banka.trading.v1.WatchlistItem.currency:type_name -> banka.trading.v1.Currency
+	7,   // 145: banka.trading.v1.Watchlist.user_kind:type_name -> banka.trading.v1.UserKind
+	160, // 146: banka.trading.v1.Watchlist.created_at:type_name -> google.protobuf.Timestamp
+	140, // 147: banka.trading.v1.Watchlist.items:type_name -> banka.trading.v1.WatchlistItem
+	141, // 148: banka.trading.v1.ListWatchlistsResponse.watchlists:type_name -> banka.trading.v1.Watchlist
+	7,   // 149: banka.trading.v1.RecurringOrder.user_kind:type_name -> banka.trading.v1.UserKind
+	4,   // 150: banka.trading.v1.RecurringOrder.direction:type_name -> banka.trading.v1.Direction
+	13,  // 151: banka.trading.v1.RecurringOrder.mode:type_name -> banka.trading.v1.RecurringMode
+	160, // 152: banka.trading.v1.RecurringOrder.next_run:type_name -> google.protobuf.Timestamp
+	160, // 153: banka.trading.v1.RecurringOrder.created_at:type_name -> google.protobuf.Timestamp
+	160, // 154: banka.trading.v1.RecurringOrder.updated_at:type_name -> google.protobuf.Timestamp
+	13,  // 155: banka.trading.v1.CreateRecurringOrderRequest.mode:type_name -> banka.trading.v1.RecurringMode
+	150, // 156: banka.trading.v1.ListRecurringOrdersResponse.recurring_orders:type_name -> banka.trading.v1.RecurringOrder
+	15,  // 157: banka.trading.v1.TradingService.GetActuaryInfo:input_type -> banka.trading.v1.GetActuaryInfoRequest
+	16,  // 158: banka.trading.v1.TradingService.ListActuaries:input_type -> banka.trading.v1.ListActuariesRequest
+	18,  // 159: banka.trading.v1.TradingService.UpsertActuaryInfo:input_type -> banka.trading.v1.UpsertActuaryInfoRequest
+	19,  // 160: banka.trading.v1.TradingService.UpdateActuaryLimit:input_type -> banka.trading.v1.UpdateActuaryLimitRequest
+	20,  // 161: banka.trading.v1.TradingService.ResetActuaryUsedLimit:input_type -> banka.trading.v1.ResetActuaryUsedLimitRequest
+	21,  // 162: banka.trading.v1.TradingService.SetActuaryNeedApproval:input_type -> banka.trading.v1.SetActuaryNeedApprovalRequest
+	161, // 163: banka.trading.v1.TradingService.RunDailyResetActuaries:input_type -> google.protobuf.Empty
+	24,  // 164: banka.trading.v1.TradingService.ListExchanges:input_type -> banka.trading.v1.ListExchangesRequest
+	26,  // 165: banka.trading.v1.TradingService.UpsertExchange:input_type -> banka.trading.v1.UpsertExchangeRequest
+	27,  // 166: banka.trading.v1.TradingService.SetExchangeOverride:input_type -> banka.trading.v1.SetExchangeOverrideRequest
+	29,  // 167: banka.trading.v1.TradingService.UpsertSecurity:input_type -> banka.trading.v1.UpsertSecurityRequest
+	30,  // 168: banka.trading.v1.TradingService.ListSecurities:input_type -> banka.trading.v1.ListSecuritiesRequest
+	33,  // 169: banka.trading.v1.TradingService.GetSecurity:input_type -> banka.trading.v1.GetSecurityRequest
+	35,  // 170: banka.trading.v1.TradingService.UpsertListing:input_type -> banka.trading.v1.UpsertListingRequest
+	36,  // 171: banka.trading.v1.TradingService.ListListings:input_type -> banka.trading.v1.ListListingsRequest
+	38,  // 172: banka.trading.v1.TradingService.GetListing:input_type -> banka.trading.v1.GetListingRequest
+	42,  // 173: banka.trading.v1.TradingService.GetOptionChain:input_type -> banka.trading.v1.GetOptionChainRequest
+	39,  // 174: banka.trading.v1.TradingService.GetListingDailyHistory:input_type -> banka.trading.v1.GetListingDailyHistoryRequest
+	47,  // 175: banka.trading.v1.TradingService.CreateOrder:input_type -> banka.trading.v1.CreateOrderRequest
+	49,  // 176: banka.trading.v1.TradingService.ListOrders:input_type -> banka.trading.v1.ListOrdersRequest
+	51,  // 177: banka.trading.v1.TradingService.GetOrder:input_type -> banka.trading.v1.GetOrderRequest
+	52,  // 178: banka.trading.v1.TradingService.ApproveOrder:input_type -> banka.trading.v1.ApproveOrderRequest
+	53,  // 179: banka.trading.v1.TradingService.DeclineOrder:input_type -> banka.trading.v1.DeclineOrderRequest
+	54,  // 180: banka.trading.v1.TradingService.CancelOrder:input_type -> banka.trading.v1.CancelOrderRequest
+	56,  // 181: banka.trading.v1.TradingService.ListHoldings:input_type -> banka.trading.v1.ListHoldingsRequest
+	58,  // 182: banka.trading.v1.TradingService.SetPublicCount:input_type -> banka.trading.v1.SetPublicCountRequest
+	59,  // 183: banka.trading.v1.TradingService.ExerciseOption:input_type -> banka.trading.v1.ExerciseOptionRequest
+	62,  // 184: banka.trading.v1.TradingService.ListTaxPositions:input_type -> banka.trading.v1.ListTaxPositionsRequest
+	64,  // 185: banka.trading.v1.TradingService.RunTax:input_type -> banka.trading.v1.RunTaxRequest
+	67,  // 186: banka.trading.v1.TradingService.ListRealizedPnL:input_type -> banka.trading.v1.ListRealizedPnLRequest
+	70,  // 187: banka.trading.v1.TradingService.ListPublicHoldings:input_type -> banka.trading.v1.ListPublicHoldingsRequest
+	73,  // 188: banka.trading.v1.TradingService.CreateOTCOffer:input_type -> banka.trading.v1.CreateOTCOfferRequest
+	74,  // 189: banka.trading.v1.TradingService.CounterOfferOTC:input_type -> banka.trading.v1.CounterOfferOTCRequest
+	75,  // 190: banka.trading.v1.TradingService.WithdrawOTCOffer:input_type -> banka.trading.v1.WithdrawOTCOfferRequest
+	76,  // 191: banka.trading.v1.TradingService.ListOTCThreads:input_type -> banka.trading.v1.ListOTCThreadsRequest
+	78,  // 192: banka.trading.v1.TradingService.GetOTCThread:input_type -> banka.trading.v1.GetOTCThreadRequest
+	80,  // 193: banka.trading.v1.TradingService.AcceptOTCOffer:input_type -> banka.trading.v1.AcceptOTCOfferRequest
+	83,  // 194: banka.trading.v1.TradingService.ListOTCContracts:input_type -> banka.trading.v1.ListOTCContractsRequest
+	85,  // 195: banka.trading.v1.TradingService.GetOTCContract:input_type -> banka.trading.v1.GetOTCContractRequest
+	86,  // 196: banka.trading.v1.TradingService.ExerciseOTCContract:input_type -> banka.trading.v1.ExerciseOTCContractRequest
+	93,  // 197: banka.trading.v1.TradingService.ListFunds:input_type -> banka.trading.v1.ListFundsRequest
+	95,  // 198: banka.trading.v1.TradingService.GetFund:input_type -> banka.trading.v1.GetFundRequest
+	97,  // 199: banka.trading.v1.TradingService.CreateFund:input_type -> banka.trading.v1.CreateFundRequest
+	98,  // 200: banka.trading.v1.TradingService.InvestInFund:input_type -> banka.trading.v1.InvestInFundRequest
+	99,  // 201: banka.trading.v1.TradingService.WithdrawFromFund:input_type -> banka.trading.v1.WithdrawFromFundRequest
+	101, // 202: banka.trading.v1.TradingService.ListFundPositions:input_type -> banka.trading.v1.ListFundPositionsRequest
+	103, // 203: banka.trading.v1.TradingService.GetFundPerformance:input_type -> banka.trading.v1.GetFundPerformanceRequest
+	105, // 204: banka.trading.v1.TradingService.ListFundTransactions:input_type -> banka.trading.v1.ListFundTransactionsRequest
+	108, // 205: banka.trading.v1.TradingService.ListActuaryPerformances:input_type -> banka.trading.v1.ListActuaryPerformancesRequest
+	111, // 206: banka.trading.v1.TradingService.ListBankFundPositions:input_type -> banka.trading.v1.ListBankFundPositionsRequest
+	113, // 207: banka.trading.v1.TradingService.GetBankProfitTimeseries:input_type -> banka.trading.v1.GetBankProfitTimeseriesRequest
+	116, // 208: banka.trading.v1.TradingService.ReassignSupervisorAssets:input_type -> banka.trading.v1.ReassignSupervisorAssetsRequest
+	118, // 209: banka.trading.v1.TradingService.RunExecutionTick:input_type -> banka.trading.v1.RunExecutionTickRequest
+	120, // 210: banka.trading.v1.TradingService.RunSagaRecoveryTick:input_type -> banka.trading.v1.RunSagaRecoveryTickRequest
+	122, // 211: banka.trading.v1.TradingService.RunOTCExpirySweep:input_type -> banka.trading.v1.RunOTCExpirySweepRequest
+	124, // 212: banka.trading.v1.TradingService.RunOptionsRefresh:input_type -> banka.trading.v1.RunOptionsRefreshRequest
+	126, // 213: banka.trading.v1.TradingService.RunMarketDataRefresh:input_type -> banka.trading.v1.RunMarketDataRefreshRequest
+	128, // 214: banka.trading.v1.TradingService.RunStockHistoryBackfill:input_type -> banka.trading.v1.RunStockHistoryBackfillRequest
+	130, // 215: banka.trading.v1.TradingService.RunFundPerformanceSnapshot:input_type -> banka.trading.v1.RunFundPerformanceSnapshotRequest
+	133, // 216: banka.trading.v1.TradingService.CreatePriceAlert:input_type -> banka.trading.v1.CreatePriceAlertRequest
+	134, // 217: banka.trading.v1.TradingService.ListPriceAlerts:input_type -> banka.trading.v1.ListPriceAlertsRequest
+	136, // 218: banka.trading.v1.TradingService.DeletePriceAlert:input_type -> banka.trading.v1.DeletePriceAlertRequest
+	138, // 219: banka.trading.v1.TradingService.RunPriceAlertSweep:input_type -> banka.trading.v1.RunPriceAlertSweepRequest
+	142, // 220: banka.trading.v1.TradingService.CreateWatchlist:input_type -> banka.trading.v1.CreateWatchlistRequest
+	143, // 221: banka.trading.v1.TradingService.ListWatchlists:input_type -> banka.trading.v1.ListWatchlistsRequest
+	145, // 222: banka.trading.v1.TradingService.DeleteWatchlist:input_type -> banka.trading.v1.DeleteWatchlistRequest
+	147, // 223: banka.trading.v1.TradingService.AddToWatchlist:input_type -> banka.trading.v1.AddToWatchlistRequest
+	148, // 224: banka.trading.v1.TradingService.RemoveFromWatchlist:input_type -> banka.trading.v1.RemoveFromWatchlistRequest
+	151, // 225: banka.trading.v1.TradingService.CreateRecurringOrder:input_type -> banka.trading.v1.CreateRecurringOrderRequest
+	152, // 226: banka.trading.v1.TradingService.ListRecurringOrders:input_type -> banka.trading.v1.ListRecurringOrdersRequest
+	154, // 227: banka.trading.v1.TradingService.PauseRecurringOrder:input_type -> banka.trading.v1.PauseRecurringOrderRequest
+	155, // 228: banka.trading.v1.TradingService.ResumeRecurringOrder:input_type -> banka.trading.v1.ResumeRecurringOrderRequest
+	156, // 229: banka.trading.v1.TradingService.CancelRecurringOrder:input_type -> banka.trading.v1.CancelRecurringOrderRequest
+	158, // 230: banka.trading.v1.TradingService.RunRecurringOrders:input_type -> banka.trading.v1.RunRecurringOrdersRequest
+	14,  // 231: banka.trading.v1.TradingService.GetActuaryInfo:output_type -> banka.trading.v1.ActuaryInfo
+	17,  // 232: banka.trading.v1.TradingService.ListActuaries:output_type -> banka.trading.v1.ListActuariesResponse
+	14,  // 233: banka.trading.v1.TradingService.UpsertActuaryInfo:output_type -> banka.trading.v1.ActuaryInfo
+	14,  // 234: banka.trading.v1.TradingService.UpdateActuaryLimit:output_type -> banka.trading.v1.ActuaryInfo
+	14,  // 235: banka.trading.v1.TradingService.ResetActuaryUsedLimit:output_type -> banka.trading.v1.ActuaryInfo
+	14,  // 236: banka.trading.v1.TradingService.SetActuaryNeedApproval:output_type -> banka.trading.v1.ActuaryInfo
+	22,  // 237: banka.trading.v1.TradingService.RunDailyResetActuaries:output_type -> banka.trading.v1.RunDailyResetActuariesResponse
+	25,  // 238: banka.trading.v1.TradingService.ListExchanges:output_type -> banka.trading.v1.ListExchangesResponse
+	23,  // 239: banka.trading.v1.TradingService.UpsertExchange:output_type -> banka.trading.v1.Exchange
+	23,  // 240: banka.trading.v1.TradingService.SetExchangeOverride:output_type -> banka.trading.v1.Exchange
+	28,  // 241: banka.trading.v1.TradingService.UpsertSecurity:output_type -> banka.trading.v1.Security
+	31,  // 242: banka.trading.v1.TradingService.ListSecurities:output_type -> banka.trading.v1.ListSecuritiesResponse
+	32,  // 243: banka.trading.v1.TradingService.GetSecurity:output_type -> banka.trading.v1.SecurityWithListing
+	34,  // 244: banka.trading.v1.TradingService.UpsertListing:output_type -> banka.trading.v1.Listing
+	37,  // 245: banka.trading.v1.TradingService.ListListings:output_type -> banka.trading.v1.ListListingsResponse
+	34,  // 246: banka.trading.v1.TradingService.GetListing:output_type -> banka.trading.v1.Listing
+	45,  // 247: banka.trading.v1.TradingService.GetOptionChain:output_type -> banka.trading.v1.GetOptionChainResponse
+	41,  // 248: banka.trading.v1.TradingService.GetListingDailyHistory:output_type -> banka.trading.v1.GetListingDailyHistoryResponse
+	48,  // 249: banka.trading.v1.TradingService.CreateOrder:output_type -> banka.trading.v1.CreateOrderResponse
+	50,  // 250: banka.trading.v1.TradingService.ListOrders:output_type -> banka.trading.v1.ListOrdersResponse
+	46,  // 251: banka.trading.v1.TradingService.GetOrder:output_type -> banka.trading.v1.Order
+	46,  // 252: banka.trading.v1.TradingService.ApproveOrder:output_type -> banka.trading.v1.Order
+	46,  // 253: banka.trading.v1.TradingService.DeclineOrder:output_type -> banka.trading.v1.Order
+	46,  // 254: banka.trading.v1.TradingService.CancelOrder:output_type -> banka.trading.v1.Order
+	57,  // 255: banka.trading.v1.TradingService.ListHoldings:output_type -> banka.trading.v1.ListHoldingsResponse
+	55,  // 256: banka.trading.v1.TradingService.SetPublicCount:output_type -> banka.trading.v1.Holding
+	60,  // 257: banka.trading.v1.TradingService.ExerciseOption:output_type -> banka.trading.v1.ExerciseOptionResponse
+	63,  // 258: banka.trading.v1.TradingService.ListTaxPositions:output_type -> banka.trading.v1.ListTaxPositionsResponse
+	65,  // 259: banka.trading.v1.TradingService.RunTax:output_type -> banka.trading.v1.RunTaxResponse
+	68,  // 260: banka.trading.v1.TradingService.ListRealizedPnL:output_type -> banka.trading.v1.ListRealizedPnLResponse
+	71,  // 261: banka.trading.v1.TradingService.ListPublicHoldings:output_type -> banka.trading.v1.ListPublicHoldingsResponse
+	72,  // 262: banka.trading.v1.TradingService.CreateOTCOffer:output_type -> banka.trading.v1.OTCOffer
+	72,  // 263: banka.trading.v1.TradingService.CounterOfferOTC:output_type -> banka.trading.v1.OTCOffer
+	72,  // 264: banka.trading.v1.TradingService.WithdrawOTCOffer:output_type -> banka.trading.v1.OTCOffer
+	77,  // 265: banka.trading.v1.TradingService.ListOTCThreads:output_type -> banka.trading.v1.ListOTCThreadsResponse
+	79,  // 266: banka.trading.v1.TradingService.GetOTCThread:output_type -> banka.trading.v1.GetOTCThreadResponse
+	81,  // 267: banka.trading.v1.TradingService.AcceptOTCOffer:output_type -> banka.trading.v1.AcceptOTCOfferResponse
+	84,  // 268: banka.trading.v1.TradingService.ListOTCContracts:output_type -> banka.trading.v1.ListOTCContractsResponse
+	82,  // 269: banka.trading.v1.TradingService.GetOTCContract:output_type -> banka.trading.v1.OTCContract
+	87,  // 270: banka.trading.v1.TradingService.ExerciseOTCContract:output_type -> banka.trading.v1.ExerciseOTCContractResponse
+	94,  // 271: banka.trading.v1.TradingService.ListFunds:output_type -> banka.trading.v1.ListFundsResponse
+	96,  // 272: banka.trading.v1.TradingService.GetFund:output_type -> banka.trading.v1.GetFundResponse
+	88,  // 273: banka.trading.v1.TradingService.CreateFund:output_type -> banka.trading.v1.Fund
+	100, // 274: banka.trading.v1.TradingService.InvestInFund:output_type -> banka.trading.v1.FundTransactionResponse
+	100, // 275: banka.trading.v1.TradingService.WithdrawFromFund:output_type -> banka.trading.v1.FundTransactionResponse
+	102, // 276: banka.trading.v1.TradingService.ListFundPositions:output_type -> banka.trading.v1.ListFundPositionsResponse
+	104, // 277: banka.trading.v1.TradingService.GetFundPerformance:output_type -> banka.trading.v1.GetFundPerformanceResponse
+	106, // 278: banka.trading.v1.TradingService.ListFundTransactions:output_type -> banka.trading.v1.ListFundTransactionsResponse
+	109, // 279: banka.trading.v1.TradingService.ListActuaryPerformances:output_type -> banka.trading.v1.ListActuaryPerformancesResponse
+	112, // 280: banka.trading.v1.TradingService.ListBankFundPositions:output_type -> banka.trading.v1.ListBankFundPositionsResponse
+	115, // 281: banka.trading.v1.TradingService.GetBankProfitTimeseries:output_type -> banka.trading.v1.GetBankProfitTimeseriesResponse
+	117, // 282: banka.trading.v1.TradingService.ReassignSupervisorAssets:output_type -> banka.trading.v1.ReassignSupervisorAssetsResponse
+	119, // 283: banka.trading.v1.TradingService.RunExecutionTick:output_type -> banka.trading.v1.RunExecutionTickResponse
+	121, // 284: banka.trading.v1.TradingService.RunSagaRecoveryTick:output_type -> banka.trading.v1.RunSagaRecoveryTickResponse
+	123, // 285: banka.trading.v1.TradingService.RunOTCExpirySweep:output_type -> banka.trading.v1.RunOTCExpirySweepResponse
+	125, // 286: banka.trading.v1.TradingService.RunOptionsRefresh:output_type -> banka.trading.v1.RunOptionsRefreshResponse
+	127, // 287: banka.trading.v1.TradingService.RunMarketDataRefresh:output_type -> banka.trading.v1.RunMarketDataRefreshResponse
+	129, // 288: banka.trading.v1.TradingService.RunStockHistoryBackfill:output_type -> banka.trading.v1.RunStockHistoryBackfillResponse
+	131, // 289: banka.trading.v1.TradingService.RunFundPerformanceSnapshot:output_type -> banka.trading.v1.RunFundPerformanceSnapshotResponse
+	132, // 290: banka.trading.v1.TradingService.CreatePriceAlert:output_type -> banka.trading.v1.PriceAlert
+	135, // 291: banka.trading.v1.TradingService.ListPriceAlerts:output_type -> banka.trading.v1.ListPriceAlertsResponse
+	137, // 292: banka.trading.v1.TradingService.DeletePriceAlert:output_type -> banka.trading.v1.DeletePriceAlertResponse
+	139, // 293: banka.trading.v1.TradingService.RunPriceAlertSweep:output_type -> banka.trading.v1.RunPriceAlertSweepResponse
+	141, // 294: banka.trading.v1.TradingService.CreateWatchlist:output_type -> banka.trading.v1.Watchlist
+	144, // 295: banka.trading.v1.TradingService.ListWatchlists:output_type -> banka.trading.v1.ListWatchlistsResponse
+	146, // 296: banka.trading.v1.TradingService.DeleteWatchlist:output_type -> banka.trading.v1.DeleteWatchlistResponse
+	140, // 297: banka.trading.v1.TradingService.AddToWatchlist:output_type -> banka.trading.v1.WatchlistItem
+	149, // 298: banka.trading.v1.TradingService.RemoveFromWatchlist:output_type -> banka.trading.v1.RemoveFromWatchlistResponse
+	150, // 299: banka.trading.v1.TradingService.CreateRecurringOrder:output_type -> banka.trading.v1.RecurringOrder
+	153, // 300: banka.trading.v1.TradingService.ListRecurringOrders:output_type -> banka.trading.v1.ListRecurringOrdersResponse
+	150, // 301: banka.trading.v1.TradingService.PauseRecurringOrder:output_type -> banka.trading.v1.RecurringOrder
+	150, // 302: banka.trading.v1.TradingService.ResumeRecurringOrder:output_type -> banka.trading.v1.RecurringOrder
+	157, // 303: banka.trading.v1.TradingService.CancelRecurringOrder:output_type -> banka.trading.v1.CancelRecurringOrderResponse
+	159, // 304: banka.trading.v1.TradingService.RunRecurringOrders:output_type -> banka.trading.v1.RunRecurringOrdersResponse
+	231, // [231:305] is the sub-list for method output_type
+	157, // [157:231] is the sub-list for method input_type
+	157, // [157:157] is the sub-list for extension type_name
+	157, // [157:157] is the sub-list for extension extendee
+	0,   // [0:157] is the sub-list for field type_name
 }
 
 func init() { file_trading_v1_trading_proto_init() }

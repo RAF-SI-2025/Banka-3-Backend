@@ -3079,6 +3079,28 @@
             "required": false,
             "type": "integer",
             "format": "int32"
+          },
+          {
+            "name": "orderType",
+            "description": "todoSpec S34 — narrow the history to a single order type\n(\"market\" | \"limit\" | \"stop\" | \"stop_limit\"). Empty = all types.",
+            "in": "query",
+            "required": false,
+            "type": "string"
+          },
+          {
+            "name": "from",
+            "description": "todoSpec S33 — filter by creation date. Both bounds inclusive\nagainst orders.created_at; either may be omitted. Mirrors the bank\nListTransactions from/to convention (RFC3339 Timestamp params).",
+            "in": "query",
+            "required": false,
+            "type": "string",
+            "format": "date-time"
+          },
+          {
+            "name": "to",
+            "in": "query",
+            "required": false,
+            "type": "string",
+            "format": "date-time"
           }
         ],
         "tags": [
@@ -9133,6 +9155,17 @@
         },
         "onBehalfOfFundId": {
           "type": "string"
+        },
+        "avgExecutionPrice": {
+          "type": "string",
+          "description": "todoSpec S30/S31 — per-order execution aggregates, computed by\naggregating order_executions (settled fills) for this order so the\nhistory list/detail can show the realized price, paid commission\nand execution date without an N+1 fetch per row. All three are\nempty/unset on an order with no settled fills yet.\n  - avg_execution_price: quantity-weighted average fill price,\n    decimal string in the security's currency.\n  - total_commission: sum of commission_amt across settled fills,\n    decimal string.\n  - last_execution_at: timestamp of the most recent settled fill."
+        },
+        "totalCommission": {
+          "type": "string"
+        },
+        "lastExecutionAt": {
+          "type": "string",
+          "format": "date-time"
         }
       }
     },

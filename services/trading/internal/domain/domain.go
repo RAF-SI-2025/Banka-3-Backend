@@ -253,6 +253,16 @@ type Order struct {
 	// KindClient/KindEmployee matching UserKind.
 	ActorKind        UserKind
 	OnBehalfOfFundID string
+
+	// Per-order execution aggregates over settled order_executions
+	// (todoSpec S30/S31). Populated by the order read queries via a
+	// LEFT JOIN subquery; all three are zero-valued on an order with no
+	// settled fills. AvgExecutionPrice is the quantity-weighted average
+	// fill price; TotalCommission is the sum of commission_amt;
+	// LastExecutionAt is the most recent settled fill time (nil = none).
+	AvgExecutionPrice string
+	TotalCommission   string
+	LastExecutionAt   *time.Time
 }
 
 // OrderExecution is one partial fill. Spec p.55-56.
