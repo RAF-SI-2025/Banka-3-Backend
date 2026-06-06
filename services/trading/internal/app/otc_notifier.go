@@ -127,6 +127,59 @@ func (n *otcEmailNotifier) OnOTCContractExpiringSoon(ctx context.Context, c *dom
 	n.dispatch(ctx, addr, fmt.Sprintf("OTC ugovor ističe za %d dana", daysLeft), body)
 }
 
+func (n *otcEmailNotifier) OnOTCOfferStateChanged(ctx context.Context, o *domain.OTCOffer, recipientID string, kind domain.UserKind) {
+	if n == nil {
+		return
+	}
+	addr, err := n.recipientEmail(ctx, recipientID, kind)
+	if err != nil || addr == "" {
+		n.log.Warn("otc email: skip offer state change (recipient unresolved)",
+			"recipient_id", recipientID, "err", errString(err))
+		return
+	}
+	label := otcOfferStatusLabel(o.Status)
+	body := fmt.Sprintf(
+		"Status OTC ponude u niti %s je promenjen na: %s.\n\nKoličina: %d\nCena po jedinici: %s %s\nPremija: %s %s\n\nOtvorite portal da pregledate detalje.",
+		o.ThreadID, label, o.Quantity, o.PricePerUnit, o.Currency, o.Premium, o.Currency,
+	)
+	n.dispatch(ctx, addr, fmt.Sprintf("OTC ponuda: %s", label), body)
+}
+
+func (n *otcEmailNotifier) OnOTCOfferExpiringSoon(ctx context.Context, o *domain.OTCOffer, recipientID string, kind domain.UserKind) {
+	if n == nil {
+		return
+	}
+	addr, err := n.recipientEmail(ctx, recipientID, kind)
+	if err != nil || addr == "" {
+		n.log.Warn("otc email: skip offer expiring-soon (recipient unresolved)",
+			"recipient_id", recipientID, "err", errString(err))
+		return
+	}
+	body := fmt.Sprintf(
+		"OTC ponuda u niti %s uskoro ističe zbog neaktivnosti (za jedan radni dan).\n\nKoličina: %d\nCena po jedinici: %s %s\nPremija: %s %s\n\nAko želite da nastavite pregovore, otvorite portal i odgovorite, izmenite ili obnovite ponudu pre isteka.",
+		o.ThreadID, o.Quantity, o.PricePerUnit, o.Currency, o.Premium, o.Currency,
+	)
+	n.dispatch(ctx, addr, "OTC ponuda uskoro ističe", body)
+}
+
+// otcOfferStatusLabel maps an offer status to its Serbian user-facing
+// label for state-change emails.
+func otcOfferStatusLabel(s domain.OTCStatus) string {
+	switch s {
+	case domain.OTCStatusCancelled:
+		return "otkazana"
+	case domain.OTCStatusRejected:
+		return "odbijena"
+	case domain.OTCStatusExpired:
+		return "istekla"
+	case domain.OTCStatusWithdrawn:
+		return "povučena"
+	case domain.OTCStatusAccepted:
+		return "prihvaćena"
+	}
+	return string(s)
+}
+
 // daysWord returns the correct Serbian noun form for "dan/dana".
 func daysWord(n int) string {
 	if n == 1 {

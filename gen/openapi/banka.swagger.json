@@ -4246,6 +4246,45 @@
         ]
       }
     },
+    "/api/v1/otc/offers/{threadId}/cancel": {
+      "post": {
+        "summary": "CancelOTCOffer lets the originator cancel their own active offer\n(todoSpec \"Automatska promena stanja pregovora\"). Only the party who\nproposed the live iteration may call; the open row flips to\n`cancelled` and the reservation is released. A state-change\nnotification fires to the counterparty.",
+        "operationId": "TradingService_CancelOTCOffer",
+        "responses": {
+          "200": {
+            "description": "A successful response.",
+            "schema": {
+              "$ref": "#/definitions/v1OTCOffer"
+            }
+          },
+          "default": {
+            "description": "An unexpected error response.",
+            "schema": {
+              "$ref": "#/definitions/rpcStatus"
+            }
+          }
+        },
+        "parameters": [
+          {
+            "name": "threadId",
+            "in": "path",
+            "required": true,
+            "type": "string"
+          },
+          {
+            "name": "body",
+            "in": "body",
+            "required": true,
+            "schema": {
+              "$ref": "#/definitions/TradingServiceCancelOTCOfferBody"
+            }
+          }
+        ],
+        "tags": [
+          "TradingService"
+        ]
+      }
+    },
     "/api/v1/otc/offers/{threadId}/counter": {
       "post": {
         "summary": "CounterOfferOTC appends a new iteration to an existing thread. The\nprior open row flips to `superseded`; reservation is adjusted if\nquantity changed. modified_by tracks which party last touched the\nthread (drives the FE unread badge).",
@@ -4277,6 +4316,45 @@
             "required": true,
             "schema": {
               "$ref": "#/definitions/TradingServiceCounterOfferOTCBody"
+            }
+          }
+        ],
+        "tags": [
+          "TradingService"
+        ]
+      }
+    },
+    "/api/v1/otc/offers/{threadId}/reject": {
+      "post": {
+        "summary": "RejectOTCOffer lets the counterparty decline the latest open offer in\na thread (todoSpec \"Automatska promena stanja pregovora\"). Only the\nparty who did NOT propose the live iteration may call; the open row\nflips to `rejected` and the reservation is released. A state-change\nnotification fires to the originator.",
+        "operationId": "TradingService_RejectOTCOffer",
+        "responses": {
+          "200": {
+            "description": "A successful response.",
+            "schema": {
+              "$ref": "#/definitions/v1OTCOffer"
+            }
+          },
+          "default": {
+            "description": "An unexpected error response.",
+            "schema": {
+              "$ref": "#/definitions/rpcStatus"
+            }
+          }
+        },
+        "parameters": [
+          {
+            "name": "threadId",
+            "in": "path",
+            "required": true,
+            "type": "string"
+          },
+          {
+            "name": "body",
+            "in": "body",
+            "required": true,
+            "schema": {
+              "$ref": "#/definitions/TradingServiceRejectOTCOfferBody"
             }
           }
         ],
@@ -5986,6 +6064,9 @@
     "TradingServiceApproveOrderBody": {
       "type": "object"
     },
+    "TradingServiceCancelOTCOfferBody": {
+      "type": "object"
+    },
     "TradingServiceCancelOrderBody": {
       "type": "object",
       "properties": {
@@ -6054,6 +6135,9 @@
       }
     },
     "TradingServicePauseRecurringOrderBody": {
+      "type": "object"
+    },
+    "TradingServiceRejectOTCOfferBody": {
       "type": "object"
     },
     "TradingServiceResetActuaryUsedLimitBody": {
@@ -9805,7 +9889,9 @@
         "OTC_STATUS_SUPERSEDED",
         "OTC_STATUS_ACCEPTED",
         "OTC_STATUS_WITHDRAWN",
-        "OTC_STATUS_EXPIRED"
+        "OTC_STATUS_EXPIRED",
+        "OTC_STATUS_CANCELLED",
+        "OTC_STATUS_REJECTED"
       ],
       "default": "OTC_STATUS_UNSPECIFIED"
     },
@@ -10487,6 +10573,16 @@
         "sharesReleased": {
           "type": "integer",
           "format": "int32"
+        },
+        "offersExpired": {
+          "type": "integer",
+          "format": "int32",
+          "description": "offers_expired counts open offers auto-expired after 3 business days\nof inactivity (todoSpec \"Automatska promena stanja pregovora\")."
+        },
+        "offersWarned": {
+          "type": "integer",
+          "format": "int32",
+          "description": "offers_warned counts pre-expiry warnings sent for offers approaching\nthe inactivity cutoff."
         }
       }
     },

@@ -34,6 +34,12 @@ type SweepExpiredOTCContractsResult struct {
 	SharesReleased   int32
 	// ContractsWarned is the count of pre-expiry warnings sent (S63).
 	ContractsWarned int
+	// OffersExpired is the count of open offers auto-expired after
+	// 3 business days of inactivity (todoSpec C4).
+	OffersExpired int
+	// OffersWarned is the count of pre-expiry warnings sent for offers
+	// approaching the inactivity cutoff.
+	OffersWarned int
 }
 
 // expiryWarnDays is the number of calendar days before settlement_date
@@ -53,6 +59,38 @@ func daysUntilExpiry(now time.Time, settlementDate time.Time, loc *time.Location
 func truncToDay(t time.Time, loc *time.Location) time.Time {
 	local := t.In(loc)
 	return time.Date(local.Year(), local.Month(), local.Day(), 0, 0, 0, 0, loc)
+}
+
+// offerInactivityBusinessDays is the number of business days (Mon–Fri,
+// weekends skipped) of inactivity after which an open OTC offer is
+// auto-expired (todoSpec "Automatska promena stanja pregovora": "Nakon
+// 3 radna dana").
+const offerInactivityBusinessDays = 3
+
+// offerExpiryWarnBusinessDays is the inactivity threshold (in business
+// days) at which the pre-expiry warning fires — one business day before
+// auto-expiry, so the holder can extend/renew/change the offer.
+const offerExpiryWarnBusinessDays = offerInactivityBusinessDays - 1
+
+// subtractBusinessDays returns the wall-clock instant `n` business days
+// (Mon–Fri; Sat/Sun skipped) before `from`, preserving the time-of-day.
+// n must be >= 0; n == 0 returns `from` unchanged. The walk happens in
+// `loc` so the weekday boundaries match the business calendar.
+//
+// Example: from a Monday, subtracting 3 business days lands on the prior
+// Wednesday (Mon→Fri→Thu→Wed, skipping the weekend in between).
+func subtractBusinessDays(from time.Time, n int, loc *time.Location) time.Time {
+	if loc == nil {
+		loc = time.UTC
+	}
+	t := from.In(loc)
+	for remaining := n; remaining > 0; {
+		t = t.AddDate(0, 0, -1)
+		if wd := t.Weekday(); wd != time.Saturday && wd != time.Sunday {
+			remaining--
+		}
+	}
+	return t
 }
 
 // SweepExpiredOTCContracts walks active contracts whose settlement_date
@@ -115,7 +153,79 @@ func (s *Service) SweepExpiredOTCContracts(ctx context.Context) (*SweepExpiredOT
 		}
 	}
 
+	// 3. Auto-expire open OFFERS inactive for 3 business days, and warn
+	// the holder one business day before they age out (todoSpec C4).
+	if err := s.sweepExpiredOTCOffers(ctx, now, loc, out); err != nil {
+		// Best-effort: log and continue; the contract sweep above already
+		// succeeded and shouldn't be lost over an offer-side failure.
+		s.Log.Warn("otc expiry: offer sweep failed", "err", err.Error())
+	}
+
 	return out, nil
+}
+
+// sweepExpiredOTCOffers auto-expires open offers whose last activity
+// (updated_at) is older than the 3-business-day inactivity cutoff, and
+// fires a one-shot pre-expiry warning for offers that crossed the
+// 2-business-day mark (one business day before auto-expiry).
+//
+// Business days skip weekends: the cutoffs are computed by walking
+// backwards from `now`, counting only Mon–Fri. The warning window is
+// the half-open band (expireCutoff, warnCutoff] so an offer is warned
+// exactly once as it ages from 2 → 3 business days of inactivity, then
+// expired on the following sweep once it crosses the 3-business-day line.
+func (s *Service) sweepExpiredOTCOffers(ctx context.Context, now time.Time, loc *time.Location, out *SweepExpiredOTCContractsResult) error {
+	expireCutoff := subtractBusinessDays(now, offerInactivityBusinessDays, loc)
+	warnCutoff := subtractBusinessDays(now, offerExpiryWarnBusinessDays, loc)
+
+	// Expire stale offers first so they don't also match the warn window.
+	stale, err := s.Store.ListStaleOpenOTCOffers(ctx, expireCutoff)
+	if err != nil {
+		return err
+	}
+	for _, o := range stale {
+		if err := s.expireOneOTCOffer(ctx, o); err != nil {
+			s.Log.Warn("otc expiry: offer sweep failed",
+				"offer_id", o.ID, "thread_id", o.ThreadID, "err", err.Error())
+			continue
+		}
+		out.OffersExpired++
+		if s.OTCNotifier != nil {
+			// Notify the party whose turn it was (modified_by is the other
+			// side); the offer aged out waiting on them.
+			recipient, kind := otherParty(o, o.ModifiedBy)
+			s.OTCNotifier.OnOTCOfferStateChanged(ctx, o, recipient, kind)
+		}
+	}
+
+	// Warn offers that have been inactive 2 business days but not yet 3.
+	soon, err := s.Store.ListOpenOTCOffersExpiringSoon(ctx, expireCutoff, warnCutoff)
+	if err != nil {
+		return err
+	}
+	for _, o := range soon {
+		if s.OTCNotifier != nil {
+			recipient, kind := otherParty(o, o.ModifiedBy)
+			s.OTCNotifier.OnOTCOfferExpiringSoon(ctx, o, recipient, kind)
+		}
+		out.OffersWarned++
+	}
+	return nil
+}
+
+// expireOneOTCOffer flips a single open offer to `expired` and releases
+// the seller's reservation for that iteration's quantity. Plain
+// trading-side tx — no cross-service write.
+func (s *Service) expireOneOTCOffer(ctx context.Context, o *domain.OTCOffer) error {
+	return s.Store.ExecuteAtomic(ctx, func(tx pgx.Tx) error {
+		if o.Quantity > 0 {
+			if _, err := s.Store.DecrementReservedHolding(ctx, tx, o.SellerHoldingID, o.Quantity); err != nil {
+				return err
+			}
+		}
+		_, err := s.Store.MarkOTCOfferStatus(ctx, tx, o.ID, domain.OTCStatusExpired)
+		return err
+	})
 }
 
 func (s *Service) expireOneOTCContract(ctx context.Context, c *domain.OTCContract) error {
