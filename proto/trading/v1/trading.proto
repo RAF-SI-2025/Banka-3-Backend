@@ -513,6 +513,45 @@ service TradingService {
   // current price, firing + deactivating crossings. Internal-only —
   // driven by the scheduler on a fast cadence.
   rpc RunPriceAlertSweep(RunPriceAlertSweepRequest) returns (RunPriceAlertSweepResponse);
+
+  // -----------------------------------------------------------------
+  // Watchlists (todoSpec C3 S35-S39). A user keeps one or more named
+  // lists of securities. Each list view hydrates its items with the
+  // current price + daily change + security type for the FE header
+  // row (S35) and type filter (S39).
+  // -----------------------------------------------------------------
+
+  // CreateWatchlist creates a named watchlist for the caller (S36).
+  rpc CreateWatchlist(CreateWatchlistRequest) returns (Watchlist) {
+    option (google.api.http) = {
+      post: "/api/v1/watchlists"
+      body: "*"
+    };
+  }
+
+  // ListWatchlists returns the caller's own watchlists, items included.
+  rpc ListWatchlists(ListWatchlistsRequest) returns (ListWatchlistsResponse) {
+    option (google.api.http) = {get: "/api/v1/watchlists"};
+  }
+
+  // DeleteWatchlist removes one of the caller's watchlists (owner-scoped).
+  rpc DeleteWatchlist(DeleteWatchlistRequest) returns (DeleteWatchlistResponse) {
+    option (google.api.http) = {delete: "/api/v1/watchlists/{id}"};
+  }
+
+  // AddToWatchlist adds a security to one of the caller's watchlists (S35).
+  rpc AddToWatchlist(AddToWatchlistRequest) returns (WatchlistItem) {
+    option (google.api.http) = {
+      post: "/api/v1/watchlists/{id}/items"
+      body: "*"
+    };
+  }
+
+  // RemoveFromWatchlist removes a security from one of the caller's
+  // watchlists (S37).
+  rpc RemoveFromWatchlist(RemoveFromWatchlistRequest) returns (RemoveFromWatchlistResponse) {
+    option (google.api.http) = {delete: "/api/v1/watchlists/{id}/items/{security_id}"};
+  }
 }
 
 // =====================================================================
@@ -1812,3 +1851,61 @@ message RunPriceAlertSweepRequest {}
 message RunPriceAlertSweepResponse {
   int32 triggered = 1;
 }
+
+// =====================================================================
+// Watchlists (todoSpec C3 S35-S39)
+// =====================================================================
+
+// WatchlistItem is one security on a watchlist, decorated with the
+// security metadata + current price/daily change so the FE can render
+// the header row (S35) and filter by type (S39) without extra calls.
+message WatchlistItem {
+  string id = 1;
+  string security_id = 2;
+  google.protobuf.Timestamp created_at = 3;
+
+  // Decorated from the security + its listing (empty when unresolved).
+  string ticker = 4;
+  string name = 5;
+  SecurityType security_type = 6;
+  Currency currency = 7;
+  string price = 8; // current price, decimal string
+  string daily_change = 9; // daily change amount, decimal string
+}
+
+message Watchlist {
+  string id = 1;
+  string user_id = 2;
+  UserKind user_kind = 3;
+  string name = 4;
+  google.protobuf.Timestamp created_at = 5;
+  repeated WatchlistItem items = 6;
+}
+
+message CreateWatchlistRequest {
+  string name = 1 [(buf.validate.field).string.min_len = 1];
+}
+
+message ListWatchlistsRequest {}
+
+message ListWatchlistsResponse {
+  repeated Watchlist watchlists = 1;
+}
+
+message DeleteWatchlistRequest {
+  string id = 1 [(buf.validate.field).string.uuid = true];
+}
+
+message DeleteWatchlistResponse {}
+
+message AddToWatchlistRequest {
+  string id = 1 [(buf.validate.field).string.uuid = true]; // watchlist id
+  string security_id = 2 [(buf.validate.field).string.uuid = true];
+}
+
+message RemoveFromWatchlistRequest {
+  string id = 1 [(buf.validate.field).string.uuid = true]; // watchlist id
+  string security_id = 2 [(buf.validate.field).string.uuid = true];
+}
+
+message RemoveFromWatchlistResponse {}

@@ -83,6 +83,11 @@ const (
 	TradingService_ListPriceAlerts_FullMethodName            = "/banka.trading.v1.TradingService/ListPriceAlerts"
 	TradingService_DeletePriceAlert_FullMethodName           = "/banka.trading.v1.TradingService/DeletePriceAlert"
 	TradingService_RunPriceAlertSweep_FullMethodName         = "/banka.trading.v1.TradingService/RunPriceAlertSweep"
+	TradingService_CreateWatchlist_FullMethodName            = "/banka.trading.v1.TradingService/CreateWatchlist"
+	TradingService_ListWatchlists_FullMethodName             = "/banka.trading.v1.TradingService/ListWatchlists"
+	TradingService_DeleteWatchlist_FullMethodName            = "/banka.trading.v1.TradingService/DeleteWatchlist"
+	TradingService_AddToWatchlist_FullMethodName             = "/banka.trading.v1.TradingService/AddToWatchlist"
+	TradingService_RemoveFromWatchlist_FullMethodName        = "/banka.trading.v1.TradingService/RemoveFromWatchlist"
 )
 
 // TradingServiceClient is the client API for TradingService service.
@@ -251,6 +256,17 @@ type TradingServiceClient interface {
 	// current price, firing + deactivating crossings. Internal-only —
 	// driven by the scheduler on a fast cadence.
 	RunPriceAlertSweep(ctx context.Context, in *RunPriceAlertSweepRequest, opts ...grpc.CallOption) (*RunPriceAlertSweepResponse, error)
+	// CreateWatchlist creates a named watchlist for the caller (S36).
+	CreateWatchlist(ctx context.Context, in *CreateWatchlistRequest, opts ...grpc.CallOption) (*Watchlist, error)
+	// ListWatchlists returns the caller's own watchlists, items included.
+	ListWatchlists(ctx context.Context, in *ListWatchlistsRequest, opts ...grpc.CallOption) (*ListWatchlistsResponse, error)
+	// DeleteWatchlist removes one of the caller's watchlists (owner-scoped).
+	DeleteWatchlist(ctx context.Context, in *DeleteWatchlistRequest, opts ...grpc.CallOption) (*DeleteWatchlistResponse, error)
+	// AddToWatchlist adds a security to one of the caller's watchlists (S35).
+	AddToWatchlist(ctx context.Context, in *AddToWatchlistRequest, opts ...grpc.CallOption) (*WatchlistItem, error)
+	// RemoveFromWatchlist removes a security from one of the caller's
+	// watchlists (S37).
+	RemoveFromWatchlist(ctx context.Context, in *RemoveFromWatchlistRequest, opts ...grpc.CallOption) (*RemoveFromWatchlistResponse, error)
 }
 
 type tradingServiceClient struct {
@@ -891,6 +907,56 @@ func (c *tradingServiceClient) RunPriceAlertSweep(ctx context.Context, in *RunPr
 	return out, nil
 }
 
+func (c *tradingServiceClient) CreateWatchlist(ctx context.Context, in *CreateWatchlistRequest, opts ...grpc.CallOption) (*Watchlist, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(Watchlist)
+	err := c.cc.Invoke(ctx, TradingService_CreateWatchlist_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *tradingServiceClient) ListWatchlists(ctx context.Context, in *ListWatchlistsRequest, opts ...grpc.CallOption) (*ListWatchlistsResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(ListWatchlistsResponse)
+	err := c.cc.Invoke(ctx, TradingService_ListWatchlists_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *tradingServiceClient) DeleteWatchlist(ctx context.Context, in *DeleteWatchlistRequest, opts ...grpc.CallOption) (*DeleteWatchlistResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(DeleteWatchlistResponse)
+	err := c.cc.Invoke(ctx, TradingService_DeleteWatchlist_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *tradingServiceClient) AddToWatchlist(ctx context.Context, in *AddToWatchlistRequest, opts ...grpc.CallOption) (*WatchlistItem, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(WatchlistItem)
+	err := c.cc.Invoke(ctx, TradingService_AddToWatchlist_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *tradingServiceClient) RemoveFromWatchlist(ctx context.Context, in *RemoveFromWatchlistRequest, opts ...grpc.CallOption) (*RemoveFromWatchlistResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(RemoveFromWatchlistResponse)
+	err := c.cc.Invoke(ctx, TradingService_RemoveFromWatchlist_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
 // TradingServiceServer is the server API for TradingService service.
 // All implementations should embed UnimplementedTradingServiceServer
 // for forward compatibility.
@@ -1057,6 +1123,17 @@ type TradingServiceServer interface {
 	// current price, firing + deactivating crossings. Internal-only —
 	// driven by the scheduler on a fast cadence.
 	RunPriceAlertSweep(context.Context, *RunPriceAlertSweepRequest) (*RunPriceAlertSweepResponse, error)
+	// CreateWatchlist creates a named watchlist for the caller (S36).
+	CreateWatchlist(context.Context, *CreateWatchlistRequest) (*Watchlist, error)
+	// ListWatchlists returns the caller's own watchlists, items included.
+	ListWatchlists(context.Context, *ListWatchlistsRequest) (*ListWatchlistsResponse, error)
+	// DeleteWatchlist removes one of the caller's watchlists (owner-scoped).
+	DeleteWatchlist(context.Context, *DeleteWatchlistRequest) (*DeleteWatchlistResponse, error)
+	// AddToWatchlist adds a security to one of the caller's watchlists (S35).
+	AddToWatchlist(context.Context, *AddToWatchlistRequest) (*WatchlistItem, error)
+	// RemoveFromWatchlist removes a security from one of the caller's
+	// watchlists (S37).
+	RemoveFromWatchlist(context.Context, *RemoveFromWatchlistRequest) (*RemoveFromWatchlistResponse, error)
 }
 
 // UnimplementedTradingServiceServer should be embedded to have
@@ -1254,6 +1331,21 @@ func (UnimplementedTradingServiceServer) DeletePriceAlert(context.Context, *Dele
 }
 func (UnimplementedTradingServiceServer) RunPriceAlertSweep(context.Context, *RunPriceAlertSweepRequest) (*RunPriceAlertSweepResponse, error) {
 	return nil, status.Error(codes.Unimplemented, "method RunPriceAlertSweep not implemented")
+}
+func (UnimplementedTradingServiceServer) CreateWatchlist(context.Context, *CreateWatchlistRequest) (*Watchlist, error) {
+	return nil, status.Error(codes.Unimplemented, "method CreateWatchlist not implemented")
+}
+func (UnimplementedTradingServiceServer) ListWatchlists(context.Context, *ListWatchlistsRequest) (*ListWatchlistsResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method ListWatchlists not implemented")
+}
+func (UnimplementedTradingServiceServer) DeleteWatchlist(context.Context, *DeleteWatchlistRequest) (*DeleteWatchlistResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method DeleteWatchlist not implemented")
+}
+func (UnimplementedTradingServiceServer) AddToWatchlist(context.Context, *AddToWatchlistRequest) (*WatchlistItem, error) {
+	return nil, status.Error(codes.Unimplemented, "method AddToWatchlist not implemented")
+}
+func (UnimplementedTradingServiceServer) RemoveFromWatchlist(context.Context, *RemoveFromWatchlistRequest) (*RemoveFromWatchlistResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method RemoveFromWatchlist not implemented")
 }
 func (UnimplementedTradingServiceServer) testEmbeddedByValue() {}
 
@@ -2409,6 +2501,96 @@ func _TradingService_RunPriceAlertSweep_Handler(srv interface{}, ctx context.Con
 	return interceptor(ctx, in, info, handler)
 }
 
+func _TradingService_CreateWatchlist_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(CreateWatchlistRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(TradingServiceServer).CreateWatchlist(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: TradingService_CreateWatchlist_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(TradingServiceServer).CreateWatchlist(ctx, req.(*CreateWatchlistRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _TradingService_ListWatchlists_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(ListWatchlistsRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(TradingServiceServer).ListWatchlists(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: TradingService_ListWatchlists_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(TradingServiceServer).ListWatchlists(ctx, req.(*ListWatchlistsRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _TradingService_DeleteWatchlist_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(DeleteWatchlistRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(TradingServiceServer).DeleteWatchlist(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: TradingService_DeleteWatchlist_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(TradingServiceServer).DeleteWatchlist(ctx, req.(*DeleteWatchlistRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _TradingService_AddToWatchlist_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(AddToWatchlistRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(TradingServiceServer).AddToWatchlist(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: TradingService_AddToWatchlist_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(TradingServiceServer).AddToWatchlist(ctx, req.(*AddToWatchlistRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _TradingService_RemoveFromWatchlist_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(RemoveFromWatchlistRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(TradingServiceServer).RemoveFromWatchlist(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: TradingService_RemoveFromWatchlist_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(TradingServiceServer).RemoveFromWatchlist(ctx, req.(*RemoveFromWatchlistRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
 // TradingService_ServiceDesc is the grpc.ServiceDesc for TradingService service.
 // It's only intended for direct use with grpc.RegisterService,
 // and not to be introspected or modified (even as a copy)
@@ -2667,6 +2849,26 @@ var TradingService_ServiceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "RunPriceAlertSweep",
 			Handler:    _TradingService_RunPriceAlertSweep_Handler,
+		},
+		{
+			MethodName: "CreateWatchlist",
+			Handler:    _TradingService_CreateWatchlist_Handler,
+		},
+		{
+			MethodName: "ListWatchlists",
+			Handler:    _TradingService_ListWatchlists_Handler,
+		},
+		{
+			MethodName: "DeleteWatchlist",
+			Handler:    _TradingService_DeleteWatchlist_Handler,
+		},
+		{
+			MethodName: "AddToWatchlist",
+			Handler:    _TradingService_AddToWatchlist_Handler,
+		},
+		{
+			MethodName: "RemoveFromWatchlist",
+			Handler:    _TradingService_RemoveFromWatchlist_Handler,
 		},
 	},
 	Streams:  []grpc.StreamDesc{},

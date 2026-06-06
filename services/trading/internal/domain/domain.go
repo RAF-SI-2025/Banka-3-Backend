@@ -709,3 +709,35 @@ type PriceAlert struct {
 	CreatedAt   time.Time
 	TriggeredAt *time.Time
 }
+
+// Watchlist is a user-owned, named collection of securities the user
+// wants to keep an eye on (todoSpec C3 S35-S39). A user can have many
+// (S36). Items hang off the list and cascade-delete with it.
+type Watchlist struct {
+	ID        string
+	UserID    string
+	UserKind  UserKind
+	Name      string
+	CreatedAt time.Time
+	Items     []*WatchlistItem
+}
+
+// WatchlistItem is one security on a watchlist. The decorated fields
+// (Ticker, Name, SecurityType, Price, DailyChange, Currency) are
+// joined in at the service layer from the security + its listing so the
+// FE can render the header row (current price + daily change, S35) and
+// filter by security type (S39) without extra round-trips. They are
+// empty when no listing/security row resolves.
+type WatchlistItem struct {
+	ID         string
+	SecurityID string
+	CreatedAt  time.Time
+
+	// Decorated (not persisted on watchlist_items).
+	Ticker       string
+	Name         string
+	SecurityType SecurityType
+	Currency     Currency
+	Price        string
+	DailyChange  string
+}

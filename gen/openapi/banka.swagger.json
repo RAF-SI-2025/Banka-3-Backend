@@ -5067,6 +5067,169 @@
           "BankService"
         ]
       }
+    },
+    "/api/v1/watchlists": {
+      "get": {
+        "summary": "ListWatchlists returns the caller's own watchlists, items included.",
+        "operationId": "TradingService_ListWatchlists",
+        "responses": {
+          "200": {
+            "description": "A successful response.",
+            "schema": {
+              "$ref": "#/definitions/v1ListWatchlistsResponse"
+            }
+          },
+          "default": {
+            "description": "An unexpected error response.",
+            "schema": {
+              "$ref": "#/definitions/rpcStatus"
+            }
+          }
+        },
+        "tags": [
+          "TradingService"
+        ]
+      },
+      "post": {
+        "summary": "CreateWatchlist creates a named watchlist for the caller (S36).",
+        "operationId": "TradingService_CreateWatchlist",
+        "responses": {
+          "200": {
+            "description": "A successful response.",
+            "schema": {
+              "$ref": "#/definitions/v1Watchlist"
+            }
+          },
+          "default": {
+            "description": "An unexpected error response.",
+            "schema": {
+              "$ref": "#/definitions/rpcStatus"
+            }
+          }
+        },
+        "parameters": [
+          {
+            "name": "body",
+            "in": "body",
+            "required": true,
+            "schema": {
+              "$ref": "#/definitions/v1CreateWatchlistRequest"
+            }
+          }
+        ],
+        "tags": [
+          "TradingService"
+        ]
+      }
+    },
+    "/api/v1/watchlists/{id}": {
+      "delete": {
+        "summary": "DeleteWatchlist removes one of the caller's watchlists (owner-scoped).",
+        "operationId": "TradingService_DeleteWatchlist",
+        "responses": {
+          "200": {
+            "description": "A successful response.",
+            "schema": {
+              "$ref": "#/definitions/v1DeleteWatchlistResponse"
+            }
+          },
+          "default": {
+            "description": "An unexpected error response.",
+            "schema": {
+              "$ref": "#/definitions/rpcStatus"
+            }
+          }
+        },
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "type": "string"
+          }
+        ],
+        "tags": [
+          "TradingService"
+        ]
+      }
+    },
+    "/api/v1/watchlists/{id}/items": {
+      "post": {
+        "summary": "AddToWatchlist adds a security to one of the caller's watchlists (S35).",
+        "operationId": "TradingService_AddToWatchlist",
+        "responses": {
+          "200": {
+            "description": "A successful response.",
+            "schema": {
+              "$ref": "#/definitions/v1WatchlistItem"
+            }
+          },
+          "default": {
+            "description": "An unexpected error response.",
+            "schema": {
+              "$ref": "#/definitions/rpcStatus"
+            }
+          }
+        },
+        "parameters": [
+          {
+            "name": "id",
+            "description": "watchlist id",
+            "in": "path",
+            "required": true,
+            "type": "string"
+          },
+          {
+            "name": "body",
+            "in": "body",
+            "required": true,
+            "schema": {
+              "$ref": "#/definitions/TradingServiceAddToWatchlistBody"
+            }
+          }
+        ],
+        "tags": [
+          "TradingService"
+        ]
+      }
+    },
+    "/api/v1/watchlists/{id}/items/{securityId}": {
+      "delete": {
+        "summary": "RemoveFromWatchlist removes a security from one of the caller's\nwatchlists (S37).",
+        "operationId": "TradingService_RemoveFromWatchlist",
+        "responses": {
+          "200": {
+            "description": "A successful response.",
+            "schema": {
+              "$ref": "#/definitions/v1RemoveFromWatchlistResponse"
+            }
+          },
+          "default": {
+            "description": "An unexpected error response.",
+            "schema": {
+              "$ref": "#/definitions/rpcStatus"
+            }
+          }
+        },
+        "parameters": [
+          {
+            "name": "id",
+            "description": "watchlist id",
+            "in": "path",
+            "required": true,
+            "type": "string"
+          },
+          {
+            "name": "securityId",
+            "in": "path",
+            "required": true,
+            "type": "string"
+          }
+        ],
+        "tags": [
+          "TradingService"
+        ]
+      }
     }
   },
   "definitions": {
@@ -5194,6 +5357,14 @@
     },
     "TradingServiceAcceptOTCOfferBody": {
       "type": "object"
+    },
+    "TradingServiceAddToWatchlistBody": {
+      "type": "object",
+      "properties": {
+        "securityId": {
+          "type": "string"
+        }
+      }
     },
     "TradingServiceApproveOrderBody": {
       "type": "object"
@@ -6467,6 +6638,14 @@
         }
       }
     },
+    "v1CreateWatchlistRequest": {
+      "type": "object",
+      "properties": {
+        "name": {
+          "type": "string"
+        }
+      }
+    },
     "v1CrossBankPayment": {
       "type": "object",
       "properties": {
@@ -6518,6 +6697,9 @@
       }
     },
     "v1DeletePriceAlertResponse": {
+      "type": "object"
+    },
+    "v1DeleteWatchlistResponse": {
       "type": "object"
     },
     "v1Direction": {
@@ -8011,6 +8193,18 @@
         }
       }
     },
+    "v1ListWatchlistsResponse": {
+      "type": "object",
+      "properties": {
+        "watchlists": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "$ref": "#/definitions/v1Watchlist"
+          }
+        }
+      }
+    },
     "v1Listing": {
       "type": "object",
       "properties": {
@@ -9048,6 +9242,9 @@
         }
       }
     },
+    "v1RemoveFromWatchlistResponse": {
+      "type": "object"
+    },
     "v1RequestPasswordResetRequest": {
       "type": "object",
       "properties": {
@@ -9713,6 +9910,71 @@
           "format": "int64"
         }
       }
+    },
+    "v1Watchlist": {
+      "type": "object",
+      "properties": {
+        "id": {
+          "type": "string"
+        },
+        "userId": {
+          "type": "string"
+        },
+        "userKind": {
+          "$ref": "#/definitions/bankaTradingV1UserKind"
+        },
+        "name": {
+          "type": "string"
+        },
+        "createdAt": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "items": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "$ref": "#/definitions/v1WatchlistItem"
+          }
+        }
+      }
+    },
+    "v1WatchlistItem": {
+      "type": "object",
+      "properties": {
+        "id": {
+          "type": "string"
+        },
+        "securityId": {
+          "type": "string"
+        },
+        "createdAt": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "ticker": {
+          "type": "string",
+          "description": "Decorated from the security + its listing (empty when unresolved)."
+        },
+        "name": {
+          "type": "string"
+        },
+        "securityType": {
+          "$ref": "#/definitions/v1SecurityType"
+        },
+        "currency": {
+          "$ref": "#/definitions/bankaTradingV1Currency"
+        },
+        "price": {
+          "type": "string",
+          "title": "current price, decimal string"
+        },
+        "dailyChange": {
+          "type": "string",
+          "title": "daily change amount, decimal string"
+        }
+      },
+      "description": "WatchlistItem is one security on a watchlist, decorated with the\nsecurity metadata + current price/daily change so the FE can render\nthe header row (S35) and filter by type (S39) without extra calls."
     }
   }
 }
