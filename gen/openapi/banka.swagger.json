@@ -2560,6 +2560,278 @@
         ]
       }
     },
+    "/api/v1/interbank/audit-log": {
+      "get": {
+        "summary": "ListInterbankAuditLog returns the inbound-message comms history\n(NEW_TX / COMMIT_TX / ROLLBACK_TX + the response we returned),\nfilterable by partner / message type / date range.",
+        "operationId": "BankService_ListInterbankAuditLog",
+        "responses": {
+          "200": {
+            "description": "A successful response.",
+            "schema": {
+              "$ref": "#/definitions/v1ListInterbankAuditLogResponse"
+            }
+          },
+          "default": {
+            "description": "An unexpected error response.",
+            "schema": {
+              "$ref": "#/definitions/rpcStatus"
+            }
+          }
+        },
+        "parameters": [
+          {
+            "name": "senderRoutingNumber",
+            "in": "query",
+            "required": false,
+            "type": "integer",
+            "format": "int32"
+          },
+          {
+            "name": "messageType",
+            "in": "query",
+            "required": false,
+            "type": "string"
+          },
+          {
+            "name": "from",
+            "in": "query",
+            "required": false,
+            "type": "string",
+            "format": "date-time"
+          },
+          {
+            "name": "to",
+            "in": "query",
+            "required": false,
+            "type": "string",
+            "format": "date-time"
+          },
+          {
+            "name": "page",
+            "in": "query",
+            "required": false,
+            "type": "integer",
+            "format": "int32"
+          },
+          {
+            "name": "pageSize",
+            "in": "query",
+            "required": false,
+            "type": "integer",
+            "format": "int32"
+          }
+        ],
+        "tags": [
+          "BankService"
+        ]
+      }
+    },
+    "/api/v1/interbank/blacklist": {
+      "get": {
+        "summary": "ListInterbankBlacklist returns blacklisted partner banks. Pass\nactive_only=true for currently-blocked partners, false for history.",
+        "operationId": "BankService_ListInterbankBlacklist",
+        "responses": {
+          "200": {
+            "description": "A successful response.",
+            "schema": {
+              "$ref": "#/definitions/v1ListInterbankBlacklistResponse"
+            }
+          },
+          "default": {
+            "description": "An unexpected error response.",
+            "schema": {
+              "$ref": "#/definitions/rpcStatus"
+            }
+          }
+        },
+        "parameters": [
+          {
+            "name": "activeOnly",
+            "description": "active_only=true → only currently-blocked partners; false → history.",
+            "in": "query",
+            "required": false,
+            "type": "boolean"
+          }
+        ],
+        "tags": [
+          "BankService"
+        ]
+      },
+      "post": {
+        "summary": "BlockInterbankPartner manually blacklists a partner bank.",
+        "operationId": "BankService_BlockInterbankPartner",
+        "responses": {
+          "200": {
+            "description": "A successful response.",
+            "schema": {
+              "$ref": "#/definitions/v1InterbankBlacklistEntry"
+            }
+          },
+          "default": {
+            "description": "An unexpected error response.",
+            "schema": {
+              "$ref": "#/definitions/rpcStatus"
+            }
+          }
+        },
+        "parameters": [
+          {
+            "name": "body",
+            "in": "body",
+            "required": true,
+            "schema": {
+              "$ref": "#/definitions/v1BlockInterbankPartnerRequest"
+            }
+          }
+        ],
+        "tags": [
+          "BankService"
+        ]
+      }
+    },
+    "/api/v1/interbank/blacklist/{senderRoutingNumber}": {
+      "delete": {
+        "summary": "UnblockInterbankPartner lifts an active blacklist entry.",
+        "operationId": "BankService_UnblockInterbankPartner",
+        "responses": {
+          "200": {
+            "description": "A successful response.",
+            "schema": {
+              "$ref": "#/definitions/v1InterbankBlacklistEntry"
+            }
+          },
+          "default": {
+            "description": "An unexpected error response.",
+            "schema": {
+              "$ref": "#/definitions/rpcStatus"
+            }
+          }
+        },
+        "parameters": [
+          {
+            "name": "senderRoutingNumber",
+            "in": "path",
+            "required": true,
+            "type": "integer",
+            "format": "int32"
+          }
+        ],
+        "tags": [
+          "BankService"
+        ]
+      }
+    },
+    "/api/v1/interbank/transactions": {
+      "get": {
+        "summary": "ListInterbankTransactions returns cross-bank 2PC transactions with\ntheir full status flow, filterable by partner / status / direction /\ndate range. Real-time status tracking is poll-based off this list.",
+        "operationId": "BankService_ListInterbankTransactions",
+        "responses": {
+          "200": {
+            "description": "A successful response.",
+            "schema": {
+              "$ref": "#/definitions/v1ListInterbankTransactionsResponse"
+            }
+          },
+          "default": {
+            "description": "An unexpected error response.",
+            "schema": {
+              "$ref": "#/definitions/rpcStatus"
+            }
+          }
+        },
+        "parameters": [
+          {
+            "name": "senderRoutingNumber",
+            "description": "All filters optional. routing 0 / empty string = any.",
+            "in": "query",
+            "required": false,
+            "type": "integer",
+            "format": "int32"
+          },
+          {
+            "name": "status",
+            "in": "query",
+            "required": false,
+            "type": "string"
+          },
+          {
+            "name": "direction",
+            "in": "query",
+            "required": false,
+            "type": "string"
+          },
+          {
+            "name": "from",
+            "in": "query",
+            "required": false,
+            "type": "string",
+            "format": "date-time"
+          },
+          {
+            "name": "to",
+            "in": "query",
+            "required": false,
+            "type": "string",
+            "format": "date-time"
+          },
+          {
+            "name": "page",
+            "in": "query",
+            "required": false,
+            "type": "integer",
+            "format": "int32"
+          },
+          {
+            "name": "pageSize",
+            "in": "query",
+            "required": false,
+            "type": "integer",
+            "format": "int32"
+          }
+        ],
+        "tags": [
+          "BankService"
+        ]
+      }
+    },
+    "/api/v1/interbank/transactions/{senderRoutingNumber}/{transactionId}": {
+      "get": {
+        "summary": "GetInterbankTransaction returns a single transaction by its\n(sender_routing_number, transaction_id) identity.",
+        "operationId": "BankService_GetInterbankTransaction",
+        "responses": {
+          "200": {
+            "description": "A successful response.",
+            "schema": {
+              "$ref": "#/definitions/v1InterbankTransaction"
+            }
+          },
+          "default": {
+            "description": "An unexpected error response.",
+            "schema": {
+              "$ref": "#/definitions/rpcStatus"
+            }
+          }
+        },
+        "parameters": [
+          {
+            "name": "senderRoutingNumber",
+            "in": "path",
+            "required": true,
+            "type": "integer",
+            "format": "int32"
+          },
+          {
+            "name": "transactionId",
+            "in": "path",
+            "required": true,
+            "type": "string"
+          }
+        ],
+        "tags": [
+          "BankService"
+        ]
+      }
+    },
     "/api/v1/listings": {
       "get": {
         "operationId": "TradingService_ListListings",
@@ -6791,6 +7063,18 @@
       },
       "description": "BankProfitBucket is one calendar period. profit_rsd uses the same\nper-row loss clamp as the actuary leaderboard (Σ greatest(gain_rsd,\n0) on realized_gains where user_kind='employee'), so Σ profit_rsd\nacross every bucket of the full history reconciles with\nΣ ListActuaryPerformances.profit_rsd. trading_rsd + fund_rsd\npartition profit_rsd by source (realized_gains.security_id set vs\nfund_id set). cumulative_rsd is the running total from the first\nbucket in the response."
     },
+    "v1BlockInterbankPartnerRequest": {
+      "type": "object",
+      "properties": {
+        "senderRoutingNumber": {
+          "type": "integer",
+          "format": "int32"
+        },
+        "reason": {
+          "type": "string"
+        }
+      }
+    },
     "v1CancelRecurringOrderResponse": {
       "type": "object"
     },
@@ -8605,6 +8889,120 @@
       ],
       "default": "INSTALLMENT_STATUS_UNSPECIFIED"
     },
+    "v1InterbankBlacklistEntry": {
+      "type": "object",
+      "properties": {
+        "senderRoutingNumber": {
+          "type": "integer",
+          "format": "int32"
+        },
+        "reason": {
+          "type": "string"
+        },
+        "blockedBy": {
+          "type": "string",
+          "description": "Supervisor user id for a manual block, or \"system\" for an auto-block."
+        },
+        "blockedAt": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "unblockedAt": {
+          "type": "string",
+          "format": "date-time",
+          "description": "Set only on inactive (unblocked) rows."
+        },
+        "active": {
+          "type": "boolean"
+        }
+      },
+      "description": "InterbankBlacklistEntry mirrors a \"bank\".interbank_blacklist row."
+    },
+    "v1InterbankMessage": {
+      "type": "object",
+      "properties": {
+        "senderRoutingNumber": {
+          "type": "integer",
+          "format": "int32"
+        },
+        "idempotenceKey": {
+          "type": "string"
+        },
+        "messageType": {
+          "type": "string"
+        },
+        "transactionId": {
+          "type": "string"
+        },
+        "responseStatus": {
+          "type": "integer",
+          "format": "int32"
+        },
+        "responseBody": {
+          "type": "string"
+        },
+        "createdAt": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "updatedAt": {
+          "type": "string",
+          "format": "date-time"
+        }
+      },
+      "description": "InterbankMessage is the supervisor projection of a recorded inbound\npartner message (the comms / audit history). message_type is the\nstored \"NEW_TX\" / \"COMMIT_TX\" / \"ROLLBACK_TX\" string."
+    },
+    "v1InterbankTransaction": {
+      "type": "object",
+      "properties": {
+        "senderRoutingNumber": {
+          "type": "integer",
+          "format": "int32"
+        },
+        "transactionId": {
+          "type": "string"
+        },
+        "direction": {
+          "type": "string"
+        },
+        "localAccountNumber": {
+          "type": "string"
+        },
+        "remoteAccountNumber": {
+          "type": "string"
+        },
+        "currency": {
+          "$ref": "#/definitions/bankaBankV1Currency"
+        },
+        "amount": {
+          "type": "string"
+        },
+        "purpose": {
+          "type": "string"
+        },
+        "reservationId": {
+          "type": "string"
+        },
+        "opId": {
+          "type": "string"
+        },
+        "status": {
+          "type": "string"
+        },
+        "lastError": {
+          "type": "string"
+        },
+        "createdAt": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "updatedAt": {
+          "type": "string",
+          "format": "date-time"
+        }
+      },
+      "description": "InterbankTransaction is the supervisor-facing projection of a\n\"bank\".interbank_protocol_transactions row. Status / direction are\nrendered as their stored lower-case strings (\"pending\",\"failed\",\n\"prepared\",\"committed\",\"rolled_back\" / \"inbound\",\"outbound\") so the FE\ndoesn't need to track a separate enum from the 2PC wire protocol."
+    },
     "v1InterestType": {
       "type": "string",
       "enum": [
@@ -8951,6 +9349,66 @@
         "totalProfit": {
           "type": "string",
           "title": "user-currency-mixed; FE renders separately"
+        }
+      }
+    },
+    "v1ListInterbankAuditLogResponse": {
+      "type": "object",
+      "properties": {
+        "messages": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "$ref": "#/definitions/v1InterbankMessage"
+          }
+        },
+        "page": {
+          "type": "integer",
+          "format": "int32"
+        },
+        "pageSize": {
+          "type": "integer",
+          "format": "int32"
+        },
+        "total": {
+          "type": "string",
+          "format": "int64"
+        }
+      }
+    },
+    "v1ListInterbankBlacklistResponse": {
+      "type": "object",
+      "properties": {
+        "entries": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "$ref": "#/definitions/v1InterbankBlacklistEntry"
+          }
+        }
+      }
+    },
+    "v1ListInterbankTransactionsResponse": {
+      "type": "object",
+      "properties": {
+        "transactions": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "$ref": "#/definitions/v1InterbankTransaction"
+          }
+        },
+        "page": {
+          "type": "integer",
+          "format": "int32"
+        },
+        "pageSize": {
+          "type": "integer",
+          "format": "int32"
+        },
+        "total": {
+          "type": "string",
+          "format": "int64"
         }
       }
     },

@@ -2,6 +2,8 @@ package store
 
 import (
 	"context"
+	"fmt"
+	"time"
 
 	"github.com/RAF-SI-2025/Banka-3-Backend/pkg/apperr"
 	"github.com/RAF-SI-2025/Banka-3-Backend/services/bank/internal/domain"
@@ -181,6 +183,263 @@ func (s *Store) GetInterbankMessage(ctx context.Context, senderRouting int, key 
 		return nil, apperr.Internal("get interbank message", err)
 	}
 	return out, nil
+}
+
+// =====================================================================
+// Inter-bank supervisor read surface (c5 observability).
+// =====================================================================
+
+// InterbankTxFilter scopes ListInterbankTransactions. Zero-valued fields
+// are ignored.
+type InterbankTxFilter struct {
+	SenderRoutingNumber int       // 0 = any partner
+	Status              string    // "" = any status
+	Direction           string    // "" = any direction
+	From                time.Time // zero = no lower bound (on created_at)
+	To                  time.Time // zero = no upper bound (on created_at)
+}
+
+// ListInterbankTransactions returns transactions matching the filter,
+// newest first, with paging. total is the unpaged match count.
+func (s *Store) ListInterbankTransactions(ctx context.Context, f InterbankTxFilter, limit, offset int) ([]*domain.InterbankProtocolTransaction, int64, error) {
+	where := "where 1=1"
+	args := []any{}
+	add := func(clause string, v any) {
+		args = append(args, v)
+		where += fmt.Sprintf(" and %s$%d", clause, len(args))
+	}
+	if f.SenderRoutingNumber != 0 {
+		add("sender_routing_number = ", f.SenderRoutingNumber)
+	}
+	if f.Status != "" {
+		add("status = ", f.Status)
+	}
+	if f.Direction != "" {
+		add("direction = ", f.Direction)
+	}
+	if !f.From.IsZero() {
+		add("created_at >= ", f.From)
+	}
+	if !f.To.IsZero() {
+		add("created_at <= ", f.To)
+	}
+
+	var total int64
+	if err := s.DB.QueryRow(ctx, `select count(*) from "bank".interbank_protocol_transactions `+where, args...).Scan(&total); err != nil {
+		return nil, 0, apperr.Internal("count interbank transactions", err)
+	}
+
+	args = append(args, limit, offset)
+	q := `select ` + interbankTxCols + `
+	      from "bank".interbank_protocol_transactions ` + where +
+		fmt.Sprintf(" order by created_at desc, transaction_id desc limit $%d offset $%d", len(args)-1, len(args))
+	rows, err := s.DB.Query(ctx, q, args...)
+	if err != nil {
+		return nil, 0, apperr.Internal("list interbank transactions", err)
+	}
+	defer rows.Close()
+	out := make([]*domain.InterbankProtocolTransaction, 0, limit)
+	for rows.Next() {
+		t, serr := scanInterbankTx(rows)
+		if serr != nil {
+			return nil, 0, apperr.Internal("scan interbank transaction", serr)
+		}
+		out = append(out, t)
+	}
+	if rows.Err() != nil {
+		return nil, 0, apperr.Internal("iterate interbank transactions", rows.Err())
+	}
+	return out, total, nil
+}
+
+// InterbankMsgFilter scopes ListInterbankMessages (the comms / audit
+// history). Zero-valued fields are ignored.
+type InterbankMsgFilter struct {
+	SenderRoutingNumber int
+	MessageType         string
+	From                time.Time
+	To                  time.Time
+}
+
+// ListInterbankMessages returns the inbound-message audit log matching
+// the filter, newest first, with paging.
+func (s *Store) ListInterbankMessages(ctx context.Context, f InterbankMsgFilter, limit, offset int) ([]*domain.InterbankProtocolMessage, int64, error) {
+	where := "where 1=1"
+	args := []any{}
+	add := func(clause string, v any) {
+		args = append(args, v)
+		where += fmt.Sprintf(" and %s$%d", clause, len(args))
+	}
+	if f.SenderRoutingNumber != 0 {
+		add("sender_routing_number = ", f.SenderRoutingNumber)
+	}
+	if f.MessageType != "" {
+		add("message_type = ", f.MessageType)
+	}
+	if !f.From.IsZero() {
+		add("created_at >= ", f.From)
+	}
+	if !f.To.IsZero() {
+		add("created_at <= ", f.To)
+	}
+
+	var total int64
+	if err := s.DB.QueryRow(ctx, `select count(*) from "bank".interbank_protocol_messages `+where, args...).Scan(&total); err != nil {
+		return nil, 0, apperr.Internal("count interbank messages", err)
+	}
+
+	args = append(args, limit, offset)
+	q := `select ` + interbankMsgCols + `
+	      from "bank".interbank_protocol_messages ` + where +
+		fmt.Sprintf(" order by created_at desc, idempotence_key desc limit $%d offset $%d", len(args)-1, len(args))
+	rows, err := s.DB.Query(ctx, q, args...)
+	if err != nil {
+		return nil, 0, apperr.Internal("list interbank messages", err)
+	}
+	defer rows.Close()
+	out := make([]*domain.InterbankProtocolMessage, 0, limit)
+	for rows.Next() {
+		m, serr := scanInterbankMsg(rows)
+		if serr != nil {
+			return nil, 0, apperr.Internal("scan interbank message", serr)
+		}
+		out = append(out, m)
+	}
+	if rows.Err() != nil {
+		return nil, 0, apperr.Internal("iterate interbank messages", rows.Err())
+	}
+	return out, total, nil
+}
+
+// =====================================================================
+// Inter-bank blacklist + failure counter (c5 observability & control).
+// =====================================================================
+
+const interbankBlacklistCols = `
+    sender_routing_number, reason, blocked_by,
+    blocked_at, unblocked_at, active`
+
+func scanBlacklistEntry(row pgx.Row) (*domain.InterbankBlacklistEntry, error) {
+	var e domain.InterbankBlacklistEntry
+	if err := row.Scan(
+		&e.SenderRoutingNumber, &e.Reason, &e.BlockedBy,
+		&e.BlockedAt, &e.UnblockedAt, &e.Active,
+	); err != nil {
+		return nil, err
+	}
+	return &e, nil
+}
+
+// IsBlacklisted reports whether a routing number is actively blocked.
+func (s *Store) IsBlacklisted(ctx context.Context, senderRouting int) (bool, error) {
+	const q = `select exists (
+	    select 1 from "bank".interbank_blacklist
+	    where sender_routing_number = $1 and active)`
+	var ok bool
+	if err := s.DB.QueryRow(ctx, q, senderRouting).Scan(&ok); err != nil {
+		return false, apperr.Internal("check interbank blacklist", err)
+	}
+	return ok, nil
+}
+
+// BlockBank inserts (or re-activates) a blacklist row. Idempotent on the
+// routing number — re-blocking an active row refreshes reason/blocked_by
+// and clears any prior unblocked_at.
+func (s *Store) BlockBank(ctx context.Context, senderRouting int, reason, blockedBy string) (*domain.InterbankBlacklistEntry, error) {
+	const q = `
+	    insert into "bank".interbank_blacklist (
+	        sender_routing_number, reason, blocked_by, blocked_at, active
+	    ) values ($1, $2, $3, now(), true)
+	    on conflict (sender_routing_number) do update set
+	        reason       = excluded.reason,
+	        blocked_by   = excluded.blocked_by,
+	        blocked_at   = now(),
+	        unblocked_at = null,
+	        active       = true
+	    returning ` + interbankBlacklistCols
+	out, err := scanBlacklistEntry(s.DB.QueryRow(ctx, q, senderRouting, reason, blockedBy))
+	if err != nil {
+		return nil, apperr.Internal("block bank", err)
+	}
+	return out, nil
+}
+
+// UnblockBank flips an active blacklist row to inactive + stamps
+// unblocked_at. NotFound when no active row exists.
+func (s *Store) UnblockBank(ctx context.Context, senderRouting int) (*domain.InterbankBlacklistEntry, error) {
+	const q = `
+	    update "bank".interbank_blacklist
+	    set active = false, unblocked_at = now()
+	    where sender_routing_number = $1 and active
+	    returning ` + interbankBlacklistCols
+	out, err := scanBlacklistEntry(s.DB.QueryRow(ctx, q, senderRouting))
+	if err != nil {
+		if noRows(err) {
+			return nil, apperr.NotFound("no active blacklist entry for routing number")
+		}
+		return nil, apperr.Internal("unblock bank", err)
+	}
+	return out, nil
+}
+
+// ListBlacklist returns blacklist rows. activeOnly restricts to active
+// blocks; false returns the full history (incl. unblocked rows).
+func (s *Store) ListBlacklist(ctx context.Context, activeOnly bool) ([]*domain.InterbankBlacklistEntry, error) {
+	q := `select ` + interbankBlacklistCols + ` from "bank".interbank_blacklist`
+	if activeOnly {
+		q += ` where active`
+	}
+	q += ` order by blocked_at desc`
+	rows, err := s.DB.Query(ctx, q)
+	if err != nil {
+		return nil, apperr.Internal("list blacklist", err)
+	}
+	defer rows.Close()
+	out := []*domain.InterbankBlacklistEntry{}
+	for rows.Next() {
+		e, serr := scanBlacklistEntry(rows)
+		if serr != nil {
+			return nil, apperr.Internal("scan blacklist entry", serr)
+		}
+		out = append(out, e)
+	}
+	if rows.Err() != nil {
+		return nil, apperr.Internal("iterate blacklist", rows.Err())
+	}
+	return out, nil
+}
+
+// RecordPartnerFailure bumps the consecutive-failure counter for a
+// routing number and returns the new count. Upserts the row.
+func (s *Store) RecordPartnerFailure(ctx context.Context, senderRouting int) (int, error) {
+	const q = `
+	    insert into "bank".interbank_partner_failures (
+	        sender_routing_number, consecutive_failures, last_failure_at, updated_at
+	    ) values ($1, 1, now(), now())
+	    on conflict (sender_routing_number) do update set
+	        consecutive_failures = "bank".interbank_partner_failures.consecutive_failures + 1,
+	        last_failure_at      = now(),
+	        updated_at           = now()
+	    returning consecutive_failures`
+	var n int
+	if err := s.DB.QueryRow(ctx, q, senderRouting).Scan(&n); err != nil {
+		return 0, apperr.Internal("record partner failure", err)
+	}
+	return n, nil
+}
+
+// ResetPartnerFailures zeroes the consecutive-failure counter for a
+// routing number after a successful interaction. No-op when no row
+// exists yet.
+func (s *Store) ResetPartnerFailures(ctx context.Context, senderRouting int) error {
+	const q = `
+	    update "bank".interbank_partner_failures
+	    set consecutive_failures = 0, updated_at = now()
+	    where sender_routing_number = $1 and consecutive_failures <> 0`
+	if _, err := s.DB.Exec(ctx, q, senderRouting); err != nil {
+		return apperr.Internal("reset partner failures", err)
+	}
+	return nil
 }
 
 // execerOrPool returns tx if non-nil, else the pool. Local helper so

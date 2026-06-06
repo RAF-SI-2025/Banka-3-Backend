@@ -74,6 +74,12 @@ const (
 	BankService_GetForexForwardSpreads_FullMethodName    = "/banka.bank.v1.BankService/GetForexForwardSpreads"
 	BankService_SetForexForwardSpread_FullMethodName     = "/banka.bank.v1.BankService/SetForexForwardSpread"
 	BankService_RunForexForwardSettlement_FullMethodName = "/banka.bank.v1.BankService/RunForexForwardSettlement"
+	BankService_ListInterbankTransactions_FullMethodName = "/banka.bank.v1.BankService/ListInterbankTransactions"
+	BankService_GetInterbankTransaction_FullMethodName   = "/banka.bank.v1.BankService/GetInterbankTransaction"
+	BankService_ListInterbankAuditLog_FullMethodName     = "/banka.bank.v1.BankService/ListInterbankAuditLog"
+	BankService_ListInterbankBlacklist_FullMethodName    = "/banka.bank.v1.BankService/ListInterbankBlacklist"
+	BankService_BlockInterbankPartner_FullMethodName     = "/banka.bank.v1.BankService/BlockInterbankPartner"
+	BankService_UnblockInterbankPartner_FullMethodName   = "/banka.bank.v1.BankService/UnblockInterbankPartner"
 )
 
 // BankServiceClient is the client API for BankService service.
@@ -239,6 +245,24 @@ type BankServiceClient interface {
 	// RunForexForwardSettlement settles every active forward whose
 	// settlement date has arrived. Internal — driven by the scheduler.
 	RunForexForwardSettlement(ctx context.Context, in *RunForexForwardSettlementRequest, opts ...grpc.CallOption) (*RunForexForwardSettlementResponse, error)
+	// ListInterbankTransactions returns cross-bank 2PC transactions with
+	// their full status flow, filterable by partner / status / direction /
+	// date range. Real-time status tracking is poll-based off this list.
+	ListInterbankTransactions(ctx context.Context, in *ListInterbankTransactionsRequest, opts ...grpc.CallOption) (*ListInterbankTransactionsResponse, error)
+	// GetInterbankTransaction returns a single transaction by its
+	// (sender_routing_number, transaction_id) identity.
+	GetInterbankTransaction(ctx context.Context, in *GetInterbankTransactionRequest, opts ...grpc.CallOption) (*InterbankTransaction, error)
+	// ListInterbankAuditLog returns the inbound-message comms history
+	// (NEW_TX / COMMIT_TX / ROLLBACK_TX + the response we returned),
+	// filterable by partner / message type / date range.
+	ListInterbankAuditLog(ctx context.Context, in *ListInterbankAuditLogRequest, opts ...grpc.CallOption) (*ListInterbankAuditLogResponse, error)
+	// ListInterbankBlacklist returns blacklisted partner banks. Pass
+	// active_only=true for currently-blocked partners, false for history.
+	ListInterbankBlacklist(ctx context.Context, in *ListInterbankBlacklistRequest, opts ...grpc.CallOption) (*ListInterbankBlacklistResponse, error)
+	// BlockInterbankPartner manually blacklists a partner bank.
+	BlockInterbankPartner(ctx context.Context, in *BlockInterbankPartnerRequest, opts ...grpc.CallOption) (*InterbankBlacklistEntry, error)
+	// UnblockInterbankPartner lifts an active blacklist entry.
+	UnblockInterbankPartner(ctx context.Context, in *UnblockInterbankPartnerRequest, opts ...grpc.CallOption) (*InterbankBlacklistEntry, error)
 }
 
 type bankServiceClient struct {
@@ -789,6 +813,66 @@ func (c *bankServiceClient) RunForexForwardSettlement(ctx context.Context, in *R
 	return out, nil
 }
 
+func (c *bankServiceClient) ListInterbankTransactions(ctx context.Context, in *ListInterbankTransactionsRequest, opts ...grpc.CallOption) (*ListInterbankTransactionsResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(ListInterbankTransactionsResponse)
+	err := c.cc.Invoke(ctx, BankService_ListInterbankTransactions_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *bankServiceClient) GetInterbankTransaction(ctx context.Context, in *GetInterbankTransactionRequest, opts ...grpc.CallOption) (*InterbankTransaction, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(InterbankTransaction)
+	err := c.cc.Invoke(ctx, BankService_GetInterbankTransaction_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *bankServiceClient) ListInterbankAuditLog(ctx context.Context, in *ListInterbankAuditLogRequest, opts ...grpc.CallOption) (*ListInterbankAuditLogResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(ListInterbankAuditLogResponse)
+	err := c.cc.Invoke(ctx, BankService_ListInterbankAuditLog_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *bankServiceClient) ListInterbankBlacklist(ctx context.Context, in *ListInterbankBlacklistRequest, opts ...grpc.CallOption) (*ListInterbankBlacklistResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(ListInterbankBlacklistResponse)
+	err := c.cc.Invoke(ctx, BankService_ListInterbankBlacklist_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *bankServiceClient) BlockInterbankPartner(ctx context.Context, in *BlockInterbankPartnerRequest, opts ...grpc.CallOption) (*InterbankBlacklistEntry, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(InterbankBlacklistEntry)
+	err := c.cc.Invoke(ctx, BankService_BlockInterbankPartner_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *bankServiceClient) UnblockInterbankPartner(ctx context.Context, in *UnblockInterbankPartnerRequest, opts ...grpc.CallOption) (*InterbankBlacklistEntry, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(InterbankBlacklistEntry)
+	err := c.cc.Invoke(ctx, BankService_UnblockInterbankPartner_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
 // BankServiceServer is the server API for BankService service.
 // All implementations should embed UnimplementedBankServiceServer
 // for forward compatibility.
@@ -952,6 +1036,24 @@ type BankServiceServer interface {
 	// RunForexForwardSettlement settles every active forward whose
 	// settlement date has arrived. Internal — driven by the scheduler.
 	RunForexForwardSettlement(context.Context, *RunForexForwardSettlementRequest) (*RunForexForwardSettlementResponse, error)
+	// ListInterbankTransactions returns cross-bank 2PC transactions with
+	// their full status flow, filterable by partner / status / direction /
+	// date range. Real-time status tracking is poll-based off this list.
+	ListInterbankTransactions(context.Context, *ListInterbankTransactionsRequest) (*ListInterbankTransactionsResponse, error)
+	// GetInterbankTransaction returns a single transaction by its
+	// (sender_routing_number, transaction_id) identity.
+	GetInterbankTransaction(context.Context, *GetInterbankTransactionRequest) (*InterbankTransaction, error)
+	// ListInterbankAuditLog returns the inbound-message comms history
+	// (NEW_TX / COMMIT_TX / ROLLBACK_TX + the response we returned),
+	// filterable by partner / message type / date range.
+	ListInterbankAuditLog(context.Context, *ListInterbankAuditLogRequest) (*ListInterbankAuditLogResponse, error)
+	// ListInterbankBlacklist returns blacklisted partner banks. Pass
+	// active_only=true for currently-blocked partners, false for history.
+	ListInterbankBlacklist(context.Context, *ListInterbankBlacklistRequest) (*ListInterbankBlacklistResponse, error)
+	// BlockInterbankPartner manually blacklists a partner bank.
+	BlockInterbankPartner(context.Context, *BlockInterbankPartnerRequest) (*InterbankBlacklistEntry, error)
+	// UnblockInterbankPartner lifts an active blacklist entry.
+	UnblockInterbankPartner(context.Context, *UnblockInterbankPartnerRequest) (*InterbankBlacklistEntry, error)
 }
 
 // UnimplementedBankServiceServer should be embedded to have
@@ -1122,6 +1224,24 @@ func (UnimplementedBankServiceServer) SetForexForwardSpread(context.Context, *Se
 }
 func (UnimplementedBankServiceServer) RunForexForwardSettlement(context.Context, *RunForexForwardSettlementRequest) (*RunForexForwardSettlementResponse, error) {
 	return nil, status.Error(codes.Unimplemented, "method RunForexForwardSettlement not implemented")
+}
+func (UnimplementedBankServiceServer) ListInterbankTransactions(context.Context, *ListInterbankTransactionsRequest) (*ListInterbankTransactionsResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method ListInterbankTransactions not implemented")
+}
+func (UnimplementedBankServiceServer) GetInterbankTransaction(context.Context, *GetInterbankTransactionRequest) (*InterbankTransaction, error) {
+	return nil, status.Error(codes.Unimplemented, "method GetInterbankTransaction not implemented")
+}
+func (UnimplementedBankServiceServer) ListInterbankAuditLog(context.Context, *ListInterbankAuditLogRequest) (*ListInterbankAuditLogResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method ListInterbankAuditLog not implemented")
+}
+func (UnimplementedBankServiceServer) ListInterbankBlacklist(context.Context, *ListInterbankBlacklistRequest) (*ListInterbankBlacklistResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method ListInterbankBlacklist not implemented")
+}
+func (UnimplementedBankServiceServer) BlockInterbankPartner(context.Context, *BlockInterbankPartnerRequest) (*InterbankBlacklistEntry, error) {
+	return nil, status.Error(codes.Unimplemented, "method BlockInterbankPartner not implemented")
+}
+func (UnimplementedBankServiceServer) UnblockInterbankPartner(context.Context, *UnblockInterbankPartnerRequest) (*InterbankBlacklistEntry, error) {
+	return nil, status.Error(codes.Unimplemented, "method UnblockInterbankPartner not implemented")
 }
 func (UnimplementedBankServiceServer) testEmbeddedByValue() {}
 
@@ -2115,6 +2235,114 @@ func _BankService_RunForexForwardSettlement_Handler(srv interface{}, ctx context
 	return interceptor(ctx, in, info, handler)
 }
 
+func _BankService_ListInterbankTransactions_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(ListInterbankTransactionsRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(BankServiceServer).ListInterbankTransactions(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: BankService_ListInterbankTransactions_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(BankServiceServer).ListInterbankTransactions(ctx, req.(*ListInterbankTransactionsRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _BankService_GetInterbankTransaction_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(GetInterbankTransactionRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(BankServiceServer).GetInterbankTransaction(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: BankService_GetInterbankTransaction_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(BankServiceServer).GetInterbankTransaction(ctx, req.(*GetInterbankTransactionRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _BankService_ListInterbankAuditLog_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(ListInterbankAuditLogRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(BankServiceServer).ListInterbankAuditLog(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: BankService_ListInterbankAuditLog_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(BankServiceServer).ListInterbankAuditLog(ctx, req.(*ListInterbankAuditLogRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _BankService_ListInterbankBlacklist_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(ListInterbankBlacklistRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(BankServiceServer).ListInterbankBlacklist(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: BankService_ListInterbankBlacklist_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(BankServiceServer).ListInterbankBlacklist(ctx, req.(*ListInterbankBlacklistRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _BankService_BlockInterbankPartner_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(BlockInterbankPartnerRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(BankServiceServer).BlockInterbankPartner(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: BankService_BlockInterbankPartner_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(BankServiceServer).BlockInterbankPartner(ctx, req.(*BlockInterbankPartnerRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _BankService_UnblockInterbankPartner_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(UnblockInterbankPartnerRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(BankServiceServer).UnblockInterbankPartner(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: BankService_UnblockInterbankPartner_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(BankServiceServer).UnblockInterbankPartner(ctx, req.(*UnblockInterbankPartnerRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
 // BankService_ServiceDesc is the grpc.ServiceDesc for BankService service.
 // It's only intended for direct use with grpc.RegisterService,
 // and not to be introspected or modified (even as a copy)
@@ -2337,6 +2565,30 @@ var BankService_ServiceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "RunForexForwardSettlement",
 			Handler:    _BankService_RunForexForwardSettlement_Handler,
+		},
+		{
+			MethodName: "ListInterbankTransactions",
+			Handler:    _BankService_ListInterbankTransactions_Handler,
+		},
+		{
+			MethodName: "GetInterbankTransaction",
+			Handler:    _BankService_GetInterbankTransaction_Handler,
+		},
+		{
+			MethodName: "ListInterbankAuditLog",
+			Handler:    _BankService_ListInterbankAuditLog_Handler,
+		},
+		{
+			MethodName: "ListInterbankBlacklist",
+			Handler:    _BankService_ListInterbankBlacklist_Handler,
+		},
+		{
+			MethodName: "BlockInterbankPartner",
+			Handler:    _BankService_BlockInterbankPartner_Handler,
+		},
+		{
+			MethodName: "UnblockInterbankPartner",
+			Handler:    _BankService_UnblockInterbankPartner_Handler,
 		},
 	},
 	Streams:  []grpc.StreamDesc{},

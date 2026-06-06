@@ -85,13 +85,59 @@ type PreparePaymentResult struct {
 
 // PreparePayment locks the resources needed to commit a cross-bank
 // payment. Idempotent on (sender_routing_number, transaction_id).
+//
+// A blacklisted partner is rejected up front. On any prepare failure the
+// partner's consecutive-failure counter is bumped (auto-blocking it once
+// it crosses the threshold) and a 'failed' audit row is recorded so the
+// supervisor status view shows the attempt; a success resets the counter.
 func (s *Service) PreparePayment(ctx context.Context, in PreparePaymentInput) (*PreparePaymentResult, error) {
 	if err := s.requireInternal(ctx); err != nil {
 		return nil, err
 	}
+
+	res, err := s.preparePayment(ctx, in)
+	if err != nil {
+		// Idempotent replays surfacing as a found existing row never reach
+		// here. Record the failed attempt + bump the failure counter so
+		// the partner can be auto-blocked. Best-effort — never mask the
+		// original error.
+		s.onPrepareFailure(ctx, in, err)
+		return nil, err
+	}
+	// A clean prepare clears any prior failure streak.
+	if rerr := s.Store.ResetPartnerFailures(ctx, in.SenderRoutingNumber); rerr != nil {
+		s.Log.Warn("interbank: reset partner failures", "sender_routing_number", in.SenderRoutingNumber, "error", rerr)
+	}
+	return res, nil
+}
+
+func (s *Service) preparePayment(ctx context.Context, in PreparePaymentInput) (*PreparePaymentResult, error) {
 	if in.TransactionID == "" || in.SenderRoutingNumber == 0 {
 		return nil, apperr.Validation("transaction_id and sender_routing_number are required")
 	}
+
+	// Idempotent fast-path: an existing row (any status) wins so a retry
+	// never re-charges and a previously-failed attempt isn't re-counted.
+	if existing, err := s.Store.GetInterbankTx(ctx, nil, in.SenderRoutingNumber, in.TransactionID, false); err == nil {
+		if existing.Status == domain.InterbankTxFailed {
+			return nil, apperr.FailedPrecondition("transaction previously failed")
+		}
+		return &PreparePaymentResult{
+			TransactionID: existing.TransactionID,
+			Status:        existing.Status,
+			ReservationID: existing.ReservationID,
+		}, nil
+	}
+
+	// Blacklist gate — refuse any leg from a blocked partner.
+	blocked, err := s.Store.IsBlacklisted(ctx, in.SenderRoutingNumber)
+	if err != nil {
+		return nil, err
+	}
+	if blocked {
+		return nil, apperr.FailedPrecondition("partner bank is blacklisted")
+	}
+
 	if len(in.LocalAccountNumber) != 18 || len(in.RemoteAccountNumber) != 18 {
 		return nil, apperr.Validation("account numbers must be 18 digits")
 	}
@@ -103,15 +149,6 @@ func (s *Service) PreparePayment(ctx context.Context, in PreparePaymentInput) (*
 		return nil, err
 	}
 
-	// Idempotent fast-path: an existing prepared / committed row wins.
-	if existing, err := s.Store.GetInterbankTx(ctx, nil, in.SenderRoutingNumber, in.TransactionID, false); err == nil {
-		return &PreparePaymentResult{
-			TransactionID: existing.TransactionID,
-			Status:        existing.Status,
-			ReservationID: existing.ReservationID,
-		}, nil
-	}
-
 	switch in.Direction {
 	case domain.InterbankOutbound:
 		return s.prepareOutbound(ctx, in, amt)
@@ -119,6 +156,100 @@ func (s *Service) PreparePayment(ctx context.Context, in PreparePaymentInput) (*
 		return s.prepareInbound(ctx, in)
 	default:
 		return nil, apperr.Validation("unknown direction")
+	}
+}
+
+// onPrepareFailure records a 'failed' audit row + bumps the consecutive-
+// failure counter, auto-blocking the partner once the threshold is hit.
+// Blacklist rejections don't re-count (the partner is already blocked).
+// All legs are best-effort and never alter the surfaced error.
+func (s *Service) onPrepareFailure(ctx context.Context, in PreparePaymentInput, cause error) {
+	if in.SenderRoutingNumber == 0 || in.TransactionID == "" {
+		return
+	}
+	if !isCountablePrepareFailure(cause) {
+		// "partner bank is blacklisted" / "transaction previously failed"
+		// — neither is a fresh partner failure to count.
+		return
+	}
+
+	// Record the attempt as a 'failed' transaction row for the supervisor
+	// status view. Direction/account/currency may be partially invalid;
+	// store what we have so the row is still auditable.
+	row := &domain.InterbankProtocolTransaction{
+		SenderRoutingNumber: in.SenderRoutingNumber,
+		TransactionID:       in.TransactionID,
+		Direction:           in.Direction,
+		LocalAccountNumber:  in.LocalAccountNumber,
+		RemoteAccountNumber: in.RemoteAccountNumber,
+		Currency:            in.Currency,
+		Amount:              in.Amount,
+		Purpose:             in.Purpose,
+		TransactionBody:     in.TransactionBody,
+		Status:              domain.InterbankTxFailed,
+		LastError:           cause.Error(),
+	}
+	if ierr := s.Store.ExecuteAtomic(ctx, func(tx pgx.Tx) error {
+		_, e := s.Store.InsertInterbankTx(ctx, tx, row)
+		return e
+	}); ierr != nil {
+		// A conflict means a row already exists (e.g. a partial prepare
+		// that did persist); not worth surfacing.
+		s.Log.Warn("interbank: record failed attempt", "sender_routing_number", in.SenderRoutingNumber, "transaction_id", in.TransactionID, "error", ierr)
+	}
+
+	n, ferr := s.Store.RecordPartnerFailure(ctx, in.SenderRoutingNumber)
+	if ferr != nil {
+		s.Log.Warn("interbank: record partner failure", "sender_routing_number", in.SenderRoutingNumber, "error", ferr)
+		return
+	}
+	if shouldAutoBlock(n) {
+		s.autoBlockPartner(ctx, in.SenderRoutingNumber, n)
+	}
+}
+
+// shouldAutoBlock reports whether a consecutive-failure count trips the
+// auto-block threshold. Pure so the policy is unit-testable without a DB.
+func shouldAutoBlock(consecutiveFailures int) bool {
+	return consecutiveFailures >= domain.InterbankFailureThreshold
+}
+
+// isCountablePrepareFailure reports whether a prepare error should bump
+// the partner's failure counter. Blacklist / already-failed rejections
+// (FailedPrecondition) don't count — the partner is already blocked or
+// the attempt was already recorded. Pure for unit-testability.
+func isCountablePrepareFailure(err error) bool {
+	return !apperrIs(err, apperr.KindFailedPrecondition)
+}
+
+// autoBlockPartner blocks a routing number after too many consecutive
+// failures and notifies a supervisor. Best-effort.
+func (s *Service) autoBlockPartner(ctx context.Context, senderRouting, failures int) {
+	reason := fmt.Sprintf("automatski blokirana posle %d uzastopnih neuspeha", failures)
+	if _, err := s.Store.BlockBank(ctx, senderRouting, reason, domain.BlacklistAutoBlockBy); err != nil {
+		s.Log.Warn("interbank: auto-block partner", "sender_routing_number", senderRouting, "error", err)
+		return
+	}
+	s.Log.Warn("interbank: partner auto-blacklisted",
+		"sender_routing_number", senderRouting, "consecutive_failures", failures)
+	s.notifyInterbankAutoBlock(ctx, senderRouting, failures)
+}
+
+// notifyInterbankAutoBlock fans an in-app notice to the supervisors so
+// the auto-block is visible in the portal. Email isn't used — there's no
+// single supervisor address; the in-app feed keyed by the supervisor
+// role is the surface. Best-effort.
+func (s *Service) notifyInterbankAutoBlock(ctx context.Context, senderRouting, failures int) {
+	if s.InApp == nil {
+		return
+	}
+	title := "Partnerska banka automatski blokirana"
+	body := fmt.Sprintf(
+		"Banka sa rutnim brojem %d je automatski blokirana posle %d uzastopnih neuspelih međubankarskih transakcija. Proverite u portalu Međubankarske transakcije.",
+		senderRouting, failures,
+	)
+	if err := s.InApp.Notify(ctx, domain.InterbankSupervisorAudience, "employee", "interbank", title, body); err != nil {
+		s.Log.Warn("interbank: auto-block notify", "error", err)
 	}
 }
 
