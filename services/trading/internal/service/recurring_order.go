@@ -24,7 +24,7 @@ type CreateRecurringOrderInput struct {
 	// AmountRSD is the per-cycle RSD notional (BYAMOUNT, S47).
 	AmountRSD string
 	// Quantity is the per-cycle share count (BYQUANTITY, S48).
-	Quantity int32
+	Quantity  int32
 	AccountID string
 	Cadence   schedule.Cadence
 	// StartDate, when set in the future, anchors the first NextRun; the
