@@ -417,8 +417,8 @@ func (c *Client) doJSONWithHeaders(ctx context.Context, method, url string, body
 		return 0, nil, fmt.Errorf("new request: %w", err)
 	}
 	req.Header.Set("Content-Type", "application/json")
-	if c.cfg.APIKey != "" {
-		req.Header.Set("X-Api-Key", c.cfg.APIKey)
+	if k := c.apiKeyForURL(url); k != "" {
+		req.Header.Set("X-Api-Key", k)
 	}
 	for k, v := range headers {
 		req.Header.Set(k, v)

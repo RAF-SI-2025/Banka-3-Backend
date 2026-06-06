@@ -8,6 +8,7 @@ import (
 	"io"
 	"log/slog"
 	"net/http"
+	"strings"
 	"sync"
 	"time"
 )
@@ -37,9 +38,14 @@ const (
 type Config struct {
 	// Routes maps partner bank codes to base URLs.
 	Routes Routes
-	// APIKey is sent as X-Api-Key on every outbound request to a
-	// partner. Set from INTERBANK_API_KEY.
+	// APIKey is the default X-Api-Key on outbound requests, used when a
+	// partner has no per-bank key in PartnerKeys. Set from INTERBANK_API_KEY.
 	APIKey string
+	// PartnerKeys maps a partner bank code to the X-Api-Key that partner
+	// expects from us (the key THEY issued). Takes precedence over APIKey
+	// for that bank. Set from INTERBANK_PARTNER_KEYS. Lets each peer use a
+	// distinct outbound key, independent of our inbound key.
+	PartnerKeys map[string]string
 	// OwnRoutingNumber identifies this bank to the partner (echoed in
 	// request payloads so partners can populate their remote_bank_code).
 	OwnRoutingNumber string
@@ -73,6 +79,24 @@ func (c *Client) baseURL(bankCode string) string {
 		return ""
 	}
 	return c.cfg.Routes[bankCode]
+}
+
+// apiKeyForURL returns the X-Api-Key to send on an outbound request to the
+// given URL. It reverse-matches the URL to a configured route so a
+// per-partner key (PartnerKeys) can be used; falls back to the default
+// APIKey when the partner has no specific key (or the URL isn't a known
+// route). Resolving by URL keeps the low-level request helpers from having
+// to thread the bank code through every call site.
+func (c *Client) apiKeyForURL(url string) string {
+	for code, base := range c.cfg.Routes {
+		if base != "" && strings.HasPrefix(url, base) {
+			if k := c.cfg.PartnerKeys[code]; k != "" {
+				return k
+			}
+			break
+		}
+	}
+	return c.cfg.APIKey
 }
 
 // Protocol returns the cached protocol for a partner, probing it on
@@ -115,8 +139,10 @@ func (c *Client) probeOK(ctx context.Context, method, url string, withAPIKey boo
 	if err != nil {
 		return false
 	}
-	if withAPIKey && c.cfg.APIKey != "" {
-		req.Header.Set("X-Api-Key", c.cfg.APIKey)
+	if withAPIKey {
+		if k := c.apiKeyForURL(url); k != "" {
+			req.Header.Set("X-Api-Key", k)
+		}
 	}
 	resp, err := c.cfg.HTTPClient.Do(req)
 	if err != nil {
@@ -148,8 +174,8 @@ func (c *Client) doJSON(ctx context.Context, method, url string, body any) (int,
 	if body != nil {
 		req.Header.Set("Content-Type", "application/json")
 	}
-	if c.cfg.APIKey != "" {
-		req.Header.Set("X-Api-Key", c.cfg.APIKey)
+	if k := c.apiKeyForURL(url); k != "" {
+		req.Header.Set("X-Api-Key", k)
 	}
 	resp, err := c.cfg.HTTPClient.Do(req)
 	if err != nil {
