@@ -215,6 +215,10 @@ type OTCNotifier interface {
 	OnOTCAccepted(ctx context.Context, contract *domain.OTCContract, recipientID string, recipientKind domain.UserKind)
 	OnOTCWithdrawn(ctx context.Context, offer *domain.OTCOffer, recipientID string, recipientKind domain.UserKind)
 	OnOTCContractExpired(ctx context.Context, contract *domain.OTCContract, recipientID string, recipientKind domain.UserKind)
+	// OnOTCContractExpiringSoon warns the buyer that their contract
+	// expires in daysLeft calendar days (scenario S63). Called once per
+	// contract when daysLeft == 3 so the holder can act before expiry.
+	OnOTCContractExpiringSoon(ctx context.Context, contract *domain.OTCContract, recipientID string, recipientKind domain.UserKind, daysLeft int)
 }
 
 // BankReservations is the trading-service view of bank's c4 reservation
