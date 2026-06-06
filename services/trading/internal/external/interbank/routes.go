@@ -42,6 +42,34 @@ func ParseRoutes(raw string) Routes {
 	return out
 }
 
+// ParsePartnerKeys parses an INTERBANK_PARTNER_KEYS value of the form
+// "code:key,code:key,..." into a code→outbound-X-Api-Key map. Each bank
+// we call may expect a different key (the key THEY issued to us), distinct
+// from the key we validate on inbound (INTERBANK_API_KEY). Keys never
+// contain ':' (bank codes are numeric), so a first-':' cut is safe.
+// Malformed entries are dropped; the per-route key simply isn't set and
+// the client falls back to INTERBANK_API_KEY.
+func ParsePartnerKeys(raw string) map[string]string {
+	out := make(map[string]string)
+	for _, part := range strings.Split(raw, ",") {
+		part = strings.TrimSpace(part)
+		if part == "" {
+			continue
+		}
+		code, key, ok := strings.Cut(part, ":")
+		if !ok {
+			continue
+		}
+		code = strings.TrimSpace(code)
+		key = strings.TrimSpace(key)
+		if code == "" || key == "" {
+			continue
+		}
+		out[code] = key
+	}
+	return out
+}
+
 // BankCodes returns the configured partner bank codes in
 // non-deterministic order. Used by Discover to fan out.
 func (r Routes) BankCodes() []string {

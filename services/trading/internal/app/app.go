@@ -200,6 +200,7 @@ func Run() error {
 			client := interbank.New(interbank.Config{
 				Routes:           routes,
 				APIKey:           config.String("INTERBANK_API_KEY", ""),
+				PartnerKeys:      interbank.ParsePartnerKeys(config.String("INTERBANK_PARTNER_KEYS", "")),
 				OwnRoutingNumber: config.String("BANK_ROUTING_NUMBER", "333"),
 			}, log)
 			svc.PartnerOTC = client
