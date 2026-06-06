@@ -28,23 +28,25 @@ Owns (Session B will NOT edit):
 - `services/trading/internal/store/saga.go`
 - any `saga_executions` migration / SAGA fault-injection
 
-**Status (2026-06-06): pushed.** Branch `feat/saga-exercise-fault-tests`
-(PR #318). The SAGA_test.pdf conformance work (compensated terminal +
-step_no/log, trading migration **0017**, CompensateOnTransient on
-otc_exercise) was already merged to main earlier. This branch adds only the
-integration-tagged force-fail suite
-`services/trading/internal/service/saga_exercise_faultinject_integration_test.go`.
-No new migration.
+**Status (2026-06-06): ✅ MERGED — Session C done.** Force-fail integration
+suite (`services/trading/internal/service/saga_exercise_faultinject_integration_test.go`)
+landed on main via **PR #318**; the SAGA_test.pdf conformance work
+(compensated terminal + step_no/log, trading migration **0017**,
+CompensateOnTransient on otc_exercise) merged earlier. No new migration.
+Cypress saga-spec ordering also hardened on the frontend via **PR #286**
+(`after()` reseed in `c4-saga-scenarios` so it leaves a clean backend for
+the persistent soak). Live-verified end to end (saga unit + integration +
+both cypress saga suites green).
 
-⚠️ **Cross-lane touch (heads-up for Session B):** this branch also edits the
-shared `services/trading/internal/service/integration_test.go` — it adds
+⚠️ **Cross-lane note (Session B):** PR #318 also touched the shared
+`services/trading/internal/service/integration_test.go` — it added
 `stubReservations.SettleDividend` + `.ListClientAccounts`. The merged
 quarterly-dividend feature put those two methods on the `BankReservations`
 interface (dividends.go) but never updated the test double, so
 `make test-integration` for trading was failing to **compile** on main. The
 stubs are minimal (SettleDividend credits the dest; ListClientAccounts
-returns none). If the dividends owner has a fuller fix in flight, drop mine
-and keep yours — no behavioural dependency.
+returns none). If the dividends owner wants a fuller stub, replace mine —
+no behavioural dependency.
 
 ## Rules
 - Pre-assign migration numbers. Next free: trading after **0024**, bank after
