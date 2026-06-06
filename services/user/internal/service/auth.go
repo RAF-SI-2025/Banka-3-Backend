@@ -62,7 +62,7 @@ func (s *Service) Login(ctx context.Context, email, password string, opts ...Log
 
 	email = strings.TrimSpace(email)
 	if email == "" || password == "" {
-		s.Log.Warn("login rejected: missing credentials")
+		s.Log.WarnContext(ctx, "login rejected: missing credentials")
 		return nil, apperr.Validation("email and password are required")
 	}
 	longLived := resolveOpts(opts).longLived
@@ -102,16 +102,16 @@ func (s *Service) completeLogin(
 	longLived bool,
 ) (*LoginResult, error) {
 	if !active {
-		s.Log.Warn("login rejected: account disabled", "user_id", userID, "kind", kind)
+		s.Log.WarnContext(ctx, "login rejected: account disabled", "user_id", userID, "kind", kind)
 		return nil, apperr.PermissionDenied("nalog je deaktiviran")
 	}
 	if !activated {
-		s.Log.Warn("login rejected: account not activated", "user_id", userID, "kind", kind)
+		s.Log.WarnContext(ctx, "login rejected: account not activated", "user_id", userID, "kind", kind)
 		return nil, apperr.FailedPrecondition("nalog nije aktiviran")
 	}
 	ok, err := passwords.Verify(password, passwordHash)
 	if err != nil || !ok {
-		s.Log.Warn("login rejected: bad password", "user_id", userID, "kind", kind)
+		s.Log.WarnContext(ctx, "login rejected: bad password", "user_id", userID, "kind", kind)
 		return nil, apperr.Unauthenticated("Neispravni kredencijali")
 	}
 	r, err := s.issueTokens(ctx, kind, userID, perms, sessionVersion, longLived)

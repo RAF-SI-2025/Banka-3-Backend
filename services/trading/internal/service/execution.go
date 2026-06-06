@@ -495,7 +495,7 @@ func (s *Service) completeFill(
 		return nil
 	})
 	if err != nil {
-		s.Log.Error("fill book-keeping failed after bank settle",
+		s.Log.ErrorContext(ctx, "fill book-keeping failed after bank settle",
 			"order_id", o.ID, "exec_id", pending.ID, "op_id", settledOpID, "err", err.Error())
 		bizmetric.TradeCompleted(ctx, string(o.Direction), string(sec.Type), "settle_failed")
 		return nil, err

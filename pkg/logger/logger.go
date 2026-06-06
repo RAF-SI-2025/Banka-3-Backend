@@ -37,6 +37,10 @@ func New(service string) *slog.Logger {
 	} else {
 		handler = slog.NewJSONHandler(os.Stdout, opts)
 	}
+	// Decorate with traceHandler so any record made via *Context calls
+	// (slog.InfoContext, log.LogAttrs(ctx, ...)) carries trace_id and
+	// span_id — Grafana uses those to link logs ↔ traces in Tempo.
+	handler = traceHandler{handler}
 
 	return slog.New(handler).With("service", service)
 }

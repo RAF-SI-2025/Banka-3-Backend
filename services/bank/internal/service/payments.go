@@ -42,7 +42,7 @@ func (s *Service) CreatePayment(ctx context.Context, in CreatePaymentInput) (res
 		}
 		bizmetric.PaymentCompleted(ctx, "payment", c, paymentStatus(err))
 		if err != nil {
-			s.Log.Warn("CreatePayment failed",
+			s.Log.WarnContext(ctx, "CreatePayment failed",
 				"from_account", in.FromAccountID,
 				"to_account_no", in.ToAccountNumber,
 				"amount", in.Amount,
@@ -129,7 +129,7 @@ func (s *Service) CreateTransfer(ctx context.Context, in CreateTransferInput) (r
 		}
 		bizmetric.PaymentCompleted(ctx, k, c, paymentStatus(err))
 		if err != nil {
-			s.Log.Warn("CreateTransfer failed",
+			s.Log.WarnContext(ctx, "CreateTransfer failed",
 				"from", in.FromAccountID, "to", in.ToAccountID,
 				"amount", in.Amount, "currency", c, "err", err.Error())
 		}
