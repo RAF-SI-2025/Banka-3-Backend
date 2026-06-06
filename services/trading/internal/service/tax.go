@@ -24,6 +24,7 @@ import (
 	"context"
 	"math/big"
 	"sort"
+	"strconv"
 	"strings"
 	"time"
 
@@ -186,12 +187,17 @@ type RunTaxResult struct {
 // MarkRealizedGainsTaxed didn't) re-derives the same op_id; bank
 // no-ops, MarkRealizedGainsTaxed converges. No double-charge.
 func (s *Service) RunTax(ctx context.Context, in RunTaxInput) (*RunTaxResult, error) {
-	if _, err := s.requireSupervisor(ctx); err != nil {
+	p, err := s.requireSupervisor(ctx)
+	if err != nil {
 		return nil, err
 	}
 	if s.TaxSettler == nil {
 		return nil, apperr.FailedPrecondition("bank tax settler not wired")
 	}
+	// S43 "ručni obračun poreza": only a manual run by a real supervisor
+	// is audited. The monthly cron stamps the synthetic admin sentinel via
+	// TaxCronContext, so a sentinel actor means cron — skip the audit.
+	isManual := p.UserID != taxCronSentinelID
 
 	// Resolve the candidate set. With UserID set we limit to that one;
 	// otherwise we walk every aggregate row with non-zero unpaid.
@@ -231,10 +237,18 @@ func (s *Service) RunTax(ctx context.Context, in RunTaxInput) (*RunTaxResult, er
 			total = money.Add(total, collected)
 		}
 	}
-	return &RunTaxResult{
+	result := &RunTaxResult{
 		UsersTaxed:        taxed,
 		TotalCollectedRSD: money.FormatAmount(total),
-	}, nil
+	}
+	if isManual {
+		// note: users taxed / total collected (RSD). Best-effort.
+		note := "korisnika oporezovano: " + strconv.Itoa(int(result.UsersTaxed)) +
+			", ukupno naplaćeno: " + result.TotalCollectedRSD + " RSD"
+		target := in.UserID // empty when the run covered every user
+		s.recordAudit(ctx, "tax.run", target, "", "", "", note)
+	}
+	return result, nil
 }
 
 // runTaxForUser pulls all unpaid gains for one user, groups by
@@ -314,12 +328,18 @@ func (s *Service) runTaxForUser(ctx context.Context, userID string, kind domain.
 	return collected, nil
 }
 
+// taxCronSentinelID is the synthetic admin principal id stamped by
+// TaxCronContext on the monthly-cron path. RunTax compares the request
+// principal against it to tell a cron run from a real supervisor's
+// manual run — only the latter is audited (todoSpec S43).
+const taxCronSentinelID = "00000000-0000-0000-0000-00000000fffd"
+
 // TaxCronContext returns a ctx with an admin principal so the
 // monthly-cron path passes requireSupervisor without needing a real
 // supervisor session. Same idiom as the daily limit reset cron.
 func TaxCronContext(ctx context.Context) context.Context {
 	return auth.WithPrincipal(ctx, auth.Principal{
-		UserID:      "00000000-0000-0000-0000-00000000fffd",
+		UserID:      taxCronSentinelID,
 		UserKind:    auth.KindEmployee,
 		Permissions: []string{permissions.Admin},
 	})

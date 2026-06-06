@@ -123,7 +123,20 @@ func (s *Service) UpdateActuaryLimit(ctx context.Context, employeeID, dailyLimit
 	if money.Cmp(newLimit, usedLimit) < 0 {
 		return nil, apperr.FailedPrecondition("novi limit ne sme biti manji od trenutno iskorišćenog limita")
 	}
-	return s.Store.UpdateActuaryLimit(ctx, employeeID, dailyLimit)
+	out, err := s.Store.UpdateActuaryLimit(ctx, employeeID, dailyLimit)
+	if err != nil {
+		return nil, err
+	}
+	// S40 "promena limita agentu": record the limit change against the
+	// agent, with the old + new daily limit. Best-effort; never fails the op.
+	label := employeeID
+	if s.Users != nil {
+		if name, derr := s.Users.DisplayName(ctx, employeeID, domain.KindEmployee); derr == nil && name != "" {
+			label = name
+		}
+	}
+	s.recordAudit(ctx, "limit.change", employeeID, label, cur.DailyLimit, dailyLimit, "")
+	return out, nil
 }
 
 // ResetActuaryUsedLimit zeroes used_limit for the given agent.

@@ -373,6 +373,8 @@ func (s *Service) ApproveOrder(ctx context.Context, id string) (*domain.Order, e
 	}
 	// S21: supervisor approved the order.
 	s.notifyOrderApproved(ctx, out)
+	// S41 "odobravanje ordera": record the approval against the order id.
+	s.recordAudit(ctx, "order.approve", id, "", "", "", "")
 	return out, nil
 }
 
@@ -392,6 +394,9 @@ func (s *Service) DeclineOrder(ctx context.Context, id, reason string) (*domain.
 	}
 	// S22: supervisor declined the order.
 	s.notifyOrderDeclined(ctx, out)
+	// S41 "odbijanje ordera": record the decline against the order id;
+	// carry the reason (if any) as the note.
+	s.recordAudit(ctx, "order.decline", id, "", "", "", reason)
 	return out, nil
 }
 

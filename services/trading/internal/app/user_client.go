@@ -51,6 +51,30 @@ func (a *userResolverAdapter) DisplayName(ctx context.Context, userID string, ki
 	}
 }
 
+// RecordAudit forwards one audit entry to user-svc. The transport uses
+// the same internal admin principal as the other adapter methods (the
+// RecordAuditEntry RPC has no permission gate), but the actor_id /
+// actor_kind carried in the request body are the real caller resolved
+// trading-side, so the persisted audit row attributes the action to the
+// supervisor/admin who actually performed it rather than the sentinel.
+func (a *userResolverAdapter) RecordAudit(ctx context.Context, action, actorID, actorKind, targetID, targetLabel, oldVal, newVal, note string) error {
+	ctx = withUserAdmin(ctx)
+	_, err := a.c.RecordAuditEntry(ctx, &userpb.RecordAuditEntryRequest{
+		Action:      action,
+		ActorId:     actorID,
+		ActorKind:   actorKind,
+		TargetId:    targetID,
+		TargetLabel: targetLabel,
+		OldValue:    oldVal,
+		NewValue:    newVal,
+		Note:        note,
+	})
+	if err != nil {
+		return fmt.Errorf("user.RecordAuditEntry: %w", err)
+	}
+	return nil
+}
+
 func (a *userResolverAdapter) EmployeePermissions(ctx context.Context, userID string) ([]string, error) {
 	ctx = withUserAdmin(ctx)
 	resp, err := a.c.GetEmployee(ctx, &userpb.GetEmployeeRequest{Id: userID})

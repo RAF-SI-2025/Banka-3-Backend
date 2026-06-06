@@ -83,6 +83,14 @@ type UserResolver interface {
 	// manager override is actually a supervisor (spec p.74). Errors
 	// when the id does not resolve to an employee.
 	EmployeePermissions(ctx context.Context, userID string) ([]string, error)
+	// RecordAudit appends one entry to the cross-cutting audit log
+	// owned by user-svc (todoSpec S40/S41/S43 trading write sites).
+	// actorID/actorKind identify the real caller (supervisor/admin)
+	// resolved from the request principal, so the audit shows the real
+	// person rather than the admin sentinel the adapter uses for
+	// transport. Best-effort: implementations must not fail the
+	// underlying trading operation on a delivery error.
+	RecordAudit(ctx context.Context, action, actorID, actorKind, targetID, targetLabel, oldVal, newVal, note string) error
 }
 
 // MarginChecker reads the funding-source state needed by spec p.55
@@ -429,4 +437,25 @@ func (s *Service) requireSupervisor(ctx context.Context) (auth.Principal, error)
 		return p, nil
 	}
 	return auth.Principal{}, apperr.PermissionDenied("nedovoljne permisije")
+}
+
+// recordAudit best-effort records one audit entry against user-svc for a
+// trading write action (todoSpec S40/S41/S43). The actor is the real
+// request principal (the supervisor/admin who performed the action),
+// resolved from ctx and passed explicitly so the audit shows the real
+// person, not the admin sentinel the transport adapter attaches. Nil-safe
+// (s.Users may be unset on a minimal dev stack) and never fails the
+// underlying operation — delivery errors are logged and swallowed.
+func (s *Service) recordAudit(ctx context.Context, action, targetID, targetLabel, oldVal, newVal, note string) {
+	if s.Users == nil {
+		return
+	}
+	var actorID, actorKind string
+	if p, ok := auth.PrincipalFrom(ctx); ok {
+		actorID = p.UserID
+		actorKind = string(p.UserKind)
+	}
+	if err := s.Users.RecordAudit(ctx, action, actorID, actorKind, targetID, targetLabel, oldVal, newVal, note); err != nil {
+		s.Log.Warn("audit-log write failed", "action", action, "target_id", targetID, "err", err.Error())
+	}
 }
