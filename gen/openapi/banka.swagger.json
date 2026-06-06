@@ -1454,6 +1454,59 @@
         ]
       }
     },
+    "/api/v1/dividends": {
+      "get": {
+        "summary": "ListDividendPayouts returns the caller's received-dividend history\n(todoSpec C3 S59), optionally scoped to one security for the\nper-position view. Supervisors/admin may pass user_id to inspect\nanother holder.",
+        "operationId": "TradingService_ListDividendPayouts",
+        "responses": {
+          "200": {
+            "description": "A successful response.",
+            "schema": {
+              "$ref": "#/definitions/v1ListDividendPayoutsResponse"
+            }
+          },
+          "default": {
+            "description": "An unexpected error response.",
+            "schema": {
+              "$ref": "#/definitions/rpcStatus"
+            }
+          }
+        },
+        "parameters": [
+          {
+            "name": "securityId",
+            "description": "security_id (optional) scopes the history to one position (S59).",
+            "in": "query",
+            "required": false,
+            "type": "string"
+          },
+          {
+            "name": "userId",
+            "description": "user_id (optional, supervisor/admin only) inspects another holder.",
+            "in": "query",
+            "required": false,
+            "type": "string"
+          },
+          {
+            "name": "userKind",
+            "description": " - USER_KIND_FUND: USER_KIND_FUND identifies investment-fund-as-actor rows (c4 PR3,\nspec p.74-75). A fund-actor order's user_id is the fund's id; its\nsettlement account is the fund's bank account. Fund-actor sells do\nnot write realized_gains rows — funds are pre-tax vehicles; tax\nattaches to the client at withdrawal time (EDGE-3).",
+            "in": "query",
+            "required": false,
+            "type": "string",
+            "enum": [
+              "USER_KIND_UNSPECIFIED",
+              "USER_KIND_CLIENT",
+              "USER_KIND_EMPLOYEE",
+              "USER_KIND_FUND"
+            ],
+            "default": "USER_KIND_UNSPECIFIED"
+          }
+        ],
+        "tags": [
+          "TradingService"
+        ]
+      }
+    },
     "/api/v1/employees": {
       "get": {
         "operationId": "UserService_ListEmployees",
@@ -7072,6 +7125,54 @@
       ],
       "default": "DIRECTION_UNSPECIFIED"
     },
+    "v1DividendPayout": {
+      "type": "object",
+      "properties": {
+        "id": {
+          "type": "string"
+        },
+        "userId": {
+          "type": "string"
+        },
+        "userKind": {
+          "$ref": "#/definitions/bankaTradingV1UserKind"
+        },
+        "securityId": {
+          "type": "string"
+        },
+        "quantity": {
+          "type": "integer",
+          "format": "int32"
+        },
+        "price": {
+          "type": "string"
+        },
+        "grossAmount": {
+          "type": "string"
+        },
+        "currency": {
+          "$ref": "#/definitions/bankaTradingV1Currency"
+        },
+        "accountId": {
+          "type": "string"
+        },
+        "taxRsd": {
+          "type": "string"
+        },
+        "status": {
+          "type": "string"
+        },
+        "paidAt": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "createdAt": {
+          "type": "string",
+          "format": "date-time"
+        }
+      },
+      "description": "DividendPayout is one quarterly dividend credited to a holder\n(todoSpec C3 S54-S59). gross_amount/currency are in the security's\nlisting currency; account_id is the account actually credited;\ntax_rsd is the 15% capital-gains tax owed (0 for actuary \"in the name\nof the bank\" payouts, S58)."
+    },
     "v1Employee": {
       "type": "object",
       "properties": {
@@ -8145,6 +8246,18 @@
         "total": {
           "type": "string",
           "format": "int64"
+        }
+      }
+    },
+    "v1ListDividendPayoutsResponse": {
+      "type": "object",
+      "properties": {
+        "payouts": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "$ref": "#/definitions/v1DividendPayout"
+          }
         }
       }
     },

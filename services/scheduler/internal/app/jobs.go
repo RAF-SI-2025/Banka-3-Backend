@@ -62,6 +62,9 @@ func (a *App) buildJobs() []job {
 			a.daily("trading-fund-perf", 23, 50, a.tradingFundPerf),
 			a.interval("trading-price-alerts", config.Duration("PRICE_ALERT_TICK", time.Minute), true, a.tradingPriceAlerts),
 			a.daily("trading-dca", 0, 5, a.tradingDCA),
+			// Fired daily; RunDividendPayout no-ops unless the call lands
+			// on the last business day of the quarter (todoSpec C3 S54).
+			a.daily("trading-dividends", 23, 45, a.tradingDividends),
 		)
 	}
 	if a.exchange != nil {
@@ -287,6 +290,17 @@ func (a *App) tradingTax(ctx context.Context) error {
 		return err
 	}
 	a.log.Info("monthly tax ran", "users_taxed", r.GetUsersTaxed(), "total_rsd", r.GetTotalCollectedRsd())
+	return nil
+}
+
+func (a *App) tradingDividends(ctx context.Context) error {
+	r, err := a.trading.RunDividendPayout(ctx, &tradingpb.RunDividendPayoutRequest{})
+	if err != nil {
+		return err
+	}
+	if r.GetRan() {
+		a.log.Info("quarterly dividend payout ran", "paid", r.GetPaid(), "skipped", r.GetSkipped(), "total_rsd", r.GetTotalRsd())
+	}
 	return nil
 }
 

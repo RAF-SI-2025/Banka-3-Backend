@@ -47,6 +47,8 @@ const (
 	TradingService_ListHoldings_FullMethodName               = "/banka.trading.v1.TradingService/ListHoldings"
 	TradingService_SetPublicCount_FullMethodName             = "/banka.trading.v1.TradingService/SetPublicCount"
 	TradingService_ExerciseOption_FullMethodName             = "/banka.trading.v1.TradingService/ExerciseOption"
+	TradingService_ListDividendPayouts_FullMethodName        = "/banka.trading.v1.TradingService/ListDividendPayouts"
+	TradingService_RunDividendPayout_FullMethodName          = "/banka.trading.v1.TradingService/RunDividendPayout"
 	TradingService_ListTaxPositions_FullMethodName           = "/banka.trading.v1.TradingService/ListTaxPositions"
 	TradingService_RunTax_FullMethodName                     = "/banka.trading.v1.TradingService/RunTax"
 	TradingService_ListRealizedPnL_FullMethodName            = "/banka.trading.v1.TradingService/ListRealizedPnL"
@@ -146,6 +148,16 @@ type TradingServiceClient interface {
 	// money option before settlementDate. Result tells the FE the
 	// remaining option position + the underlying-side effect.
 	ExerciseOption(ctx context.Context, in *ExerciseOptionRequest, opts ...grpc.CallOption) (*ExerciseOptionResponse, error)
+	// ListDividendPayouts returns the caller's received-dividend history
+	// (todoSpec C3 S59), optionally scoped to one security for the
+	// per-position view. Supervisors/admin may pass user_id to inspect
+	// another holder.
+	ListDividendPayouts(ctx context.Context, in *ListDividendPayoutsRequest, opts ...grpc.CallOption) (*ListDividendPayoutsResponse, error)
+	// RunDividendPayout pays the quarterly dividend to every eligible
+	// holder (todoSpec C3 S54-S58). Internal-only — driven by the
+	// scheduler daily; it no-ops unless the call lands on the last
+	// business day of the quarter.
+	RunDividendPayout(ctx context.Context, in *RunDividendPayoutRequest, opts ...grpc.CallOption) (*RunDividendPayoutResponse, error)
 	ListTaxPositions(ctx context.Context, in *ListTaxPositionsRequest, opts ...grpc.CallOption) (*ListTaxPositionsResponse, error)
 	RunTax(ctx context.Context, in *RunTaxRequest, opts ...grpc.CallOption) (*RunTaxResponse, error)
 	ListRealizedPnL(ctx context.Context, in *ListRealizedPnLRequest, opts ...grpc.CallOption) (*ListRealizedPnLResponse, error)
@@ -572,6 +584,26 @@ func (c *tradingServiceClient) ExerciseOption(ctx context.Context, in *ExerciseO
 	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
 	out := new(ExerciseOptionResponse)
 	err := c.cc.Invoke(ctx, TradingService_ExerciseOption_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *tradingServiceClient) ListDividendPayouts(ctx context.Context, in *ListDividendPayoutsRequest, opts ...grpc.CallOption) (*ListDividendPayoutsResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(ListDividendPayoutsResponse)
+	err := c.cc.Invoke(ctx, TradingService_ListDividendPayouts_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *tradingServiceClient) RunDividendPayout(ctx context.Context, in *RunDividendPayoutRequest, opts ...grpc.CallOption) (*RunDividendPayoutResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(RunDividendPayoutResponse)
+	err := c.cc.Invoke(ctx, TradingService_RunDividendPayout_FullMethodName, in, out, cOpts...)
 	if err != nil {
 		return nil, err
 	}
@@ -1107,6 +1139,16 @@ type TradingServiceServer interface {
 	// money option before settlementDate. Result tells the FE the
 	// remaining option position + the underlying-side effect.
 	ExerciseOption(context.Context, *ExerciseOptionRequest) (*ExerciseOptionResponse, error)
+	// ListDividendPayouts returns the caller's received-dividend history
+	// (todoSpec C3 S59), optionally scoped to one security for the
+	// per-position view. Supervisors/admin may pass user_id to inspect
+	// another holder.
+	ListDividendPayouts(context.Context, *ListDividendPayoutsRequest) (*ListDividendPayoutsResponse, error)
+	// RunDividendPayout pays the quarterly dividend to every eligible
+	// holder (todoSpec C3 S54-S58). Internal-only — driven by the
+	// scheduler daily; it no-ops unless the call lands on the last
+	// business day of the quarter.
+	RunDividendPayout(context.Context, *RunDividendPayoutRequest) (*RunDividendPayoutResponse, error)
 	ListTaxPositions(context.Context, *ListTaxPositionsRequest) (*ListTaxPositionsResponse, error)
 	RunTax(context.Context, *RunTaxRequest) (*RunTaxResponse, error)
 	ListRealizedPnL(context.Context, *ListRealizedPnLRequest) (*ListRealizedPnLResponse, error)
@@ -1348,6 +1390,12 @@ func (UnimplementedTradingServiceServer) SetPublicCount(context.Context, *SetPub
 }
 func (UnimplementedTradingServiceServer) ExerciseOption(context.Context, *ExerciseOptionRequest) (*ExerciseOptionResponse, error) {
 	return nil, status.Error(codes.Unimplemented, "method ExerciseOption not implemented")
+}
+func (UnimplementedTradingServiceServer) ListDividendPayouts(context.Context, *ListDividendPayoutsRequest) (*ListDividendPayoutsResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method ListDividendPayouts not implemented")
+}
+func (UnimplementedTradingServiceServer) RunDividendPayout(context.Context, *RunDividendPayoutRequest) (*RunDividendPayoutResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method RunDividendPayout not implemented")
 }
 func (UnimplementedTradingServiceServer) ListTaxPositions(context.Context, *ListTaxPositionsRequest) (*ListTaxPositionsResponse, error) {
 	return nil, status.Error(codes.Unimplemented, "method ListTaxPositions not implemented")
@@ -1995,6 +2043,42 @@ func _TradingService_ExerciseOption_Handler(srv interface{}, ctx context.Context
 	}
 	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
 		return srv.(TradingServiceServer).ExerciseOption(ctx, req.(*ExerciseOptionRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _TradingService_ListDividendPayouts_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(ListDividendPayoutsRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(TradingServiceServer).ListDividendPayouts(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: TradingService_ListDividendPayouts_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(TradingServiceServer).ListDividendPayouts(ctx, req.(*ListDividendPayoutsRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _TradingService_RunDividendPayout_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(RunDividendPayoutRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(TradingServiceServer).RunDividendPayout(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: TradingService_RunDividendPayout_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(TradingServiceServer).RunDividendPayout(ctx, req.(*RunDividendPayoutRequest))
 	}
 	return interceptor(ctx, in, info, handler)
 }
@@ -2977,6 +3061,14 @@ var TradingService_ServiceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "ExerciseOption",
 			Handler:    _TradingService_ExerciseOption_Handler,
+		},
+		{
+			MethodName: "ListDividendPayouts",
+			Handler:    _TradingService_ListDividendPayouts_Handler,
+		},
+		{
+			MethodName: "RunDividendPayout",
+			Handler:    _TradingService_RunDividendPayout_Handler,
 		},
 		{
 			MethodName: "ListTaxPositions",

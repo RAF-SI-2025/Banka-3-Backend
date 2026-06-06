@@ -685,6 +685,30 @@ type RealizedGain struct {
 	TaxOpID      string
 }
 
+// DividendPayout records one quarterly dividend credited to a holder
+// (todoSpec C3 S54-S59). GrossAmount + Currency are the dividend in the
+// security's listing currency; AccountID is the bank account actually
+// credited (purchase account → default-currency account → RSD account,
+// S54/S55/S56). TaxRSD is the 15% capital-gains tax owed for client
+// holders (S57); "0" for actuary "in the name of the bank" holdings,
+// which route to Profit Banke untaxed (S58).
+type DividendPayout struct {
+	ID          string
+	UserID      string
+	UserKind    UserKind
+	SecurityID  string
+	Quantity    int32
+	Price       string
+	GrossAmount string
+	Currency    Currency
+	AccountID   string
+	TaxRSD      string
+	OpID        string
+	Status      string
+	PaidAt      *time.Time
+	CreatedAt   time.Time
+}
+
 // PriceAlertCondition discriminates the threshold-crossing direction
 // (todoSpec C3 S26-S29). Values match the price_alerts.condition check
 // constraint.
