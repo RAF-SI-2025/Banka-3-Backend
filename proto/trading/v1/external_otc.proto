@@ -134,6 +134,21 @@ service ExternalOTCService {
   // an option contract written by our user. We confirm the local
   // settlement and acknowledge.
   rpc ReceiveExternalOTCExerciseNotice(ReceiveExternalOTCExerciseNoticeRequest) returns (ReceiveExternalOTCExerciseNoticeResponse);
+
+  // SettleExternalOTCOption performs the seller-side effects of a
+  // cross-bank OTC option settlement that arrived as a multi-posting
+  // NEW_TX on the gateway's /interbank surface (Banka-4 protocol-notes
+  // §2/§3). The gateway parses the envelope and drives the 2PC phases:
+  //   PREPARE  — accept: reserve the seller's shares; exercise: validate
+  //              the contract + reservation. Returns the YES/NO vote.
+  //   COMMIT   — accept: credit premium + form/confirm the contract +
+  //              lock the reservation; exercise: release reservation,
+  //              transfer shares out, credit strike, mark exercised.
+  //   ROLLBACK — release the prepare-phase holds.
+  // Idempotent on (sender_bank_code, transaction_id). `handled` is false
+  // when no settlement exists for the tx, so COMMIT/ROLLBACK can fall
+  // back to the bank cash 2PC.
+  rpc SettleExternalOTCOption(SettleExternalOTCOptionRequest) returns (SettleExternalOTCOptionResponse);
 }
 
 // -------------------------------------------------------------------
@@ -438,4 +453,51 @@ message ReceiveExternalOTCExerciseNoticeRequest {
 
 message ReceiveExternalOTCExerciseNoticeResponse {
   ExternalOTCContract contract = 1;
+}
+
+// ExternalOTCSettlementPhase is the 2PC phase the gateway is driving.
+enum ExternalOTCSettlementPhase {
+  EXTERNAL_OTC_SETTLEMENT_PHASE_UNSPECIFIED = 0;
+  EXTERNAL_OTC_SETTLEMENT_PHASE_PREPARE = 1;
+  EXTERNAL_OTC_SETTLEMENT_PHASE_COMMIT = 2;
+  EXTERNAL_OTC_SETTLEMENT_PHASE_ROLLBACK = 3;
+}
+
+// ExternalOTCSettlementKind discriminates the settlement flavour.
+enum ExternalOTCSettlementKind {
+  EXTERNAL_OTC_SETTLEMENT_KIND_UNSPECIFIED = 0;
+  EXTERNAL_OTC_SETTLEMENT_KIND_ACCEPT = 1;
+  EXTERNAL_OTC_SETTLEMENT_KIND_EXERCISE = 2;
+}
+
+message SettleExternalOTCOptionRequest {
+  ExternalOTCSettlementPhase phase = 1;
+  // kind/option_ref/... are read on PREPARE; COMMIT/ROLLBACK look the
+  // settlement up by (sender_bank_code, transaction_id).
+  ExternalOTCSettlementKind kind = 2;
+  string sender_bank_code = 3 [(buf.validate.field).string.min_len = 1];
+  string transaction_id = 4 [(buf.validate.field).string.min_len = 1];
+  // option_ref is the negotiationId (accept) or contractId (exercise),
+  // both minted by us, with our routing number.
+  string option_ref = 5;
+  // seller_user_ref is our seller PERSON id (accept).
+  string seller_user_ref = 6;
+  // cash leg credited to our side: premium (accept) / strike (exercise).
+  string cash_amount = 7;
+  string cash_currency = 8;
+  // share leg (exercise).
+  string ticker = 9;
+  int64 quantity = 10;
+}
+
+message SettleExternalOTCOptionResponse {
+  // accepted is the YES/NO vote on PREPARE, or success on COMMIT/ROLLBACK.
+  bool accepted = 1;
+  // reason carries a NoVoteReason code (NO_SUCH_ACCOUNT, INSUFFICIENT_ASSET,
+  // OPTION_NEGOTIATION_NOT_FOUND, OPTION_USED_OR_EXPIRED, ...) when accepted
+  // is false.
+  string reason = 2;
+  // handled is false when no settlement is recorded for this tx, so the
+  // gateway can fall back to the bank cash 2PC on COMMIT/ROLLBACK.
+  bool handled = 3;
 }
