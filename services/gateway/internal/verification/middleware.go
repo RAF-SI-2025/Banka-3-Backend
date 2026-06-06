@@ -16,6 +16,7 @@ import (
 	"net/http"
 	"regexp"
 
+	pkgauth "github.com/RAF-SI-2025/Banka-3-Backend/pkg/auth"
 	"github.com/RAF-SI-2025/Banka-3-Backend/pkg/verification"
 )
 
@@ -25,6 +26,13 @@ const (
 	HeaderID   = "X-Verification-Id"
 	HeaderCode = "X-Verification-Code"
 )
+
+// QuickApproveSentinel is an explicit code value the web app may send in
+// X-Verification-Code to signal "this request was approved from the
+// phone — validate by id only" (todoSpec S12). An empty code header is
+// treated identically; the sentinel exists so the intent is legible in
+// request logs and so a client can distinguish it from a forgotten code.
+const QuickApproveSentinel = "approved"
 
 // Rule maps a (method, path-pattern) tuple to the verification kind
 // the gated route requires.
@@ -108,10 +116,45 @@ func Middleware(v verification.Verifier, rules []Rule, log *slog.Logger) func(ht
 			}
 			id := r.Header.Get(HeaderID)
 			code := r.Header.Get(HeaderCode)
-			if id == "" || code == "" {
+			if id == "" {
 				writeErr(w, http.StatusUnauthorized, "Verifikacioni kod je obavezan.")
 				return
 			}
+
+			// Quick-approve path (todoSpec S12): an id with no code (or
+			// the explicit sentinel) means the client approved the action
+			// from the mobile app. Validate by id+user without a code,
+			// admitting only if the record was actually approved. An
+			// un-approved id-only request is rejected by ConsumeApproved
+			// (ErrNotApproved) — it is NOT a bypass of the code gate.
+			if code == "" || code == QuickApproveSentinel {
+				ap, ok := v.(verification.Approver)
+				if !ok {
+					writeErr(w, http.StatusUnauthorized, "Verifikacioni kod je obavezan.")
+					return
+				}
+				p, ok := pkgauth.PrincipalFrom(r.Context())
+				if !ok {
+					writeErr(w, http.StatusUnauthorized, "missing access token")
+					return
+				}
+				aerr := ap.ConsumeApproved(r.Context(), p.UserID, id, kind)
+				switch {
+				case aerr == nil:
+					next.ServeHTTP(w, r)
+				case errors.Is(aerr, verification.ErrNotApproved):
+					writeErr(w, http.StatusUnauthorized, "Zahtev još nije odobren sa telefona.")
+				case errors.Is(aerr, verification.ErrNotFound):
+					writeErr(w, http.StatusUnauthorized, "Verifikacioni kod je istekao. Zatraži novi.")
+				case errors.Is(aerr, verification.ErrMismatch):
+					writeErr(w, http.StatusUnauthorized, "Verifikacioni kod ne odgovara ovoj akciji.")
+				default:
+					log.Warn("verification quick-approve consume failed", "error", aerr)
+					writeErr(w, http.StatusServiceUnavailable, "Verifikacija privremeno nedostupna.")
+				}
+				return
+			}
+
 			err := v.Consume(r.Context(), id, code, kind)
 			switch {
 			case err == nil:

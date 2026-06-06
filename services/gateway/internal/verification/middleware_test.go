@@ -10,6 +10,7 @@ import (
 	"testing"
 	"time"
 
+	pkgauth "github.com/RAF-SI-2025/Banka-3-Backend/pkg/auth"
 	"github.com/RAF-SI-2025/Banka-3-Backend/pkg/verification"
 )
 
@@ -24,6 +25,25 @@ func (s *stubVerifier) Issue(_ context.Context, _ string, _ verification.ActionK
 
 func (s *stubVerifier) Consume(_ context.Context, id, code string, kind verification.ActionKind) error {
 	return s.consume(id, code, kind)
+}
+
+// stubApprover is the in-memory test double that also implements the
+// quick-approve capability (todoSpec S12).
+type stubApprover struct {
+	stubVerifier
+	consumeApproved func(userID, id string, kind verification.ActionKind) error
+}
+
+func (s *stubApprover) Approve(_ context.Context, _, _ string) error { return nil }
+
+func (s *stubApprover) ConsumeApproved(_ context.Context, userID, id string, kind verification.ActionKind) error {
+	return s.consumeApproved(userID, id, kind)
+}
+
+// withPrincipal stamps a principal so PrincipalFrom in the quick-approve
+// branch resolves (the auth middleware does this in production).
+func withPrincipal(req *http.Request, userID string) *http.Request {
+	return req.WithContext(pkgauth.WithPrincipal(req.Context(), pkgauth.Principal{UserID: userID}))
 }
 
 func discardLog() *slog.Logger {
@@ -135,6 +155,87 @@ func TestMiddleware_MapsErrorsToStatusCodes(t *testing.T) {
 				t.Errorf("status: %d, want 401", rec.Code)
 			}
 		})
+	}
+}
+
+func TestMiddleware_QuickApprove_PassesWhenApproved(t *testing.T) {
+	var gotUser, gotID string
+	var gotKind verification.ActionKind
+	v := &stubApprover{
+		stubVerifier: stubVerifier{consume: func(string, string, verification.ActionKind) error {
+			t.Error("Consume must not be called on the quick-approve path")
+			return nil
+		}},
+		consumeApproved: func(userID, id string, kind verification.ActionKind) error {
+			gotUser, gotID, gotKind = userID, id, kind
+			return nil
+		},
+	}
+	mw := Middleware(v, DefaultRules(), discardLog())(okHandler())
+
+	// id present, no code → quick-approve.
+	req := httptest.NewRequest(http.MethodPost, "/api/v1/payments", nil)
+	req.Header.Set(HeaderID, "vid-1")
+	req = withPrincipal(req, "user-7")
+	rec := httptest.NewRecorder()
+	mw.ServeHTTP(rec, req)
+	if rec.Code != http.StatusOK {
+		t.Errorf("status: %d, want 200 (approved id-only request)", rec.Code)
+	}
+	if gotUser != "user-7" || gotID != "vid-1" || gotKind != verification.ActionPayment {
+		t.Errorf("ConsumeApproved called with (%q,%q,%q), want (user-7, vid-1, payment)", gotUser, gotID, gotKind)
+	}
+}
+
+func TestMiddleware_QuickApprove_SentinelCode(t *testing.T) {
+	called := false
+	v := &stubApprover{
+		stubVerifier:    stubVerifier{consume: func(string, string, verification.ActionKind) error { t.Error("Consume must not run"); return nil }},
+		consumeApproved: func(string, string, verification.ActionKind) error { called = true; return nil },
+	}
+	mw := Middleware(v, DefaultRules(), discardLog())(okHandler())
+	req := httptest.NewRequest(http.MethodPost, "/api/v1/payments", nil)
+	req.Header.Set(HeaderID, "vid-1")
+	req.Header.Set(HeaderCode, QuickApproveSentinel)
+	req = withPrincipal(req, "u")
+	rec := httptest.NewRecorder()
+	mw.ServeHTTP(rec, req)
+	if !called || rec.Code != http.StatusOK {
+		t.Errorf("sentinel code should route to quick-approve and pass: called=%v status=%d", called, rec.Code)
+	}
+}
+
+func TestMiddleware_QuickApprove_RejectsUnapproved(t *testing.T) {
+	v := &stubApprover{
+		stubVerifier:    stubVerifier{consume: func(string, string, verification.ActionKind) error { return nil }},
+		consumeApproved: func(string, string, verification.ActionKind) error { return verification.ErrNotApproved },
+	}
+	mw := Middleware(v, DefaultRules(), discardLog())(okHandler())
+	req := httptest.NewRequest(http.MethodPost, "/api/v1/payments", nil)
+	req.Header.Set(HeaderID, "vid-unapproved")
+	req = withPrincipal(req, "u")
+	rec := httptest.NewRecorder()
+	mw.ServeHTTP(rec, req)
+	if rec.Code != http.StatusUnauthorized {
+		t.Errorf("status: %d, want 401 (un-approved id-only request must be rejected)", rec.Code)
+	}
+}
+
+func TestMiddleware_QuickApprove_NoApproverCapabilityRejects(t *testing.T) {
+	// A plain Verifier (no Approver) must reject id-only requests rather
+	// than silently bypassing the code gate.
+	v := &stubVerifier{consume: func(string, string, verification.ActionKind) error {
+		t.Error("Consume must not be called for an id-only request")
+		return nil
+	}}
+	mw := Middleware(v, DefaultRules(), discardLog())(okHandler())
+	req := httptest.NewRequest(http.MethodPost, "/api/v1/payments", nil)
+	req.Header.Set(HeaderID, "vid-1")
+	req = withPrincipal(req, "u")
+	rec := httptest.NewRecorder()
+	mw.ServeHTTP(rec, req)
+	if rec.Code != http.StatusUnauthorized {
+		t.Errorf("status: %d, want 401 (no Approver capability)", rec.Code)
 	}
 }
 

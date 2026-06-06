@@ -190,6 +190,88 @@ func TestListPendingReflectsAttempts(t *testing.T) {
 	}
 }
 
+func TestApproveThenConsumeApproved(t *testing.T) {
+	c := setup(t)
+	ctx := context.Background()
+	id, _, _, _ := c.Issue(ctx, "u1", ActionPayment)
+
+	// Un-approved id-only consume is rejected.
+	if err := c.ConsumeApproved(ctx, "u1", id, ActionPayment); !errors.Is(err, ErrNotApproved) {
+		t.Fatalf("pre-approve consume: want ErrNotApproved, got %v", err)
+	}
+
+	// Approve flips the flag and shows up in ListPending.
+	if err := c.Approve(ctx, "u1", id); err != nil {
+		t.Fatalf("approve: %v", err)
+	}
+	if err := c.Approve(ctx, "u1", id); err != nil {
+		t.Errorf("re-approve should be idempotent, got %v", err)
+	}
+	got, _ := c.ListPending(ctx, "u1")
+	if len(got) != 1 || !got[0].Approved {
+		t.Fatalf("pending should report approved=true, got %+v", got)
+	}
+
+	// Quick-approve consume succeeds and is one-shot.
+	if err := c.ConsumeApproved(ctx, "u1", id, ActionPayment); err != nil {
+		t.Fatalf("approved consume: %v", err)
+	}
+	if err := c.ConsumeApproved(ctx, "u1", id, ActionPayment); !errors.Is(err, ErrNotFound) {
+		t.Errorf("second consume: want ErrNotFound, got %v", err)
+	}
+}
+
+func TestApproveOwnershipScoped(t *testing.T) {
+	c := setup(t)
+	ctx := context.Background()
+	id, _, _, _ := c.Issue(ctx, "owner", ActionPayment)
+
+	// A different user can neither approve nor consume-approved the record.
+	if err := c.Approve(ctx, "intruder", id); !errors.Is(err, ErrNotFound) {
+		t.Errorf("foreign approve: want ErrNotFound, got %v", err)
+	}
+	if err := c.Approve(ctx, "owner", id); err != nil {
+		t.Fatalf("owner approve: %v", err)
+	}
+	if err := c.ConsumeApproved(ctx, "intruder", id, ActionPayment); !errors.Is(err, ErrNotFound) {
+		t.Errorf("foreign consume: want ErrNotFound, got %v", err)
+	}
+	// Wrong kind even when approved → ErrMismatch.
+	if err := c.ConsumeApproved(ctx, "owner", id, ActionTransfer); !errors.Is(err, ErrMismatch) {
+		t.Errorf("kind mismatch: want ErrMismatch, got %v", err)
+	}
+	// Owner + right kind still works.
+	if err := c.ConsumeApproved(ctx, "owner", id, ActionPayment); err != nil {
+		t.Errorf("owner approved consume: %v", err)
+	}
+}
+
+func TestConsumeApprovedMissing(t *testing.T) {
+	c := setup(t)
+	if err := c.ConsumeApproved(context.Background(), "u", "deadbeef", ActionPayment); !errors.Is(err, ErrNotFound) {
+		t.Errorf("missing id: want ErrNotFound, got %v", err)
+	}
+	if err := c.Approve(context.Background(), "u", "deadbeef"); !errors.Is(err, ErrNotFound) {
+		t.Errorf("approve missing id: want ErrNotFound, got %v", err)
+	}
+}
+
+func TestApprovePreservesTTL(t *testing.T) {
+	c := setup(t)
+	ctx := context.Background()
+	id, _, _, _ := c.Issue(ctx, "u", ActionPayment)
+	if err := c.Approve(ctx, "u", id); err != nil {
+		t.Fatalf("approve: %v", err)
+	}
+	ttl, err := c.R.TTL(ctx, key(id)).Result()
+	if err != nil {
+		t.Fatalf("ttl: %v", err)
+	}
+	if ttl <= 0 || ttl > CodeTTL+time.Second {
+		t.Errorf("ttl after approve out of range: %v", ttl)
+	}
+}
+
 func TestConsumeExpired(t *testing.T) {
 	c := setup(t)
 	ctx := context.Background()

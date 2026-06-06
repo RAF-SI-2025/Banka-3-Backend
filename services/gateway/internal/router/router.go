@@ -73,6 +73,13 @@ func (r *Router) Mount(ctx context.Context, gwMux *runtime.ServeMux, registerGW 
 		// Additive: mobile polls this for the active codes to display
 		// (spec p.84). Auth-gated so we know whose codes to list.
 		mux.Handle("GET /api/v1/verification/pending", r.AuthMW(http.HandlerFunc(r.VerificationPendingHandler())))
+		// Additive: mobile quick-approve (todoSpec S12). Marks the
+		// caller's own pending record approved so the next gated request
+		// passes with X-Verification-Id only. Auth-gated.
+		mux.Handle("POST /api/v1/verification/{id}/approve", r.AuthMW(http.HandlerFunc(r.VerificationApproveHandler())))
+		// Additive: web poll-mode dialog reads pending|approved|expired
+		// for a single id to know when the phone approved (todoSpec S12).
+		mux.Handle("GET /api/v1/verification/{id}/status", r.AuthMW(http.HandlerFunc(r.VerificationStatusHandler())))
 		// Additive: mobile "Verifikacija" screen request history, each
 		// row marked successful/unsuccessful (spec p.84). Durable —
 		// backed by the user service, survives the Redis code TTL.

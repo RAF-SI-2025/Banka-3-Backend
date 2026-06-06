@@ -101,6 +101,11 @@ var (
 	// ErrMismatch means the record exists but for a different action
 	// kind. Surface 401/403 to the caller — never reveal the kind.
 	ErrMismatch = errors.New("verification: action mismatch")
+	// ErrNotApproved means a quick-approve consume was attempted against
+	// a record that exists and belongs to the user but has not been
+	// approved from the mobile app. The caller must either approve it
+	// (POST .../approve) or fall back to the 6-digit code path.
+	ErrNotApproved = errors.New("verification: not approved")
 )
 
 // Verifier is the interface the gateway middleware depends on. The
@@ -109,6 +114,22 @@ var (
 type Verifier interface {
 	Issue(ctx context.Context, userID string, kind ActionKind) (id, code string, expiresAt time.Time, err error)
 	Consume(ctx context.Context, id, code string, expectedKind ActionKind) error
+}
+
+// Approver is the optional quick-approve capability (todoSpec S12). The
+// mobile app marks a pending record APPROVED instead of relaying the
+// 6-digit code; the gateway middleware then admits an id-only request
+// via ConsumeApproved. Kept separate from Verifier so existing test
+// stubs don't have to implement it — the gateway type-asserts for it.
+type Approver interface {
+	// Approve marks the pending record id (which must belong to userID)
+	// as approved, within its existing TTL. Idempotent: re-approving an
+	// already-approved record succeeds.
+	Approve(ctx context.Context, userID, id string) error
+	// ConsumeApproved retires record id iff it exists, belongs to
+	// userID, matches expectedKind, and has been approved. Returns
+	// ErrNotApproved when the record exists but was never approved.
+	ConsumeApproved(ctx context.Context, userID, id string, expectedKind ActionKind) error
 }
 
 // Pending is one active (not yet consumed/expired) verification record,
@@ -121,6 +142,10 @@ type Pending struct {
 	Code      string
 	Attempts  int
 	ExpiresAt time.Time
+	// Approved reflects the quick-approve flag (todoSpec S12). The web
+	// app polls ListPending and, once a record reports Approved, fires
+	// the gated request with X-Verification-Id only (no code).
+	Approved bool
 }
 
 // PendingLister is an optional capability: list a user's active codes.
@@ -130,10 +155,16 @@ type PendingLister interface {
 	ListPending(ctx context.Context, userID string) ([]Pending, error)
 }
 
-// Cache is the Redis-backed Verifier (and PendingLister).
+// Cache is the Redis-backed Verifier (and PendingLister, Approver).
 type Cache struct {
 	R *redis.Client
 }
+
+var (
+	_ Verifier      = (*Cache)(nil)
+	_ PendingLister = (*Cache)(nil)
+	_ Approver      = (*Cache)(nil)
+)
 
 func key(id string) string      { return "verif:" + id }
 func userKey(uid string) string { return "verif:user:" + uid }
@@ -143,6 +174,9 @@ type record struct {
 	Kind     ActionKind `json:"k"`
 	Code     string     `json:"c"`
 	Attempts int        `json:"a"`
+	// Approved is set by the mobile quick-approve flow (todoSpec S12).
+	// Once true, ConsumeApproved retires the record without a code.
+	Approved bool `json:"ap,omitempty"`
 }
 
 // Issue mints a fresh verification code, stores the record under a new
@@ -217,6 +251,7 @@ func (c *Cache) ListPending(ctx context.Context, userID string) ([]Pending, erro
 			Code:      rec.Code,
 			Attempts:  rec.Attempts,
 			ExpiresAt: time.Unix(int64(z.Score), 0),
+			Approved:  rec.Approved,
 		})
 	}
 	return out, nil
@@ -266,6 +301,75 @@ func (c *Cache) Consume(ctx context.Context, id, code string, expectedKind Actio
 		return err
 	}
 	return ErrWrongCode
+}
+
+// Approve marks the record id as approved (todoSpec S12 quick-approve).
+// The record must exist and belong to userID; otherwise ErrNotFound.
+// The approved flag is persisted under the record's remaining TTL so
+// the 5-minute window is unchanged. Idempotent.
+func (c *Cache) Approve(ctx context.Context, userID, id string) error {
+	raw, err := c.R.Get(ctx, key(id)).Bytes()
+	if errors.Is(err, redis.Nil) {
+		return ErrNotFound
+	}
+	if err != nil {
+		return err
+	}
+	var rec record
+	if err := json.Unmarshal(raw, &rec); err != nil {
+		return err
+	}
+	// Ownership check: a user may only approve their own record. Return
+	// ErrNotFound (not a distinct error) so a caller can't probe whether
+	// an id belongs to someone else.
+	if rec.UserID != userID {
+		return ErrNotFound
+	}
+	if rec.Approved {
+		return nil
+	}
+	rec.Approved = true
+	ttl, terr := c.R.TTL(ctx, key(id)).Result()
+	if terr != nil || ttl <= 0 {
+		ttl = CodeTTL
+	}
+	updated, err := json.Marshal(rec)
+	if err != nil {
+		return err
+	}
+	return c.R.Set(ctx, key(id), updated, ttl).Err()
+}
+
+// ConsumeApproved retires record id without a code, succeeding only if
+// the record exists, belongs to userID, matches expectedKind, and has
+// been approved via Approve. Mirrors Consume's one-shot semantics: a
+// successful call deletes the record. An existing-but-unapproved record
+// returns ErrNotApproved and is left intact (the user may still approve
+// it from the phone or fall back to the code path).
+func (c *Cache) ConsumeApproved(ctx context.Context, userID, id string, expectedKind ActionKind) error {
+	raw, err := c.R.Get(ctx, key(id)).Bytes()
+	if errors.Is(err, redis.Nil) {
+		return ErrNotFound
+	}
+	if err != nil {
+		return err
+	}
+	var rec record
+	if err := json.Unmarshal(raw, &rec); err != nil {
+		return err
+	}
+	if rec.UserID != userID {
+		return ErrNotFound
+	}
+	if rec.Kind != expectedKind {
+		return ErrMismatch
+	}
+	if !rec.Approved {
+		return ErrNotApproved
+	}
+	// One-shot: a successful quick-approve consume retires the record.
+	_ = c.R.Del(ctx, key(id)).Err()
+	return nil
 }
 
 func newID() (string, error) {
