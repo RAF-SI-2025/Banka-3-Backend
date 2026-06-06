@@ -35,6 +35,7 @@ type RecordingVerifier struct {
 var (
 	_ verification.Verifier      = (*RecordingVerifier)(nil)
 	_ verification.PendingLister = (*RecordingVerifier)(nil)
+	_ verification.Approver      = (*RecordingVerifier)(nil)
 )
 
 func (r *RecordingVerifier) Issue(ctx context.Context, userID string, kind verification.ActionKind) (string, string, time.Time, error) {
@@ -90,4 +91,33 @@ func (r *RecordingVerifier) ListPending(ctx context.Context, userID string) ([]v
 		return nil, nil
 	}
 	return lister.ListPending(ctx, userID)
+}
+
+// Approve forwards the quick-approve flag to the inner verifier (the
+// Redis Cache implements Approver). A verifier without the capability
+// reports ErrNotFound so the gateway surfaces a clean 404/410. Approval
+// itself writes no history row — the terminal outcome is recorded by
+// ConsumeApproved when the gated request actually lands.
+func (r *RecordingVerifier) Approve(ctx context.Context, userID, id string) error {
+	ap, ok := r.Inner.(verification.Approver)
+	if !ok {
+		return verification.ErrNotFound
+	}
+	return ap.Approve(ctx, userID, id)
+}
+
+// ConsumeApproved forwards to the inner verifier and, on a clean
+// one-shot consume, resolves the durable history row to success —
+// mirroring Consume so a quick-approved action shows up as a successful
+// verification in the mobile "Verifikacija" history (spec p.84).
+func (r *RecordingVerifier) ConsumeApproved(ctx context.Context, userID, id string, expectedKind verification.ActionKind) error {
+	ap, ok := r.Inner.(verification.Approver)
+	if !ok {
+		return verification.ErrNotFound
+	}
+	err := ap.ConsumeApproved(ctx, userID, id, expectedKind)
+	if err == nil {
+		r.resolve(ctx, id, true)
+	}
+	return err
 }

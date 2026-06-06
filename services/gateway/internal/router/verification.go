@@ -2,6 +2,7 @@ package router
 
 import (
 	"encoding/json"
+	"errors"
 	"net/http"
 	"time"
 
@@ -81,6 +82,10 @@ type pendingItem struct {
 	Code              string    `json:"code"`
 	ExpiresAt         time.Time `json:"expiresAt"`
 	AttemptsRemaining int       `json:"attemptsRemaining"`
+	// Approved reflects the quick-approve flag (todoSpec S12): the
+	// mobile app hides the "Odobri" button once true, and the web app's
+	// poll-mode dialog auto-proceeds with an id-only gated request.
+	Approved bool `json:"approved"`
 }
 
 type pendingResponse struct {
@@ -123,6 +128,7 @@ func (r *Router) VerificationPendingHandler() http.HandlerFunc {
 				Code:              rec.Code,
 				ExpiresAt:         rec.ExpiresAt,
 				AttemptsRemaining: remaining,
+				Approved:          rec.Approved,
 			})
 		}
 		writeJSON(w, http.StatusOK, pendingResponse{Pending: items})
@@ -220,5 +226,105 @@ func (r *Router) VerificationHandler() http.HandlerFunc {
 			ExpiresAt:      exp,
 			Delivery:       "inline",
 		})
+	}
+}
+
+// approveResponse confirms a quick-approve (todoSpec S12).
+type approveResponse struct {
+	ID       string `json:"id"`
+	Approved bool   `json:"approved"`
+}
+
+// VerificationApproveHandler returns POST /api/v1/verification/{id}/approve
+// — the mobile app's quick-approve endpoint (todoSpec S12). Instead of
+// relaying the 6-digit code, the client taps "Odobri" and the phone
+// marks its own pending record approved in Redis. The next gated
+// request the user fires (from the web app) then passes verification
+// with X-Verification-Id only. Auth-gated so the caller can only
+// approve their own records (ownership enforced in verification.Approve).
+func (r *Router) VerificationApproveHandler() http.HandlerFunc {
+	return func(w http.ResponseWriter, req *http.Request) {
+		if r.Verifier == nil {
+			writeError(w, http.StatusServiceUnavailable, "Verifikacija nije konfigurisana.")
+			return
+		}
+		ap, ok := r.Verifier.(verification.Approver)
+		if !ok {
+			writeError(w, http.StatusServiceUnavailable, "Brzo odobravanje nije dostupno.")
+			return
+		}
+		id := req.PathValue("id")
+		if id == "" {
+			writeError(w, http.StatusBadRequest, "neispravan zahtev")
+			return
+		}
+		p, ok := pkgauth.PrincipalFrom(req.Context())
+		if !ok {
+			writeError(w, http.StatusUnauthorized, "missing access token")
+			return
+		}
+		err := ap.Approve(req.Context(), p.UserID, id)
+		switch {
+		case err == nil:
+			writeJSON(w, http.StatusOK, approveResponse{ID: id, Approved: true})
+		case errors.Is(err, verification.ErrNotFound):
+			// Not owned, expired, or already consumed — indistinguishable
+			// on purpose (don't let a caller probe foreign records).
+			writeError(w, http.StatusNotFound, "Zahtev za verifikaciju nije pronađen ili je istekao.")
+		default:
+			writeError(w, http.StatusServiceUnavailable, "Verifikacija privremeno nedostupna.")
+		}
+	}
+}
+
+// statusResponse reports a single verification record's state to the web
+// app's poll-mode dialog (todoSpec S12): pending | approved | expired.
+type statusResponse struct {
+	ID     string `json:"id"`
+	Status string `json:"status"`
+}
+
+// VerificationStatusHandler returns GET /api/v1/verification/{id}/status
+// — the web app polls this after opening the quick-approve dialog. It
+// reports "approved" once the user taps Odobri on the phone (then the
+// dialog fires the gated request id-only), or "expired" when the record
+// is gone (consumed elsewhere or TTL elapsed). Derived from the caller's
+// own pending list so no foreign record can be probed.
+func (r *Router) VerificationStatusHandler() http.HandlerFunc {
+	return func(w http.ResponseWriter, req *http.Request) {
+		id := req.PathValue("id")
+		if id == "" {
+			writeError(w, http.StatusBadRequest, "neispravan zahtev")
+			return
+		}
+		p, ok := pkgauth.PrincipalFrom(req.Context())
+		if !ok {
+			writeError(w, http.StatusUnauthorized, "missing access token")
+			return
+		}
+		lister, ok := r.Verifier.(verification.PendingLister)
+		if !ok {
+			writeJSON(w, http.StatusOK, statusResponse{ID: id, Status: "expired"})
+			return
+		}
+		recs, err := lister.ListPending(req.Context(), p.UserID)
+		if err != nil {
+			writeError(w, http.StatusServiceUnavailable, "Verifikacija privremeno nedostupna.")
+			return
+		}
+		for _, rec := range recs {
+			if rec.ID != id {
+				continue
+			}
+			if rec.Approved {
+				writeJSON(w, http.StatusOK, statusResponse{ID: id, Status: "approved"})
+				return
+			}
+			writeJSON(w, http.StatusOK, statusResponse{ID: id, Status: "pending"})
+			return
+		}
+		// Not in the active pending set for this user: consumed or
+		// expired. The web dialog treats "expired" as terminal.
+		writeJSON(w, http.StatusOK, statusResponse{ID: id, Status: "expired"})
 	}
 }
