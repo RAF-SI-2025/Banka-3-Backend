@@ -119,6 +119,18 @@ type PartnerActionInput struct {
 	PricePerUnit   string
 	Premium        string
 	SettlementDate time.Time
+
+	// Immutable identities, carried so a counter (PUT) can echo the full
+	// OtcOffer the partner requires (stock, buyerId, sellerId,
+	// buyerAccountNumber). Populated from the thread; ignored by withdraw/
+	// accept and by the native dialect.
+	LocalIsBuyer       bool
+	LocalUserRef       string
+	RemoteUserRef      string
+	LocalAccountNumber string
+	RemoteAccountRef   string
+	SecurityTicker     string
+	Currency           string
 }
 
 // =====================================================================
@@ -414,6 +426,14 @@ func (s *Service) CounterExternalOTCOffer(ctx context.Context, in CounterExterna
 		PricePerUnit:   live.PricePerUnit,
 		Premium:        live.Premium,
 		SettlementDate: live.SettlementDate,
+
+		LocalIsBuyer:       live.LocalRole == domain.ExternalOTCRoleBuyer,
+		LocalUserRef:       live.LocalUserID,
+		RemoteUserRef:      live.RemoteUserRef,
+		LocalAccountNumber: live.LocalAccountNumber,
+		RemoteAccountRef:   live.RemoteAccountRef,
+		SecurityTicker:     live.SecurityTicker,
+		Currency:           string(live.Currency),
 	}); err != nil {
 		return nil, apperr.FailedPrecondition("partner banka je odbila kontraponudu: " + err.Error())
 	}

@@ -63,6 +63,11 @@ type banka2OtcOffer struct {
 	SellerID       banka2ForeignID `json:"sellerId"`
 	Amount         json.Number     `json:"amount"`
 	LastModifiedBy banka2ForeignID `json:"lastModifiedBy"`
+	// BuyerAccountNumber — agreed cross-bank extension (Banka-4 protocol
+	// notes §1): the buyer's settlement account, used by the seller's bank
+	// to debit the premium on accept and the strike on exercise. REQUIRED
+	// on create (missing → 400) and immutable on counter (echoed unchanged).
+	BuyerAccountNumber string `json:"buyerAccountNumber"`
 }
 
 // =====================================================================
@@ -126,6 +131,9 @@ func (c *Client) createOfferBanka2(ctx context.Context, in service.PartnerCreate
 		SellerID:       banka2ForeignID{RoutingNumber: partnerRouting, ID: in.RemoteUserRef},
 		Amount:         json.Number(strconv.Itoa(int(in.Quantity))),
 		LastModifiedBy: banka2ForeignID{RoutingNumber: ownRouting, ID: in.LocalUserRef},
+		// We initiate as the buyer, so our settlement account is the
+		// buyer account the partner debits for premium/strike.
+		BuyerAccountNumber: in.LocalAccountRef,
 	}
 
 	url := c.baseURL(in.RemoteBankCode) + "/interbank/negotiations"
@@ -156,15 +164,37 @@ func (c *Client) actionBanka2(ctx context.Context, in service.PartnerActionInput
 
 	switch verb {
 	case "counter":
-		// PUT with the new terms — full OtcOffer body, lastModifiedBy = us.
+		// PUT must echo the FULL OtcOffer with immutable fields unchanged
+		// (stock, buyerId, sellerId, buyerAccountNumber) and lastModifiedBy
+		// = us; the partner rejects a counter that drops or changes them.
 		settle := in.SettlementDate.UTC().Format(time.RFC3339)
+		cur := in.Currency
+		if cur == "" {
+			cur = "USD"
+		}
+		// buyer/seller and the buyer's settlement account are fixed at offer
+		// creation; reconstruct them from our role in the thread.
+		var buyerID, sellerID banka2ForeignID
+		var buyerAcct string
+		if in.LocalIsBuyer {
+			buyerID = banka2ForeignID{RoutingNumber: ownRouting, ID: in.LocalUserRef}
+			sellerID = banka2ForeignID{RoutingNumber: partnerRouting, ID: in.RemoteUserRef}
+			buyerAcct = in.LocalAccountNumber
+		} else {
+			buyerID = banka2ForeignID{RoutingNumber: partnerRouting, ID: in.RemoteUserRef}
+			sellerID = banka2ForeignID{RoutingNumber: ownRouting, ID: in.LocalUserRef}
+			buyerAcct = in.RemoteAccountRef
+		}
 		body := banka2OtcOffer{
-			Stock:          banka2Stock{Ticker: ""}, // Banka 2 keeps the original stock from the prior offer
-			SettlementDate: settle,
-			PricePerUnit:   banka2Monetary{Currency: "USD", Amount: json.Number(in.PricePerUnit)},
-			Premium:        banka2Monetary{Currency: "USD", Amount: json.Number(in.Premium)},
-			Amount:         json.Number(strconv.Itoa(int(in.Quantity))),
-			LastModifiedBy: banka2ForeignID{RoutingNumber: ownRouting, ID: ""},
+			Stock:              banka2Stock{Ticker: in.SecurityTicker},
+			SettlementDate:     settle,
+			PricePerUnit:       banka2Monetary{Currency: cur, Amount: json.Number(in.PricePerUnit)},
+			Premium:            banka2Monetary{Currency: cur, Amount: json.Number(in.Premium)},
+			BuyerID:            buyerID,
+			SellerID:           sellerID,
+			Amount:             json.Number(strconv.Itoa(int(in.Quantity))),
+			LastModifiedBy:     banka2ForeignID{RoutingNumber: ownRouting, ID: in.LocalUserRef},
+			BuyerAccountNumber: buyerAcct,
 		}
 		status, respBody, err := c.doJSON(ctx, "PUT", base+path, body)
 		if err != nil {
