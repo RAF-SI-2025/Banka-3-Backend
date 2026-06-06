@@ -12,18 +12,15 @@ import (
 // Each helper is best-effort: it nil-checks s.Notifier and never returns
 // an error, so a notification failure can't fail the order operation that
 // triggered it. Delivery is the in-app row (always, when a Notifier is
-// wired); email is only attempted when an address is readily available.
-//
-// The trading service has no email-address resolver, so for order events
-// we generally have no `to` address — the in-app notification is what
-// satisfies these scenarios. The email leg is left as a deliberate no-op
-// (see notifyOrderEmail) until an address resolver is wired here.
+// wired) plus an email leg whenever the owner's address resolves.
 //
 // eventKind is always "order" so the FE can group these rows.
 const orderEventKind = "order"
 
 // notifyOrder writes the in-app row for an order event to the order's
-// owner. Best-effort: logs on error, never propagates.
+// owner and, when the owner's email resolves, sends the same Serbian
+// copy by email. Best-effort: logs on error, never propagates. The
+// in-app leg always fires even if email resolution or delivery fails.
 func (s *Service) notifyOrder(ctx context.Context, o *domain.Order, title, body string) {
 	if s == nil || s.Notifier == nil || o == nil {
 		return
@@ -32,9 +29,14 @@ func (s *Service) notifyOrder(ctx context.Context, o *domain.Order, title, body 
 		s.Log.Warn("order notify: in-app delivery failed",
 			"order_id", o.ID, "user_id", o.UserID, "title", title, "err", err.Error())
 	}
-	// Email is intentionally skipped: the trading service has no
-	// email-address resolver, so we have no `to` here. When one is wired,
-	// resolve the owner's address and call s.Notifier.Email(...).
+	// Email leg: resolve the owner's address and send the same copy. A
+	// "" address (unresolved / no resolver wired) is a no-op.
+	if to := s.recipientEmail(ctx, o.UserID, o.UserKind); to != "" {
+		if err := s.Notifier.Email(ctx, to, title, body); err != nil {
+			s.Log.Warn("order notify: email delivery failed",
+				"order_id", o.ID, "user_id", o.UserID, "title", title, "err", err.Error())
+		}
+	}
 }
 
 // notifyOrderPending — S20. An agent's order needing supervisor approval

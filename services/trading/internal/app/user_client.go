@@ -75,6 +75,33 @@ func (a *userResolverAdapter) RecordAudit(ctx context.Context, action, actorID, 
 	return nil
 }
 
+// Email resolves a user's email address so the trading service can add an
+// email leg to its order/price-alert notifications. Mirrors bank's
+// userResolverAdapter.ClientEmail: it attaches the internal admin
+// principal to outgoing metadata (these calls run server-side, after the
+// triggering operation's own permission gate) then dials user-svc —
+// GetClient for clients, GetEmployee for employees, both of which carry
+// the address on their `email` field.
+func (a *userResolverAdapter) Email(ctx context.Context, userID string, kind domain.UserKind) (string, error) {
+	ctx = withUserAdmin(ctx)
+	switch kind {
+	case domain.KindClient:
+		resp, err := a.c.GetClient(ctx, &userpb.GetClientRequest{Id: userID})
+		if err != nil {
+			return "", fmt.Errorf("user.GetClient: %w", err)
+		}
+		return resp.GetEmail(), nil
+	case domain.KindEmployee:
+		resp, err := a.c.GetEmployee(ctx, &userpb.GetEmployeeRequest{Id: userID})
+		if err != nil {
+			return "", fmt.Errorf("user.GetEmployee: %w", err)
+		}
+		return resp.GetEmail(), nil
+	default:
+		return "", nil
+	}
+}
+
 func (a *userResolverAdapter) EmployeePermissions(ctx context.Context, userID string) ([]string, error) {
 	ctx = withUserAdmin(ctx)
 	resp, err := a.c.GetEmployee(ctx, &userpb.GetEmployeeRequest{Id: userID})

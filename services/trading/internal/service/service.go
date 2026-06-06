@@ -91,6 +91,14 @@ type UserResolver interface {
 	// transport. Best-effort: implementations must not fail the
 	// underlying trading operation on a delivery error.
 	RecordAudit(ctx context.Context, action, actorID, actorKind, targetID, targetLabel, oldVal, newVal, note string) error
+	// Email resolves a user's email address so the trading service can
+	// add an email leg to its order/price-alert notifications (the
+	// in-app feed only carries a user_id, not an address). For
+	// kind=client it dials user-svc GetClient; for kind=employee it
+	// dials GetEmployee. Returns the address, or "" + error when the id
+	// does not resolve. Callers treat any error as "no address" and fall
+	// back to in-app only.
+	Email(ctx context.Context, userID string, kind domain.UserKind) (string, error)
 }
 
 // MarginChecker reads the funding-source state needed by spec p.55
@@ -458,4 +466,22 @@ func (s *Service) recordAudit(ctx context.Context, action, targetID, targetLabel
 	if err := s.Users.RecordAudit(ctx, action, actorID, actorKind, targetID, targetLabel, oldVal, newVal, note); err != nil {
 		s.Log.Warn("audit-log write failed", "action", action, "target_id", targetID, "err", err.Error())
 	}
+}
+
+// recipientEmail best-effort resolves a user's email address for the
+// email leg of an order/price-alert notification. Nil-safe (s.Users may
+// be unset on a minimal dev stack) and never fails the underlying
+// operation: any resolution error returns "" so the caller delivers the
+// in-app notification regardless. A "" return means "send no email".
+func (s *Service) recipientEmail(ctx context.Context, userID string, kind domain.UserKind) string {
+	if s.Users == nil {
+		return ""
+	}
+	addr, err := s.Users.Email(ctx, userID, kind)
+	if err != nil {
+		s.Log.Warn("notification: email lookup failed",
+			"user_id", userID, "kind", string(kind), "err", err.Error())
+		return ""
+	}
+	return addr
 }
