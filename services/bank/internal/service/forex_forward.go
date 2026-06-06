@@ -438,8 +438,16 @@ func (s *Service) settleForexForward(ctx context.Context, f *domain.ForexForward
 // Available to any payment-capable principal (clients see what they'll be
 // quoted; supervisors edit).
 func (s *Service) GetForexForwardSpreads(ctx context.Context) ([]*domain.ForexForwardSpread, error) {
-	if err := s.requirePermission(ctx, permissions.PaymentWrite); err != nil {
+	p, err := s.requirePrincipal(ctx)
+	if err != nil {
 		return nil, err
+	}
+	// Reading the configured spreads feeds the supervisor spread-editor
+	// page; clients quote forwards through resolveSpreadFactor and never
+	// call this. Gate it to supervisor/admin (PaymentWrite, used by the
+	// client quote/create path, excludes supervisors).
+	if !permissions.HasAny(p.Permissions, permissions.ActuarySupervisor, permissions.Admin) {
+		return nil, apperr.PermissionDenied("samo supervizor može videti parametre terminskih ugovora")
 	}
 	return s.Store.ListForexForwardSpreads(ctx)
 }
@@ -453,6 +461,12 @@ func (s *Service) SetForexForwardSpread(ctx context.Context, base, quote domain.
 	}
 	if !permissions.HasAny(p.Permissions, permissions.ActuarySupervisor, permissions.Admin) {
 		return nil, apperr.PermissionDenied("samo supervizor može menjati parametre terminskih ugovora")
+	}
+	// A forward always settles in RSD, so the quote leg is implicit — the
+	// editor sends only the base currency. Default an unspecified quote to
+	// RSD rather than rejecting it as "unsupported currency".
+	if quote == "" {
+		quote = forwardQuoteCurrency
 	}
 	if !base.Supported() || !quote.Supported() {
 		return nil, apperr.Validation("unsupported currency")
