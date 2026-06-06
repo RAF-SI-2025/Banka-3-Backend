@@ -2537,9 +2537,13 @@ type SettleExternalOTCOptionResponse struct {
 	Reason string `protobuf:"bytes,2,opt,name=reason,proto3" json:"reason,omitempty"`
 	// handled is false when no settlement is recorded for this tx, so the
 	// gateway can fall back to the bank cash 2PC on COMMIT/ROLLBACK.
-	Handled       bool `protobuf:"varint,3,opt,name=handled,proto3" json:"handled,omitempty"`
-	unknownFields protoimpl.UnknownFields
-	sizeCache     protoimpl.SizeCache
+	Handled bool `protobuf:"varint,3,opt,name=handled,proto3" json:"handled,omitempty"`
+	// seller_account_number is our seller's settlement account, returned on
+	// PREPARE so the gateway can drive the premium/strike cash leg through
+	// the bank inbound 2PC.
+	SellerAccountNumber string `protobuf:"bytes,4,opt,name=seller_account_number,json=sellerAccountNumber,proto3" json:"seller_account_number,omitempty"`
+	unknownFields       protoimpl.UnknownFields
+	sizeCache           protoimpl.SizeCache
 }
 
 func (x *SettleExternalOTCOptionResponse) Reset() {
@@ -2591,6 +2595,13 @@ func (x *SettleExternalOTCOptionResponse) GetHandled() bool {
 		return x.Handled
 	}
 	return false
+}
+
+func (x *SettleExternalOTCOptionResponse) GetSellerAccountNumber() string {
+	if x != nil {
+		return x.SellerAccountNumber
+	}
+	return ""
 }
 
 var File_trading_v1_external_otc_proto protoreflect.FileDescriptor
@@ -2788,11 +2799,12 @@ const file_trading_v1_external_otc_proto_rawDesc = "" +
 	"\rcash_currency\x18\b \x01(\tR\fcashCurrency\x12\x16\n" +
 	"\x06ticker\x18\t \x01(\tR\x06ticker\x12\x1a\n" +
 	"\bquantity\x18\n" +
-	" \x01(\x03R\bquantity\"o\n" +
+	" \x01(\x03R\bquantity\"\xa3\x01\n" +
 	"\x1fSettleExternalOTCOptionResponse\x12\x1a\n" +
 	"\baccepted\x18\x01 \x01(\bR\baccepted\x12\x16\n" +
 	"\x06reason\x18\x02 \x01(\tR\x06reason\x12\x18\n" +
-	"\ahandled\x18\x03 \x01(\bR\ahandled*\x88\x01\n" +
+	"\ahandled\x18\x03 \x01(\bR\ahandled\x122\n" +
+	"\x15seller_account_number\x18\x04 \x01(\tR\x13sellerAccountNumber*\x88\x01\n" +
 	"\x14ExternalOTCDirection\x12&\n" +
 	"\"EXTERNAL_OTC_DIRECTION_UNSPECIFIED\x10\x00\x12#\n" +
 	"\x1fEXTERNAL_OTC_DIRECTION_OUTGOING\x10\x01\x12#\n" +

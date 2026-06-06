@@ -500,4 +500,8 @@ message SettleExternalOTCOptionResponse {
   // handled is false when no settlement is recorded for this tx, so the
   // gateway can fall back to the bank cash 2PC on COMMIT/ROLLBACK.
   bool handled = 3;
+  // seller_account_number is our seller's settlement account, returned on
+  // PREPARE so the gateway can drive the premium/strike cash leg through
+  // the bank inbound 2PC.
+  string seller_account_number = 4;
 }
