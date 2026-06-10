@@ -159,7 +159,9 @@ func (a *App) once(name string, fn func(context.Context) error) job {
 // fire invokes one trigger with the admin context, logging failures
 // (but swallowing them so one bad tick never kills the job loop).
 func (a *App) fire(ctx context.Context, name string, fn func(context.Context) error) {
-	a.log.InfoContext(ctx, "job triggered", "job", name)
+	// Debug, not Info: the tightest jobs tick every 5s, and the target
+	// services already log batch summaries when a tick does real work.
+	a.log.DebugContext(ctx, "job triggered", "job", name)
 	start := time.Now()
 	if err := fn(a.adminCtx(ctx)); err != nil {
 		if ctx.Err() != nil {
@@ -169,7 +171,7 @@ func (a *App) fire(ctx context.Context, name string, fn func(context.Context) er
 			"err", err.Error(), "job", name, "duration", time.Since(start).String())
 		return
 	}
-	a.log.InfoContext(ctx, "job completed", "job", name, "duration", time.Since(start).String())
+	a.log.DebugContext(ctx, "job completed", "job", name, "duration", time.Since(start).String())
 }
 
 // --- Triggers: one gRPC call each ---

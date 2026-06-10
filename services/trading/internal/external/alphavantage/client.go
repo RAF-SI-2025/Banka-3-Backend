@@ -296,6 +296,18 @@ func (c *Client) FXQuote(ctx context.Context, from, to string) (*FXQuote, error)
 	return out, nil
 }
 
+// stripURLError unwraps a *url.Error to its transport cause. The
+// url.Error string embeds the full request URL — and with it the API
+// key in the query string — so it must never be logged or returned
+// upstream (callers log err.Error() too).
+func stripURLError(err error) error {
+	var uerr *url.Error
+	if errors.As(err, &uerr) {
+		return fmt.Errorf("alphavantage %s: %w", uerr.Op, uerr.Err)
+	}
+	return err
+}
+
 // do issues the GET, applies the API key, and rejects rate-limit and
 // error envelopes. Log lines deliberately carry the request function +
 // symbol rather than the URL — the URL embeds the API key.
@@ -308,6 +320,7 @@ func (c *Client) do(ctx context.Context, q url.Values) ([]byte, error) {
 	}
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, base+"?"+q.Encode(), nil)
 	if err != nil {
+		err = stripURLError(err)
 		log.ErrorContext(ctx, "alphavantage request build failed", "err", err)
 		return nil, err
 	}
@@ -317,6 +330,7 @@ func (c *Client) do(ctx context.Context, q url.Values) ([]byte, error) {
 	}
 	resp, err := httpc.Do(req)
 	if err != nil {
+		err = stripURLError(err)
 		log.ErrorContext(ctx, "alphavantage request failed", "err", err)
 		return nil, err
 	}

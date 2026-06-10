@@ -248,6 +248,8 @@ func (s *Service) ListBankFundPositions(ctx context.Context) ([]*BankFundPositio
 	for _, pos := range rows {
 		f, err := s.Store.GetFund(ctx, pos.FundID)
 		if err != nil {
+			s.log().WarnContext(ctx, "bank fund positions: fund lookup failed, row dropped",
+				"err", err, "fund_id", pos.FundID, "position_id", pos.ID)
 			continue
 		}
 		dec := s.decorateFund(ctx, f)

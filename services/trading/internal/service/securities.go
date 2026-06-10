@@ -3,6 +3,7 @@ package service
 import (
 	"context"
 	"errors"
+	"log/slog"
 	"math/big"
 	"strings"
 	"time"
@@ -283,6 +284,15 @@ func filterStrikeWindow(rows []*OptionChainRow, shared *big.Rat, window int) []*
 	for _, r := range rows {
 		strike, err := money.Parse(r.StrikePrice)
 		if err != nil {
+			// No ctx in this helper — package-level slog.
+			attrs := []any{"err", err, "strike", r.StrikePrice}
+			if r.Call != nil {
+				attrs = append(attrs, "call_security_id", r.Call.ID)
+			}
+			if r.Put != nil {
+				attrs = append(attrs, "put_security_id", r.Put.ID)
+			}
+			slog.Warn("option chain: strike parse failed, row dropped", attrs...)
 			continue
 		}
 		diff := money.Sub(strike, shared)
@@ -384,10 +394,15 @@ func computeMaintenanceMargin(sec *domain.Security, l *domain.Listing) (*big.Rat
 	}
 	price, err := money.Parse(priceStr)
 	if err != nil {
+		// No ctx in this helper — package-level slog.
+		slog.Warn("maintenance margin: price parse failed, margin omitted",
+			"err", err, "security_id", sec.ID, "ticker", sec.Ticker, "price", priceStr)
 		return nil, false
 	}
 	contract, err := money.Parse(contrStr)
 	if err != nil {
+		slog.Warn("maintenance margin: contract size parse failed, margin omitted",
+			"err", err, "security_id", sec.ID, "ticker", sec.Ticker, "contract_size", contrStr)
 		return nil, false
 	}
 	switch sec.Type {

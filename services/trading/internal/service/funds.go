@@ -378,14 +378,20 @@ func (s *Service) fundHoldingsValueRSD(ctx context.Context, fundID string) (stri
 	for _, h := range holdings {
 		sec, err := s.Store.GetSecurity(ctx, h.SecurityID)
 		if err != nil {
+			s.logOpErr(ctx, "fund value: security lookup failed, holding dropped from total", err,
+				"fund_id", fundID, "holding_id", h.ID, "security_id", h.SecurityID)
 			continue
 		}
 		listing, err := s.Store.GetListingBySecurityID(ctx, sec.ID)
 		if err != nil {
+			s.logOpErr(ctx, "fund value: listing lookup failed, holding dropped from total", err,
+				"fund_id", fundID, "holding_id", h.ID, "security_id", sec.ID)
 			continue
 		}
 		price, err := money.Parse(listing.Price)
 		if err != nil {
+			s.log().ErrorContext(ctx, "fund value: listing price parse failed, holding dropped from total",
+				"err", err, "fund_id", fundID, "holding_id", h.ID, "security_id", sec.ID, "price", listing.Price)
 			continue
 		}
 		cs, err := money.Parse(listing.ContractSize)
@@ -398,9 +404,15 @@ func (s *Service) fundHoldingsValueRSD(ctx context.Context, fundID string) (stri
 		if sec.Currency != tdomain.CurrencyRSD && sec.Currency != "" && s.Rates != nil {
 			_, ask, err := s.Rates.Quote(ctx, sec.Currency, tdomain.CurrencyRSD)
 			if err == nil {
-				if r, err := money.Parse(ask); err == nil {
+				if r, perr := money.Parse(ask); perr == nil {
 					notional = money.Mul(notional, r)
+				} else {
+					s.log().ErrorContext(ctx, "fund value: rate ask parse failed, amount counted unconverted",
+						"err", perr, "currency", sec.Currency, "security_id", sec.ID, "fund_id", fundID, "ask", ask)
 				}
+			} else {
+				s.log().ErrorContext(ctx, "fund value: fx quote failed, amount counted unconverted",
+					"err", err, "currency", sec.Currency, "security_id", sec.ID, "fund_id", fundID)
 			}
 		}
 		total = money.Add(total, notional)
@@ -585,6 +597,8 @@ func (s *Service) ListFundPositions(ctx context.Context, in ListFundPositionsInp
 	for _, pos := range rows {
 		f, err := s.Store.GetFund(ctx, pos.FundID)
 		if err != nil {
+			s.log().WarnContext(ctx, "fund positions: fund lookup failed, row dropped",
+				"err", err, "fund_id", pos.FundID, "position_id", pos.ID)
 			continue
 		}
 		dec := s.decorateFund(ctx, f)

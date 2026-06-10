@@ -186,7 +186,9 @@ func (s *Service) ListExternalPublicHoldings(ctx context.Context, bankCode, tick
 	}
 	holdings, err := s.PartnerOTC.Discover(ctx, bankCode, tickerFilter)
 	if err != nil {
-		s.log().ErrorContext(ctx, "external otc discovery failed",
+		// Discover only errors on an unconfigured bank_code (per-partner
+		// failures are logged inside the client) — client input, so Warn.
+		s.log().WarnContext(ctx, "external otc discovery failed",
 			"err", err, "remote_bank_code", bankCode, "ticker", tickerFilter)
 		return nil, err
 	}

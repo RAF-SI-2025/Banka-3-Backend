@@ -84,6 +84,12 @@ func (s *Service) ListHoldings(ctx context.Context, in ListHoldingsInput) ([]*Ho
 		}
 		dec := &HoldingDecorated{Holding: h, Security: sec}
 		listing, err := s.Store.GetListingBySecurityID(ctx, h.SecurityID)
+		if err != nil && !isAppKind(err, apperr.KindNotFound) {
+			// NotFound is expected (e.g. options without a listing); other
+			// failures silently render the holding without a market value.
+			s.log().WarnContext(ctx, "holding listing lookup failed, market value omitted",
+				"err", err, "holding_id", h.ID, "security_id", h.SecurityID)
+		}
 		if err == nil {
 			dec.CurrentPrice = listing.Price
 			price, _ := money.Parse(listing.Price)

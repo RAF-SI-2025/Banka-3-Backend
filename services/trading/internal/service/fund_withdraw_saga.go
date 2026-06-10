@@ -582,6 +582,8 @@ func (s *Service) placeAutoLiquidationOrders(ctx context.Context, sc *saga.Conte
 		}
 		sec, err := s.Store.GetSecurity(ctx, h.SecurityID)
 		if err != nil {
+			s.logOpErr(ctx, "auto-liquidation: security lookup failed, holding skipped in ranking", err,
+				"fund_id", sc.State.FundID, "holding_id", h.ID, "security_id", h.SecurityID)
 			continue
 		}
 		if sec.Type == domain.SecurityForex || sec.Type == domain.SecurityOption {
@@ -591,6 +593,8 @@ func (s *Service) placeAutoLiquidationOrders(ctx context.Context, sc *saga.Conte
 		}
 		listing, err := s.Store.GetListingBySecurityID(ctx, sec.ID)
 		if err != nil {
+			s.logOpErr(ctx, "auto-liquidation: listing lookup failed, holding skipped in ranking", err,
+				"fund_id", sc.State.FundID, "holding_id", h.ID, "security_id", sec.ID)
 			continue
 		}
 		price, _ := money.Parse(listing.Price)

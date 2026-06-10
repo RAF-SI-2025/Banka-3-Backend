@@ -719,6 +719,8 @@ func (s *Service) recordRealizedGain(
 func (s *Service) stopTriggered(o *domain.Order, listing *domain.Listing) bool {
 	stop, err := money.Parse(o.StopPrice)
 	if err != nil {
+		s.log().Warn("stop trigger: stop price parse failed, order will never trigger",
+			"err", err, "order_id", o.ID, "security_id", o.SecurityID, "stop_price", o.StopPrice)
 		return false
 	}
 	var quoteStr string
@@ -729,6 +731,8 @@ func (s *Service) stopTriggered(o *domain.Order, listing *domain.Listing) bool {
 	}
 	quote, err := money.Parse(quoteStr)
 	if err != nil {
+		s.log().Warn("stop trigger: listing quote parse failed, order will never trigger",
+			"err", err, "order_id", o.ID, "security_id", o.SecurityID, "quote", quoteStr)
 		return false
 	}
 	cmp := quote.Cmp(stop)
@@ -754,18 +758,24 @@ func (s *Service) stopTriggered(o *domain.Order, listing *domain.Listing) bool {
 func (s *Service) limitConditionMet(o *domain.Order, listing *domain.Listing) bool {
 	limit, err := money.Parse(o.LimitPrice)
 	if err != nil {
+		s.log().Warn("limit condition: limit price parse failed, order will never fill",
+			"err", err, "order_id", o.ID, "security_id", o.SecurityID, "limit_price", o.LimitPrice)
 		return false
 	}
 	switch o.Direction {
 	case domain.DirectionBuy:
 		ask, err := money.Parse(listing.Ask)
 		if err != nil {
+			s.log().Warn("limit condition: listing ask parse failed, order will never fill",
+				"err", err, "order_id", o.ID, "security_id", o.SecurityID, "ask", listing.Ask)
 			return false
 		}
 		return ask.Cmp(limit) <= 0
 	case domain.DirectionSell:
 		bid, err := money.Parse(listing.Bid)
 		if err != nil {
+			s.log().Warn("limit condition: listing bid parse failed, order will never fill",
+				"err", err, "order_id", o.ID, "security_id", o.SecurityID, "bid", listing.Bid)
 			return false
 		}
 		return bid.Cmp(limit) >= 0

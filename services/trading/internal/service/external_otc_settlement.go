@@ -57,7 +57,13 @@ type SettleExternalOTCOptionResult struct {
 }
 
 func (s *Service) SettleExternalOTCOption(ctx context.Context, in SettleExternalOTCOptionInput) (*SettleExternalOTCOptionResult, error) {
-	senderRouting, _ := strconv.Atoi(in.SenderBankCode)
+	senderRouting, aerr := strconv.Atoi(in.SenderBankCode)
+	if aerr != nil {
+		// Routing 0 makes the contract lookup miss and the system vote NO
+		// with "contract not found" — surface the real cause here.
+		s.log().WarnContext(ctx, "external otc settlement: malformed sender bank code, routing treated as 0",
+			"err", aerr, "sender_bank_code", in.SenderBankCode, "transaction_id", in.TransactionID)
+	}
 	switch strings.ToLower(in.Phase) {
 	case "prepare":
 		return s.settleOTCPrepare(ctx, senderRouting, in)

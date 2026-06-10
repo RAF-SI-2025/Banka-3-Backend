@@ -51,7 +51,11 @@ func accessLog(log *slog.Logger, next http.Handler) http.Handler {
 		// On a failure, attach the error response body (the JSON error
 		// envelope every handler writes) so a bare `status=500` line
 		// still names its cause without trace-spelunking.
-		if sr.status >= 400 && len(sr.errBody) > 0 {
+		// Auth routes excluded as defense-in-depth: their error
+		// envelopes are token-free today, but one future handler
+		// echoing a credential into an error message must not end
+		// up in Loki.
+		if sr.status >= 400 && len(sr.errBody) > 0 && !strings.HasPrefix(r.URL.Path, "/api/v1/auth/") {
 			attrs = append(attrs, slog.String("err", string(sr.errBody)))
 		}
 		log.LogAttrs(r.Context(), level, "http", attrs...)
