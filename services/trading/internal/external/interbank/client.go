@@ -8,6 +8,7 @@ import (
 	"io"
 	"log/slog"
 	"net/http"
+	"strconv"
 	"strings"
 	"sync"
 	"time"
@@ -27,12 +28,12 @@ const (
 	// running this codebase will speak.
 	ProtocolNative Protocol = "native"
 	// ProtocolBanka2 — the partner speaks the canonical si-tx-proto /
-	// Banka-4 shape: every endpoint under /interbank
-	// (/interbank/public-stock, /interbank/negotiations/…,
-	// /interbank/user/{routing}/{id}) and the §2 2PC envelope at
-	// POST /interbank. The peer base URL is the partner's root; we append
-	// the /interbank/… paths. (Named "banka2" for historical reasons —
-	// the shape was first reverse-engineered from a Banka-2 Spring bank.)
+	// Banka-4 shape: OTC endpoints at the partner root
+	// (/public-stock, /negotiations/…, /user/{routing}/{id}) and the §2
+	// 2PC envelope at POST /interbank. The peer base URL is the partner's
+	// root; we append /public-stock, /negotiations/… and /interbank.
+	// (Named "banka2" for historical reasons — the shape was first
+	// reverse-engineered from a Banka-2 Spring bank.)
 	ProtocolBanka2 Protocol = "banka2"
 )
 
@@ -51,6 +52,17 @@ type Config struct {
 	// OwnRoutingNumber identifies this bank to the partner (echoed in
 	// request payloads so partners can populate their remote_bank_code).
 	OwnRoutingNumber string
+	// PresentedRouting maps a partner bank code to the routing number that
+	// partner has tied to OUR API key — i.e. how they identify us. Most
+	// partners know us by OwnRoutingNumber, but a partner that slotted our
+	// key into a pre-existing routing entry expects that number instead and
+	// rejects any envelope whose idempotenceKey.routingNumber differs
+	// ("mismatches X-Api-Key sender"). Banka-2 registered Banka-3's key under
+	// their legacy "265" EXBanka slot, so PresentedRouting["222"]="265". Set
+	// from INTERBANK_PRESENTED_ROUTING; absent an entry we present
+	// OwnRoutingNumber. Only the Banka-2 dialect consults this — native peers
+	// know us by our real routing.
+	PresentedRouting map[string]string
 	// SignKey is the shared secret for the celina-5 digital-signature
 	// primitive (INTERBANK_SIGN_KEY). When non-empty, every outbound
 	// request is stamped with X-Timestamp, X-Content-Hash, and
@@ -108,6 +120,20 @@ func (c *Client) apiKeyForURL(url string) string {
 	return c.cfg.APIKey
 }
 
+// presentedRouting returns the routing number we must present to the given
+// partner in idempotenceKey/transactionId/ForeignBankId — i.e. how that
+// partner has registered our API key (see Config.PresentedRouting). Falls
+// back to OwnRoutingNumber when the partner has no override.
+func (c *Client) presentedRouting(bankCode string) int {
+	if v := c.cfg.PresentedRouting[bankCode]; v != "" {
+		if n, err := strconv.Atoi(v); err == nil {
+			return n
+		}
+	}
+	n, _ := strconv.Atoi(c.cfg.OwnRoutingNumber)
+	return n
+}
+
 // Protocol returns the cached protocol for a partner, probing it on
 // first use. Falls back to ProtocolUnknown when both probes fail.
 func (c *Client) Protocol(ctx context.Context, bankCode string) Protocol {
@@ -122,8 +148,8 @@ func (c *Client) Protocol(ctx context.Context, bankCode string) Protocol {
 }
 
 // probe tries the native /bank/api/v1/otc/public route first; falls
-// back to /public-stock with the API key. Returns ProtocolUnknown when
-// neither comes back 200.
+// back to the canonical root /public-stock with the API key. Returns
+// ProtocolUnknown when neither comes back 200.
 func (c *Client) probe(ctx context.Context, bankCode string) Protocol {
 	base := c.baseURL(bankCode)
 	if base == "" {
@@ -132,7 +158,7 @@ func (c *Client) probe(ctx context.Context, bankCode string) Protocol {
 	if c.probeOK(ctx, "GET", base+"/bank/api/v1/otc/public", false) {
 		return ProtocolNative
 	}
-	if c.probeOK(ctx, "GET", base+"/interbank/public-stock", true) {
+	if c.probeOK(ctx, "GET", base+"/public-stock", true) {
 		return ProtocolBanka2
 	}
 	return ProtocolUnknown

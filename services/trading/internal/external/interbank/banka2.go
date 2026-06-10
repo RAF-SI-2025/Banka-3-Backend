@@ -17,9 +17,11 @@ import (
 // Banka-2-Backend/banka2_bek/src/main/java/rs/raf/banka2_bek/interbank.
 //
 // Differences from our native shape:
-//   * every endpoint is under /interbank on the partner's root base URL
-//     (/interbank/public-stock, /interbank/negotiations/…), matching
-//     Banka-4's mount; the §2 2PC envelope is POST {base}/interbank
+//   * OTC endpoints sit at the partner's root base URL
+//     (/public-stock, /negotiations/…) — the canonical si-tx-proto
+//     sibling layout, which Banka-4 adopted on 2026-06-09 (they moved
+//     OTC out from under /interbank). The §2 2PC envelope still POSTs
+//     to {base}/interbank.
 //   * counter uses PUT, withdraw uses DELETE, accept uses GET
 //   * money is { currency: "USD", amount: 150 } (BigDecimal, not string)
 //   * settlement_date is OffsetDateTime / RFC3339
@@ -75,7 +77,7 @@ type banka2OtcOffer struct {
 // =====================================================================
 
 func (c *Client) discoverBanka2(ctx context.Context, bankCode, tickerFilter string) ([]*service.PartnerHolding, error) {
-	url := c.baseURL(bankCode) + "/interbank/public-stock"
+	url := c.baseURL(bankCode) + "/public-stock"
 	status, body, err := c.doJSON(ctx, "GET", url, nil)
 	if err != nil {
 		return nil, err
@@ -119,7 +121,7 @@ func (c *Client) createOfferBanka2(ctx context.Context, in service.PartnerCreate
 	if err != nil {
 		return nil, fmt.Errorf("banka2 create offer: parse settlement: %w", err)
 	}
-	ownRouting, _ := strconv.Atoi(c.cfg.OwnRoutingNumber)
+	ownRouting := c.presentedRouting(in.RemoteBankCode)
 	partnerRouting, _ := strconv.Atoi(in.RemoteBankCode)
 
 	body := banka2OtcOffer{
@@ -136,7 +138,7 @@ func (c *Client) createOfferBanka2(ctx context.Context, in service.PartnerCreate
 		BuyerAccountNumber: in.LocalAccountRef,
 	}
 
-	url := c.baseURL(in.RemoteBankCode) + "/interbank/negotiations"
+	url := c.baseURL(in.RemoteBankCode) + "/negotiations"
 	status, respBody, err := c.doJSON(ctx, "POST", url, body)
 	if err != nil {
 		return nil, err
@@ -157,10 +159,10 @@ func (c *Client) createOfferBanka2(ctx context.Context, in service.PartnerCreate
 }
 
 func (c *Client) actionBanka2(ctx context.Context, in service.PartnerActionInput, verb string) error {
-	ownRouting, _ := strconv.Atoi(c.cfg.OwnRoutingNumber)
+	ownRouting := c.presentedRouting(in.RemoteBankCode)
 	partnerRouting, _ := strconv.Atoi(in.RemoteBankCode)
 	base := c.baseURL(in.RemoteBankCode)
-	path := fmt.Sprintf("/interbank/negotiations/%d/%s", partnerRouting, in.RemoteThreadID)
+	path := fmt.Sprintf("/negotiations/%d/%s", partnerRouting, in.RemoteThreadID)
 
 	switch verb {
 	case "counter":

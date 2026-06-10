@@ -278,7 +278,7 @@ type b2TransactionVote struct {
 }
 
 func (c *Client) preparePartnerBanka2(ctx context.Context, in PreparePartnerInput) (*PreparePartnerResult, error) {
-	ownRouting, _ := strconv.Atoi(c.cfg.OwnRoutingNumber)
+	ownRouting := c.presentedRouting(in.RemoteBankCode)
 	partnerRouting, _ := strconv.Atoi(in.RemoteBankCode)
 	tx := b2Transaction{
 		TransactionID:  b2ForeignID{RoutingNumber: ownRouting, ID: in.TransactionID},
@@ -326,7 +326,7 @@ func (c *Client) preparePartnerBanka2(ctx context.Context, in PreparePartnerInpu
 }
 
 func (c *Client) commitPartnerBanka2(ctx context.Context, in CommitPartnerInput) error {
-	ownRouting, _ := strconv.Atoi(c.cfg.OwnRoutingNumber)
+	ownRouting := c.presentedRouting(in.RemoteBankCode)
 	envelope := b2Envelope{
 		IdempotenceKey: b2IdempotenceKey{RoutingNumber: ownRouting, LocallyGeneratedKey: in.TransactionID + "-commit"},
 		MessageType:    "COMMIT_TX",
@@ -344,7 +344,7 @@ func (c *Client) commitPartnerBanka2(ctx context.Context, in CommitPartnerInput)
 }
 
 func (c *Client) rollbackPartnerBanka2(ctx context.Context, in RollbackPartnerInput) error {
-	ownRouting, _ := strconv.Atoi(c.cfg.OwnRoutingNumber)
+	ownRouting := c.presentedRouting(in.RemoteBankCode)
 	envelope := b2Envelope{
 		IdempotenceKey: b2IdempotenceKey{RoutingNumber: ownRouting, LocallyGeneratedKey: in.TransactionID + "-rollback"},
 		MessageType:    "ROLLBACK_TX",

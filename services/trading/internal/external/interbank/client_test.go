@@ -18,6 +18,25 @@ func TestParsePartnerKeys(t *testing.T) {
 	}
 }
 
+func TestPresentedRouting(t *testing.T) {
+	c := New(Config{
+		OwnRoutingNumber: "333",
+		// Banka-2 (code 222) registered our key under their legacy 265 slot;
+		// 444 has no override and should fall back to our real routing.
+		PresentedRouting: ParsePresentedRouting("222:265"),
+	}, nil)
+
+	if got := c.presentedRouting("222"); got != 265 {
+		t.Errorf("presentedRouting(222) = %d, want 265 (Banka-2 knows us as 265)", got)
+	}
+	if got := c.presentedRouting("444"); got != 333 {
+		t.Errorf("presentedRouting(444) = %d, want 333 (fallback to OwnRoutingNumber)", got)
+	}
+	if got := c.presentedRouting("999"); got != 333 {
+		t.Errorf("presentedRouting(999) = %d, want 333 (no override)", got)
+	}
+}
+
 func TestAPIKeyForURL(t *testing.T) {
 	c := New(Config{
 		Routes:      Routes{"444": "http://rafsi.davidovic.io:8083", "999": "http://mock-partner:9099"},
@@ -28,8 +47,9 @@ func TestAPIKeyForURL(t *testing.T) {
 	cases := []struct {
 		url, want string
 	}{
-		// 444 has a per-partner key — used for every path under its base.
-		{"http://rafsi.davidovic.io:8083/interbank/public-stock", "bank4-secret-key"},
+		// 444 has a per-partner key — used for every path under its base
+		// (OTC at root, 2PC envelope under /interbank).
+		{"http://rafsi.davidovic.io:8083/public-stock", "bank4-secret-key"},
 		{"http://rafsi.davidovic.io:8083/interbank", "bank4-secret-key"},
 		// 999 has no per-partner key — falls back to the default.
 		{"http://mock-partner:9099/bank/api/v1/otc/public", "default-inbound-key"},
