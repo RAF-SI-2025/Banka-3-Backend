@@ -57,6 +57,16 @@ type externalOTCExercisePayload struct {
 	TotalAmount         string `json:"total_amount"`
 	Currency            string `json:"currency"`
 	SenderRoutingNumber int    `json:"sender_routing_number"`
+
+	// Banka-2 / si-tx-proto fields. When PartnerIsBanka2, exercise is a
+	// buyer-coordinated multi-asset 2PC: we send the partner the exercise
+	// NEW_TX (OPTION-account legs release the seller's shares + credit the
+	// strike) and deliver the shares to our buyer locally.
+	PartnerIsBanka2 bool   `json:"partner_is_banka2"`
+	BuyerUserRef    string `json:"buyer_user_ref"`
+	LocalUserID     string `json:"local_user_id"`
+	LocalUserKind   string `json:"local_user_kind"`
+	SecurityTicker  string `json:"security_ticker"`
 }
 
 var externalOTCExerciseNS = uuid.MustParse("c5e0f130-7e62-4f00-9c1d-1f24f2d8a402")
@@ -103,6 +113,11 @@ func (s *Service) exerciseExternalOutgoing(ctx context.Context, contract *domain
 		TotalAmount:         money.FormatAmount(total),
 		Currency:            string(contract.Currency),
 		SenderRoutingNumber: s.Cfg.OwnRoutingNumber,
+		PartnerIsBanka2:     s.PartnerOTC != nil && s.PartnerOTC.SpeaksBanka2Dialect(ctx, contract.RemoteBankCode),
+		BuyerUserRef:        contract.LocalUserID,
+		LocalUserID:         contract.LocalUserID,
+		LocalUserKind:       string(contract.LocalUserKind),
+		SecurityTicker:      contract.SecurityTicker,
 	}
 
 	ctx = saga.FaultsFromMetadata(ctx, s.Cfg.SagaDebugFaultInjection)
@@ -160,8 +175,26 @@ func registerExternalOTCExerciseSaga(reg *saga.Registry, svc *Service) {
 			// with the accept saga.
 			{
 				Name: "notify_partner_exercise",
-				Forward: func(_ context.Context, _ *saga.Context[externalOTCExercisePayload]) error {
-					return nil
+				Forward: func(ctx context.Context, sc *saga.Context[externalOTCExercisePayload]) error {
+					if !sc.State.PartnerIsBanka2 {
+						// Native partners observe our exercise via the strike-leg
+						// 2PC commit (step 3); no dedicated verb. No-op.
+						return nil
+					}
+					// Banka-2 / si-tx-proto: WE coordinate. Send the exercise NEW_TX
+					// (OPTION-account legs release the seller shares + credit the
+					// strike) and drive it to COMMIT. A partner NO surfaces as a
+					// permanent error -> compensate the local strike reservation.
+					return svc.PartnerOTC.ExerciseOption(ctx, PartnerExerciseInput{
+						RemoteBankCode: sc.State.RemoteBankCode,
+						ContractID:     sc.State.RemoteThreadID,
+						TransactionID:  sc.TransactionID,
+						BuyerUserRef:   sc.State.BuyerUserRef,
+						Quantity:       sc.State.Quantity,
+						StrikeTotal:    sc.State.TotalAmount,
+						Currency:       sc.State.Currency,
+						Ticker:         sc.State.SecurityTicker,
+					})
 				},
 				Compensate: nil,
 			},
@@ -171,6 +204,31 @@ func registerExternalOTCExerciseSaga(reg *saga.Registry, svc *Service) {
 					_, err := svc.InterbankPayer.CommitPayment(ctx,
 						sc.State.SenderRoutingNumber, sc.TransactionID)
 					return err
+				},
+				Compensate: nil,
+			},
+			{
+				Name: "deliver_shares",
+				Forward: func(ctx context.Context, sc *saga.Context[externalOTCExercisePayload]) error {
+					if !sc.State.PartnerIsBanka2 || sc.State.SecurityTicker == "" {
+						// Native exercise does not model local share delivery.
+						return nil
+					}
+					// Banka-2 exercise grants the buyer qty shares (PERSON STOCK
+					// +qty). Credit a local holding at strike cost. Idempotent via
+					// the (user, security, account) upsert under the saga txid retry.
+					sec, err := svc.Store.GetSecurityByTicker(ctx, sc.State.SecurityTicker, domain.SecurityStock)
+					if err != nil {
+						// Unknown ticker locally — strike already settled + contract
+						// exercised; skip delivery rather than strand the saga.
+						return nil
+					}
+					return svc.Store.ExecuteAtomic(ctx, func(tx pgx.Tx) error {
+						_, aerr := svc.Store.ApplyBuyFill(ctx, tx, sc.State.LocalUserID,
+							sc.State.LocalUserKind, sec.ID, sc.State.LocalAccountID,
+							sc.State.Quantity, sc.State.StrikePrice)
+						return aerr
+					})
 				},
 				Compensate: nil,
 			},

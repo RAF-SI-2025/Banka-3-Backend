@@ -138,8 +138,15 @@ func (s *Service) preparePayment(ctx context.Context, in PreparePaymentInput) (*
 		return nil, apperr.FailedPrecondition("partner bank is blacklisted")
 	}
 
-	if len(in.LocalAccountNumber) != 18 || len(in.RemoteAccountNumber) != 18 {
-		return nil, apperr.Validation("account numbers must be 18 digits")
+	// local_account_number is the account whose funds actually move and must
+	// be a real 18-digit number. remote_account_number is audit-only (see the
+	// proto comment): 18 digits for cash payments, empty for PERSON-addressed
+	// OTC settlements where the counterparty has no account number.
+	if len(in.LocalAccountNumber) != 18 {
+		return nil, apperr.Validation("local account number must be 18 digits")
+	}
+	if in.RemoteAccountNumber != "" && len(in.RemoteAccountNumber) != 18 {
+		return nil, apperr.Validation("remote account number must be 18 digits or empty")
 	}
 	if !in.Currency.Supported() {
 		return nil, apperr.Validation("unsupported currency")

@@ -67,6 +67,12 @@ type externalOTCAcceptPayload struct {
 	Currency            string `json:"currency"`
 	SettlementDate      string `json:"settlement_date"`
 	SenderRoutingNumber int    `json:"sender_routing_number"`
+
+	// PartnerCoordinatesAccept is true when the partner's bank coordinates
+	// the accept 2PC (si-tx-proto / Banka-2). Then prepare_premium and
+	// commit_premium are no-ops — the partner debits our buyer via an
+	// inbound NEW_TX; we only notify accept + record the local contract.
+	PartnerCoordinatesAccept bool `json:"partner_coordinates_accept"`
 }
 
 var externalOTCAcceptNS = uuid.MustParse("c5ac0030-7e62-4f00-9c1d-1f24f2d8a401")
@@ -121,6 +127,11 @@ func (s *Service) acceptExternalOutgoing(ctx context.Context, thread *domain.Ext
 		Currency:            string(thread.Currency),
 		SettlementDate:      thread.SettlementDate.Format("2006-01-02"),
 		SenderRoutingNumber: s.Cfg.OwnRoutingNumber,
+		// si-tx-proto / Banka-2 partners coordinate the accept 2PC from the
+		// seller side, debiting our buyer via an inbound NEW_TX. Detect once
+		// here and persist in the saga state so the premium steps stay
+		// no-ops across retries.
+		PartnerCoordinatesAccept: s.PartnerOTC.AcceptCoordinatedByPartner(ctx, thread.RemoteBankCode),
 	}
 
 	ctx = saga.FaultsFromMetadata(ctx, s.Cfg.SagaDebugFaultInjection)
@@ -160,6 +171,12 @@ func registerExternalOTCAcceptSaga(reg *saga.Registry, svc *Service) {
 			{
 				Name: "prepare_premium",
 				Forward: func(ctx context.Context, sc *saga.Context[externalOTCAcceptPayload]) error {
+					if sc.State.PartnerCoordinatesAccept {
+						// Partner (si-tx-proto/Banka-2) debits our buyer via an
+						// inbound NEW_TX during notify_partner_accept; nothing to
+						// prepare on our side.
+						return nil
+					}
 					_, err := svc.InterbankPayer.PreparePayment(ctx, PrepareInterbankInput{
 						SenderRoutingNumber: sc.State.SenderRoutingNumber,
 						TransactionID:       sc.TransactionID,
@@ -172,6 +189,9 @@ func registerExternalOTCAcceptSaga(reg *saga.Registry, svc *Service) {
 					return err
 				},
 				Compensate: func(ctx context.Context, sc *saga.Context[externalOTCAcceptPayload]) error {
+					if sc.State.PartnerCoordinatesAccept {
+						return nil
+					}
 					return svc.InterbankPayer.RollbackPayment(ctx,
 						sc.State.SenderRoutingNumber, sc.TransactionID,
 						"external otc accept compensation")
@@ -209,6 +229,11 @@ func registerExternalOTCAcceptSaga(reg *saga.Registry, svc *Service) {
 			{
 				Name: "commit_premium",
 				Forward: func(ctx context.Context, sc *saga.Context[externalOTCAcceptPayload]) error {
+					if sc.State.PartnerCoordinatesAccept {
+						// Premium was settled by the partner-coordinated inbound
+						// NEW_TX; nothing to commit on our side.
+						return nil
+					}
 					_, err := svc.InterbankPayer.CommitPayment(ctx,
 						sc.State.SenderRoutingNumber, sc.TransactionID)
 					return err

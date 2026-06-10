@@ -92,7 +92,12 @@ message PreparePaymentRequest {
   // validated against the spec sum(digits)%11 checksum at the gateway
   // before the RPC fires.
   string local_account_number = 4 [(buf.validate.field).string.len = 18];
-  string remote_account_number = 5 [(buf.validate.field).string.len = 18];
+  // remote_account_number is audit-only (the money moves between
+  // local_account_number and the bank's per-currency system account). It is
+  // 18 digits for account-addressed cash payments, but EMPTY for PERSON-
+  // addressed OTC settlements (si-tx-proto/Banka-2), where the counterparty
+  // is identified by foreign-bank id, not an account number. So: 18 or empty.
+  string remote_account_number = 5 [(buf.validate.field).string.max_len = 18];
   Currency currency = 6 [(buf.validate.field).enum = {
     defined_only: true
     not_in: [0]
