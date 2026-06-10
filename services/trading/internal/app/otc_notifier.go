@@ -216,8 +216,10 @@ func (n *otcEmailNotifier) recipientEmail(ctx context.Context, userID string, ki
 
 func (n *otcEmailNotifier) dispatch(ctx context.Context, to, subject, body string) {
 	if err := n.sender.Send(ctx, email.Message{To: to, Subject: subject, Body: body}); err != nil {
-		n.log.Warn("otc email send failed", "to", to, "subject", subject, "err", err.Error())
+		n.log.WarnContext(ctx, "otc email send failed", "err", err, "to", to, "subject", subject)
+		return
 	}
+	n.log.InfoContext(ctx, "otc email sent", "to", to, "subject", subject)
 }
 
 func errString(err error) string {

@@ -12,14 +12,49 @@
 package router
 
 import (
+	"bytes"
 	"crypto/subtle"
 	"encoding/json"
+	"errors"
+	"io"
 	"net/http"
 	"time"
 
 	tradingpb "github.com/RAF-SI-2025/Banka-3-Backend/gen/proto/trading/v1"
+	"github.com/RAF-SI-2025/Banka-3-Backend/pkg/logger"
 	"google.golang.org/protobuf/types/known/timestamppb"
 )
+
+// snippetMax bounds the partner-payload excerpt attached to decode-
+// failure logs. These are partner-bank protocol bodies (no user
+// secrets); the cap keeps a hostile payload from flooding a log line.
+const snippetMax = 512
+
+// bodySnippet truncates raw to snippetMax bytes for logging.
+func bodySnippet(raw []byte) string {
+	if len(raw) > snippetMax {
+		raw = raw[:snippetMax]
+	}
+	return string(raw)
+}
+
+// snippetWriter retains the first snippetMax bytes written through it.
+// Tee a request body through one so a JSON decode failure can log what
+// the partner actually sent without re-reading the stream.
+type snippetWriter struct{ buf bytes.Buffer }
+
+func (s *snippetWriter) Write(p []byte) (int, error) {
+	if room := snippetMax - s.buf.Len(); room > 0 {
+		if len(p) > room {
+			s.buf.Write(p[:room])
+		} else {
+			s.buf.Write(p)
+		}
+	}
+	return len(p), nil
+}
+
+func (s *snippetWriter) String() string { return s.buf.String() }
 
 // PartnerOTC holds the deps the partner-facing handlers need. Set on
 // the Router when celina-5 is configured (INTERBANK_API_KEY and the
@@ -122,6 +157,9 @@ type nativePublicHolding struct {
 // protocol detection so it's intentionally unauthenticated.
 func (p *PartnerOTC) ListPublic(w http.ResponseWriter, r *http.Request) {
 	if p.Trading == nil {
+		ctx := r.Context()
+		logger.From(ctx).ErrorContext(ctx, "partner public listing unavailable: trading not wired",
+			"method", r.Method, "path", r.URL.Path)
 		writeError(w, http.StatusServiceUnavailable, "trading not wired")
 		return
 	}
@@ -130,7 +168,7 @@ func (p *PartnerOTC) ListPublic(w http.ResponseWriter, r *http.Request) {
 		Ticker: ticker,
 	})
 	if err != nil {
-		writeGRPCError(w, err)
+		writeGRPCError(w, r, err)
 		return
 	}
 	bankCode := p.BankRoutingNumber
@@ -198,6 +236,11 @@ func (p *PartnerOTC) guard(h http.HandlerFunc) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		got := []byte(r.Header.Get("X-Api-Key"))
 		if subtle.ConstantTimeCompare(got, expected) != 1 {
+			ctx := r.Context()
+			// Never log the presented key itself.
+			logger.From(ctx).WarnContext(ctx, "partner api key rejected",
+				"method", r.Method, "path", r.URL.Path,
+				"key_present", len(got) > 0, "remote", r.RemoteAddr)
 			writeError(w, http.StatusUnauthorized, "invalid X-Api-Key")
 			return
 		}
@@ -207,13 +250,24 @@ func (p *PartnerOTC) guard(h http.HandlerFunc) http.HandlerFunc {
 
 // ReceiveOffer handles a partner's CreateOffer call.
 func (p *PartnerOTC) ReceiveOffer(w http.ResponseWriter, r *http.Request) {
+	ctx := r.Context()
+	log := logger.From(ctx)
 	var in partnerOfferRequest
-	if err := json.NewDecoder(r.Body).Decode(&in); err != nil {
+	var snip snippetWriter
+	if err := json.NewDecoder(io.TeeReader(r.Body, &snip)).Decode(&in); err != nil {
+		log.WarnContext(ctx, "partner offer payload decode failed",
+			"err", err, "path", r.URL.Path, "body", snip.String())
 		writeError(w, http.StatusBadRequest, "invalid JSON body")
 		return
 	}
+	// Carry the partner identity + thread id on the request logger so
+	// the shared writeGRPCError line names the failing exchange too.
+	log = log.With("partner_bank", in.SenderBankCode, "sender_thread_id", in.SenderThreadID)
+	r = r.WithContext(logger.Inject(ctx, log))
+	ctx = r.Context()
 	settle, err := parsePartnerDate(in.SettlementDate)
 	if err != nil {
+		log.WarnContext(ctx, "partner offer rejected: bad settlement date", "err", err)
 		writeError(w, http.StatusBadRequest, "invalid settlement_date: "+err.Error())
 		return
 	}
@@ -229,9 +283,13 @@ func (p *PartnerOTC) ReceiveOffer(w http.ResponseWriter, r *http.Request) {
 		SettlementDate:    timestamppb.New(settle),
 	})
 	if err != nil {
-		writeGRPCError(w, err)
+		writeGRPCError(w, r, err)
 		return
 	}
+	log.InfoContext(ctx, "partner offer received",
+		"local_thread_id", out.GetLocalMirror().GetId(),
+		"quantity", in.Quantity, "price_per_unit", in.PricePerUnit,
+		"premium", in.Premium)
 	writeJSON(w, http.StatusOK, partnerOfferResponse{
 		RemoteThreadID:    out.GetLocalMirror().GetId(),
 		RemoteDisplayName: out.GetLocalMirror().GetLocalUserId(),
@@ -241,14 +299,14 @@ func (p *PartnerOTC) ReceiveOffer(w http.ResponseWriter, r *http.Request) {
 
 // ReceiveCounter handles a partner's counter-offer.
 func (p *PartnerOTC) ReceiveCounter(w http.ResponseWriter, r *http.Request) {
+	ctx := r.Context()
+	log := logger.From(ctx)
 	var in partnerCounterRequest
-	if err := json.NewDecoder(r.Body).Decode(&in); err != nil {
+	var snip snippetWriter
+	if err := json.NewDecoder(io.TeeReader(r.Body, &snip)).Decode(&in); err != nil {
+		log.WarnContext(ctx, "partner counter payload decode failed",
+			"err", err, "path", r.URL.Path, "body", snip.String())
 		writeError(w, http.StatusBadRequest, "invalid JSON body")
-		return
-	}
-	settle, err := parsePartnerDate(in.SettlementDate)
-	if err != nil {
-		writeError(w, http.StatusBadRequest, "invalid settlement_date: "+err.Error())
 		return
 	}
 	bankCode := r.PathValue("bank_code")
@@ -259,6 +317,15 @@ func (p *PartnerOTC) ReceiveCounter(w http.ResponseWriter, r *http.Request) {
 	if in.SenderThreadID == "" {
 		in.SenderThreadID = threadID
 	}
+	log = log.With("partner_bank", in.SenderBankCode, "sender_thread_id", in.SenderThreadID)
+	r = r.WithContext(logger.Inject(ctx, log))
+	ctx = r.Context()
+	settle, err := parsePartnerDate(in.SettlementDate)
+	if err != nil {
+		log.WarnContext(ctx, "partner counter rejected: bad settlement date", "err", err)
+		writeError(w, http.StatusBadRequest, "invalid settlement_date: "+err.Error())
+		return
+	}
 	_, err = p.TradingOTC.ReceiveExternalOTCCounter(r.Context(), &tradingpb.ReceiveExternalOTCCounterRequest{
 		SenderBankCode: in.SenderBankCode,
 		SenderThreadId: in.SenderThreadID,
@@ -268,9 +335,12 @@ func (p *PartnerOTC) ReceiveCounter(w http.ResponseWriter, r *http.Request) {
 		SettlementDate: timestamppb.New(settle),
 	})
 	if err != nil {
-		writeGRPCError(w, err)
+		writeGRPCError(w, r, err)
 		return
 	}
+	log.InfoContext(ctx, "partner counter received",
+		"quantity", in.Quantity, "price_per_unit", in.PricePerUnit,
+		"premium", in.Premium)
 	w.WriteHeader(http.StatusNoContent)
 }
 
@@ -291,10 +361,17 @@ const (
 )
 
 func (p *PartnerOTC) dispatchAction(w http.ResponseWriter, r *http.Request, kind partnerActionKind) {
+	ctx := r.Context()
+	log := logger.From(ctx)
 	var in partnerActionRequest
 	// Bodies may be empty for action endpoints; ignore decode errors
-	// when body length is 0.
-	_ = json.NewDecoder(r.Body).Decode(&in)
+	// when body length is 0 (io.EOF). Anything else is a malformed
+	// partner payload worth a line even though we proceed regardless.
+	var snip snippetWriter
+	if derr := json.NewDecoder(io.TeeReader(r.Body, &snip)).Decode(&in); derr != nil && !errors.Is(derr, io.EOF) {
+		log.WarnContext(ctx, "partner action payload ignored: decode failed",
+			"err", derr, "path", r.URL.Path, "body", snip.String())
+	}
 	bankCode := r.PathValue("bank_code")
 	threadID := r.PathValue("thread_id")
 	if in.SenderBankCode == "" {
@@ -303,6 +380,13 @@ func (p *PartnerOTC) dispatchAction(w http.ResponseWriter, r *http.Request, kind
 	if in.SenderThreadID == "" {
 		in.SenderThreadID = threadID
 	}
+	action := "withdraw"
+	if kind == acceptAction {
+		action = "accept"
+	}
+	log = log.With("partner_bank", in.SenderBankCode, "sender_thread_id", in.SenderThreadID, "action", action)
+	r = r.WithContext(logger.Inject(ctx, log))
+	ctx = r.Context()
 	req := &tradingpb.ReceiveExternalOTCActionRequest{
 		SenderBankCode: in.SenderBankCode,
 		SenderThreadId: in.SenderThreadID,
@@ -315,16 +399,22 @@ func (p *PartnerOTC) dispatchAction(w http.ResponseWriter, r *http.Request, kind
 		_, err = p.TradingOTC.ReceiveExternalOTCAccept(r.Context(), req)
 	}
 	if err != nil {
-		writeGRPCError(w, err)
+		writeGRPCError(w, r, err)
 		return
 	}
+	log.InfoContext(ctx, "partner otc action applied")
 	w.WriteHeader(http.StatusNoContent)
 }
 
 // ReceiveExerciseNotice handles a partner's exercise notification.
 func (p *PartnerOTC) ReceiveExerciseNotice(w http.ResponseWriter, r *http.Request) {
+	ctx := r.Context()
+	log := logger.From(ctx)
 	var in partnerExerciseRequest
-	if err := json.NewDecoder(r.Body).Decode(&in); err != nil {
+	var snip snippetWriter
+	if err := json.NewDecoder(io.TeeReader(r.Body, &snip)).Decode(&in); err != nil {
+		log.WarnContext(ctx, "partner exercise payload decode failed",
+			"err", err, "path", r.URL.Path, "body", snip.String())
 		writeError(w, http.StatusBadRequest, "invalid JSON body")
 		return
 	}
@@ -336,7 +426,12 @@ func (p *PartnerOTC) ReceiveExerciseNotice(w http.ResponseWriter, r *http.Reques
 	if in.SenderContractID == "" {
 		in.SenderContractID = contractID
 	}
+	log = log.With("partner_bank", in.SenderBankCode,
+		"sender_contract_id", in.SenderContractID, "exercise_op_id", in.ExerciseOpID)
+	r = r.WithContext(logger.Inject(ctx, log))
+	ctx = r.Context()
 	if in.ExerciseOpID == "" {
+		log.WarnContext(ctx, "partner exercise rejected: missing exercise_op_id")
 		writeError(w, http.StatusBadRequest, "exercise_op_id is required")
 		return
 	}
@@ -346,9 +441,10 @@ func (p *PartnerOTC) ReceiveExerciseNotice(w http.ResponseWriter, r *http.Reques
 		ExerciseOpId:     in.ExerciseOpID,
 	})
 	if err != nil {
-		writeGRPCError(w, err)
+		writeGRPCError(w, r, err)
 		return
 	}
+	log.InfoContext(ctx, "partner exercise notice received")
 	w.WriteHeader(http.StatusNoContent)
 }
 

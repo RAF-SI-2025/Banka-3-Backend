@@ -32,15 +32,23 @@ import (
 // Run blocks until the process is signalled to terminate.
 func Run() error {
 	log := logger.New("user")
+	// Make logger.From(ctx) fall back to the JSON logger in frames that
+	// don't carry an injected logger (store, server helpers).
+	slog.SetDefault(log)
 
 	ctx, cancel := shutdown.Context()
 	defer cancel()
 
 	prov, err := otelinit.Init(ctx, "user")
 	if err != nil {
+		log.ErrorContext(ctx, "otel init failed", "err", err)
 		return fmt.Errorf("otelinit: %w", err)
 	}
-	defer func() { _ = prov.Shutdown(context.Background()) }()
+	defer func() {
+		if err := prov.Shutdown(context.Background()); err != nil {
+			log.Warn("otel shutdown failed", "err", err)
+		}
+	}()
 
 	// OpenPair dials the primary (DATABASE_URL → banka-pg-pooler-rw) and,
 	// when set, a hot-standby read pool (DATABASE_READ_URL →
@@ -48,6 +56,7 @@ func Run() error {
 	// the standby; writes and transactions stay on the primary.
 	db, err := postgres.OpenPair(ctx, config.MustString("DATABASE_URL"), config.String("DATABASE_READ_URL", ""))
 	if err != nil {
+		log.ErrorContext(ctx, "postgres connect failed", "err", err)
 		return fmt.Errorf("postgres: %w", err)
 	}
 	defer db.Close()
@@ -57,6 +66,7 @@ func Run() error {
 
 	rdb, err := pkgredis.Open(ctx, config.MustString("REDIS_ADDR"), config.String("REDIS_PASSWORD", ""))
 	if err != nil {
+		log.ErrorContext(ctx, "redis connect failed", "err", err)
 		return fmt.Errorf("redis: %w", err)
 	}
 	defer rdb.Close()
@@ -88,6 +98,7 @@ func Run() error {
 			grpc.WithStatsHandler(prov.GRPCClientHandler()),
 		)
 		if err != nil {
+			log.ErrorContext(ctx, "dial trading failed", "err", err, "addr", tradingAddr)
 			return fmt.Errorf("dial trading: %w", err)
 		}
 		defer conn.Close()
@@ -120,6 +131,7 @@ func Run() error {
 	log.Info("user service ready", "grpc", grpcAddr)
 
 	if err := g.Wait(); err != nil && !errors.Is(err, context.Canceled) {
+		log.Error("user service exited", "err", err)
 		return err
 	}
 	return nil
@@ -133,6 +145,7 @@ func buildNotifier(ctx context.Context, log *slog.Logger) (service.Notifier, fun
 	if addr := config.String("NOTIFICATION_GRPC_ADDR", ""); addr != "" {
 		conn, err := grpc.NewClient(addr, grpc.WithTransportCredentials(insecure.NewCredentials()))
 		if err != nil {
+			log.ErrorContext(ctx, "dial notification failed", "err", err, "addr", addr)
 			return nil, func() {}, fmt.Errorf("dial notification: %w", err)
 		}
 		return &notifClientAdapter{c: notifpb.NewNotificationServiceClient(conn), origin: "user"},

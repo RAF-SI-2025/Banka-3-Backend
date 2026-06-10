@@ -239,6 +239,11 @@ func (s *Service) ProcessOrderTick(ctx context.Context, o *domain.Order) (proces
 				res.NextEarliest = s.now().Add(s.tickRetryInterval())
 				return res, nil
 			}
+		} else if !isAppKind(exErr, apperr.KindNotFound) {
+			// Swallowed by design (fail-open to the fill path), but a
+			// real lookup failure deserves visibility.
+			s.log().WarnContext(ctx, "fill: exchange lookup failed; proceeding without market-state gate",
+				"err", exErr, "order_id", o.ID, "mic", listing.ExchangeMIC)
 		}
 	}
 
@@ -319,6 +324,7 @@ func (s *Service) ProcessOrderTick(ctx context.Context, o *domain.Order) (proces
 // legs; the booking tx is the only operation needed to converge.
 func (s *Service) executeFill(ctx context.Context, o *domain.Order, listing *domain.Listing, fillPrice string, qty int32) (*domain.OrderExecution, error) {
 	if s.Settler == nil {
+		s.log().ErrorContext(ctx, "fill: trade settler not wired", "order_id", o.ID)
 		return nil, apperr.Internal("trade settler not wired", nil)
 	}
 
@@ -332,10 +338,14 @@ func (s *Service) executeFill(ctx context.Context, o *domain.Order, listing *dom
 
 	csR, err := money.Parse(contractSize)
 	if err != nil {
+		s.log().ErrorContext(ctx, "fill: contract size unparseable",
+			"err", err, "order_id", o.ID, "contract_size", contractSize)
 		return nil, apperr.Internal("contract size unparseable", err)
 	}
 	priceR, err := money.Parse(fillPrice)
 	if err != nil {
+		s.log().ErrorContext(ctx, "fill: fill price unparseable",
+			"err", err, "order_id", o.ID, "fill_price", fillPrice)
 		return nil, apperr.Internal("fill price unparseable", err)
 	}
 	qtyR := new(big.Rat).SetInt64(int64(qty))
@@ -375,6 +385,8 @@ func (s *Service) executeFill(ctx context.Context, o *domain.Order, listing *dom
 		pending = row
 		return nil
 	}); err != nil {
+		s.log().ErrorContext(ctx, "fill: pending execution insert failed",
+			"err", err, "order_id", o.ID, "quantity", qty)
 		return nil, err
 	}
 
@@ -438,10 +450,14 @@ func (s *Service) completeFill(
 ) (*domain.OrderExecution, error) {
 	notional, err := money.Parse(pending.TotalAmount)
 	if err != nil {
+		s.log().ErrorContext(ctx, "fill: pending notional unparseable",
+			"err", err, "order_id", o.ID, "exec_id", pending.ID, "total_amount", pending.TotalAmount)
 		return nil, apperr.Internal("pending notional unparseable", err)
 	}
 	commission, err := money.Parse(pending.CommissionAmt)
 	if err != nil {
+		s.log().ErrorContext(ctx, "fill: pending commission unparseable",
+			"err", err, "order_id", o.ID, "exec_id", pending.ID, "commission", pending.CommissionAmt)
 		return nil, apperr.Internal("pending commission unparseable", err)
 	}
 
@@ -450,6 +466,9 @@ func (s *Service) completeFill(
 	// migration 0011), so a retry after a partial failure is a no-op.
 	settledOpID, err := s.settleCashLeg(ctx, o, sec, pending.PricePerUnit, pending.Quantity, notional, commission, pending.ID)
 	if err != nil {
+		s.log().ErrorContext(ctx, "fill: bank cash-leg settle failed",
+			"err", err, "order_id", o.ID, "exec_id", pending.ID,
+			"ticker", sec.Ticker, "quantity", pending.Quantity)
 		return nil, err
 	}
 
@@ -513,6 +532,10 @@ func (s *Service) completeFill(
 	pending.Status = "settled"
 	exec = pending
 	bizmetric.TradeCompleted(ctx, string(o.Direction), string(sec.Type), "ok")
+	s.log().InfoContext(ctx, "order fill settled",
+		"order_id", o.ID, "exec_id", pending.ID, "op_id", settledOpID,
+		"ticker", sec.Ticker, "quantity", pending.Quantity,
+		"price", pending.PricePerUnit, "remaining", remainingAfter)
 
 	// Order-fill notifications (todoSpec C3 S23/S24). Emitted after the
 	// booking tx commits so the row state matches what we announce.
@@ -1029,6 +1052,7 @@ func (s *Service) tickRetryInterval() time.Duration {
 func (s *Service) RunExecutionTick(ctx context.Context) (int, error) {
 	pendingIDs, err := s.Store.ListOrderIDsWithPendingExecutions(ctx, 200)
 	if err != nil {
+		s.log().ErrorContext(ctx, "execution tick: pending-execution scan failed", "err", err)
 		return 0, err
 	}
 	seen := make(map[string]struct{}, len(pendingIDs))
@@ -1052,6 +1076,7 @@ func (s *Service) RunExecutionTick(ctx context.Context) (int, error) {
 
 	orders, err := s.Store.GetActiveOrdersForExecution(ctx, 200)
 	if err != nil {
+		s.log().ErrorContext(ctx, "execution tick: active-order scan failed", "err", err)
 		return fired, err
 	}
 	for _, o := range orders {

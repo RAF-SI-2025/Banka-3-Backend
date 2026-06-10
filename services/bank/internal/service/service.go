@@ -94,6 +94,15 @@ func New(st *store.Store, cfg Config, log *slog.Logger) *Service {
 	return &Service{Store: st, Cfg: cfg, Log: log}
 }
 
+// log returns the wired logger, falling back to slog.Default() so
+// logging is nil-safe in unit tests that construct Service bare.
+func (s *Service) log() *slog.Logger {
+	if s.Log != nil {
+		return s.Log
+	}
+	return slog.Default()
+}
+
 func (s *Service) requirePermission(ctx context.Context, perm string) error {
 	p, ok := auth.PrincipalFrom(ctx)
 	if !ok {

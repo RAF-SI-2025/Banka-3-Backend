@@ -36,12 +36,12 @@ func (s *Server) SendEmail(ctx context.Context, in *notifpb.SendEmailRequest) (*
 		Body:    in.GetBody(),
 		HTML:    in.GetHtml(),
 	}); err != nil {
-		s.Log.Warn("send email failed",
-			"to", in.GetTo(), "kind", in.GetKind().String(),
-			"origin", in.GetOriginService(), "err", err.Error())
+		s.Log.ErrorContext(ctx, "smtp send failed",
+			"err", err, "to", in.GetTo(), "kind", in.GetKind().String(),
+			"origin", in.GetOriginService())
 		return nil, err
 	}
-	s.Log.Info("send email ok",
+	s.Log.InfoContext(ctx, "email sent",
 		"to", in.GetTo(), "kind", in.GetKind().String(),
 		"origin", in.GetOriginService())
 	return &notifpb.SendEmailResponse{}, nil

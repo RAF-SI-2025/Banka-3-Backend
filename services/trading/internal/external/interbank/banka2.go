@@ -87,6 +87,8 @@ func (c *Client) discoverBanka2(ctx context.Context, bankCode, tickerFilter stri
 	}
 	var parsed []banka2PublicStock
 	if err := jsonDecode(body, &parsed); err != nil {
+		c.log.ErrorContext(ctx, "banka2 public-stock decode failed",
+			"err", err.Error(), "bank_code", bankCode, "body", bodySnippet(body, 512))
 		return nil, fmt.Errorf("banka2 %s public-stock decode: %w", bankCode, err)
 	}
 	// Banka 2 returns one element per ticker carrying a list of sellers.
@@ -94,7 +96,11 @@ func (c *Client) discoverBanka2(ctx context.Context, bankCode, tickerFilter stri
 	out := make([]*service.PartnerHolding, 0)
 	for _, ps := range parsed {
 		for _, s := range ps.Sellers {
-			qty, _ := strconv.ParseInt(s.Amount.String(), 10, 32)
+			qty, qerr := strconv.ParseInt(s.Amount.String(), 10, 32)
+			if qerr != nil {
+				c.log.WarnContext(ctx, "banka2 public-stock seller amount unparsable, defaulting to 0",
+					"err", qerr.Error(), "bank_code", bankCode, "ticker", ps.Stock.Ticker, "amount", s.Amount.String())
+			}
 			rowBankCode := strconv.Itoa(s.Seller.RoutingNumber)
 			if rowBankCode == "" {
 				rowBankCode = bankCode
@@ -149,6 +155,9 @@ func (c *Client) createOfferBanka2(ctx context.Context, in service.PartnerCreate
 	// Banka 2 returns the ForeignBankId it minted — { routingNumber, id }.
 	var partnerID banka2ForeignID
 	if err := jsonDecode(respBody, &partnerID); err != nil {
+		c.log.ErrorContext(ctx, "banka2 create offer decode failed",
+			"err", err.Error(), "bank_code", in.RemoteBankCode, "thread_id", in.LocalThreadID,
+			"body", bodySnippet(respBody, 512))
 		return nil, fmt.Errorf("banka2 create offer decode: %w", err)
 	}
 	return &service.PartnerCreateOfferOutput{
@@ -230,5 +239,7 @@ func (c *Client) actionBanka2(ctx context.Context, in service.PartnerActionInput
 		}
 		return nil
 	}
+	c.log.ErrorContext(ctx, "banka2 unknown action verb",
+		"verb", verb, "bank_code", in.RemoteBankCode, "remote_thread_id", in.RemoteThreadID)
 	return fmt.Errorf("banka2: unknown action verb %q", verb)
 }

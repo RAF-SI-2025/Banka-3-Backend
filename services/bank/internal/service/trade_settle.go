@@ -46,6 +46,14 @@ func (s *Service) idempotentSettle(
 			if lerr == nil && len(existing) > 0 {
 				return &domain.PaymentResult{OpID: opID, Status: domain.TxStatusRealized, Transactions: existing}, nil
 			}
+			if lerr != nil {
+				s.log().ErrorContext(ctx, "settle: re-read of racing legs failed", "err", lerr, "op_id", opID)
+			}
+		}
+		if clientClassErr(err) {
+			s.log().WarnContext(ctx, "settle rejected", "err", err, "op_id", opID)
+		} else {
+			s.log().ErrorContext(ctx, "settle failed", "err", err, "op_id", opID)
 		}
 		return nil, err
 	}
@@ -102,6 +110,13 @@ func (s *Service) SettleTrade(ctx context.Context, in SettleTradeInput) (*domain
 
 	user, err := s.Store.GetAccountByID(ctx, in.AccountID)
 	if err != nil {
+		if apperrIs(err, apperr.KindNotFound) {
+			s.log().WarnContext(ctx, "settle trade: account not found",
+				"err", err, "account_id", in.AccountID, "op_id", in.OpID)
+		} else {
+			s.log().ErrorContext(ctx, "settle trade: account lookup failed",
+				"err", err, "account_id", in.AccountID, "op_id", in.OpID)
+		}
 		return nil, err
 	}
 	// Spec p.56: zaposleni (aktuari) trguju sa bankinog računa. Refuse
@@ -113,10 +128,14 @@ func (s *Service) SettleTrade(ctx context.Context, in SettleTradeInput) (*domain
 	// orders settle from the fund's own bank account (KindFund), which
 	// is bank-owned too (owner_client_id = FundsOwnerID).
 	if in.IsActuary && user.Kind != domain.KindSystem && user.Kind != domain.KindForexBook && user.Kind != domain.KindFund {
+		s.log().WarnContext(ctx, "settle trade rejected: actuary on non-bank account",
+			"account_id", in.AccountID, "op_id", in.OpID, "account_kind", user.Kind)
 		return nil, apperr.FailedPrecondition("aktuari mogu trgovati samo sa bankinog računa")
 	}
 	house, err := s.Store.GetSystemAccount(ctx, in.Currency)
 	if err != nil {
+		s.log().ErrorContext(ctx, "settle trade: house account lookup failed",
+			"err", err, "currency", in.Currency, "op_id", in.OpID)
 		return nil, err
 	}
 	// Same-account trade (actuary debiting a bank account and crediting
@@ -153,12 +172,17 @@ func (s *Service) SettleTrade(ctx context.Context, in SettleTradeInput) (*domain
 	if user.Currency != in.Currency {
 		fb, err := s.Store.GetForexBookAccount(ctx, in.Currency)
 		if err != nil {
+			s.log().ErrorContext(ctx, "settle trade: forex book account lookup failed",
+				"err", err, "currency", in.Currency, "op_id", in.OpID)
 			return nil, err
 		}
 		counterparty = fb
 		if dir == "debit" {
 			_, conv, cerr := s.rateAndConvert(ctx, in.Currency, user.Currency, amt)
 			if cerr != nil {
+				s.log().ErrorContext(ctx, "settle trade: fx conversion failed",
+					"err", cerr, "op_id", in.OpID, "from_currency", in.Currency,
+					"to_currency", user.Currency, "amount", in.Amount)
 				return nil, cerr
 			}
 			fromAmt = conv
@@ -197,9 +221,17 @@ func (s *Service) SettleTrade(ctx context.Context, in SettleTradeInput) (*domain
 		purpose = "Trgovinska poravnava"
 	}
 
-	return s.idempotentSettle(ctx, in.OpID, func(tx pgx.Tx) ([]*domain.Transaction, error) {
+	res, err := s.idempotentSettle(ctx, in.OpID, func(tx pgx.Tx) ([]*domain.Transaction, error) {
 		return s.executeMoneyMove(ctx, tx, from, to, fromAmt, domain.TxKindTrade, in.OpID, initiator, paymentMeta{Purpose: purpose}, 0)
 	})
+	if err != nil {
+		return nil, err
+	}
+	s.log().InfoContext(ctx, "trade settled",
+		"op_id", in.OpID, "account_id", in.AccountID, "direction", dir,
+		"amount", in.Amount, "currency", in.Currency, "is_actuary", in.IsActuary,
+		"legs", len(res.Transactions))
+	return res, nil
 }
 
 // SettleForexFillInput pairs the two cash legs of a forex pair fill
@@ -261,18 +293,26 @@ func (s *Service) SettleForexFill(ctx context.Context, in SettleForexFillInput) 
 
 	houseBase, err := s.Store.GetSystemAccount(ctx, in.BaseCurrency)
 	if err != nil {
+		s.log().ErrorContext(ctx, "settle forex fill: house account lookup failed",
+			"err", err, "currency", in.BaseCurrency, "op_id", in.OpID)
 		return nil, err
 	}
 	houseQuote, err := s.Store.GetSystemAccount(ctx, in.QuoteCurrency)
 	if err != nil {
+		s.log().ErrorContext(ctx, "settle forex fill: house account lookup failed",
+			"err", err, "currency", in.QuoteCurrency, "op_id", in.OpID)
 		return nil, err
 	}
 	bookBase, err := s.Store.GetForexBookAccount(ctx, in.BaseCurrency)
 	if err != nil {
+		s.log().ErrorContext(ctx, "settle forex fill: forex book account lookup failed",
+			"err", err, "currency", in.BaseCurrency, "op_id", in.OpID)
 		return nil, err
 	}
 	bookQuote, err := s.Store.GetForexBookAccount(ctx, in.QuoteCurrency)
 	if err != nil {
+		s.log().ErrorContext(ctx, "settle forex fill: forex book account lookup failed",
+			"err", err, "currency", in.QuoteCurrency, "op_id", in.OpID)
 		return nil, err
 	}
 
@@ -303,7 +343,7 @@ func (s *Service) SettleForexFill(ctx context.Context, in SettleForexFillInput) 
 		fromBase, toBase = houseBase, bookBase
 	}
 
-	return s.idempotentSettle(ctx, in.OpID, func(tx pgx.Tx) ([]*domain.Transaction, error) {
+	res, err := s.idempotentSettle(ctx, in.OpID, func(tx pgx.Tx) ([]*domain.Transaction, error) {
 		quoteLegs, err := s.executeMoneyMove(ctx, tx, fromQuote, toQuote, quoteAmt, domain.TxKindForex, in.OpID, initiator, paymentMeta{Purpose: purpose}, 0)
 		if err != nil {
 			return nil, err
@@ -314,4 +354,13 @@ func (s *Service) SettleForexFill(ctx context.Context, in SettleForexFillInput) 
 		}
 		return append(quoteLegs, baseLegs...), nil
 	})
+	if err != nil {
+		return nil, err
+	}
+	s.log().InfoContext(ctx, "forex fill settled",
+		"op_id", in.OpID, "direction", dir,
+		"base_amount", in.BaseAmount, "base_currency", in.BaseCurrency,
+		"quote_amount", in.QuoteAmount, "quote_currency", in.QuoteCurrency,
+		"legs", len(res.Transactions))
+	return res, nil
 }

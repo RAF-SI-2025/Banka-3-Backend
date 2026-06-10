@@ -8,6 +8,7 @@ import (
 
 	userpb "github.com/RAF-SI-2025/Banka-3-Backend/gen/proto/user/v1"
 	pkgauth "github.com/RAF-SI-2025/Banka-3-Backend/pkg/auth"
+	"github.com/RAF-SI-2025/Banka-3-Backend/pkg/logger"
 	"github.com/RAF-SI-2025/Banka-3-Backend/pkg/verification"
 )
 
@@ -108,11 +109,17 @@ func (r *Router) VerificationPendingHandler() http.HandlerFunc {
 		}
 		p, ok := pkgauth.PrincipalFrom(req.Context())
 		if !ok {
+			ctx := req.Context()
+			logger.From(ctx).WarnContext(ctx, "verification pending rejected: missing principal",
+				"path", req.URL.Path)
 			writeError(w, http.StatusUnauthorized, "missing access token")
 			return
 		}
 		recs, err := lister.ListPending(req.Context(), p.UserID)
 		if err != nil {
+			ctx := req.Context()
+			logger.From(ctx).ErrorContext(ctx, "verification pending list failed",
+				"err", err, "user_id", p.UserID)
 			writeError(w, http.StatusServiceUnavailable, "Verifikacija privremeno nedostupna.")
 			return
 		}
@@ -157,8 +164,11 @@ type historyResponse struct {
 // row older than the code TTL to "expired" here.
 func (r *Router) VerificationHistoryHandler() http.HandlerFunc {
 	return func(w http.ResponseWriter, req *http.Request) {
-		p, ok := pkgauth.PrincipalFrom(req.Context())
+		ctx := req.Context()
+		p, ok := pkgauth.PrincipalFrom(ctx)
 		if !ok {
+			logger.From(ctx).WarnContext(ctx, "verification history rejected: missing principal",
+				"path", req.URL.Path)
 			writeError(w, http.StatusUnauthorized, "missing access token")
 			return
 		}
@@ -166,6 +176,8 @@ func (r *Router) VerificationHistoryHandler() http.HandlerFunc {
 			UserId: p.UserID,
 		})
 		if err != nil {
+			logger.From(ctx).ErrorContext(ctx, "verification history list failed",
+				"err", err, "user_id", p.UserID)
 			writeError(w, http.StatusServiceUnavailable, "Istorija verifikacija privremeno nedostupna.")
 			return
 		}
@@ -195,27 +207,39 @@ func (r *Router) VerificationHistoryHandler() http.HandlerFunc {
 // is already on the context.
 func (r *Router) VerificationHandler() http.HandlerFunc {
 	return func(w http.ResponseWriter, req *http.Request) {
+		ctx := req.Context()
+		log := logger.From(ctx)
 		if r.Verifier == nil {
+			log.ErrorContext(ctx, "verification request failed: verifier not configured",
+				"path", req.URL.Path)
 			writeError(w, http.StatusServiceUnavailable, "Verifikacija nije konfigurisana.")
 			return
 		}
 		var body VerificationRequest
 		if err := json.NewDecoder(req.Body).Decode(&body); err != nil {
+			log.WarnContext(ctx, "verification request rejected: invalid body", "err", err)
 			writeError(w, http.StatusBadRequest, "neispravan zahtev")
 			return
 		}
 		kind, ok := allowedKinds[body.ActionKind]
 		if !ok {
+			log.WarnContext(ctx, "verification request rejected: unknown action kind",
+				"action_kind", body.ActionKind)
 			writeError(w, http.StatusBadRequest, "nepoznat tip akcije")
 			return
 		}
 		p, ok := pkgauth.PrincipalFrom(req.Context())
 		if !ok {
+			log.WarnContext(ctx, "verification request rejected: missing principal",
+				"path", req.URL.Path)
 			writeError(w, http.StatusUnauthorized, "missing access token")
 			return
 		}
 		id, code, exp, err := r.Verifier.Issue(req.Context(), p.UserID, kind)
 		if err != nil {
+			// The 6-digit code is never logged, here or anywhere.
+			log.ErrorContext(ctx, "verification code issue failed",
+				"err", err, "user_id", p.UserID, "action_kind", string(kind))
 			writeError(w, http.StatusServiceUnavailable, "Verifikacija privremeno nedostupna.")
 			return
 		}
@@ -244,22 +268,31 @@ type approveResponse struct {
 // approve their own records (ownership enforced in verification.Approve).
 func (r *Router) VerificationApproveHandler() http.HandlerFunc {
 	return func(w http.ResponseWriter, req *http.Request) {
+		ctx := req.Context()
+		log := logger.From(ctx)
 		if r.Verifier == nil {
+			log.ErrorContext(ctx, "verification approve failed: verifier not configured",
+				"path", req.URL.Path)
 			writeError(w, http.StatusServiceUnavailable, "Verifikacija nije konfigurisana.")
 			return
 		}
 		ap, ok := r.Verifier.(verification.Approver)
 		if !ok {
+			log.ErrorContext(ctx, "verification approve failed: approver not supported",
+				"path", req.URL.Path)
 			writeError(w, http.StatusServiceUnavailable, "Brzo odobravanje nije dostupno.")
 			return
 		}
 		id := req.PathValue("id")
 		if id == "" {
+			log.WarnContext(ctx, "verification approve rejected: missing id")
 			writeError(w, http.StatusBadRequest, "neispravan zahtev")
 			return
 		}
 		p, ok := pkgauth.PrincipalFrom(req.Context())
 		if !ok {
+			log.WarnContext(ctx, "verification approve rejected: missing principal",
+				"path", req.URL.Path)
 			writeError(w, http.StatusUnauthorized, "missing access token")
 			return
 		}
@@ -270,8 +303,12 @@ func (r *Router) VerificationApproveHandler() http.HandlerFunc {
 		case errors.Is(err, verification.ErrNotFound):
 			// Not owned, expired, or already consumed — indistinguishable
 			// on purpose (don't let a caller probe foreign records).
+			log.WarnContext(ctx, "verification approve rejected: record not found",
+				"verification_id", id, "user_id", p.UserID)
 			writeError(w, http.StatusNotFound, "Zahtev za verifikaciju nije pronađen ili je istekao.")
 		default:
+			log.ErrorContext(ctx, "verification approve failed",
+				"err", err, "verification_id", id, "user_id", p.UserID)
 			writeError(w, http.StatusServiceUnavailable, "Verifikacija privremeno nedostupna.")
 		}
 	}
@@ -292,13 +329,17 @@ type statusResponse struct {
 // own pending list so no foreign record can be probed.
 func (r *Router) VerificationStatusHandler() http.HandlerFunc {
 	return func(w http.ResponseWriter, req *http.Request) {
+		ctx := req.Context()
 		id := req.PathValue("id")
 		if id == "" {
+			logger.From(ctx).WarnContext(ctx, "verification status rejected: missing id")
 			writeError(w, http.StatusBadRequest, "neispravan zahtev")
 			return
 		}
 		p, ok := pkgauth.PrincipalFrom(req.Context())
 		if !ok {
+			logger.From(ctx).WarnContext(ctx, "verification status rejected: missing principal",
+				"path", req.URL.Path)
 			writeError(w, http.StatusUnauthorized, "missing access token")
 			return
 		}
@@ -309,6 +350,9 @@ func (r *Router) VerificationStatusHandler() http.HandlerFunc {
 		}
 		recs, err := lister.ListPending(req.Context(), p.UserID)
 		if err != nil {
+			ctx := req.Context()
+			logger.From(ctx).ErrorContext(ctx, "verification status list failed",
+				"err", err, "verification_id", id, "user_id", p.UserID)
 			writeError(w, http.StatusServiceUnavailable, "Verifikacija privremeno nedostupna.")
 			return
 		}

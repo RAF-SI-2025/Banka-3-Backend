@@ -119,9 +119,13 @@ func (s *Service) ExerciseOTCContract(ctx context.Context, in ExerciseOTCContrac
 		}
 	}
 	if c.Status != domain.OTCContractActive {
+		s.log().WarnContext(ctx, "otc exercise rejected: contract not active",
+			"contract_id", c.ID, "status", string(c.Status))
 		return nil, apperr.FailedPrecondition("ugovor nije aktivan")
 	}
 	if !c.SettlementDate.After(s.now()) {
+		s.log().WarnContext(ctx, "otc exercise rejected: contract expired",
+			"contract_id", c.ID, "settlement_date", c.SettlementDate)
 		return nil, apperr.FailedPrecondition("ugovor je istekao")
 	}
 
@@ -129,6 +133,8 @@ func (s *Service) ExerciseOTCContract(ctx context.Context, in ExerciseOTCContrac
 	q := new(big.Rat).SetInt64(int64(c.Quantity))
 	strike, err := money.Parse(c.StrikePrice)
 	if err != nil {
+		s.log().ErrorContext(ctx, "otc exercise: strike price unparseable",
+			"err", err, "contract_id", c.ID, "strike_price", c.StrikePrice)
 		return nil, apperr.Internal("strike parse", err)
 	}
 	total := money.Mul(q, strike)
@@ -166,6 +172,9 @@ func (s *Service) ExerciseOTCContract(ctx context.Context, in ExerciseOTCContrac
 		// "internal error". The saga rolled forward+compensated
 		// already; this is a business-rule failure, not a system
 		// fault, so map it to FailedPrecondition.
+		s.log().WarnContext(ctx, "otc exercise saga rolled back",
+			"err", err, "transaction_id", txID, "contract_id", c.ID,
+			"thread_id", c.ThreadID, "last_error", sagaFailureMessage(row, err))
 		return nil, apperr.FailedPrecondition(sagaFailureMessage(row, err))
 	}
 	if row.Status != saga.StatusCompleted {
@@ -176,25 +185,44 @@ func (s *Service) ExerciseOTCContract(ctx context.Context, in ExerciseOTCContrac
 		// caller knows to poll/backoff rather than treating this as
 		// a permanent failure (c4-aggressive W4 expects 503 here).
 		if row.Status == saga.StatusRunning {
+			s.log().WarnContext(ctx, "otc exercise saga parked for retry",
+				"transaction_id", txID, "contract_id", c.ID,
+				"last_error", row.LastError)
 			return nil, status.Error(codes.Unavailable, sagaFailureMessage(row, nil))
 		}
+		s.log().WarnContext(ctx, "otc exercise saga did not complete",
+			"transaction_id", txID, "contract_id", c.ID,
+			"saga_status", string(row.Status), "last_error", row.LastError)
 		return nil, apperr.FailedPrecondition(sagaFailureMessage(row, nil))
 	}
 
 	// Reload + return final state.
 	finalRow, err := s.SagaStore.Get(ctx, txID)
 	if err != nil {
+		s.logOpErr(ctx, "otc exercise: saga row reload failed", err,
+			"transaction_id", txID, "contract_id", c.ID)
 		return nil, err
 	}
 	var finalPayload otcExerciseSagaPayload
 	if finalRow != nil && len(finalRow.State) > 0 {
-		_ = json.Unmarshal(finalRow.State, &finalPayload)
+		if uerr := json.Unmarshal(finalRow.State, &finalPayload); uerr != nil {
+			// Best-effort decoration — the contract is already exercised;
+			// only the realized-gain echo is lost.
+			s.log().WarnContext(ctx, "otc exercise: final saga state decode failed",
+				"err", uerr, "transaction_id", txID, "contract_id", c.ID)
+		}
 	}
 	updated, err := s.Store.GetOTCContract(ctx, c.ID)
 	if err != nil {
+		s.logOpErr(ctx, "otc exercise: contract refetch failed", err,
+			"contract_id", c.ID, "transaction_id", txID)
 		return nil, err
 	}
 	strikeOp := saga.DeriveOpID(txID, "transfer_strike")
+	s.log().InfoContext(ctx, "otc contract exercised",
+		"transaction_id", txID, "contract_id", c.ID, "thread_id", c.ThreadID,
+		"quantity", c.Quantity, "strike_total", payload.TotalAmount,
+		"currency", payload.Currency, "seller_gain_native", finalPayload.RealizedGainNative)
 	return &ExerciseOTCContractResult{
 		Contract:                 updated,
 		StrikeOpID:               strikeOp,
@@ -216,6 +244,9 @@ func registerOTCExerciseSaga(reg *saga.Registry, svc *Service) {
 			{
 				Name: "reserve_buyer_strike",
 				Forward: func(ctx context.Context, sc *saga.Context[otcExerciseSagaPayload]) error {
+					sc.Log.DebugContext(ctx, "otc exercise: reserving buyer strike",
+						"contract_id", sc.State.ContractID, "strike_total", sc.State.TotalAmount,
+						"currency", sc.State.Currency)
 					_, err := svc.Reservations.Reserve(ctx, ReserveInput{
 						AccountID: sc.State.BuyerAccountID,
 						Amount:    sc.State.TotalAmount,
@@ -223,11 +254,24 @@ func registerOTCExerciseSaga(reg *saga.Registry, svc *Service) {
 						OpID:      sc.OpID,
 						OpKind:    "otc_exercise",
 					})
+					if err != nil {
+						sc.Log.ErrorContext(ctx, "otc exercise: buyer strike reserve failed",
+							"err", err, "contract_id", sc.State.ContractID,
+							"buyer_account_id", sc.State.BuyerAccountID,
+							"strike_total", sc.State.TotalAmount)
+					}
 					return err
 				},
 				Compensate: func(ctx context.Context, sc *saga.Context[otcExerciseSagaPayload]) error {
 					_, err := svc.Reservations.Release(ctx, sc.OpID)
-					return err
+					if err != nil {
+						sc.Log.ErrorContext(ctx, "otc exercise: strike reservation release compensation failed",
+							"err", err, "contract_id", sc.State.ContractID)
+						return err
+					}
+					sc.Log.InfoContext(ctx, "otc exercise: strike reservation released",
+						"contract_id", sc.State.ContractID)
+					return nil
 				},
 			},
 			{
@@ -235,9 +279,17 @@ func registerOTCExerciseSaga(reg *saga.Registry, svc *Service) {
 				Forward: func(ctx context.Context, sc *saga.Context[otcExerciseSagaPayload]) error {
 					h, err := svc.Store.GetHoldingByID(ctx, sc.State.SellerHoldingID)
 					if err != nil {
+						sc.Log.ErrorContext(ctx, "otc exercise: seller holding lookup failed",
+							"err", err, "contract_id", sc.State.ContractID,
+							"seller_holding_id", sc.State.SellerHoldingID)
 						return err
 					}
 					if h.Quantity < sc.State.Quantity || h.ReservedCount < sc.State.Quantity {
+						sc.Log.WarnContext(ctx, "otc exercise: seller holding no longer covers contract",
+							"contract_id", sc.State.ContractID,
+							"seller_holding_id", sc.State.SellerHoldingID,
+							"held", h.Quantity, "reserved", h.ReservedCount,
+							"quantity", sc.State.Quantity)
 						return status.Error(codes.FailedPrecondition,
 							"seller holding no longer covers contract quantity")
 					}
@@ -257,7 +309,16 @@ func registerOTCExerciseSaga(reg *saga.Registry, svc *Service) {
 						IsActuary:     sc.State.IsActuary,
 						Purpose:       "OTC izvršenje — ugovor " + sc.State.ContractID,
 					})
-					return err
+					if err != nil {
+						sc.Log.ErrorContext(ctx, "otc exercise: strike transfer failed",
+							"err", err, "contract_id", sc.State.ContractID,
+							"strike_total", sc.State.TotalAmount, "currency", sc.State.Currency)
+						return err
+					}
+					sc.Log.InfoContext(ctx, "otc exercise: strike transferred to seller",
+						"contract_id", sc.State.ContractID,
+						"strike_total", sc.State.TotalAmount, "currency", sc.State.Currency)
+					return nil
 				},
 				Compensate: func(ctx context.Context, sc *saga.Context[otcExerciseSagaPayload]) error {
 					// Forward Commit already moved real money seller-ward
@@ -275,13 +336,21 @@ func registerOTCExerciseSaga(reg *saga.Registry, svc *Service) {
 						IsActuary:     sc.State.IsActuary,
 						Purpose:       "Rollback OTC izvršenja — ugovor " + sc.State.ContractID,
 					})
-					return err
+					if err != nil {
+						sc.Log.ErrorContext(ctx, "otc exercise: strike reverse-transfer compensation failed",
+							"err", err, "contract_id", sc.State.ContractID,
+							"strike_total", sc.State.TotalAmount)
+						return err
+					}
+					sc.Log.InfoContext(ctx, "otc exercise: strike returned to buyer (compensation)",
+						"contract_id", sc.State.ContractID, "strike_total", sc.State.TotalAmount)
+					return nil
 				},
 			},
 			{
 				Name: "transfer_shares",
 				Forward: func(ctx context.Context, sc *saga.Context[otcExerciseSagaPayload]) error {
-					return svc.Store.ExecuteAtomic(ctx, func(tx pgx.Tx) error {
+					txErr := svc.Store.ExecuteAtomic(ctx, func(tx pgx.Tx) error {
 						// 1. Sell side: capture pre-fill cost basis,
 						//    then decrement reserved_count BEFORE quantity.
 						//    The CHECK constraint reserved_count <= quantity
@@ -357,9 +426,20 @@ func registerOTCExerciseSaga(reg *saga.Registry, svc *Service) {
 						sc.State.RealizedGainRSD = rg.GainRSD
 						return nil
 					})
+					if txErr != nil {
+						sc.Log.ErrorContext(ctx, "otc exercise: share transfer failed",
+							"err", txErr, "contract_id", sc.State.ContractID,
+							"seller_holding_id", sc.State.SellerHoldingID,
+							"quantity", sc.State.Quantity)
+						return txErr
+					}
+					sc.Log.InfoContext(ctx, "otc exercise: shares transferred to buyer",
+						"contract_id", sc.State.ContractID, "quantity", sc.State.Quantity,
+						"seller_gain_native", sc.State.RealizedGainNative)
+					return nil
 				},
 				Compensate: func(ctx context.Context, sc *saga.Context[otcExerciseSagaPayload]) error {
-					return svc.Store.ExecuteAtomic(ctx, func(tx pgx.Tx) error {
+					compErr := svc.Store.ExecuteAtomic(ctx, func(tx pgx.Tx) error {
 						// Reverse the seller decrement: add back qty.
 						sellerHolding, err := svc.Store.GetHoldingByID(ctx, sc.State.SellerHoldingID)
 						if err != nil {
@@ -400,6 +480,13 @@ func registerOTCExerciseSaga(reg *saga.Registry, svc *Service) {
 						}
 						return nil
 					})
+					if compErr != nil {
+						sc.Log.ErrorContext(ctx, "otc exercise: share transfer compensation failed",
+							"err", compErr, "contract_id", sc.State.ContractID,
+							"seller_holding_id", sc.State.SellerHoldingID,
+							"quantity", sc.State.Quantity)
+					}
+					return compErr
 				},
 			},
 			{
@@ -407,14 +494,21 @@ func registerOTCExerciseSaga(reg *saga.Registry, svc *Service) {
 				Forward: func(ctx context.Context, sc *saga.Context[otcExerciseSagaPayload]) error {
 					strikeOp := saga.DeriveOpID(sc.TransactionID, "transfer_strike")
 					now := time.Now()
-					return svc.Store.ExecuteAtomic(ctx, func(tx pgx.Tx) error {
+					if err := svc.Store.ExecuteAtomic(ctx, func(tx pgx.Tx) error {
 						_, err := svc.Store.MarkOTCContractStatus(ctx, tx,
 							sc.State.ContractID,
 							domain.OTCContractExercised,
 							strikeOp, sc.TransactionID, &now,
 						)
 						return err
-					})
+					}); err != nil {
+						sc.Log.ErrorContext(ctx, "otc exercise: contract finalize failed",
+							"err", err, "contract_id", sc.State.ContractID)
+						return err
+					}
+					sc.Log.InfoContext(ctx, "otc exercise: contract marked exercised",
+						"contract_id", sc.State.ContractID, "thread_id", sc.State.ThreadID)
+					return nil
 				},
 				Compensate: nil, // last step
 			},

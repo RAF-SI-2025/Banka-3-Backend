@@ -254,10 +254,29 @@ func (s *Service) WithdrawFromFund(ctx context.Context, in WithdrawFromFundInput
 		AttemptsMax:   8,
 	})
 	if err != nil {
-		_ = s.markFundTxFailed(ctx, auditID, err.Error())
+		s.log().ErrorContext(ctx, "fund withdraw saga failed",
+			"err", err, "transaction_id", txID, "fund_id", f.ID)
+		if mErr := s.markFundTxFailed(ctx, auditID, err.Error()); mErr != nil {
+			s.log().WarnContext(ctx, "fund withdraw: mark tx failed errored",
+				"err", mErr, "transaction_id", txID, "fund_tx_id", auditID)
+		}
 		return nil, fmt.Errorf("fund withdraw saga: %w", err)
 	}
-	final, _ := s.Store.GetFundTransaction(ctx, auditID)
+	if row.Status == saga.StatusRunning {
+		s.log().WarnContext(ctx, "fund withdraw saga parked (pending liquidation/retry)",
+			"transaction_id", txID, "fund_id", f.ID, "last_error", row.LastError)
+	} else {
+		s.log().InfoContext(ctx, "fund withdraw completed",
+			"transaction_id", txID, "fund_id", f.ID,
+			"amount_rsd", payload.AmountRSD, "units_removed", payload.UnitsRemoved)
+	}
+	final, ferr := s.Store.GetFundTransaction(ctx, auditID)
+	if ferr != nil {
+		// Best-effort echo — the saga outcome stands; only the audit-row
+		// decoration is lost.
+		s.log().WarnContext(ctx, "fund withdraw: audit row refetch failed",
+			"err", ferr, "transaction_id", txID, "fund_tx_id", auditID)
+	}
 	return &WithdrawFromFundResult{
 		Transaction: final,
 		SagaID:      txID,

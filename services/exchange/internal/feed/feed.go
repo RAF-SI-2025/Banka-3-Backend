@@ -19,6 +19,7 @@ import (
 	"strconv"
 	"time"
 
+	"github.com/RAF-SI-2025/Banka-3-Backend/pkg/logger"
 	"github.com/RAF-SI-2025/Banka-3-Backend/services/exchange/internal/domain"
 	"github.com/RAF-SI-2025/Banka-3-Backend/services/exchange/internal/store"
 )
@@ -45,7 +46,7 @@ type Feeder struct {
 // interval. The first tick fires immediately.
 func (f *Feeder) Run(ctx context.Context, interval time.Duration) error {
 	if _, err := f.Once(ctx); err != nil {
-		f.Log.Warn("fx feed initial fetch failed", "error", err)
+		f.Log.ErrorContext(ctx, "fx feed initial fetch failed", "err", err)
 	}
 	t := time.NewTicker(interval)
 	defer t.Stop()
@@ -55,7 +56,7 @@ func (f *Feeder) Run(ctx context.Context, interval time.Duration) error {
 			return nil
 		case <-t.C:
 			if _, err := f.Once(ctx); err != nil {
-				f.Log.Warn("fx feed tick failed", "error", err)
+				f.Log.ErrorContext(ctx, "fx feed tick failed", "err", err)
 			}
 		}
 	}
@@ -82,18 +83,20 @@ func (f *Feeder) Once(ctx context.Context) (int, error) {
 			Ask:  formatRate(ask),
 		}
 		if _, err := f.Store.UpsertRate(ctx, r); err != nil {
-			f.Log.Warn("fx feed upsert failed", "from", cur, "error", err)
+			f.Log.ErrorContext(ctx, "fx feed upsert failed",
+				"err", err, "from", string(cur), "to", string(domain.CurrencyRSD))
 			continue
 		}
 		// Append an append-only history point so the mobile last-month
 		// kursna lista accrues over time. A history write failure must
 		// not abort the latest-only update — log and carry on.
 		if err := f.Store.InsertRateHistory(ctx, r); err != nil {
-			f.Log.Warn("fx feed history insert failed", "from", cur, "error", err)
+			f.Log.ErrorContext(ctx, "fx feed history insert failed",
+				"err", err, "from", string(cur), "to", string(domain.CurrencyRSD))
 		}
 		written++
 	}
-	f.Log.Info("fx feed updated", "rows", written)
+	f.Log.InfoContext(ctx, "fx rates refreshed", "rows", written)
 	return written, nil
 }
 
@@ -147,6 +150,8 @@ func (o *OpenERAPI) Fetch(ctx context.Context) (map[domain.Currency]float64, err
 	for code, rsdAsBase := range body.Rates {
 		// rsdAsBase is "1 RSD = rsdAsBase <code>". We want "1 <code> in RSD".
 		if rsdAsBase <= 0 {
+			logger.From(ctx).WarnContext(ctx, "fx feed rate skipped (non-positive)",
+				"code", code, "rate", rsdAsBase, "source", url)
 			continue
 		}
 		out[domain.Currency(code)] = 1 / rsdAsBase

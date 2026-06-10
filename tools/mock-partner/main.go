@@ -148,24 +148,39 @@ func main() {
 	mux.HandleFunc("GET /healthz", func(w http.ResponseWriter, _ *http.Request) { w.WriteHeader(http.StatusOK) })
 
 	log.Printf("mock-partner listening on :%s as bank_code=%s", port, bankCode)
-	srv := &http.Server{Addr: ":" + port, Handler: mux, ReadHeaderTimeout: 5 * time.Second}
+	srv := &http.Server{Addr: ":" + port, Handler: logRequests(mux), ReadHeaderTimeout: 5 * time.Second}
 	if err := srv.ListenAndServe(); err != nil {
-		log.Fatal(err)
+		log.Fatalf("mock-partner listen failed on :%s: %v", port, err)
 	}
 }
 
-func (s *state) handlePublic(w http.ResponseWriter, _ *http.Request) {
+// logRequests logs every inbound request's method + path (healthz
+// probes excluded) so interop sessions are debuggable from the mock's
+// stdout alone; handlers add the per-route decision lines.
+func logRequests(h http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path != "/healthz" {
+			log.Printf("inbound request: method=%s path=%s remote=%s", r.Method, r.URL.Path, r.RemoteAddr)
+		}
+		h.ServeHTTP(w, r)
+	})
+}
+
+func (s *state) handlePublic(w http.ResponseWriter, r *http.Request) {
+	log.Printf("public feed served: items=%d remote=%s", len(s.holdings), r.RemoteAddr)
 	writeJSON(w, http.StatusOK, map[string]any{"items": s.holdings})
 }
 
 func (s *state) handleOffer(w http.ResponseWriter, r *http.Request) {
 	var in offerRequest
 	if err := json.NewDecoder(r.Body).Decode(&in); err != nil {
+		log.Printf("offer rejected: invalid JSON: %v (remote=%s)", err, r.RemoteAddr)
 		writeJSON(w, http.StatusBadRequest, map[string]any{"code": 400, "message": "invalid JSON"})
 		return
 	}
 	// Validate seller_holding_id matches our seed.
 	if in.SellerHoldingID != "mock-holding-aapl-50" {
+		log.Printf("offer rejected: unknown holding=%s sender=%s thread=%s", in.SellerHoldingID, in.SenderBankCode, in.SenderThreadID)
 		writeJSON(w, http.StatusNotFound, map[string]any{"code": 404, "message": "unknown holding"})
 		return
 	}
@@ -195,6 +210,7 @@ func (s *state) handleOffer(w http.ResponseWriter, r *http.Request) {
 func (s *state) handleCounter(w http.ResponseWriter, r *http.Request) {
 	var in counterRequest
 	if err := json.NewDecoder(r.Body).Decode(&in); err != nil {
+		log.Printf("counter rejected: invalid JSON: %v (remote=%s)", err, r.RemoteAddr)
 		writeJSON(w, http.StatusBadRequest, map[string]any{"code": 400, "message": "invalid JSON"})
 		return
 	}
@@ -203,10 +219,12 @@ func (s *state) handleCounter(w http.ResponseWriter, r *http.Request) {
 	defer s.mu.Unlock()
 	t, ok := s.threads[threadID]
 	if !ok {
+		log.Printf("counter rejected: thread not found thread=%s sender=%s", threadID, in.SenderBankCode)
 		writeJSON(w, http.StatusNotFound, map[string]any{"code": 404, "message": "thread not found"})
 		return
 	}
 	if t.Status != "open" {
+		log.Printf("counter rejected: thread not open thread=%s status=%s sender=%s", threadID, t.Status, in.SenderBankCode)
 		writeJSON(w, http.StatusConflict, map[string]any{"code": 409, "message": "thread not open"})
 		return
 	}
@@ -222,16 +240,20 @@ func (s *state) handleCounter(w http.ResponseWriter, r *http.Request) {
 func (s *state) handleAction(target string) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		var in actionRequest
-		_ = json.NewDecoder(r.Body).Decode(&in)
+		if err := json.NewDecoder(r.Body).Decode(&in); err != nil {
+			log.Printf("%s body ignored: invalid JSON: %v (remote=%s)", target, err, r.RemoteAddr)
+		}
 		threadID := r.PathValue("thread_id")
 		s.mu.Lock()
 		defer s.mu.Unlock()
 		t, ok := s.threads[threadID]
 		if !ok {
+			log.Printf("%s rejected: thread not found thread=%s sender=%s", target, threadID, in.SenderBankCode)
 			writeJSON(w, http.StatusNotFound, map[string]any{"code": 404, "message": "thread not found"})
 			return
 		}
 		if t.Status != "open" {
+			log.Printf("%s rejected: thread not open thread=%s status=%s sender=%s", target, threadID, t.Status, in.SenderBankCode)
 			writeJSON(w, http.StatusConflict, map[string]any{"code": 409, "message": "thread not open"})
 			return
 		}
@@ -251,6 +273,7 @@ func guard(apiKey string, h http.HandlerFunc) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		got := []byte(r.Header.Get("X-Api-Key"))
 		if subtle.ConstantTimeCompare(got, expected) != 1 {
+			log.Printf("request rejected: invalid X-Api-Key method=%s path=%s remote=%s", r.Method, r.URL.Path, r.RemoteAddr)
 			writeJSON(w, http.StatusUnauthorized, map[string]any{"code": 401, "message": "invalid X-Api-Key"})
 			return
 		}

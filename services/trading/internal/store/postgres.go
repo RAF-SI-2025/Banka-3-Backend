@@ -6,6 +6,7 @@ import (
 	"errors"
 
 	"github.com/RAF-SI-2025/Banka-3-Backend/pkg/apperr"
+	"github.com/RAF-SI-2025/Banka-3-Backend/pkg/logger"
 	"github.com/RAF-SI-2025/Banka-3-Backend/pkg/postgres"
 	"github.com/jackc/pgx/v5"
 )
@@ -93,13 +94,17 @@ func intArg(n int) string {
 func (s *Store) ExecuteAtomic(ctx context.Context, fn func(pgx.Tx) error) error {
 	tx, err := s.DB.BeginTx(ctx, pgx.TxOptions{})
 	if err != nil {
+		logger.From(ctx).ErrorContext(ctx, "begin tx failed", "err", err)
 		return apperr.Internal("begin tx", err)
 	}
 	if err := fn(tx); err != nil {
-		_ = tx.Rollback(ctx)
+		if rerr := tx.Rollback(ctx); rerr != nil && !errors.Is(rerr, pgx.ErrTxClosed) {
+			logger.From(ctx).WarnContext(ctx, "rollback tx failed", "err", rerr)
+		}
 		return err
 	}
 	if err := tx.Commit(ctx); err != nil {
+		logger.From(ctx).ErrorContext(ctx, "commit tx failed", "err", err)
 		return apperr.Internal("commit tx", err)
 	}
 	return nil

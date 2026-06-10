@@ -84,9 +84,15 @@ func (s *Service) exerciseExternalOutgoing(ctx context.Context, contract *domain
 		return nil, apperr.FailedPrecondition("cross-bank infrastructure nije konfigurisana")
 	}
 	if contract.LocalRole != domain.ExternalOTCRoleBuyer {
+		s.log().WarnContext(ctx, "external otc exercise rejected: local side is not buyer",
+			"contract_id", contract.ID, "local_role", string(contract.LocalRole),
+			"remote_bank_code", contract.RemoteBankCode)
 		return nil, apperr.FailedPrecondition("samo kupac može iskoristiti opciju")
 	}
 	if contract.Status != domain.ExternalOTCContractActive {
+		s.log().WarnContext(ctx, "external otc exercise rejected: contract not active",
+			"contract_id", contract.ID, "status", string(contract.Status),
+			"remote_bank_code", contract.RemoteBankCode)
 		return nil, apperr.FailedPrecondition("ugovor nije aktivan")
 	}
 
@@ -94,6 +100,8 @@ func (s *Service) exerciseExternalOutgoing(ctx context.Context, contract *domain
 	qty, _ := money.Parse(fmt.Sprintf("%d", contract.Quantity))
 	strike, err := money.Parse(contract.StrikePrice)
 	if err != nil {
+		s.log().ErrorContext(ctx, "external otc exercise: strike price unparseable",
+			"err", err, "contract_id", contract.ID, "strike_price", contract.StrikePrice)
 		return nil, apperr.Internal("strike price unparseable", err)
 	}
 	total := money.Mul(qty, strike)
@@ -128,14 +136,29 @@ func (s *Service) exerciseExternalOutgoing(ctx context.Context, contract *domain
 		AttemptsMax:   8,
 	})
 	if err != nil {
+		s.log().ErrorContext(ctx, "external otc exercise saga failed",
+			"err", err, "transaction_id", txID, "contract_id", contract.ID,
+			"remote_bank_code", contract.RemoteBankCode)
 		return nil, fmt.Errorf("external otc exercise saga: %w", err)
 	}
 	if row.Status != saga.StatusCompleted {
 		if row.Status == saga.StatusRunning {
+			s.log().WarnContext(ctx, "external otc exercise saga parked for retry",
+				"transaction_id", txID, "contract_id", contract.ID,
+				"remote_bank_code", contract.RemoteBankCode, "last_error", row.LastError)
 			return nil, status.Error(codes.Unavailable, "external otc exercise saga parked for retry")
 		}
+		s.log().ErrorContext(ctx, "external otc exercise saga did not complete",
+			"transaction_id", txID, "contract_id", contract.ID,
+			"remote_bank_code", contract.RemoteBankCode,
+			"saga_status", string(row.Status), "last_error", row.LastError)
 		return nil, apperr.Internal("external otc exercise saga did not complete", nil)
 	}
+	s.log().InfoContext(ctx, "external otc contract exercised",
+		"transaction_id", txID, "contract_id", contract.ID,
+		"thread_id", contract.ThreadID, "remote_bank_code", contract.RemoteBankCode,
+		"ticker", contract.SecurityTicker, "quantity", contract.Quantity,
+		"strike_total", payload.TotalAmount, "currency", payload.Currency)
 	return s.Store.GetExternalOTCContract(ctx, contract.ID)
 }
 
@@ -147,6 +170,9 @@ func registerExternalOTCExerciseSaga(reg *saga.Registry, svc *Service) {
 			{
 				Name: "prepare_strike",
 				Forward: func(ctx context.Context, sc *saga.Context[externalOTCExercisePayload]) error {
+					sc.Log.DebugContext(ctx, "external otc exercise: preparing strike leg",
+						"contract_id", sc.State.ContractID, "remote_bank_code", sc.State.RemoteBankCode,
+						"strike_total", sc.State.TotalAmount, "currency", sc.State.Currency)
 					_, err := svc.InterbankPayer.PreparePayment(ctx, PrepareInterbankInput{
 						SenderRoutingNumber: sc.State.SenderRoutingNumber,
 						TransactionID:       sc.TransactionID,
@@ -156,12 +182,25 @@ func registerExternalOTCExerciseSaga(reg *saga.Registry, svc *Service) {
 						Amount:              sc.State.TotalAmount,
 						Purpose:             "OTC izvršenje (eksterno) — ugovor " + sc.State.ContractID,
 					})
+					if err != nil {
+						sc.Log.ErrorContext(ctx, "external otc exercise: strike prepare failed",
+							"err", err, "contract_id", sc.State.ContractID,
+							"remote_bank_code", sc.State.RemoteBankCode)
+					}
 					return err
 				},
 				Compensate: func(ctx context.Context, sc *saga.Context[externalOTCExercisePayload]) error {
-					return svc.InterbankPayer.RollbackPayment(ctx,
+					if err := svc.InterbankPayer.RollbackPayment(ctx,
 						sc.State.SenderRoutingNumber, sc.TransactionID,
-						"external otc exercise compensation")
+						"external otc exercise compensation"); err != nil {
+						sc.Log.ErrorContext(ctx, "external otc exercise: strike rollback compensation failed",
+							"err", err, "contract_id", sc.State.ContractID,
+							"remote_bank_code", sc.State.RemoteBankCode)
+						return err
+					}
+					sc.Log.InfoContext(ctx, "external otc exercise: strike reservation rolled back",
+						"contract_id", sc.State.ContractID, "remote_bank_code", sc.State.RemoteBankCode)
+					return nil
 				},
 			},
 			// Partner notification — there's no dedicated "Exercise" verb
@@ -185,7 +224,7 @@ func registerExternalOTCExerciseSaga(reg *saga.Registry, svc *Service) {
 					// (OPTION-account legs release the seller shares + credit the
 					// strike) and drive it to COMMIT. A partner NO surfaces as a
 					// permanent error -> compensate the local strike reservation.
-					return svc.PartnerOTC.ExerciseOption(ctx, PartnerExerciseInput{
+					if err := svc.PartnerOTC.ExerciseOption(ctx, PartnerExerciseInput{
 						RemoteBankCode: sc.State.RemoteBankCode,
 						ContractID:     sc.State.RemoteThreadID,
 						TransactionID:  sc.TransactionID,
@@ -194,7 +233,17 @@ func registerExternalOTCExerciseSaga(reg *saga.Registry, svc *Service) {
 						StrikeTotal:    sc.State.TotalAmount,
 						Currency:       sc.State.Currency,
 						Ticker:         sc.State.SecurityTicker,
-					})
+					}); err != nil {
+						sc.Log.ErrorContext(ctx, "external otc exercise: partner exercise 2pc failed",
+							"err", err, "contract_id", sc.State.ContractID,
+							"remote_bank_code", sc.State.RemoteBankCode,
+							"remote_thread_id", sc.State.RemoteThreadID)
+						return err
+					}
+					sc.Log.InfoContext(ctx, "external otc exercise: partner exercise 2pc committed",
+						"contract_id", sc.State.ContractID, "remote_bank_code", sc.State.RemoteBankCode,
+						"ticker", sc.State.SecurityTicker, "quantity", sc.State.Quantity)
+					return nil
 				},
 				Compensate: nil,
 			},
@@ -203,7 +252,16 @@ func registerExternalOTCExerciseSaga(reg *saga.Registry, svc *Service) {
 				Forward: func(ctx context.Context, sc *saga.Context[externalOTCExercisePayload]) error {
 					_, err := svc.InterbankPayer.CommitPayment(ctx,
 						sc.State.SenderRoutingNumber, sc.TransactionID)
-					return err
+					if err != nil {
+						sc.Log.ErrorContext(ctx, "external otc exercise: strike commit failed",
+							"err", err, "contract_id", sc.State.ContractID,
+							"remote_bank_code", sc.State.RemoteBankCode)
+						return err
+					}
+					sc.Log.InfoContext(ctx, "external otc exercise: strike committed",
+						"contract_id", sc.State.ContractID, "remote_bank_code", sc.State.RemoteBankCode,
+						"strike_total", sc.State.TotalAmount, "currency", sc.State.Currency)
+					return nil
 				},
 				Compensate: nil,
 			},
@@ -221,14 +279,26 @@ func registerExternalOTCExerciseSaga(reg *saga.Registry, svc *Service) {
 					if err != nil {
 						// Unknown ticker locally — strike already settled + contract
 						// exercised; skip delivery rather than strand the saga.
+						sc.Log.WarnContext(ctx, "external otc exercise: ticker unknown locally, skipping share delivery",
+							"err", err, "contract_id", sc.State.ContractID,
+							"ticker", sc.State.SecurityTicker, "quantity", sc.State.Quantity)
 						return nil
 					}
-					return svc.Store.ExecuteAtomic(ctx, func(tx pgx.Tx) error {
+					if err := svc.Store.ExecuteAtomic(ctx, func(tx pgx.Tx) error {
 						_, aerr := svc.Store.ApplyBuyFill(ctx, tx, sc.State.LocalUserID,
 							sc.State.LocalUserKind, sec.ID, sc.State.LocalAccountID,
 							sc.State.Quantity, sc.State.StrikePrice)
 						return aerr
-					})
+					}); err != nil {
+						sc.Log.ErrorContext(ctx, "external otc exercise: local share delivery failed",
+							"err", err, "contract_id", sc.State.ContractID,
+							"ticker", sc.State.SecurityTicker, "quantity", sc.State.Quantity)
+						return err
+					}
+					sc.Log.InfoContext(ctx, "external otc exercise: shares delivered to buyer",
+						"contract_id", sc.State.ContractID, "ticker", sc.State.SecurityTicker,
+						"quantity", sc.State.Quantity)
+					return nil
 				},
 				Compensate: nil,
 			},
@@ -236,11 +306,18 @@ func registerExternalOTCExerciseSaga(reg *saga.Registry, svc *Service) {
 				Name: "mark_exercised",
 				Forward: func(ctx context.Context, sc *saga.Context[externalOTCExercisePayload]) error {
 					opID := deriveExternalCommitOpID(sc.State.SenderRoutingNumber, sc.TransactionID)
-					return svc.Store.ExecuteAtomic(ctx, func(tx pgx.Tx) error {
+					if err := svc.Store.ExecuteAtomic(ctx, func(tx pgx.Tx) error {
 						_, merr := svc.Store.SetExternalOTCContractExercised(ctx, tx,
 							sc.State.ContractID, opID, time.Now())
 						return merr
-					})
+					}); err != nil {
+						sc.Log.ErrorContext(ctx, "external otc exercise: mark exercised failed",
+							"err", err, "contract_id", sc.State.ContractID, "exercise_op_id", opID)
+						return err
+					}
+					sc.Log.InfoContext(ctx, "external otc exercise: contract marked exercised",
+						"contract_id", sc.State.ContractID, "exercise_op_id", opID)
+					return nil
 				},
 				Compensate: nil,
 			},

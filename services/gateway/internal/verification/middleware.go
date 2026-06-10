@@ -114,9 +114,14 @@ func Middleware(v verification.Verifier, rules []Rule, log *slog.Logger) func(ht
 				next.ServeHTTP(w, r)
 				return
 			}
+			ctx := r.Context()
+			// The verification id is an opaque handle, safe to log; the
+			// 6-digit code is a secret and never appears in a log line.
 			id := r.Header.Get(HeaderID)
 			code := r.Header.Get(HeaderCode)
 			if id == "" {
+				log.WarnContext(ctx, "verification rejected: missing id",
+					"kind", string(kind), "method", r.Method, "path", r.URL.Path)
 				writeErr(w, http.StatusUnauthorized, "Verifikacioni kod je obavezan.")
 				return
 			}
@@ -130,26 +135,45 @@ func Middleware(v verification.Verifier, rules []Rule, log *slog.Logger) func(ht
 			if code == "" || code == QuickApproveSentinel {
 				ap, ok := v.(verification.Approver)
 				if !ok {
+					log.WarnContext(ctx, "verification rejected: quick-approve unsupported",
+						"verification_id", id, "kind", string(kind),
+						"method", r.Method, "path", r.URL.Path)
 					writeErr(w, http.StatusUnauthorized, "Verifikacioni kod je obavezan.")
 					return
 				}
 				p, ok := pkgauth.PrincipalFrom(r.Context())
 				if !ok {
+					log.WarnContext(ctx, "verification rejected: missing principal",
+						"verification_id", id, "kind", string(kind),
+						"method", r.Method, "path", r.URL.Path)
 					writeErr(w, http.StatusUnauthorized, "missing access token")
 					return
 				}
 				aerr := ap.ConsumeApproved(r.Context(), p.UserID, id, kind)
 				switch {
 				case aerr == nil:
+					log.DebugContext(ctx, "verification quick-approve consumed",
+						"verification_id", id, "kind", string(kind), "path", r.URL.Path)
 					next.ServeHTTP(w, r)
 				case errors.Is(aerr, verification.ErrNotApproved):
+					log.WarnContext(ctx, "verification rejected: not approved yet",
+						"verification_id", id, "kind", string(kind),
+						"method", r.Method, "path", r.URL.Path)
 					writeErr(w, http.StatusUnauthorized, "Zahtev još nije odobren sa telefona.")
 				case errors.Is(aerr, verification.ErrNotFound):
+					log.WarnContext(ctx, "verification rejected: record expired or not found",
+						"verification_id", id, "kind", string(kind),
+						"method", r.Method, "path", r.URL.Path)
 					writeErr(w, http.StatusUnauthorized, "Verifikacioni kod je istekao. Zatraži novi.")
 				case errors.Is(aerr, verification.ErrMismatch):
+					log.WarnContext(ctx, "verification rejected: action kind mismatch",
+						"verification_id", id, "kind", string(kind),
+						"method", r.Method, "path", r.URL.Path)
 					writeErr(w, http.StatusUnauthorized, "Verifikacioni kod ne odgovara ovoj akciji.")
 				default:
-					log.Warn("verification quick-approve consume failed", "error", aerr)
+					log.ErrorContext(ctx, "verification quick-approve consume failed",
+						"err", aerr, "verification_id", id, "kind", string(kind),
+						"method", r.Method, "path", r.URL.Path)
 					writeErr(w, http.StatusServiceUnavailable, "Verifikacija privremeno nedostupna.")
 				}
 				return
@@ -158,17 +182,33 @@ func Middleware(v verification.Verifier, rules []Rule, log *slog.Logger) func(ht
 			err := v.Consume(r.Context(), id, code, kind)
 			switch {
 			case err == nil:
+				log.DebugContext(ctx, "verification consumed",
+					"verification_id", id, "kind", string(kind), "path", r.URL.Path)
 				next.ServeHTTP(w, r)
 			case errors.Is(err, verification.ErrWrongCode):
+				log.WarnContext(ctx, "verification rejected: wrong code",
+					"verification_id", id, "kind", string(kind),
+					"method", r.Method, "path", r.URL.Path)
 				writeErr(w, http.StatusUnauthorized, "Pogrešan verifikacioni kod.")
 			case errors.Is(err, verification.ErrTooMany):
+				log.WarnContext(ctx, "verification rejected: too many attempts",
+					"verification_id", id, "kind", string(kind),
+					"method", r.Method, "path", r.URL.Path)
 				writeErr(w, http.StatusUnauthorized, "Previše neuspešnih pokušaja. Zatraži novi kod.")
 			case errors.Is(err, verification.ErrNotFound):
+				log.WarnContext(ctx, "verification rejected: record expired or not found",
+					"verification_id", id, "kind", string(kind),
+					"method", r.Method, "path", r.URL.Path)
 				writeErr(w, http.StatusUnauthorized, "Verifikacioni kod je istekao. Zatraži novi.")
 			case errors.Is(err, verification.ErrMismatch):
+				log.WarnContext(ctx, "verification rejected: action kind mismatch",
+					"verification_id", id, "kind", string(kind),
+					"method", r.Method, "path", r.URL.Path)
 				writeErr(w, http.StatusUnauthorized, "Verifikacioni kod ne odgovara ovoj akciji.")
 			default:
-				log.Warn("verification consume failed", "error", err)
+				log.ErrorContext(ctx, "verification consume failed",
+					"err", err, "verification_id", id, "kind", string(kind),
+					"method", r.Method, "path", r.URL.Path)
 				writeErr(w, http.StatusServiceUnavailable, "Verifikacija privremeno nedostupna.")
 			}
 		})
@@ -183,5 +223,9 @@ type errBody struct {
 func writeErr(w http.ResponseWriter, status int, msg string) {
 	w.Header().Set("Content-Type", "application/json; charset=utf-8")
 	w.WriteHeader(status)
-	_ = json.NewEncoder(w).Encode(errBody{Code: status, Message: msg})
+	if err := json.NewEncoder(w).Encode(errBody{Code: status, Message: msg}); err != nil {
+		// Almost always a client that hung up mid-response; no request
+		// context here, so the default (service) logger carries it.
+		slog.Default().Warn("response write failed", "err", err, "status", status)
+	}
 }

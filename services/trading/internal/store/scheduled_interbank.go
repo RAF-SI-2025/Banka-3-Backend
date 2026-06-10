@@ -5,6 +5,7 @@ import (
 	"time"
 
 	"github.com/RAF-SI-2025/Banka-3-Backend/pkg/apperr"
+	"github.com/RAF-SI-2025/Banka-3-Backend/pkg/logger"
 	"github.com/RAF-SI-2025/Banka-3-Backend/pkg/postgres"
 	"github.com/RAF-SI-2025/Banka-3-Backend/services/trading/internal/domain"
 	"github.com/jackc/pgx/v5"
@@ -30,6 +31,7 @@ func (s *Store) InsertScheduledInterbankPayment(ctx context.Context, p *domain.S
 		p.Cadence, p.NextRun)
 	out, err := scanScheduledInterbank(row)
 	if err != nil {
+		logger.From(ctx).ErrorContext(ctx, "insert scheduled interbank payment failed", "err", err)
 		return nil, apperr.Internal("insert scheduled interbank payment", err)
 	}
 	return out, nil
@@ -42,10 +44,15 @@ func (s *Store) ListScheduledInterbankPaymentsByUser(ctx context.Context, userID
 	      where user_id = $1 order by created_at desc`
 	rows, err := s.DB.Query(postgres.WithRead(ctx), q, userID)
 	if err != nil {
+		logger.From(ctx).ErrorContext(ctx, "list scheduled interbank payments failed", "err", err, "user_id", userID)
 		return nil, apperr.Internal("list scheduled interbank payments", err)
 	}
 	defer rows.Close()
-	return scanScheduledInterbanks(rows)
+	out, err := scanScheduledInterbanks(rows)
+	if err != nil {
+		logger.From(ctx).ErrorContext(ctx, "list scheduled interbank payments by user failed", "err", err, "user_id", userID)
+	}
+	return out, err
 }
 
 // ListDueScheduledInterbankPayments returns every active row whose
@@ -56,10 +63,15 @@ func (s *Store) ListDueScheduledInterbankPayments(ctx context.Context, now time.
 	      where active = true and next_run <= $1 order by next_run asc`
 	rows, err := s.DB.Query(ctx, q, now)
 	if err != nil {
+		logger.From(ctx).ErrorContext(ctx, "list due scheduled interbank payments failed", "err", err)
 		return nil, apperr.Internal("list due scheduled interbank payments", err)
 	}
 	defer rows.Close()
-	return scanScheduledInterbanks(rows)
+	out, err := scanScheduledInterbanks(rows)
+	if err != nil {
+		logger.From(ctx).ErrorContext(ctx, "list due scheduled interbank payments failed", "err", err)
+	}
+	return out, err
 }
 
 // GetScheduledInterbankPayment returns one row by id. NotFound on miss.
@@ -70,6 +82,7 @@ func (s *Store) GetScheduledInterbankPayment(ctx context.Context, id string) (*d
 		if noRows(err) {
 			return nil, apperr.NotFound("zakazana inostrana uplata nije pronađena")
 		}
+		logger.From(ctx).ErrorContext(ctx, "get scheduled interbank payment failed", "err", err, "id", id)
 		return nil, apperr.Internal("get scheduled interbank payment", err)
 	}
 	return out, nil
@@ -81,6 +94,7 @@ func (s *Store) SetScheduledInterbankPaymentActive(ctx context.Context, id strin
 	const q = `update "trading".scheduled_interbank_payments
 	           set active = $2, updated_at = now() where id = $1`
 	if _, err := s.DB.Exec(ctx, q, id, active); err != nil {
+		logger.From(ctx).ErrorContext(ctx, "set scheduled interbank payment active failed", "err", err, "id", id)
 		return apperr.Internal("set scheduled interbank payment active", err)
 	}
 	return nil
@@ -99,6 +113,7 @@ func (s *Store) AdvanceScheduledInterbankPayment(ctx context.Context, id string,
 	               updated_at = now()
 	           where id = $1`
 	if _, err := s.DB.Exec(ctx, q, id, next, deactivate, lastStatus, lastErr, ranAt); err != nil {
+		logger.From(ctx).ErrorContext(ctx, "advance scheduled interbank payment failed", "err", err, "id", id)
 		return apperr.Internal("advance scheduled interbank payment", err)
 	}
 	return nil
@@ -109,6 +124,7 @@ func (s *Store) AdvanceScheduledInterbankPayment(ctx context.Context, id string,
 func (s *Store) DeleteScheduledInterbankPayment(ctx context.Context, id string) error {
 	const q = `delete from "trading".scheduled_interbank_payments where id = $1`
 	if _, err := s.DB.Exec(ctx, q, id); err != nil {
+		logger.From(ctx).ErrorContext(ctx, "delete scheduled interbank payment failed", "err", err, "id", id)
 		return apperr.Internal("delete scheduled interbank payment", err)
 	}
 	return nil

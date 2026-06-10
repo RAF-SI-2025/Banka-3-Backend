@@ -29,9 +29,9 @@ func runDailyAt(ctx context.Context, log *slog.Logger, name string, loc *time.Lo
 			return nil
 		case <-t.C:
 			if err := fn(ctx); err != nil {
-				log.Warn("daily job failed", "job", name, "error", err)
+				log.ErrorContext(ctx, "daily job failed", "err", err, "job", name)
 			} else {
-				log.Info("daily job ran", "job", name)
+				log.InfoContext(ctx, "daily job ran", "job", name)
 			}
 		}
 	}
@@ -80,7 +80,7 @@ func runMonthlyTaxCron(ctx context.Context, log *slog.Logger, svc *service.Servi
 			cronCtx := service.TaxCronContext(ctx)
 			res, err := svc.RunTax(cronCtx, service.RunTaxInput{})
 			if err != nil {
-				log.Warn("monthly tax cron failed", "err", err.Error())
+				log.ErrorContext(ctx, "monthly tax cron failed", "err", err)
 				continue
 			}
 			log.Info("monthly tax cron ran",
@@ -119,7 +119,7 @@ func runOptionsRefresh(ctx context.Context, log *slog.Logger, svc *service.Servi
 	once := func() {
 		res, err := svc.Options.RunOnce(ctx)
 		if err != nil {
-			log.Warn("options generator failed", "err", err.Error())
+			log.ErrorContext(ctx, "options generator failed", "err", err)
 			return
 		}
 		log.Info("options generator ran",
@@ -155,7 +155,7 @@ func runMarketDataRefresh(ctx context.Context, log *slog.Logger, svc *service.Se
 	once := func() {
 		res, err := svc.MarketData.RunOnce(ctx)
 		if err != nil {
-			log.Warn("market-data refresh failed", "err", err.Error())
+			log.ErrorContext(ctx, "market-data refresh failed", "err", err)
 			return
 		}
 		log.Info("market-data refresh ran",
@@ -190,7 +190,8 @@ func runStockHistoryBackfill(ctx context.Context, log *slog.Logger, svc *service
 	}
 	res, err := svc.MarketData.BackfillStockHistory(ctx)
 	if err != nil {
-		log.Warn("stock-history backfill failed", "err", err.Error())
+		// Swallowed by design — the seed history remains usable.
+		log.ErrorContext(ctx, "stock-history backfill failed", "err", err)
 		return nil
 	}
 	log.Info("stock-history backfill ran",
@@ -227,7 +228,7 @@ func runExecutionWorker(ctx context.Context, log *slog.Logger, svc *service.Serv
 		case <-t.C:
 			fired, err := svc.RunExecutionTick(ctx)
 			if err != nil {
-				log.Warn("execution tick failed", "err", err.Error())
+				log.ErrorContext(ctx, "execution tick failed", "err", err)
 				continue
 			}
 			if fired > 0 {
@@ -249,7 +250,7 @@ func runOTCExpirySweep(ctx context.Context, log *slog.Logger, svc *service.Servi
 	once := func() {
 		res, err := svc.SweepExpiredOTCContracts(ctx)
 		if err != nil {
-			log.Warn("otc expiry sweep failed", "err", err.Error())
+			log.ErrorContext(ctx, "otc expiry sweep failed", "err", err)
 			return
 		}
 		if res.ContractsExpired > 0 || res.OffersExpired > 0 || res.OffersWarned > 0 {
@@ -303,7 +304,7 @@ func runSagaRecoveryWorker(ctx context.Context, log *slog.Logger, svc *service.S
 			// so the scheduler service can drive the same logic.
 			n, err := svc.RunSagaRecoveryTick(ctx)
 			if err != nil {
-				log.Warn("saga recovery: tick failed", "err", err.Error())
+				log.ErrorContext(ctx, "saga recovery: tick failed", "err", err)
 				continue
 			}
 			if n > 0 {
@@ -330,7 +331,7 @@ func runFundPerformanceCron(ctx context.Context, log *slog.Logger, svc *service.
 		case <-t.C:
 			n, err := svc.SnapshotAllFunds(ctx, time.Now().In(loc))
 			if err != nil {
-				log.Warn("fund snapshot cron failed", "err", err.Error())
+				log.ErrorContext(ctx, "fund snapshot cron failed", "err", err)
 				continue
 			}
 			log.Info("fund snapshot cron ran", "funds", n)

@@ -85,6 +85,8 @@ func (s *Service) ExerciseOption(ctx context.Context, in ExerciseOptionInput) (*
 		return nil, apperr.FailedPrecondition("opcija je istekla")
 	}
 	if option.UnderlyingSecurityID == "" {
+		s.log().ErrorContext(ctx, "option exercise: option has no underlying",
+			"holding_id", holding.ID, "security_id", option.ID, "ticker", option.Ticker)
 		return nil, apperr.Internal("opcija bez underlying-a", nil)
 	}
 
@@ -102,10 +104,14 @@ func (s *Service) ExerciseOption(ctx context.Context, in ExerciseOptionInput) (*
 	// exercising).
 	current, err := money.Parse(listing.Price)
 	if err != nil {
+		s.log().ErrorContext(ctx, "option exercise: underlying price unparseable",
+			"err", err, "ticker", option.Ticker, "price", listing.Price)
 		return nil, apperr.Internal("underlying price unparseable", err)
 	}
 	strike, err := money.Parse(option.StrikePrice)
 	if err != nil {
+		s.log().ErrorContext(ctx, "option exercise: strike unparseable",
+			"err", err, "ticker", option.Ticker, "strike_price", option.StrikePrice)
 		return nil, apperr.Internal("strike unparseable", err)
 	}
 	switch option.OptionType {
@@ -128,6 +134,8 @@ func (s *Service) ExerciseOption(ctx context.Context, in ExerciseOptionInput) (*
 	}
 	cs, err := money.Parse(contractSizeStr)
 	if err != nil {
+		s.log().ErrorContext(ctx, "option exercise: contract size unparseable",
+			"err", err, "ticker", option.Ticker, "contract_size", contractSizeStr)
 		return nil, apperr.Internal("contract size unparseable", err)
 	}
 	if cs.Sign() == 0 {
@@ -167,12 +175,16 @@ func (s *Service) ExerciseOption(ctx context.Context, in ExerciseOptionInput) (*
 		pending = row
 		return nil
 	}); err != nil {
+		s.log().ErrorContext(ctx, "option exercise: pending row insert failed",
+			"err", err, "holding_id", holding.ID, "ticker", option.Ticker)
 		return nil, err
 	}
 
 	// (2) Bank cash leg. CALL = debit user, PUT = credit user. The bank
 	// dedupes on op_id via migration 0011's unique (op_id, leg_index).
 	if s.Settler == nil {
+		s.log().ErrorContext(ctx, "option exercise: trade settler not wired",
+			"exercise_id", pending.ID)
 		return nil, apperr.Internal("trade settler not wired", nil)
 	}
 	direction := "debit"
@@ -189,6 +201,10 @@ func (s *Service) ExerciseOption(ctx context.Context, in ExerciseOptionInput) (*
 		Purpose:   "Exercise " + option.Ticker,
 	})
 	if err != nil {
+		s.log().ErrorContext(ctx, "option exercise: bank settle failed",
+			"err", err, "exercise_id", pending.ID, "ticker", option.Ticker,
+			"direction", direction, "amount", pending.NotionalAmt,
+			"currency", string(currency))
 		return nil, err
 	}
 
@@ -274,6 +290,10 @@ func (s *Service) ExerciseOption(ctx context.Context, in ExerciseOptionInput) (*
 			"exercise_id", pending.ID, "op_id", settledOpID, "err", err.Error())
 		return nil, err
 	}
+	s.log().InfoContext(ctx, "option exercised",
+		"exercise_id", pending.ID, "op_id", settledOpID, "ticker", option.Ticker,
+		"option_type", string(option.OptionType), "quantity", in.Quantity,
+		"notional", pending.NotionalAmt, "currency", string(currency))
 	return res, nil
 }
 

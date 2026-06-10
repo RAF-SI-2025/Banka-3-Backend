@@ -23,6 +23,8 @@ import (
 	"strconv"
 	"strings"
 	"time"
+
+	"github.com/RAF-SI-2025/Banka-3-Backend/pkg/logger"
 )
 
 const measurement = "listing_daily_price_info"
@@ -100,17 +102,21 @@ func (s *influxStore) WriteDaily(ctx context.Context, r Row) error {
 		s.baseURL, url.QueryEscape(s.org), url.QueryEscape(s.bucket))
 	req, err := http.NewRequestWithContext(ctx, http.MethodPost, u, strings.NewReader(line))
 	if err != nil {
+		logger.From(ctx).ErrorContext(ctx, "influx write request build failed", "err", err, "listing_id", r.ListingID)
 		return err
 	}
 	req.Header.Set("Authorization", "Token "+s.token)
 	req.Header.Set("Content-Type", "text/plain; charset=utf-8")
 	resp, err := s.client.Do(req)
 	if err != nil {
+		logger.From(ctx).ErrorContext(ctx, "influx write request failed", "err", err, "listing_id", r.ListingID)
 		return err
 	}
 	defer resp.Body.Close()
 	if resp.StatusCode/100 != 2 {
 		body, _ := io.ReadAll(resp.Body)
+		logger.From(ctx).ErrorContext(ctx, "influx write rejected",
+			"status", resp.StatusCode, "listing_id", r.ListingID, "body", string(body))
 		return fmt.Errorf("influxmarket write: %d %s", resp.StatusCode, string(body))
 	}
 	return nil
@@ -163,6 +169,7 @@ func (s *influxStore) query(ctx context.Context, flux string) ([]Row, error) {
 	u := fmt.Sprintf("%s/api/v2/query?org=%s", s.baseURL, url.QueryEscape(s.org))
 	req, err := http.NewRequestWithContext(ctx, http.MethodPost, u, bytes.NewReader(body))
 	if err != nil {
+		logger.From(ctx).ErrorContext(ctx, "influx query request build failed", "err", err)
 		return nil, err
 	}
 	req.Header.Set("Authorization", "Token "+s.token)
@@ -170,14 +177,21 @@ func (s *influxStore) query(ctx context.Context, flux string) ([]Row, error) {
 	req.Header.Set("Accept", "application/csv")
 	resp, err := s.client.Do(req)
 	if err != nil {
+		logger.From(ctx).ErrorContext(ctx, "influx query request failed", "err", err)
 		return nil, err
 	}
 	defer resp.Body.Close()
 	if resp.StatusCode/100 != 2 {
 		raw, _ := io.ReadAll(resp.Body)
+		logger.From(ctx).ErrorContext(ctx, "influx query rejected", "status", resp.StatusCode, "body", string(raw))
 		return nil, fmt.Errorf("influxmarket query: %d %s", resp.StatusCode, string(raw))
 	}
-	return decodeCSV(resp.Body)
+	rows, err := decodeCSV(resp.Body)
+	if err != nil {
+		logger.From(ctx).ErrorContext(ctx, "influx query csv decode failed", "err", err)
+		return nil, err
+	}
+	return rows, nil
 }
 
 func decodeCSV(r io.Reader) ([]Row, error) {

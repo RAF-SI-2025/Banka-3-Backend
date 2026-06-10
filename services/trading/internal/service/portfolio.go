@@ -127,7 +127,15 @@ func (s *Service) SetPublicCount(ctx context.Context, holdingID string, count in
 		}
 	}
 	if count > h.Quantity {
+		s.log().WarnContext(ctx, "set public count rejected: exceeds quantity",
+			"holding_id", holdingID, "count", count, "quantity", h.Quantity)
 		return nil, apperr.Validation("public_count ne može da bude veći od quantity")
 	}
-	return s.Store.SetPublicCount(ctx, holdingID, count)
+	out, err := s.Store.SetPublicCount(ctx, holdingID, count)
+	if err != nil {
+		return nil, err
+	}
+	s.log().InfoContext(ctx, "holding public count set",
+		"holding_id", holdingID, "count", count)
+	return out, nil
 }

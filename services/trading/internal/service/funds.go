@@ -228,10 +228,13 @@ func (s *Service) CreateFund(ctx context.Context, in CreateFundInput) (*tdomain.
 		}
 	}
 	if s.Reservations == nil {
+		s.log().ErrorContext(ctx, "create fund: bank client not wired", "fund_name", name)
 		return nil, apperr.Internal("bank client not wired", nil)
 	}
 	accountID, err := s.Reservations.CreateFundAccount(ctx, name, tdomain.CurrencyRSD)
 	if err != nil {
+		s.log().ErrorContext(ctx, "create fund: bank fund-account create failed",
+			"err", err, "fund_name", name)
 		return nil, fmt.Errorf("bank.CreateFundAccount: %w", err)
 	}
 	f := &tdomain.Fund{
@@ -243,7 +246,16 @@ func (s *Service) CreateFund(ctx context.Context, in CreateFundInput) (*tdomain.
 		TotalUnits:          "0",
 		Status:              tdomain.FundActive,
 	}
-	return s.Store.InsertFund(ctx, f)
+	out, err := s.Store.InsertFund(ctx, f)
+	if err != nil {
+		s.logOpErr(ctx, "fund create failed", err,
+			"fund_name", name, "bank_account_id", accountID)
+		return nil, err
+	}
+	s.log().InfoContext(ctx, "fund created",
+		"fund_id", out.ID, "fund_name", out.Name, "manager_user_id", out.ManagerUserID,
+		"bank_account_id", out.BankAccountID)
+	return out, nil
 }
 
 // SetFundReinvestDividends toggles the fund's dividend-reinvestment flag
@@ -265,7 +277,15 @@ func (s *Service) SetFundReinvestDividends(ctx context.Context, fundID string, e
 	if err := requireFundManager(p, f); err != nil {
 		return nil, err
 	}
-	return s.Store.SetFundReinvestDividends(ctx, fundID, enabled)
+	out, err := s.Store.SetFundReinvestDividends(ctx, fundID, enabled)
+	if err != nil {
+		s.logOpErr(ctx, "fund reinvest-dividends flip failed", err,
+			"fund_id", fundID, "enabled", enabled)
+		return nil, err
+	}
+	s.log().InfoContext(ctx, "fund reinvest-dividends flag set",
+		"fund_id", fundID, "enabled", enabled)
+	return out, nil
 }
 
 // ListFundDividends returns the per-client distribution history for a

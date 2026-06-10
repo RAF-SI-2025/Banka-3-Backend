@@ -33,7 +33,15 @@ func (s *Service) UpsertSecurity(ctx context.Context, in *domain.Security) (*dom
 	if err := validateSecurity(in); err != nil {
 		return nil, err
 	}
-	return s.Store.UpsertSecurity(ctx, in)
+	out, err := s.Store.UpsertSecurity(ctx, in)
+	if err != nil {
+		s.logOpErr(ctx, "security upsert failed", err,
+			"ticker", in.Ticker, "type", string(in.Type))
+		return nil, err
+	}
+	s.log().InfoContext(ctx, "security upserted",
+		"security_id", out.ID, "ticker", out.Ticker, "type", string(out.Type))
+	return out, nil
 }
 
 // GetSecurity returns one security joined with its listing and the

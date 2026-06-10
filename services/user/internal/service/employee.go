@@ -76,9 +76,11 @@ func (s *Service) CreateEmployee(ctx context.Context, in CreateEmployeeInput) (*
 		return nil, err
 	}
 
+	s.Log.InfoContext(ctx, "employee created", "employee_id", emp.ID, "email", emp.Email)
+
 	if err := s.sendActivationEmail(ctx, emp); err != nil {
 		// Don't roll back the employee — admin can resend manually.
-		s.Log.Error("send activation email failed", "employee_id", emp.ID, "error", err)
+		s.Log.ErrorContext(ctx, "send activation email failed", "err", err, "employee_id", emp.ID)
 	}
 
 	s.recordAudit(ctx, "employee.create", emp.ID,
@@ -148,11 +150,11 @@ func (s *Service) UpdateEmployee(ctx context.Context, in UpdateEmployeeInput) (*
 		// goes — and the old one too so the previous account holder sees
 		// the swap.
 		if err := s.sendProfileChangeEmail(ctx, updated, changes); err != nil {
-			s.Log.Warn("profile change email failed", "employee_id", updated.ID, "error", err)
+			s.Log.WarnContext(ctx, "profile change email failed", "err", err, "employee_id", updated.ID)
 		}
 		if before.Email != updated.Email {
 			if err := s.sendProfileChangeEmailTo(ctx, before.Email, updated.FirstName, changes); err != nil {
-				s.Log.Warn("profile change email (old address) failed", "employee_id", updated.ID, "error", err)
+				s.Log.WarnContext(ctx, "profile change email (old address) failed", "err", err, "employee_id", updated.ID)
 			}
 		}
 	}
@@ -187,13 +189,14 @@ func (s *Service) SetEmployeeActive(ctx context.Context, id string, active bool)
 	}
 	if !active {
 		if _, err := s.Store.IncrementEmployeeSessionVersion(ctx, id); err != nil {
-			s.Log.Error("bump session version failed", "employee_id", id, "error", err)
+			s.Log.ErrorContext(ctx, "bump session version failed", "err", err, "employee_id", id)
 		}
 		if err := s.Store.RevokeAllRefreshTokens(ctx, domain.KindEmployee, id); err != nil {
-			s.Log.Error("revoke refresh tokens failed", "employee_id", id, "error", err)
+			s.Log.ErrorContext(ctx, "revoke refresh tokens failed", "err", err, "employee_id", id)
 		}
 		s.invalidateSessionCache(ctx, domain.KindEmployee, id)
 	}
+	s.Log.InfoContext(ctx, "employee active set", "employee_id", id, "active", active)
 	return updated, nil
 }
 
@@ -236,6 +239,7 @@ func (s *Service) SetEmployeePermissions(ctx context.Context, id string, perms [
 		}
 		n, err := s.FundReassigner.Reassign(ctx, id, caller.UserID)
 		if err != nil {
+			s.Log.ErrorContext(ctx, "supervisor fund reassign failed", "err", err, "from_user_id", id, "to_user_id", caller.UserID)
 			return nil, apperr.Internal("reassign supervisor assets", err)
 		}
 		if n > 0 && s.Notifier != nil && target.Email != "" {
@@ -245,11 +249,11 @@ func (s *Service) SetEmployeePermissions(ctx context.Context, id string, perms [
 				"upravljanje Vašim postojećim fondovima je preneto na drugog supervizora.\n\n" +
 				"Banka 3"
 			if err := s.Notifier.Send(ctx, target.Email, subject, body, false); err != nil {
-				s.Log.Warn("send handover email failed", "to", target.Email, "err", err.Error())
+				s.Log.WarnContext(ctx, "send handover email failed", "err", err, "to", target.Email)
 			}
 		}
 	} else if losingFundsManager && s.FundReassigner == nil {
-		s.Log.Warn("funds.manage.supervisor revoked but FundReassigner not wired — funds may be orphaned",
+		s.Log.WarnContext(ctx, "funds.manage.supervisor revoked but FundReassigner not wired — funds may be orphaned",
 			"user_id", id)
 	}
 	updated, err := s.Store.SetEmployeePermissions(ctx, id, perms)
@@ -261,6 +265,7 @@ func (s *Service) SetEmployeePermissions(ctx context.Context, id string, perms [
 		strings.Join(target.Permissions, ", "), strings.Join(perms, ", "),
 		"Izmena permisija")
 	s.invalidateSessionCache(ctx, domain.KindEmployee, id)
+	s.Log.InfoContext(ctx, "employee permissions updated", "employee_id", id)
 	return updated, nil
 }
 
@@ -273,7 +278,7 @@ func (s *Service) invalidateSessionCache(ctx context.Context, kind domain.UserKi
 		return
 	}
 	if err := s.Redis.Del(ctx, "usv:"+string(kind)+":"+id).Err(); err != nil {
-		s.Log.Warn("invalidate session cache", "user_id", id, "error", err)
+		s.Log.ErrorContext(ctx, "invalidate session cache failed", "err", err, "user_id", id, "kind", kind)
 	}
 }
 
@@ -287,6 +292,7 @@ func (s *Service) guardSelf(ctx context.Context, targetID, action string) error 
 		return apperr.Unauthenticated("not authenticated")
 	}
 	if p.UserID == targetID {
+		s.Log.WarnContext(ctx, "self-edit rejected", "user_id", p.UserID, "action", action)
 		return apperr.PermissionDenied("ne možete promeniti " + action + " sopstvenog naloga")
 	}
 	return nil
@@ -305,6 +311,7 @@ func (s *Service) guardAdminOnAdmin(ctx context.Context, target *domain.Employee
 	if p.UserID == target.ID {
 		return nil
 	}
+	s.Log.WarnContext(ctx, "admin-on-admin edit rejected", "user_id", p.UserID, "target_id", target.ID)
 	return apperr.PermissionDenied("admin nije ovlašćen da menja drugog admina")
 }
 
@@ -316,6 +323,7 @@ func (s *Service) requirePermission(ctx context.Context, perm string) error {
 	if permissions.Has(p.Permissions, perm) || permissions.Has(p.Permissions, permissions.Admin) {
 		return nil
 	}
+	s.Log.WarnContext(ctx, "permission denied", "user_id", p.UserID, "kind", p.UserKind, "required", perm)
 	return apperr.PermissionDenied("nedovoljne permisije")
 }
 
@@ -440,6 +448,7 @@ func (s *Service) sendProfileChangeEmailTo(ctx context.Context, to, firstName st
 func (s *Service) sendActivationEmail(ctx context.Context, e *domain.Employee) error {
 	plaintext, hash, err := tokens.Generate(32)
 	if err != nil {
+		s.Log.ErrorContext(ctx, "activation token generate failed", "err", err, "employee_id", e.ID)
 		return err
 	}
 	if err := s.Store.CreateActivationToken(ctx, e.ID, hash, s.Clock.Now().Add(s.Cfg.ActivationTTL)); err != nil {

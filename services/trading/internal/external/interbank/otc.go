@@ -88,6 +88,8 @@ func (c *Client) Discover(ctx context.Context, bankCode, tickerFilter string) ([
 	var targets []string
 	if bankCode != "" {
 		if c.baseURL(bankCode) == "" {
+			c.log.WarnContext(ctx, "discover requested for unconfigured partner bank",
+				"bank_code", bankCode, "configured_banks", c.cfg.Routes.BankCodes())
 			return nil, &errUnknownBank{bankCode: bankCode}
 		}
 		targets = []string{bankCode}
@@ -96,15 +98,19 @@ func (c *Client) Discover(ctx context.Context, bankCode, tickerFilter string) ([
 	}
 
 	var out []*service.PartnerHolding
+	failed := 0
 	for _, code := range targets {
 		rows, err := c.discoverOne(ctx, code, tickerFilter)
 		if err != nil {
-			c.log.Warn("partner discover failed",
-				"bank_code", code, "err", err.Error())
+			failed++
+			c.log.WarnContext(ctx, "partner discover failed",
+				"bank_code", code, "base_url", c.baseURL(code), "err", err.Error())
 			continue
 		}
 		out = append(out, rows...)
 	}
+	c.log.InfoContext(ctx, "partner discovery complete",
+		"targets", len(targets), "failed", failed, "holdings", len(out), "ticker_filter", tickerFilter)
 	return out, nil
 }
 
@@ -133,6 +139,8 @@ func (c *Client) discoverNative(ctx context.Context, bankCode, tickerFilter stri
 	}
 	var parsed nativePublicResponse
 	if err := jsonDecode(body, &parsed); err != nil {
+		c.log.ErrorContext(ctx, "native discover decode failed",
+			"err", err.Error(), "bank_code", bankCode, "body", bodySnippet(body, 512))
 		return nil, fmt.Errorf("partner %s discover decode: %w", bankCode, err)
 	}
 	out := make([]*service.PartnerHolding, 0, len(parsed.Items))
@@ -195,6 +203,9 @@ func (c *Client) createOfferNative(ctx context.Context, in service.PartnerCreate
 	}
 	var parsed nativeOfferResponse
 	if err := jsonDecode(respBody, &parsed); err != nil {
+		c.log.ErrorContext(ctx, "native create offer decode failed",
+			"err", err.Error(), "bank_code", in.RemoteBankCode, "thread_id", in.LocalThreadID,
+			"body", bodySnippet(respBody, 512))
 		return nil, fmt.Errorf("partner %s create offer decode: %w", in.RemoteBankCode, err)
 	}
 	return &service.PartnerCreateOfferOutput{

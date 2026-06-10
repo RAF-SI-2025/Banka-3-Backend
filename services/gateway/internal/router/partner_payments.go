@@ -28,6 +28,7 @@ import (
 
 	bankpb "github.com/RAF-SI-2025/Banka-3-Backend/gen/proto/bank/v1"
 	pkgauth "github.com/RAF-SI-2025/Banka-3-Backend/pkg/auth"
+	"github.com/RAF-SI-2025/Banka-3-Backend/pkg/logger"
 	"github.com/RAF-SI-2025/Banka-3-Backend/pkg/permissions"
 	"github.com/RAF-SI-2025/Banka-3-Backend/pkg/signature"
 )
@@ -118,8 +119,14 @@ func (p *PartnerPayments) guard(h http.HandlerFunc) http.HandlerFunc {
 	expected := []byte(p.APIKey)
 	verifier := signature.New(p.SignKey)
 	return func(w http.ResponseWriter, r *http.Request) {
+		ctx := r.Context()
+		log := logger.From(ctx)
 		got := []byte(r.Header.Get("X-Api-Key"))
 		if subtle.ConstantTimeCompare(got, expected) != 1 {
+			// Never log the presented key itself.
+			log.WarnContext(ctx, "partner api key rejected",
+				"method", r.Method, "path", r.URL.Path,
+				"key_present", len(got) > 0, "remote", r.RemoteAddr)
 			writeError(w, http.StatusUnauthorized, "invalid X-Api-Key")
 			return
 		}
@@ -131,13 +138,24 @@ func (p *PartnerPayments) guard(h http.HandlerFunc) http.HandlerFunc {
 			body, err := io.ReadAll(io.LimitReader(r.Body, 1<<20))
 			_ = r.Body.Close()
 			if err != nil {
+				log.WarnContext(ctx, "partner request body read failed",
+					"err", err, "method", r.Method, "path", r.URL.Path)
 				writeError(w, http.StatusBadRequest, "read body: "+err.Error())
 				return
 			}
 			if err := verifier.Verify(body, r.Header.Get("X-Timestamp"), r.Header.Get("X-Signature")); err != nil {
+				// err names the failed check (stale/malformed timestamp
+				// vs signature mismatch). The signature value and key
+				// stay out of the log; the body is a partner protocol
+				// payload, not a user secret.
+				log.WarnContext(ctx, "interbank signature rejected",
+					"err", err, "method", r.Method, "path", r.URL.Path,
+					"ts", r.Header.Get("X-Timestamp"), "body", bodySnippet(body))
 				writeError(w, http.StatusUnauthorized, "invalid signature: "+err.Error())
 				return
 			}
+			log.DebugContext(ctx, "interbank signature verified",
+				"method", r.Method, "path", r.URL.Path)
 			r.Body = io.NopCloser(bytes.NewReader(body))
 		}
 		h(w, r)
@@ -191,16 +209,25 @@ func statusToWire(s bankpb.InterbankTxStatus) string {
 
 // handlePrepare — POST /bank/api/v1/interbank/transactions.
 func (p *PartnerPayments) handlePrepare(w http.ResponseWriter, r *http.Request) {
+	ctx := r.Context()
+	log := logger.From(ctx)
 	body, err := io.ReadAll(io.LimitReader(r.Body, 1<<20))
 	if err != nil {
+		log.WarnContext(ctx, "partner request body read failed",
+			"err", err, "method", r.Method, "path", r.URL.Path)
 		writeError(w, http.StatusBadRequest, "read body: "+err.Error())
 		return
 	}
 	var in preparePaymentRequest
 	if err := json.Unmarshal(body, &in); err != nil {
+		log.WarnContext(ctx, "interbank prepare payload decode failed",
+			"err", err, "path", r.URL.Path, "body", bodySnippet(body))
 		writeError(w, http.StatusBadRequest, "invalid JSON body")
 		return
 	}
+	log = log.With("partner_bank", in.SenderRoutingNumber, "transaction_id", in.TransactionID)
+	r = r.WithContext(logger.Inject(ctx, log))
+	ctx = r.Context()
 	if replayed := p.tryReplay(w, r, in.SenderRoutingNumber); replayed {
 		return
 	}
@@ -216,9 +243,12 @@ func (p *PartnerPayments) handlePrepare(w http.ResponseWriter, r *http.Request) 
 		Purpose:             in.Purpose,
 	})
 	if err != nil {
-		writeGRPCError(w, err)
+		writeGRPCError(w, r, err)
 		return
 	}
+	log.InfoContext(ctx, "interbank prepare accepted",
+		"status", statusToWire(resp.GetStatus()), "direction", in.Direction,
+		"currency", in.Currency, "amount", in.Amount)
 	out := preparePaymentResponse{
 		TransactionID: resp.GetTransactionId(),
 		Status:        statusToWire(resp.GetStatus()),
@@ -230,23 +260,33 @@ func (p *PartnerPayments) handlePrepare(w http.ResponseWriter, r *http.Request) 
 
 // handleCommit — POST /bank/api/v1/interbank/transactions/{transaction_id}/commit.
 func (p *PartnerPayments) handleCommit(w http.ResponseWriter, r *http.Request) {
+	ctx := r.Context()
+	log := logger.From(ctx)
 	var in commitPaymentRequest
-	if err := json.NewDecoder(r.Body).Decode(&in); err != nil {
+	var snip snippetWriter
+	if err := json.NewDecoder(io.TeeReader(r.Body, &snip)).Decode(&in); err != nil {
+		log.WarnContext(ctx, "interbank commit payload decode failed",
+			"err", err, "path", r.URL.Path, "body", snip.String())
 		writeError(w, http.StatusBadRequest, "invalid JSON body")
 		return
 	}
+	txID := r.PathValue("transaction_id")
+	log = log.With("partner_bank", in.SenderRoutingNumber, "transaction_id", txID)
+	r = r.WithContext(logger.Inject(ctx, log))
+	ctx = r.Context()
 	if replayed := p.tryReplay(w, r, in.SenderRoutingNumber); replayed {
 		return
 	}
-	txID := r.PathValue("transaction_id")
 	resp, err := p.Interbank.CommitPayment(partnerCtx(r.Context()), &bankpb.CommitPaymentRequest{
 		SenderRoutingNumber: int32(in.SenderRoutingNumber),
 		TransactionId:       txID,
 	})
 	if err != nil {
-		writeGRPCError(w, err)
+		writeGRPCError(w, r, err)
 		return
 	}
+	log.InfoContext(ctx, "interbank commit accepted",
+		"status", statusToWire(resp.GetStatus()), "op_id", resp.GetOpId())
 	out := commitPaymentResponse{
 		TransactionID: resp.GetTransactionId(),
 		Status:        statusToWire(resp.GetStatus()),
@@ -258,24 +298,34 @@ func (p *PartnerPayments) handleCommit(w http.ResponseWriter, r *http.Request) {
 
 // handleRollback — POST /bank/api/v1/interbank/transactions/{transaction_id}/rollback.
 func (p *PartnerPayments) handleRollback(w http.ResponseWriter, r *http.Request) {
+	ctx := r.Context()
+	log := logger.From(ctx)
 	var in rollbackPaymentRequest
-	if err := json.NewDecoder(r.Body).Decode(&in); err != nil {
+	var snip snippetWriter
+	if err := json.NewDecoder(io.TeeReader(r.Body, &snip)).Decode(&in); err != nil {
+		log.WarnContext(ctx, "interbank rollback payload decode failed",
+			"err", err, "path", r.URL.Path, "body", snip.String())
 		writeError(w, http.StatusBadRequest, "invalid JSON body")
 		return
 	}
+	txID := r.PathValue("transaction_id")
+	log = log.With("partner_bank", in.SenderRoutingNumber, "transaction_id", txID)
+	r = r.WithContext(logger.Inject(ctx, log))
+	ctx = r.Context()
 	if replayed := p.tryReplay(w, r, in.SenderRoutingNumber); replayed {
 		return
 	}
-	txID := r.PathValue("transaction_id")
 	resp, err := p.Interbank.RollbackPayment(partnerCtx(r.Context()), &bankpb.RollbackPaymentRequest{
 		SenderRoutingNumber: int32(in.SenderRoutingNumber),
 		TransactionId:       txID,
 		Reason:              in.Reason,
 	})
 	if err != nil {
-		writeGRPCError(w, err)
+		writeGRPCError(w, r, err)
 		return
 	}
+	log.InfoContext(ctx, "interbank rollback accepted",
+		"status", statusToWire(resp.GetStatus()), "reason", in.Reason)
 	out := rollbackPaymentResponse{
 		TransactionID: resp.GetTransactionId(),
 		Status:        statusToWire(resp.GetStatus()),
@@ -292,40 +342,63 @@ func (p *PartnerPayments) tryReplay(w http.ResponseWriter, r *http.Request, send
 	if key == "" || sender == 0 {
 		return false
 	}
-	hit, err := p.Interbank.GetInboundMessage(partnerCtx(r.Context()), &bankpb.GetInboundMessageRequest{
+	ctx := r.Context()
+	log := logger.From(ctx)
+	hit, err := p.Interbank.GetInboundMessage(partnerCtx(ctx), &bankpb.GetInboundMessageRequest{
 		SenderRoutingNumber: int32(sender),
 		IdempotenceKey:      key,
 	})
 	if err != nil || hit == nil || !hit.GetFound() {
+		if err != nil {
+			// Best-effort lookup — a miss just re-runs the handler, but
+			// a broken audit store deserves a line.
+			log.WarnContext(ctx, "interbank replay lookup failed; proceeding",
+				"err", err, "partner_bank", sender)
+		}
 		return false
 	}
+	log.InfoContext(ctx, "interbank message replayed from cache",
+		"partner_bank", sender, "status", hit.GetResponseStatus())
 	w.Header().Set("Content-Type", "application/json; charset=utf-8")
 	w.WriteHeader(int(hit.GetResponseStatus()))
-	_, _ = w.Write([]byte(hit.GetResponseBody()))
+	if _, werr := w.Write([]byte(hit.GetResponseBody())); werr != nil {
+		log.WarnContext(ctx, "response write failed", "err", werr, "partner_bank", sender)
+	}
 	return true
 }
 
 // writeAndCache writes the JSON response and (when the partner sent
 // X-Idempotence-Key) stashes it for replay. Cache write is best-effort.
 func (p *PartnerPayments) writeAndCache(w http.ResponseWriter, r *http.Request, sender int, txID string, msgType bankpb.InterbankMessageType, status int, payload any) {
+	ctx := r.Context()
+	log := logger.From(ctx)
 	buf, err := json.Marshal(payload)
 	if err != nil {
+		log.ErrorContext(ctx, "interbank response marshal failed",
+			"err", err, "partner_bank", sender, "transaction_id", txID)
 		writeError(w, http.StatusInternalServerError, "marshal response: "+err.Error())
 		return
 	}
 	w.Header().Set("Content-Type", "application/json; charset=utf-8")
 	w.WriteHeader(status)
-	_, _ = w.Write(buf)
+	if _, werr := w.Write(buf); werr != nil {
+		log.WarnContext(ctx, "response write failed",
+			"err", werr, "partner_bank", sender, "transaction_id", txID)
+	}
 	key := r.Header.Get("X-Idempotence-Key")
 	if key == "" || sender == 0 {
 		return
 	}
-	_, _ = p.Interbank.RecordInboundMessage(partnerCtx(r.Context()), &bankpb.RecordInboundMessageRequest{
+	if _, rerr := p.Interbank.RecordInboundMessage(partnerCtx(ctx), &bankpb.RecordInboundMessageRequest{
 		SenderRoutingNumber: int32(sender),
 		IdempotenceKey:      key,
 		MessageType:         msgType,
 		TransactionId:       txID,
 		ResponseStatus:      int32(status),
 		ResponseBody:        string(buf),
-	})
+	}); rerr != nil {
+		// Best-effort idempotency audit; a retry will simply re-run.
+		log.WarnContext(ctx, "interbank inbound message cache write failed",
+			"err", rerr, "partner_bank", sender, "transaction_id", txID)
+	}
 }

@@ -50,6 +50,7 @@ package postgres
 import (
 	"context"
 	"fmt"
+	"log/slog"
 	"time"
 
 	"github.com/exaring/otelpgx"
@@ -81,12 +82,16 @@ func Open(ctx context.Context, dsn string) (*pgxpool.Pool, error) {
 
 	pool, err := pgxpool.NewWithConfig(ctx, cfg)
 	if err != nil {
+		// err may quote the DSN, but pgx redacts the password; the DSN
+		// itself is never logged here.
+		slog.ErrorContext(ctx, "postgres pool open failed", "err", err)
 		return nil, fmt.Errorf("new pool: %w", err)
 	}
 
 	pingCtx, cancel := context.WithTimeout(ctx, 10*time.Second)
 	defer cancel()
 	if err := pool.Ping(pingCtx); err != nil {
+		slog.ErrorContext(ctx, "postgres ping failed", "err", err)
 		pool.Close()
 		return nil, fmt.Errorf("ping: %w", err)
 	}

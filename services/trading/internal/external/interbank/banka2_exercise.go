@@ -138,6 +138,9 @@ func (c *Client) ExercisePartnerBanka2(ctx context.Context, in ExercisePartnerIn
 	}
 	var vote b2TransactionVote
 	if err := jsonDecode(body, &vote); err != nil {
+		c.log.ErrorContext(ctx, "banka2 exercise NEW_TX decode failed",
+			"err", err.Error(), "transaction_id", in.TransactionID, "bank_code", in.RemoteBankCode,
+			"body", bodySnippet(body, 512))
 		return fmt.Errorf("banka2 exercise NEW_TX decode: %w", err)
 	}
 	if vote.Vote != "YES" {
@@ -145,9 +148,23 @@ func (c *Client) ExercisePartnerBanka2(ctx context.Context, in ExercisePartnerIn
 		for _, rr := range vote.Reasons {
 			reasons = append(reasons, rr.Reason)
 		}
+		c.log.WarnContext(ctx, "banka2 exercise vote rejected",
+			"transaction_id", in.TransactionID, "bank_code", in.RemoteBankCode,
+			"contract_id", in.ContractID, "vote", vote.Vote, "reasons", reasons)
 		// Roll the partner's prepared state back before surfacing the refusal.
-		_ = c.rollbackPartnerBanka2(ctx, RollbackPartnerInput{RemoteBankCode: in.RemoteBankCode, TransactionID: in.TransactionID})
+		if rerr := c.rollbackPartnerBanka2(ctx, RollbackPartnerInput{RemoteBankCode: in.RemoteBankCode, TransactionID: in.TransactionID}); rerr != nil {
+			c.log.WarnContext(ctx, "banka2 exercise rollback after NO vote failed",
+				"err", rerr.Error(), "transaction_id", in.TransactionID, "bank_code", in.RemoteBankCode)
+		}
 		return fmt.Errorf("banka2 exercise refused by %s: %v", in.RemoteBankCode, reasons)
 	}
-	return c.commitPartnerBanka2(ctx, CommitPartnerInput{RemoteBankCode: in.RemoteBankCode, TransactionID: in.TransactionID})
+	if err := c.commitPartnerBanka2(ctx, CommitPartnerInput{RemoteBankCode: in.RemoteBankCode, TransactionID: in.TransactionID}); err != nil {
+		c.log.ErrorContext(ctx, "banka2 exercise commit failed",
+			"err", err.Error(), "transaction_id", in.TransactionID, "bank_code", in.RemoteBankCode)
+		return err
+	}
+	c.log.InfoContext(ctx, "banka2 exercise committed",
+		"transaction_id", in.TransactionID, "bank_code", in.RemoteBankCode, "contract_id", in.ContractID,
+		"ticker", in.Ticker, "quantity", in.Quantity)
+	return nil
 }

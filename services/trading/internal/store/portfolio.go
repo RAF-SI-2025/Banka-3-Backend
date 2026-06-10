@@ -5,6 +5,7 @@ import (
 	"strings"
 
 	"github.com/RAF-SI-2025/Banka-3-Backend/pkg/apperr"
+	"github.com/RAF-SI-2025/Banka-3-Backend/pkg/logger"
 	"github.com/RAF-SI-2025/Banka-3-Backend/pkg/postgres"
 	"github.com/RAF-SI-2025/Banka-3-Backend/services/trading/internal/domain"
 	"github.com/jackc/pgx/v5"
@@ -28,6 +29,7 @@ func (s *Store) GetHolding(ctx context.Context, tx pgx.Tx, userID, userKind, sec
 		if noRows(err) {
 			return nil, apperr.NotFound("holding not found")
 		}
+		logger.From(ctx).ErrorContext(ctx, "get holding failed", "err", err, "user_id", userID, "security_id", securityID)
 		return nil, apperr.Internal("get holding", err)
 	}
 	return out, nil
@@ -56,6 +58,7 @@ func (s *Store) ApplyBuyFill(
 	row := tx.QueryRow(ctx, q, userID, userKind, securityID, accountID, qty, pricePerUnit)
 	out, err := scanHolding(row)
 	if err != nil {
+		logger.From(ctx).ErrorContext(ctx, "apply buy fill failed", "err", err, "user_id", userID, "security_id", securityID)
 		return nil, apperr.Internal("apply buy fill", err)
 	}
 	return out, nil
@@ -98,6 +101,7 @@ func (s *Store) ApplySellFill(
 		if noRows(err) {
 			return "", nil, apperr.FailedPrecondition("nedovoljna količina za prodaju")
 		}
+		logger.From(ctx).ErrorContext(ctx, "apply sell fill failed", "err", err, "user_id", userID, "security_id", securityID)
 		return "", nil, apperr.Internal("apply sell fill", err)
 	}
 	h.UserKind = domain.UserKind(t)
@@ -134,6 +138,7 @@ func (s *Store) ListHoldings(ctx context.Context, f HoldingFilter) ([]*domain.Ho
 	q := `select ` + holdingCols + ` from "trading".portfolio_holdings` + where + ` order by updated_at desc`
 	rows, err := s.DB.Query(postgres.WithRead(ctx), q, args...)
 	if err != nil {
+		logger.From(ctx).ErrorContext(ctx, "list holdings failed", "err", err)
 		return nil, apperr.Internal("list holdings", err)
 	}
 	defer rows.Close()
@@ -141,11 +146,16 @@ func (s *Store) ListHoldings(ctx context.Context, f HoldingFilter) ([]*domain.Ho
 	for rows.Next() {
 		h, err := scanHolding(rows)
 		if err != nil {
+			logger.From(ctx).ErrorContext(ctx, "scan holding failed", "err", err)
 			return nil, apperr.Internal("scan holding", err)
 		}
 		out = append(out, h)
 	}
-	return out, rows.Err()
+	if err := rows.Err(); err != nil {
+		logger.From(ctx).ErrorContext(ctx, "list holdings rows failed", "err", err)
+		return out, err
+	}
+	return out, nil
 }
 
 // SetPublicCount updates the spec p.61 OTC public-share count for c4.
@@ -162,6 +172,7 @@ func (s *Store) SetPublicCount(ctx context.Context, holdingID string, count int3
 		if noRows(err) {
 			return nil, apperr.NotFound("holding ne postoji")
 		}
+		logger.From(ctx).ErrorContext(ctx, "set public count failed", "err", err, "holding_id", holdingID)
 		return nil, apperr.Internal("set public count", err)
 	}
 	return out, nil
@@ -175,6 +186,7 @@ func (s *Store) GetHoldingByID(ctx context.Context, id string) (*domain.Holding,
 		if noRows(err) {
 			return nil, apperr.NotFound("holding ne postoji")
 		}
+		logger.From(ctx).ErrorContext(ctx, "get holding failed", "err", err, "id", id)
 		return nil, apperr.Internal("get holding", err)
 	}
 	return out, nil
@@ -195,6 +207,7 @@ func (s *Store) GetHoldingForUpdate(ctx context.Context, tx pgx.Tx, id string) (
 		if noRows(err) {
 			return nil, apperr.NotFound("holding ne postoji")
 		}
+		logger.From(ctx).ErrorContext(ctx, "lock holding failed", "err", err, "id", id)
 		return nil, apperr.Internal("lock holding", err)
 	}
 	return out, nil
@@ -239,6 +252,7 @@ func (s *Store) IncrementReservedHolding(ctx context.Context, tx pgx.Tx, holding
 		if isCheckViolation(err) {
 			return nil, apperr.FailedPrecondition("nedovoljno raspoloživih akcija za rezervaciju")
 		}
+		logger.From(ctx).ErrorContext(ctx, "increment reserved failed", "err", err, "holding_id", holdingID)
 		return nil, apperr.Internal("increment reserved", err)
 	}
 	return out, nil
@@ -265,8 +279,10 @@ func (s *Store) DecrementReservedHolding(ctx context.Context, tx pgx.Tx, holding
 			return nil, apperr.NotFound("holding ne postoji")
 		}
 		if isCheckViolation(err) {
+			logger.From(ctx).ErrorContext(ctx, "rezervacija je negativna failed", "err", err, "holding_id", holdingID)
 			return nil, apperr.Internal("rezervacija je negativna", err)
 		}
+		logger.From(ctx).ErrorContext(ctx, "decrement reserved failed", "err", err, "holding_id", holdingID)
 		return nil, apperr.Internal("decrement reserved", err)
 	}
 	return out, nil

@@ -20,6 +20,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"log/slog"
 	"time"
 
 	"github.com/redis/go-redis/v9"
@@ -59,10 +60,12 @@ func (c *Cache) Get(ctx context.Context, userID, idemKey string) (*Entry, error)
 		return nil, ErrMiss
 	}
 	if err != nil {
+		slog.WarnContext(ctx, "idempotency cache get failed", "err", err, "key", idemKey, "user_id", userID)
 		return nil, err
 	}
 	var e Entry
 	if err := json.Unmarshal(raw, &e); err != nil {
+		slog.WarnContext(ctx, "idempotency cache entry corrupt", "err", err, "key", idemKey, "user_id", userID)
 		return nil, err
 	}
 	return &e, nil
@@ -74,7 +77,12 @@ func (c *Cache) Get(ctx context.Context, userID, idemKey string) (*Entry, error)
 func (c *Cache) Set(ctx context.Context, userID, idemKey string, e *Entry) error {
 	raw, err := json.Marshal(e)
 	if err != nil {
+		slog.WarnContext(ctx, "idempotency entry marshal failed", "err", err, "key", idemKey, "user_id", userID)
 		return err
 	}
-	return c.R.SetNX(ctx, cacheKey(userID, idemKey), raw, c.TTL).Err()
+	if err := c.R.SetNX(ctx, cacheKey(userID, idemKey), raw, c.TTL).Err(); err != nil {
+		slog.WarnContext(ctx, "idempotency cache set failed", "err", err, "key", idemKey, "user_id", userID)
+		return err
+	}
+	return nil
 }

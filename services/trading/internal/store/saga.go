@@ -11,6 +11,7 @@ import (
 	"github.com/jackc/pgx/v5/pgconn"
 
 	"github.com/RAF-SI-2025/Banka-3-Backend/pkg/apperr"
+	"github.com/RAF-SI-2025/Banka-3-Backend/pkg/logger"
 	"github.com/RAF-SI-2025/Banka-3-Backend/services/trading/internal/saga"
 )
 
@@ -88,6 +89,7 @@ func (s *SagaStore) Insert(ctx context.Context, row *saga.Row) error {
 	}
 	logRaw, err := marshalLog(row.Log)
 	if err != nil {
+		logger.From(ctx).ErrorContext(ctx, "encode saga log failed", "err", err, "transaction_id", row.TransactionID)
 		return apperr.Internal("encode saga log", err)
 	}
 	_, err = s.Pool.Exec(ctx, q,
@@ -98,6 +100,7 @@ func (s *SagaStore) Insert(ctx context.Context, row *saga.Row) error {
 		if isUniqueViolation(err) {
 			return saga.ErrAlreadyExists
 		}
+		logger.From(ctx).ErrorContext(ctx, "insert saga failed", "err", err, "transaction_id", row.TransactionID)
 		return apperr.Internal("insert saga", err)
 	}
 	return nil
@@ -111,6 +114,7 @@ func (s *SagaStore) Get(ctx context.Context, transactionID string) (*saga.Row, e
 		if errors.Is(err, pgx.ErrNoRows) {
 			return nil, nil
 		}
+		logger.From(ctx).ErrorContext(ctx, "get saga failed", "err", err, "transaction_id", transactionID)
 		return nil, apperr.Internal("get saga", err)
 	}
 	return out, nil
@@ -137,6 +141,7 @@ func (s *SagaStore) Update(ctx context.Context, row *saga.Row) error {
 	}
 	logRaw, err := marshalLog(row.Log)
 	if err != nil {
+		logger.From(ctx).ErrorContext(ctx, "encode saga log failed", "err", err, "transaction_id", row.TransactionID)
 		return apperr.Internal("encode saga log", err)
 	}
 	tag, err := s.Pool.Exec(ctx, q,
@@ -145,6 +150,7 @@ func (s *SagaStore) Update(ctx context.Context, row *saga.Row) error {
 		row.NextAttemptAt,
 	)
 	if err != nil {
+		logger.From(ctx).ErrorContext(ctx, "update saga failed", "err", err, "transaction_id", row.TransactionID)
 		return apperr.Internal("update saga", err)
 	}
 	if tag.RowsAffected() == 0 {
@@ -167,9 +173,14 @@ func (s *SagaStore) Update(ctx context.Context, row *saga.Row) error {
 func (s *SagaStore) TryLock(ctx context.Context, transactionID string, fn func(ctx context.Context) error) (bool, error) {
 	tx, err := s.Pool.BeginTx(ctx, pgx.TxOptions{})
 	if err != nil {
+		logger.From(ctx).ErrorContext(ctx, "begin saga lock tx failed", "err", err, "transaction_id", transactionID)
 		return false, apperr.Internal("begin saga lock tx", err)
 	}
-	defer func() { _ = tx.Rollback(ctx) }()
+	defer func() {
+		if rerr := tx.Rollback(ctx); rerr != nil && !errors.Is(rerr, pgx.ErrTxClosed) {
+			logger.From(ctx).WarnContext(ctx, "rollback saga lock tx failed", "err", rerr, "transaction_id", transactionID)
+		}
+	}()
 
 	// Use bigint hash of the transaction_id so we don't depend on
 	// hashtext (search_path-sensitive). FNV-1a is stable across runs
@@ -178,6 +189,7 @@ func (s *SagaStore) TryLock(ctx context.Context, transactionID string, fn func(c
 	key := lockKey(transactionID)
 	var acquired bool
 	if err := tx.QueryRow(ctx, `select pg_try_advisory_xact_lock($1)`, key).Scan(&acquired); err != nil {
+		logger.From(ctx).ErrorContext(ctx, "advisory lock failed", "err", err, "transaction_id", transactionID)
 		return false, apperr.Internal("advisory lock", err)
 	}
 	if !acquired {
@@ -187,6 +199,7 @@ func (s *SagaStore) TryLock(ctx context.Context, transactionID string, fn func(c
 		return true, err
 	}
 	if err := tx.Commit(ctx); err != nil {
+		logger.From(ctx).ErrorContext(ctx, "commit saga lock tx failed", "err", err, "transaction_id", transactionID)
 		return true, apperr.Internal("commit saga lock tx", err)
 	}
 	return true, nil
@@ -214,6 +227,7 @@ func (s *SagaStore) DueForRecovery(ctx context.Context, limit int) ([]*saga.Row,
 	      limit $2`
 	rows, err := s.Pool.Query(ctx, q, time.Now(), limit)
 	if err != nil {
+		logger.From(ctx).ErrorContext(ctx, "list due sagas failed", "err", err)
 		return nil, apperr.Internal("list due sagas", err)
 	}
 	defer rows.Close()
@@ -221,9 +235,14 @@ func (s *SagaStore) DueForRecovery(ctx context.Context, limit int) ([]*saga.Row,
 	for rows.Next() {
 		r, err := scanSaga(rows)
 		if err != nil {
+			logger.From(ctx).ErrorContext(ctx, "scan saga failed", "err", err)
 			return nil, apperr.Internal("scan saga", err)
 		}
 		out = append(out, r)
 	}
-	return out, rows.Err()
+	if err := rows.Err(); err != nil {
+		logger.From(ctx).ErrorContext(ctx, "due for recovery rows failed", "err", err)
+		return out, err
+	}
+	return out, nil
 }

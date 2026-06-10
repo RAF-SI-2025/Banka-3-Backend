@@ -33,12 +33,14 @@ func (s *Service) CreateAuthorizedPerson(ctx context.Context, in CreateAuthorize
 		return nil, err
 	}
 	if _, err := s.Store.GetCompanyByID(ctx, in.CompanyID); err != nil {
+		s.log().WarnContext(ctx, "create authorized person: company lookup failed", "err", err, "company_id", in.CompanyID)
 		return nil, err
 	}
 	if err := s.validateAP(in); err != nil {
+		s.log().WarnContext(ctx, "create authorized person validation failed", "err", err, "company_id", in.CompanyID)
 		return nil, err
 	}
-	return s.Store.CreateAuthorizedPerson(ctx, &domain.AuthorizedPerson{
+	created, err := s.Store.CreateAuthorizedPerson(ctx, &domain.AuthorizedPerson{
 		CompanyID:   in.CompanyID,
 		FirstName:   strings.TrimSpace(in.FirstName),
 		LastName:    strings.TrimSpace(in.LastName),
@@ -48,6 +50,11 @@ func (s *Service) CreateAuthorizedPerson(ctx context.Context, in CreateAuthorize
 		Phone:       strings.TrimSpace(in.Phone),
 		Address:     strings.TrimSpace(in.Address),
 	})
+	if err != nil {
+		return nil, err
+	}
+	s.log().InfoContext(ctx, "authorized person created", "authorized_person_id", created.ID, "company_id", in.CompanyID)
+	return created, nil
 }
 
 func (s *Service) ListAuthorizedPersons(ctx context.Context, companyID string) ([]*domain.AuthorizedPerson, error) {

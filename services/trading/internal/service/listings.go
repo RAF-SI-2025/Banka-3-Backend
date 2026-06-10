@@ -31,9 +31,16 @@ func (s *Service) UpsertListing(ctx context.Context, in *domain.Listing) (*domai
 		in.ChangeAmt = "0"
 	}
 	if _, err := s.Store.GetSecurity(ctx, in.SecurityID); err != nil {
+		s.log().WarnContext(ctx, "upsert listing security lookup failed",
+			"err", err, "security_id", in.SecurityID)
 		return nil, err
 	}
-	return s.Store.UpsertListing(ctx, in)
+	l, err := s.Store.UpsertListing(ctx, in)
+	if err != nil {
+		return nil, err
+	}
+	s.log().InfoContext(ctx, "listing upserted", "listing_id", l.ID, "security_id", l.SecurityID)
+	return l, nil
 }
 
 // GetListing returns one listing.

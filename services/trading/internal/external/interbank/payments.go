@@ -27,6 +27,7 @@ import (
 	"net/http"
 	"strconv"
 	"strings"
+	"time"
 
 	"github.com/RAF-SI-2025/Banka-3-Backend/services/trading/internal/service"
 )
@@ -177,9 +178,17 @@ func (c *Client) preparePartnerNative(ctx context.Context, in PreparePartnerInpu
 	}
 	var parsed nativePreparePaymentResponse
 	if err := jsonDecode(respBody, &parsed); err != nil {
+		c.log.ErrorContext(ctx, "native prepare decode failed",
+			"err", err.Error(), "transaction_id", in.TransactionID, "bank_code", in.RemoteBankCode,
+			"body", bodySnippet(respBody, 512))
 		return nil, fmt.Errorf("native prepare decode: %w", err)
 	}
 	accepted := strings.EqualFold(parsed.Status, "prepared")
+	if !accepted {
+		c.log.WarnContext(ctx, "native prepare not accepted",
+			"transaction_id", in.TransactionID, "bank_code", in.RemoteBankCode,
+			"partner_status", parsed.Status)
+	}
 	return &PreparePartnerResult{Accepted: accepted, RawStatus: status, RawBody: respBody}, nil
 }
 
@@ -313,15 +322,23 @@ func (c *Client) preparePartnerBanka2(ctx context.Context, in PreparePartnerInpu
 	}
 	var vote b2TransactionVote
 	if err := jsonDecode(respBody, &vote); err != nil {
+		c.log.ErrorContext(ctx, "banka2 NEW_TX decode failed",
+			"err", err.Error(), "transaction_id", in.TransactionID, "bank_code", in.RemoteBankCode,
+			"body", bodySnippet(respBody, 512))
 		return nil, fmt.Errorf("banka2 NEW_TX decode: %w", err)
 	}
 	if strings.EqualFold(vote.Vote, "YES") {
+		c.log.InfoContext(ctx, "banka2 prepare vote accepted",
+			"transaction_id", in.TransactionID, "bank_code", in.RemoteBankCode)
 		return &PreparePartnerResult{Accepted: true, RawStatus: status, RawBody: respBody}, nil
 	}
 	reasons := make([]string, 0, len(vote.Reasons))
 	for _, r := range vote.Reasons {
 		reasons = append(reasons, r.Reason)
 	}
+	c.log.WarnContext(ctx, "banka2 vote rejected",
+		"transaction_id", in.TransactionID, "bank_code", in.RemoteBankCode,
+		"vote", vote.Vote, "reasons", reasons)
 	return &PreparePartnerResult{Accepted: false, NoReasons: reasons, RawStatus: status, RawBody: respBody}, nil
 }
 
@@ -410,10 +427,12 @@ func (c *Client) doJSONWithHeaders(ctx context.Context, method, url string, body
 	}
 	buf, err := json.Marshal(body)
 	if err != nil {
+		c.log.ErrorContext(ctx, "interbank request marshal failed", "err", err.Error(), "method", method, "url", url)
 		return 0, nil, fmt.Errorf("marshal: %w", err)
 	}
 	req, err := http.NewRequestWithContext(ctx, method, url, bytes.NewReader(buf))
 	if err != nil {
+		c.log.ErrorContext(ctx, "interbank request build failed", "err", err.Error(), "method", method, "url", url)
 		return 0, nil, fmt.Errorf("new request: %w", err)
 	}
 	req.Header.Set("Content-Type", "application/json")
@@ -424,14 +443,20 @@ func (c *Client) doJSONWithHeaders(ctx context.Context, method, url string, body
 	for k, v := range headers {
 		req.Header.Set(k, v)
 	}
+	start := time.Now()
 	resp, err := c.cfg.HTTPClient.Do(req)
 	if err != nil {
+		c.log.ErrorContext(ctx, "interbank request failed",
+			"method", method, "url", url, "dur", time.Since(start), "err", err.Error())
 		return 0, nil, fmt.Errorf("do request: %w", err)
 	}
 	defer resp.Body.Close()
 	out, err := io.ReadAll(io.LimitReader(resp.Body, 1<<20))
 	if err != nil {
+		c.log.ErrorContext(ctx, "interbank response read failed",
+			"method", method, "url", url, "status", resp.StatusCode, "err", err.Error())
 		return resp.StatusCode, nil, fmt.Errorf("read body: %w", err)
 	}
+	logOutbound(ctx, c.log, method, url, resp.StatusCode, time.Since(start), out)
 	return resp.StatusCode, out, nil
 }

@@ -4,6 +4,7 @@ import (
 	"context"
 
 	"github.com/RAF-SI-2025/Banka-3-Backend/pkg/apperr"
+	"github.com/RAF-SI-2025/Banka-3-Backend/pkg/logger"
 	"github.com/RAF-SI-2025/Banka-3-Backend/pkg/postgres"
 	"github.com/RAF-SI-2025/Banka-3-Backend/services/user/internal/domain"
 )
@@ -22,6 +23,7 @@ func (s *Store) RecordVerificationEvent(ctx context.Context, id, userID, actionK
         values ($1, $2, $3)
         on conflict (id) do nothing`
 	if _, err := s.DB.Exec(ctx, q, id, userID, actionKind); err != nil {
+		logger.From(ctx).ErrorContext(ctx, "record verification event failed", "err", err, "event_id", id, "user_id", userID)
 		return apperr.Internal("record verification event", err)
 	}
 	return nil
@@ -42,6 +44,7 @@ func (s *Store) ResolveVerificationEvent(ctx context.Context, id string, success
            set status = $2, resolved_at = now()
          where id = $1 and status = 'pending'`
 	if _, err := s.DB.Exec(ctx, q, id, status); err != nil {
+		logger.From(ctx).ErrorContext(ctx, "resolve verification event failed", "err", err, "event_id", id)
 		return apperr.Internal("resolve verification event", err)
 	}
 	return nil
@@ -58,6 +61,7 @@ func (s *Store) ListVerificationEvents(ctx context.Context, userID string, limit
          limit $2`
 	rows, err := s.DB.Query(postgres.WithRead(ctx), q, userID, limit)
 	if err != nil {
+		logger.From(ctx).ErrorContext(ctx, "list verification events failed", "err", err, "user_id", userID)
 		return nil, apperr.Internal("list verification events", err)
 	}
 	defer rows.Close()
@@ -68,11 +72,13 @@ func (s *Store) ListVerificationEvents(ctx context.Context, userID string, limit
 		if err := rows.Scan(
 			&e.ID, &e.UserID, &e.ActionKind, &e.Status, &e.CreatedAt, &e.ResolvedAt,
 		); err != nil {
+			logger.From(ctx).ErrorContext(ctx, "scan verification event failed", "err", err, "user_id", userID)
 			return nil, apperr.Internal("scan verification event", err)
 		}
 		out = append(out, e)
 	}
 	if err := rows.Err(); err != nil {
+		logger.From(ctx).ErrorContext(ctx, "rows verification events failed", "err", err, "user_id", userID)
 		return nil, apperr.Internal("rows verification events", err)
 	}
 	return out, nil

@@ -184,7 +184,13 @@ func (s *Service) ListExternalPublicHoldings(ctx context.Context, bankCode, tick
 	if s.PartnerOTC == nil {
 		return nil, apperr.FailedPrecondition("cross-bank discovery nije konfigurisana")
 	}
-	return s.PartnerOTC.Discover(ctx, bankCode, tickerFilter)
+	holdings, err := s.PartnerOTC.Discover(ctx, bankCode, tickerFilter)
+	if err != nil {
+		s.log().ErrorContext(ctx, "external otc discovery failed",
+			"err", err, "remote_bank_code", bankCode, "ticker", tickerFilter)
+		return nil, err
+	}
+	return holdings, nil
 }
 
 // CreateExternalOTCOfferInput captures the FE form payload.
@@ -239,9 +245,13 @@ func (s *Service) CreateExternalOTCOffer(ctx context.Context, in CreateExternalO
 	}
 	acctNum, err := s.Reservations.AccountNumber(ctx, in.BuyerAccountID)
 	if err != nil {
+		s.log().WarnContext(ctx, "external otc offer: buyer account lookup failed",
+			"err", err, "buyer_account_id", in.BuyerAccountID, "remote_bank_code", in.RemoteBankCode)
 		return nil, apperr.Validation("kupčev račun nije pronađen")
 	}
 	if len(acctNum) != 18 {
+		s.log().ErrorContext(ctx, "external otc offer: local account number not 18 digits",
+			"buyer_account_id", in.BuyerAccountID, "len", len(acctNum))
 		return nil, apperr.Internal("local account number nema 18 cifara", nil)
 	}
 
@@ -287,6 +297,9 @@ func (s *Service) CreateExternalOTCOffer(ctx context.Context, in CreateExternalO
 		live = t
 		return nil
 	}); err != nil {
+		s.log().ErrorContext(ctx, "external otc offer: local mirror insert failed",
+			"err", err, "remote_bank_code", in.RemoteBankCode, "ticker", in.SecurityTicker,
+			"quantity", in.Quantity)
 		return nil, err
 	}
 
@@ -310,13 +323,19 @@ func (s *Service) CreateExternalOTCOffer(ctx context.Context, in CreateExternalO
 		LocalAccountRef:  live.LocalAccountNumber,
 	})
 	if err != nil {
+		s.log().WarnContext(ctx, "external otc offer: partner rejected create",
+			"err", err, "thread_id", live.ID, "remote_bank_code", in.RemoteBankCode,
+			"ticker", in.SecurityTicker, "quantity", in.Quantity)
 		// Best-effort flip to 'rejected' so the FE can show a final
 		// state. Swallow the inner error — the user-facing 5xx is
 		// already informative.
-		_ = s.Store.ExecuteAtomic(ctx, func(tx pgx.Tx) error {
+		if errFlip := s.Store.ExecuteAtomic(ctx, func(tx pgx.Tx) error {
 			_, errRej := s.Store.SetExternalOTCThreadStatus(ctx, tx, live.ID, domain.ExternalOTCThreadRejected)
 			return errRej
-		})
+		}); errFlip != nil {
+			s.log().WarnContext(ctx, "external otc thread status flip to rejected failed",
+				"err", errFlip, "thread_id", live.ID, "remote_bank_code", in.RemoteBankCode)
+		}
 		return nil, apperr.FailedPrecondition("partner banka je odbila ponudu: " + err.Error())
 	}
 
@@ -330,9 +349,16 @@ func (s *Service) CreateExternalOTCOffer(ctx context.Context, in CreateExternalO
 			live = t
 			return nil
 		}); err != nil {
+			s.log().ErrorContext(ctx, "external otc offer: remote identity stamp failed after partner ack",
+				"err", err, "thread_id", live.ID, "remote_bank_code", in.RemoteBankCode,
+				"remote_thread_id", out.RemoteThreadID)
 			return nil, err
 		}
 	}
+	s.log().InfoContext(ctx, "external otc offer created; partner acked",
+		"thread_id", live.ID, "remote_bank_code", live.RemoteBankCode,
+		"remote_thread_id", live.RemoteThreadID, "ticker", live.SecurityTicker,
+		"quantity", live.Quantity)
 	return live, nil
 }
 
@@ -395,6 +421,11 @@ func (s *Service) GetExternalOTCThread(ctx context.Context, threadID, remoteBank
 	res := &GetExternalOTCThreadResult{Thread: t, Iterations: its}
 	if c, err := s.Store.GetExternalOTCContractByThread(ctx, t.ID); err == nil {
 		res.Contract = c
+	} else if !isAppKind(err, apperr.KindNotFound) {
+		// Best-effort decoration — absence is normal, anything else is
+		// a real lookup failure being swallowed.
+		s.log().WarnContext(ctx, "external otc thread contract lookup failed",
+			"err", err, "thread_id", t.ID, "remote_bank_code", t.RemoteBankCode)
 	}
 	return res, nil
 }
@@ -437,9 +468,13 @@ func (s *Service) CounterExternalOTCOffer(ctx context.Context, in CounterExterna
 			return err
 		}
 		if t.Status != domain.ExternalOTCThreadOpen {
+			s.log().WarnContext(ctx, "external otc counter rejected: thread not open",
+				"thread_id", t.ID, "status", string(t.Status))
 			return apperr.FailedPrecondition("nit više nije otvorena")
 		}
 		if t.ModifiedBySide == domain.ExternalOTCSideLocal {
+			s.log().WarnContext(ctx, "external otc counter rejected: not local side's turn",
+				"thread_id", t.ID)
 			return apperr.FailedPrecondition("druga strana je na potezu")
 		}
 		updated, err := s.Store.UpdateExternalOTCThreadTerms(ctx, tx, t.ID,
@@ -461,6 +496,7 @@ func (s *Service) CounterExternalOTCOffer(ctx context.Context, in CounterExterna
 		live = updated
 		return nil
 	}); err != nil {
+		s.logOpErr(ctx, "external otc counter failed", err, "thread_id", in.ThreadID)
 		return nil, err
 	}
 
@@ -481,8 +517,14 @@ func (s *Service) CounterExternalOTCOffer(ctx context.Context, in CounterExterna
 		SecurityTicker:     live.SecurityTicker,
 		Currency:           string(live.Currency),
 	}); err != nil {
+		s.log().WarnContext(ctx, "external otc counter: partner rejected",
+			"err", err, "thread_id", live.ID, "remote_bank_code", live.RemoteBankCode,
+			"remote_thread_id", live.RemoteThreadID)
 		return nil, apperr.FailedPrecondition("partner banka je odbila kontraponudu: " + err.Error())
 	}
+	s.log().InfoContext(ctx, "external otc counter applied; partner acked",
+		"thread_id", live.ID, "remote_bank_code", live.RemoteBankCode,
+		"quantity", live.Quantity, "ticker", live.SecurityTicker)
 	return live, nil
 }
 
@@ -510,6 +552,8 @@ func (s *Service) WithdrawExternalOTCOffer(ctx context.Context, bankCode, thread
 			return err
 		}
 		if t.Status != domain.ExternalOTCThreadOpen {
+			s.log().WarnContext(ctx, "external otc withdraw rejected: thread not open",
+				"thread_id", t.ID, "status", string(t.Status))
 			return apperr.FailedPrecondition("nit više nije otvorena")
 		}
 		updated, err := s.Store.SetExternalOTCThreadStatus(ctx, tx, t.ID, domain.ExternalOTCThreadWithdrawn)
@@ -519,8 +563,11 @@ func (s *Service) WithdrawExternalOTCOffer(ctx context.Context, bankCode, thread
 		live = updated
 		return nil
 	}); err != nil {
+		s.logOpErr(ctx, "external otc withdraw failed", err, "thread_id", threadID)
 		return nil, err
 	}
+	s.log().InfoContext(ctx, "external otc thread withdrawn",
+		"thread_id", live.ID, "remote_bank_code", live.RemoteBankCode)
 
 	// Best-effort partner notification — local state is already
 	// terminal. Partner reconciles on next poll if this fails.
@@ -634,10 +681,15 @@ func (s *Service) ReceiveExternalOTCOffer(ctx context.Context, in ReceiveExterna
 	// SellerHoldingRef is a uuid (we control the format on /otc/public).
 	holding, err := s.Store.GetHoldingByID(ctx, in.SellerHoldingRef)
 	if err != nil {
+		s.log().WarnContext(ctx, "external otc inbound offer: seller holding not found",
+			"err", err, "seller_holding_ref", in.SellerHoldingRef,
+			"remote_bank_code", in.SenderBankCode, "remote_thread_id", in.SenderThreadID)
 		return nil, apperr.Validation("hartija ne postoji ili nije javno objavljena")
 	}
 	sec, err := s.Store.GetSecurity(ctx, holding.SecurityID)
 	if err != nil {
+		s.log().ErrorContext(ctx, "external otc inbound offer: security lookup failed",
+			"err", err, "security_id", holding.SecurityID, "remote_bank_code", in.SenderBankCode)
 		return nil, apperr.Internal("get security", err)
 	}
 	acctNum, err := s.resolveSellerAccountNumber(ctx, holding)
@@ -688,8 +740,15 @@ func (s *Service) ReceiveExternalOTCOffer(ctx context.Context, in ReceiveExterna
 		live = t
 		return nil
 	}); err != nil {
+		s.log().ErrorContext(ctx, "external otc inbound offer: mirror insert failed",
+			"err", err, "remote_bank_code", in.SenderBankCode,
+			"remote_thread_id", in.SenderThreadID, "ticker", sec.Ticker)
 		return nil, err
 	}
+	s.log().InfoContext(ctx, "external otc inbound offer mirrored",
+		"thread_id", live.ID, "remote_bank_code", in.SenderBankCode,
+		"remote_thread_id", in.SenderThreadID, "ticker", live.SecurityTicker,
+		"quantity", live.Quantity)
 	return live, nil
 }
 
@@ -716,6 +775,8 @@ func (s *Service) ReceiveExternalOTCCounter(ctx context.Context, in ReceiveExter
 			return err
 		}
 		if t.Status != domain.ExternalOTCThreadOpen {
+			s.log().WarnContext(ctx, "external otc inbound counter rejected: thread not open",
+				"thread_id", t.ID, "status", string(t.Status), "remote_bank_code", in.SenderBankCode)
 			return apperr.FailedPrecondition("nit više nije otvorena")
 		}
 		updated, err := s.Store.UpdateExternalOTCThreadTerms(ctx, tx, t.ID,
@@ -737,8 +798,13 @@ func (s *Service) ReceiveExternalOTCCounter(ctx context.Context, in ReceiveExter
 		live = updated
 		return nil
 	}); err != nil {
+		s.logOpErr(ctx, "external otc inbound counter failed", err,
+			"remote_bank_code", in.SenderBankCode, "remote_thread_id", in.SenderThreadID)
 		return nil, err
 	}
+	s.log().InfoContext(ctx, "external otc inbound counter applied",
+		"thread_id", live.ID, "remote_bank_code", in.SenderBankCode,
+		"quantity", live.Quantity)
 	return live, nil
 }
 
@@ -771,6 +837,8 @@ func (s *Service) ReceiveExternalOTCAccept(ctx context.Context, in ReceiveExtern
 		// accepting a thread we initiated, the partner_otc.go inbound
 		// route should never have routed it here.)
 		if t.Direction != domain.ExternalOTCIncoming {
+			s.log().WarnContext(ctx, "external otc inbound accept rejected: thread not incoming",
+				"thread_id", t.ID, "direction", string(t.Direction), "remote_bank_code", in.SenderBankCode)
 			return apperr.FailedPrecondition("partner može prihvatiti samo dolaznu nit")
 		}
 		if t.Status == domain.ExternalOTCThreadAccepted {
@@ -779,6 +847,8 @@ func (s *Service) ReceiveExternalOTCAccept(ctx context.Context, in ReceiveExtern
 			return nil
 		}
 		if t.Status != domain.ExternalOTCThreadOpen {
+			s.log().WarnContext(ctx, "external otc inbound accept rejected: thread not open",
+				"thread_id", t.ID, "status", string(t.Status), "remote_bank_code", in.SenderBankCode)
 			return apperr.FailedPrecondition("nit nije otvorena")
 		}
 		updated, err := s.Store.SetExternalOTCThreadStatus(ctx, tx, t.ID, domain.ExternalOTCThreadAccepted)
@@ -817,8 +887,14 @@ func (s *Service) ReceiveExternalOTCAccept(ctx context.Context, in ReceiveExtern
 		live = updated
 		return nil
 	}); err != nil {
+		s.logOpErr(ctx, "external otc inbound accept failed", err,
+			"remote_bank_code", in.SenderBankCode, "remote_thread_id", in.SenderThreadID)
 		return nil, err
 	}
+	s.log().InfoContext(ctx, "external otc inbound accept: thread accepted, contract minted",
+		"thread_id", live.ID, "remote_bank_code", in.SenderBankCode,
+		"remote_thread_id", in.SenderThreadID, "ticker", live.SecurityTicker,
+		"quantity", live.Quantity)
 	return live, nil
 }
 
@@ -865,6 +941,9 @@ func (s *Service) ReceiveExternalOTCExerciseNotice(ctx context.Context, in Recei
 			return nil
 		}
 		if contract.Status != domain.ExternalOTCContractActive {
+			s.log().WarnContext(ctx, "external otc inbound exercise rejected: contract not active",
+				"contract_id", contract.ID, "status", string(contract.Status),
+				"remote_bank_code", in.SenderBankCode)
 			return apperr.FailedPrecondition("ugovor nije aktivan")
 		}
 		updated, err := s.Store.SetExternalOTCContractExercised(ctx, tx, contract.ID, derivedOpID, s.now())
@@ -874,8 +953,13 @@ func (s *Service) ReceiveExternalOTCExerciseNotice(ctx context.Context, in Recei
 		live = updated
 		return nil
 	}); err != nil {
+		s.logOpErr(ctx, "external otc inbound exercise notice failed", err,
+			"remote_bank_code", in.SenderBankCode, "remote_contract_id", in.SenderContractID)
 		return nil, err
 	}
+	s.log().InfoContext(ctx, "external otc contract exercised via inbound notice",
+		"contract_id", live.ID, "thread_id", live.ThreadID,
+		"remote_bank_code", in.SenderBankCode, "exercise_op_id", derivedOpID)
 	return live, nil
 }
 
@@ -907,8 +991,13 @@ func (s *Service) setRemoteThreadStatus(ctx context.Context, bankCode, remoteThr
 		live = updated
 		return nil
 	}); err != nil {
+		s.logOpErr(ctx, "external otc thread status flip failed", err,
+			"remote_bank_code", bankCode, "remote_thread_id", remoteThreadID,
+			"target_status", string(status))
 		return nil, err
 	}
+	s.log().InfoContext(ctx, "external otc thread status flipped",
+		"thread_id", live.ID, "remote_bank_code", bankCode, "status", string(status))
 	return live, nil
 }
 
@@ -945,9 +1034,13 @@ func (s *Service) resolveSellerAccountNumber(ctx context.Context, h *domain.Hold
 	}
 	num, err := s.Reservations.AccountNumber(ctx, h.AccountID)
 	if err != nil {
+		s.log().ErrorContext(ctx, "external otc: seller account number lookup failed",
+			"err", err, "account_id", h.AccountID, "holding_id", h.ID)
 		return "", apperr.Internal("resolve seller account number", err)
 	}
 	if len(num) != 18 {
+		s.log().ErrorContext(ctx, "external otc: seller account number not 18 digits",
+			"account_id", h.AccountID, "len", len(num))
 		return "", apperr.Internal("seller account number nema 18 cifara", nil)
 	}
 	return num, nil

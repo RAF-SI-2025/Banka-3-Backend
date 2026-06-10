@@ -5,6 +5,8 @@ import (
 	"net/http"
 	"strings"
 	"time"
+
+	"github.com/RAF-SI-2025/Banka-3-Backend/pkg/logger"
 )
 
 // accessLog wraps an http.Handler so every request emits one slog line
@@ -19,6 +21,10 @@ import (
 // doesn't expose the written status otherwise.
 func accessLog(log *slog.Logger, next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		// Make the service logger available downstream via
+		// logger.From(r.Context()) so handlers and middleware emit
+		// through the same JSON handler with trace correlation.
+		r = r.WithContext(logger.Inject(r.Context(), log))
 		if isSilentPath(r.URL.Path) {
 			next.ServeHTTP(w, r)
 			return
@@ -35,13 +41,20 @@ func accessLog(log *slog.Logger, next http.Handler) http.Handler {
 		case sr.status >= 400:
 			level = slog.LevelInfo
 		}
-		log.LogAttrs(r.Context(), level, "http",
+		attrs := []slog.Attr{
 			slog.String("method", r.Method),
 			slog.String("path", r.URL.Path),
 			slog.Int("status", sr.status),
 			slog.Duration("dur", dur),
 			slog.String("remote", clientIP(r)),
-		)
+		}
+		// On a failure, attach the error response body (the JSON error
+		// envelope every handler writes) so a bare `status=500` line
+		// still names its cause without trace-spelunking.
+		if sr.status >= 400 && len(sr.errBody) > 0 {
+			attrs = append(attrs, slog.String("err", string(sr.errBody)))
+		}
+		log.LogAttrs(r.Context(), level, "http", attrs...)
 	})
 }
 
@@ -59,10 +72,17 @@ func clientIP(r *http.Request) string {
 	return r.RemoteAddr
 }
 
+// errBodyMax caps how much of a 4xx/5xx response body the access log
+// retains. Error envelopes are short JSON; the cap guards the log line.
+const errBodyMax = 512
+
 type statusRecorder struct {
 	http.ResponseWriter
 	status      int
 	wroteHeader bool
+	// errBody holds the first errBodyMax bytes of a 4xx/5xx response
+	// body so the access log can carry the failure cause.
+	errBody []byte
 }
 
 func (s *statusRecorder) WriteHeader(code int) {
@@ -77,6 +97,13 @@ func (s *statusRecorder) WriteHeader(code int) {
 func (s *statusRecorder) Write(b []byte) (int, error) {
 	if !s.wroteHeader {
 		s.wroteHeader = true
+	}
+	if s.status >= 400 && len(s.errBody) < errBodyMax {
+		n := errBodyMax - len(s.errBody)
+		if n > len(b) {
+			n = len(b)
+		}
+		s.errBody = append(s.errBody, b[:n]...)
 	}
 	return s.ResponseWriter.Write(b)
 }

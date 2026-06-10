@@ -6,6 +6,7 @@ import (
 	"strings"
 
 	"github.com/RAF-SI-2025/Banka-3-Backend/pkg/apperr"
+	"github.com/RAF-SI-2025/Banka-3-Backend/pkg/logger"
 	"github.com/RAF-SI-2025/Banka-3-Backend/pkg/postgres"
 	"github.com/RAF-SI-2025/Banka-3-Backend/services/user/internal/domain"
 )
@@ -52,6 +53,7 @@ func (s *Store) CreateEmployee(ctx context.Context, e *domain.Employee) (*domain
 		if isUniqueViolation(err) {
 			return nil, apperr.Conflict("an account with this email or username already exists")
 		}
+		logger.From(ctx).ErrorContext(ctx, "create employee failed", "err", err, "email", e.Email)
 		return nil, apperr.Internal("create employee", err)
 	}
 	return out, nil
@@ -65,6 +67,7 @@ func (s *Store) GetEmployeeByID(ctx context.Context, id string) (*domain.Employe
 		if noRows(err) {
 			return nil, apperr.NotFound("employee not found")
 		}
+		logger.From(ctx).ErrorContext(ctx, "get employee failed", "err", err, "employee_id", id)
 		return nil, apperr.Internal("get employee", err)
 	}
 	return out, nil
@@ -78,6 +81,7 @@ func (s *Store) GetEmployeeByEmail(ctx context.Context, email string) (*domain.E
 		if noRows(err) {
 			return nil, apperr.NotFound("employee not found")
 		}
+		logger.From(ctx).ErrorContext(ctx, "get employee by email failed", "err", err, "email", email)
 		return nil, apperr.Internal("get employee by email", err)
 	}
 	return out, nil
@@ -107,6 +111,7 @@ func (s *Store) UpdateEmployeeProfile(ctx context.Context, e *domain.Employee) (
 		if isUniqueViolation(err) {
 			return nil, apperr.Conflict("email or username already in use")
 		}
+		logger.From(ctx).ErrorContext(ctx, "update employee failed", "err", err, "employee_id", e.ID)
 		return nil, apperr.Internal("update employee", err)
 	}
 	return out, nil
@@ -120,6 +125,7 @@ func (s *Store) SetEmployeePasswordHash(ctx context.Context, id, hash string) er
         where id = $1`
 	tag, err := s.DB.Exec(ctx, q, id, hash)
 	if err != nil {
+		logger.From(ctx).ErrorContext(ctx, "set employee password failed", "err", err, "employee_id", id)
 		return apperr.Internal("set password", err)
 	}
 	if tag.RowsAffected() == 0 {
@@ -141,6 +147,7 @@ func (s *Store) SetEmployeeActive(ctx context.Context, id string, active bool) (
 		if noRows(err) {
 			return nil, apperr.NotFound("employee not found")
 		}
+		logger.From(ctx).ErrorContext(ctx, "set employee active failed", "err", err, "employee_id", id, "active", active)
 		return nil, apperr.Internal("set active", err)
 	}
 	return out, nil
@@ -161,6 +168,7 @@ func (s *Store) SetEmployeePermissions(ctx context.Context, id string, perms []s
 		if noRows(err) {
 			return nil, apperr.NotFound("employee not found")
 		}
+		logger.From(ctx).ErrorContext(ctx, "set employee permissions failed", "err", err, "employee_id", id)
 		return nil, apperr.Internal("set permissions", err)
 	}
 	return out, nil
@@ -178,6 +186,7 @@ func (s *Store) IncrementEmployeeSessionVersion(ctx context.Context, id string) 
 		if noRows(err) {
 			return 0, apperr.NotFound("employee not found")
 		}
+		logger.From(ctx).ErrorContext(ctx, "bump employee session version failed", "err", err, "employee_id", id)
 		return 0, apperr.Internal("bump session version", err)
 	}
 	return v, nil
@@ -219,6 +228,7 @@ func (s *Store) ListEmployees(ctx context.Context, f domain.EmployeeFilter, page
 	countQ := `select count(*) from "user".employees` + where
 	var total int64
 	if err := s.DB.QueryRow(postgres.WithRead(ctx), countQ, args...).Scan(&total); err != nil {
+		logger.From(ctx).ErrorContext(ctx, "count employees failed", "err", err)
 		return nil, 0, apperr.Internal("count employees", err)
 	}
 
@@ -229,6 +239,7 @@ func (s *Store) ListEmployees(ctx context.Context, f domain.EmployeeFilter, page
 
 	rows, err := s.DB.Query(postgres.WithRead(ctx), listQ, listArgs...)
 	if err != nil {
+		logger.From(ctx).ErrorContext(ctx, "list employees failed", "err", err)
 		return nil, 0, apperr.Internal("list employees", err)
 	}
 	defer rows.Close()
@@ -237,11 +248,13 @@ func (s *Store) ListEmployees(ctx context.Context, f domain.EmployeeFilter, page
 	for rows.Next() {
 		e, err := scanEmployee(rows)
 		if err != nil {
+			logger.From(ctx).ErrorContext(ctx, "scan employee failed", "err", err)
 			return nil, 0, apperr.Internal("scan employee", err)
 		}
 		out = append(out, e)
 	}
 	if err := rows.Err(); err != nil {
+		logger.From(ctx).ErrorContext(ctx, "rows employees failed", "err", err)
 		return nil, 0, apperr.Internal("rows employees", err)
 	}
 	return out, total, nil

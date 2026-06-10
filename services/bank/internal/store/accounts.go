@@ -2,6 +2,7 @@ package store
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"strings"
 	"time"
@@ -9,6 +10,7 @@ import (
 	"github.com/jackc/pgx/v5"
 
 	"github.com/RAF-SI-2025/Banka-3-Backend/pkg/apperr"
+	"github.com/RAF-SI-2025/Banka-3-Backend/pkg/logger"
 	"github.com/RAF-SI-2025/Banka-3-Backend/pkg/postgres"
 	"github.com/RAF-SI-2025/Banka-3-Backend/services/bank/internal/domain"
 )
@@ -75,6 +77,7 @@ func (s *Store) CreateAccount(ctx context.Context, a *domain.Account) (*domain.A
 		if isCheckViolation(err) {
 			return nil, apperr.Validation("account constraints violated (kind/company/subtype mismatch)")
 		}
+		logger.From(ctx).ErrorContext(ctx, "create account failed", "err", err, "number", a.Number, "owner_client_id", a.OwnerClientID)
 		return nil, apperr.Internal("create account", err)
 	}
 	return out, nil
@@ -87,6 +90,7 @@ func (s *Store) GetAccountByID(ctx context.Context, id string) (*domain.Account,
 		if noRows(err) {
 			return nil, apperr.NotFound("account not found")
 		}
+		logger.From(ctx).ErrorContext(ctx, "get account failed", "err", err, "account_id", id)
 		return nil, apperr.Internal("get account", err)
 	}
 	return out, nil
@@ -100,6 +104,7 @@ func (s *Store) GetSystemAccount(ctx context.Context, currency domain.Currency) 
 		if noRows(err) {
 			return nil, apperr.NotFound("system account not found for currency " + string(currency))
 		}
+		logger.From(ctx).ErrorContext(ctx, "get system account failed", "err", err, "currency", string(currency))
 		return nil, apperr.Internal("get system account", err)
 	}
 	return out, nil
@@ -116,6 +121,7 @@ func (s *Store) GetForexBookAccount(ctx context.Context, currency domain.Currenc
 		if noRows(err) {
 			return nil, apperr.NotFound("forex book account not found for currency " + string(currency))
 		}
+		logger.From(ctx).ErrorContext(ctx, "get forex book account failed", "err", err, "currency", string(currency))
 		return nil, apperr.Internal("get forex book account", err)
 	}
 	return out, nil
@@ -131,6 +137,7 @@ func (s *Store) GetStateTaxAccount(ctx context.Context) (*domain.Account, error)
 		if noRows(err) {
 			return nil, apperr.NotFound("state tax account not found")
 		}
+		logger.From(ctx).ErrorContext(ctx, "get state tax account failed", "err", err)
 		return nil, apperr.Internal("get state tax account", err)
 	}
 	return out, nil
@@ -150,6 +157,7 @@ func (s *Store) UpdateAccountLimits(ctx context.Context, id, daily, monthly stri
 		if noRows(err) {
 			return nil, apperr.NotFound("account not found")
 		}
+		logger.From(ctx).ErrorContext(ctx, "update limits failed", "err", err, "account_id", id)
 		return nil, apperr.Internal("update limits", err)
 	}
 	return out, nil
@@ -168,6 +176,7 @@ func (s *Store) UpdateAccountName(ctx context.Context, id, name string) (*domain
 		if noRows(err) {
 			return nil, apperr.NotFound("account not found")
 		}
+		logger.From(ctx).ErrorContext(ctx, "update name failed", "err", err, "account_id", id)
 		return nil, apperr.Internal("update name", err)
 	}
 	return out, nil
@@ -189,6 +198,7 @@ func (s *Store) AccountNameTakenByOwner(ctx context.Context, ownerClientID, name
         )`
 	var taken bool
 	if err := s.DB.QueryRow(ctx, q, ownerClientID, name, excludeID).Scan(&taken); err != nil {
+		logger.From(ctx).ErrorContext(ctx, "check name uniqueness failed", "err", err, "owner_client_id", ownerClientID)
 		return false, apperr.Internal("check name uniqueness", err)
 	}
 	return taken, nil
@@ -204,6 +214,7 @@ func (s *Store) SetAccountStatus(ctx context.Context, id string, status domain.A
 		if noRows(err) {
 			return nil, apperr.NotFound("account not found")
 		}
+		logger.From(ctx).ErrorContext(ctx, "set status failed", "err", err, "account_id", id, "status", string(status))
 		return nil, apperr.Internal("set status", err)
 	}
 	return out, nil
@@ -222,6 +233,7 @@ func (s *Store) ListAccountsDueForMaintenance(ctx context.Context, cutoff time.T
               order by created_at`
 	rows, err := s.DB.Query(ctx, q, cutoff)
 	if err != nil {
+		logger.From(ctx).ErrorContext(ctx, "list maintenance-due failed", "err", err)
 		return nil, apperr.Internal("list maintenance-due", err)
 	}
 	defer rows.Close()
@@ -229,11 +241,16 @@ func (s *Store) ListAccountsDueForMaintenance(ctx context.Context, cutoff time.T
 	for rows.Next() {
 		a, err := scanAccount(rows)
 		if err != nil {
+			logger.From(ctx).ErrorContext(ctx, "scan maintenance-due account failed", "err", err)
 			return nil, apperr.Internal("scan", err)
 		}
 		out = append(out, a)
 	}
-	return out, rows.Err()
+	if err := rows.Err(); err != nil {
+		logger.From(ctx).ErrorContext(ctx, "iterate maintenance-due accounts failed", "err", err)
+		return out, err
+	}
+	return out, nil
 }
 
 // MarkMaintenanceDebited stamps last_maintenance_debit = now() on the
@@ -242,6 +259,7 @@ func (s *Store) ListAccountsDueForMaintenance(ctx context.Context, cutoff time.T
 func (s *Store) MarkMaintenanceDebited(ctx context.Context, tx pgx.Tx, accountID string) error {
 	_, err := tx.Exec(ctx, `update "bank".accounts set last_maintenance_debit = now() where id = $1`, accountID)
 	if err != nil {
+		logger.From(ctx).ErrorContext(ctx, "mark maintenance debited failed", "err", err, "account_id", accountID)
 		return apperr.Internal("mark maintenance debited", err)
 	}
 	return nil
@@ -288,6 +306,7 @@ func (s *Store) ListAccounts(ctx context.Context, f domain.AccountFilter, page, 
 
 	var total int64
 	if err := s.DB.QueryRow(postgres.WithRead(ctx), `select count(*) from "bank".accounts`+where, args...).Scan(&total); err != nil {
+		logger.From(ctx).ErrorContext(ctx, "count accounts failed", "err", err)
 		return nil, 0, apperr.Internal("count accounts", err)
 	}
 
@@ -298,6 +317,7 @@ func (s *Store) ListAccounts(ctx context.Context, f domain.AccountFilter, page, 
 
 	rows, err := s.DB.Query(postgres.WithRead(ctx), listQ, listArgs...)
 	if err != nil {
+		logger.From(ctx).ErrorContext(ctx, "list accounts failed", "err", err)
 		return nil, 0, apperr.Internal("list accounts", err)
 	}
 	defer rows.Close()
@@ -305,11 +325,16 @@ func (s *Store) ListAccounts(ctx context.Context, f domain.AccountFilter, page, 
 	for rows.Next() {
 		a, err := scanAccount(rows)
 		if err != nil {
+			logger.From(ctx).ErrorContext(ctx, "scan account failed", "err", err)
 			return nil, 0, apperr.Internal("scan account", err)
 		}
 		out = append(out, a)
 	}
-	return out, total, rows.Err()
+	if err := rows.Err(); err != nil {
+		logger.From(ctx).ErrorContext(ctx, "iterate accounts failed", "err", err)
+		return out, total, err
+	}
+	return out, total, nil
 }
 
 // ResetSpentCounters zeroes daily_spent for every account whose recorded
@@ -331,9 +356,14 @@ func (s *Store) ListAccounts(ctx context.Context, f domain.AccountFilter, page, 
 func (s *Store) ResetSpentCounters(ctx context.Context) (daily, monthly int64, err error) {
 	tx, err := s.DB.Begin(ctx)
 	if err != nil {
+		logger.From(ctx).ErrorContext(ctx, "begin spent-reset tx failed", "err", err)
 		return 0, 0, apperr.Internal("begin spent-reset tx", err)
 	}
-	defer func() { _ = tx.Rollback(ctx) }()
+	defer func() {
+		if rbErr := tx.Rollback(ctx); rbErr != nil && !errors.Is(rbErr, pgx.ErrTxClosed) {
+			logger.From(ctx).WarnContext(ctx, "rollback spent-reset tx failed", "err", rbErr)
+		}
+	}()
 
 	const dailyQ = `
         update "bank".accounts
@@ -343,6 +373,7 @@ func (s *Store) ResetSpentCounters(ctx context.Context) (daily, monthly int64, e
          where daily_spent_reset_on < current_date`
 	tag, err := tx.Exec(ctx, dailyQ)
 	if err != nil {
+		logger.From(ctx).ErrorContext(ctx, "reset daily spent failed", "err", err)
 		return 0, 0, apperr.Internal("reset daily spent", err)
 	}
 	daily = tag.RowsAffected()
@@ -355,11 +386,13 @@ func (s *Store) ResetSpentCounters(ctx context.Context) (daily, monthly int64, e
          where date_trunc('month', monthly_spent_reset_on) < date_trunc('month', current_date)`
 	tag, err = tx.Exec(ctx, monthlyQ)
 	if err != nil {
+		logger.From(ctx).ErrorContext(ctx, "reset monthly spent failed", "err", err)
 		return daily, 0, apperr.Internal("reset monthly spent", err)
 	}
 	monthly = tag.RowsAffected()
 
 	if err := tx.Commit(ctx); err != nil {
+		logger.From(ctx).ErrorContext(ctx, "commit spent-reset tx failed", "err", err)
 		return 0, 0, apperr.Internal("commit spent-reset tx", err)
 	}
 	return daily, monthly, nil

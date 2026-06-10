@@ -119,6 +119,9 @@ func (s *Service) payFundDividend(ctx context.Context, c *store.DividendCandidat
 		}
 	}
 
+	s.log().InfoContext(ctx, "fund dividend paid",
+		"fund_id", f.ID, "payout_id", payout.ID,
+		"gross", grossStr, "currency", string(c.Currency))
 	return rsd, nil
 }
 
@@ -130,6 +133,10 @@ func (s *Service) payFundDividend(ctx context.Context, c *store.DividendCandidat
 func (s *Service) distributeFundDividend(ctx context.Context, f *domain.Fund, payout *domain.DividendPayout, rsd *big.Rat) error {
 	totalUnits, err := money.Parse(f.TotalUnits)
 	if err != nil || totalUnits.Sign() <= 0 {
+		if err != nil {
+			s.log().WarnContext(ctx, "fund total_units unparseable; skipping dividend distribution",
+				"err", err, "fund_id", f.ID, "total_units", f.TotalUnits)
+		}
 		return nil
 	}
 	positions, err := s.Store.ListFundPositions(ctx, store.FundPositionFilter{
@@ -146,6 +153,10 @@ func (s *Service) distributeFundDividend(ctx context.Context, f *domain.Fund, pa
 		for _, pos := range positions {
 			units, err := money.Parse(pos.Units)
 			if err != nil || units.Sign() <= 0 {
+				if err != nil {
+					s.log().WarnContext(ctx, "fund position units unparseable; skipping slice",
+						"err", err, "fund_id", f.ID, "client_id", pos.ClientID, "units", pos.Units)
+				}
 				continue
 			}
 			slice := fundDividendSlice(rsd, units, totalUnits)
@@ -214,6 +225,10 @@ func reinvestQuantity(gross, price *big.Rat) int32 {
 func (s *Service) reinvestFundDividend(ctx context.Context, f *domain.Fund, c *store.DividendCandidate) error {
 	price, err := money.Parse(c.Price)
 	if err != nil || price.Sign() <= 0 {
+		if err != nil {
+			s.log().WarnContext(ctx, "fund reinvest price unparseable; skipping",
+				"err", err, "fund_id", f.ID, "security_id", c.SecurityID, "price", c.Price)
+		}
 		return nil
 	}
 	// Whole-share quantity affordable with the (security-currency)
@@ -236,5 +251,9 @@ func (s *Service) reinvestFundDividend(ctx context.Context, f *domain.Fund, c *s
 		OrderType:  domain.OrderMarket,
 		// InitiatorUser empty — the cron owns the call, not a supervisor.
 	})
+	if err == nil {
+		s.log().InfoContext(ctx, "fund dividend reinvested",
+			"fund_id", f.ID, "security_id", c.SecurityID, "quantity", qty)
+	}
 	return err
 }

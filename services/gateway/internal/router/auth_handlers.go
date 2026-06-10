@@ -8,6 +8,7 @@ import (
 	"net/http"
 
 	userpb "github.com/RAF-SI-2025/Banka-3-Backend/gen/proto/user/v1"
+	"github.com/RAF-SI-2025/Banka-3-Backend/pkg/logger"
 )
 
 // refreshCookieName is the http-only cookie holding the opaque refresh
@@ -43,8 +44,11 @@ type loginResponseBody struct {
 // returns the access token + metadata in the body.
 func (r *Router) LoginHandler() http.HandlerFunc {
 	return func(w http.ResponseWriter, req *http.Request) {
+		ctx := req.Context()
 		var body loginRequestBody
 		if err := json.NewDecoder(req.Body).Decode(&body); err != nil {
+			// No body snippet here — login payloads carry credentials.
+			logger.From(ctx).WarnContext(ctx, "login payload decode failed", "err", err)
 			writeError(w, http.StatusBadRequest, "invalid JSON body")
 			return
 		}
@@ -54,7 +58,7 @@ func (r *Router) LoginHandler() http.HandlerFunc {
 			LongLivedSession: body.LongLivedSession,
 		})
 		if err != nil {
-			writeGRPCError(w, err)
+			writeGRPCError(w, req, err)
 			return
 		}
 		out := loginResponseBody{
@@ -104,7 +108,7 @@ func (r *Router) RefreshHandler() http.HandlerFunc {
 			})
 			if rerr != nil {
 				clearRefreshCookie(w, r.SecureCookies)
-				writeGRPCError(w, rerr)
+				writeGRPCError(w, req, rerr)
 				return
 			}
 			setRefreshCookie(w, resp.GetRefreshToken(), r.SecureCookies)
@@ -118,6 +122,9 @@ func (r *Router) RefreshHandler() http.HandlerFunc {
 		// No cookie → mobile body path.
 		var body refreshRequestBody
 		if err := json.NewDecoder(req.Body).Decode(&body); err != nil || body.RefreshToken == "" {
+			// Token contents stay out of the log.
+			ctx := req.Context()
+			logger.From(ctx).WarnContext(ctx, "refresh rejected: no refresh token", "err", err)
 			writeError(w, http.StatusUnauthorized, "no refresh token")
 			return
 		}
@@ -126,7 +133,7 @@ func (r *Router) RefreshHandler() http.HandlerFunc {
 			LongLivedSession: body.LongLivedSession,
 		})
 		if err != nil {
-			writeGRPCError(w, err)
+			writeGRPCError(w, req, err)
 			return
 		}
 		writeJSON(w, http.StatusOK, refreshResponseBody{
@@ -140,14 +147,21 @@ func (r *Router) RefreshHandler() http.HandlerFunc {
 // LogoutHandler revokes the refresh token and clears the cookie.
 func (r *Router) LogoutHandler() http.HandlerFunc {
 	return func(w http.ResponseWriter, req *http.Request) {
+		ctx := req.Context()
 		if c, err := req.Cookie(refreshCookieName); err == nil && c.Value != "" {
-			_, _ = r.Users.Logout(req.Context(), &userpb.LogoutRequest{RefreshToken: c.Value})
+			if _, lerr := r.Users.Logout(req.Context(), &userpb.LogoutRequest{RefreshToken: c.Value}); lerr != nil {
+				// Response stays 204 either way; the un-revoked row is
+				// worth a line (token value itself is never logged).
+				logger.From(ctx).WarnContext(ctx, "logout revoke failed", "err", lerr)
+			}
 		} else {
 			// Mobile path: refresh token in the body so the
 			// server-side row is actually revoked on sign-out.
 			var body refreshRequestBody
 			if json.NewDecoder(req.Body).Decode(&body) == nil && body.RefreshToken != "" {
-				_, _ = r.Users.Logout(req.Context(), &userpb.LogoutRequest{RefreshToken: body.RefreshToken})
+				if _, lerr := r.Users.Logout(req.Context(), &userpb.LogoutRequest{RefreshToken: body.RefreshToken}); lerr != nil {
+					logger.From(ctx).WarnContext(ctx, "logout revoke failed", "err", lerr)
+				}
 			}
 		}
 		clearRefreshCookie(w, r.SecureCookies)

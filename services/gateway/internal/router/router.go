@@ -3,12 +3,14 @@ package router
 import (
 	"context"
 	"encoding/json"
+	"log/slog"
 	"net/http"
 	"time"
 
 	userpb "github.com/RAF-SI-2025/Banka-3-Backend/gen/proto/user/v1"
 	"github.com/RAF-SI-2025/Banka-3-Backend/pkg/auth"
 	"github.com/RAF-SI-2025/Banka-3-Backend/pkg/clock"
+	"github.com/RAF-SI-2025/Banka-3-Backend/pkg/logger"
 	"github.com/RAF-SI-2025/Banka-3-Backend/pkg/permissions"
 	"github.com/RAF-SI-2025/Banka-3-Backend/pkg/verification"
 
@@ -127,7 +129,11 @@ func (r *Router) Mount(ctx context.Context, gwMux *runtime.ServeMux, registerGW 
 func writeJSON(w http.ResponseWriter, status int, body any) {
 	w.Header().Set("Content-Type", "application/json; charset=utf-8")
 	w.WriteHeader(status)
-	_ = json.NewEncoder(w).Encode(body)
+	if err := json.NewEncoder(w).Encode(body); err != nil {
+		// Almost always a client that hung up mid-response; no request
+		// context here, so the default (service) logger carries it.
+		slog.Default().Warn("response write failed", "err", err, "status", status)
+	}
 }
 
 // DebugClockSetHandler handles POST /api/v1/_debug/clock with body
@@ -139,25 +145,35 @@ func (r *Router) DebugClockSetHandler() http.HandlerFunc {
 		Offset string `json:"offset"`
 	}
 	return func(w http.ResponseWriter, httpReq *http.Request) {
-		p, ok := auth.PrincipalFrom(httpReq.Context())
+		ctx := httpReq.Context()
+		log := logger.From(ctx)
+		p, ok := auth.PrincipalFrom(ctx)
 		if !ok || !permissions.Has(p.Permissions, permissions.Admin) {
+			log.WarnContext(ctx, "debug clock set rejected: admin only",
+				"path", httpReq.URL.Path)
 			writeJSON(w, http.StatusForbidden, errBody{Code: http.StatusForbidden, Message: "admin only"})
 			return
 		}
 		var in req
 		if err := json.NewDecoder(httpReq.Body).Decode(&in); err != nil {
+			log.WarnContext(ctx, "debug clock set rejected: invalid body", "err", err)
 			writeJSON(w, http.StatusBadRequest, errBody{Code: http.StatusBadRequest, Message: "invalid body"})
 			return
 		}
 		d, err := time.ParseDuration(in.Offset)
 		if err != nil {
+			log.WarnContext(ctx, "debug clock set rejected: bad offset", "err", err)
 			writeJSON(w, http.StatusBadRequest, errBody{Code: http.StatusBadRequest, Message: "offset: " + err.Error()})
 			return
 		}
-		if err := r.Clock.SetOffset(httpReq.Context(), d); err != nil {
+		if err := r.Clock.SetOffset(ctx, d); err != nil {
+			log.ErrorContext(ctx, "debug clock offset persist failed",
+				"err", err, "offset", d.String())
 			writeJSON(w, http.StatusInternalServerError, errBody{Code: http.StatusInternalServerError, Message: err.Error()})
 			return
 		}
+		log.InfoContext(ctx, "debug clock offset set",
+			"offset", d.String(), "user_id", p.UserID)
 		writeJSON(w, http.StatusOK, map[string]any{
 			"offset": d.String(),
 			"now":    r.Clock.Now().Format(time.RFC3339),
@@ -187,13 +203,29 @@ func writeError(w http.ResponseWriter, code int, msg string) {
 }
 
 // writeGRPCError translates a gRPC status to an HTTP error JSON body.
-func writeGRPCError(w http.ResponseWriter, err error) {
+// It is the router package's gRPC→HTTP translation choke point, so it
+// also emits the structured log line for the failure: Error for 5xx
+// (upstream/internal), Warn for client-class 4xx.
+func writeGRPCError(w http.ResponseWriter, r *http.Request, err error) {
+	ctx := r.Context()
+	log := logger.From(ctx)
 	st, ok := status.FromError(err)
 	if !ok || st == nil {
+		log.ErrorContext(ctx, "upstream call failed",
+			"err", err, "method", r.Method, "path", r.URL.Path)
 		writeError(w, http.StatusInternalServerError, "internal error")
 		return
 	}
 	httpCode := runtime.HTTPStatusFromCode(st.Code())
+	if httpCode >= 500 {
+		log.ErrorContext(ctx, "upstream call failed",
+			"err", err, "code", st.Code().String(), "status", httpCode,
+			"method", r.Method, "path", r.URL.Path)
+	} else {
+		log.WarnContext(ctx, "upstream call rejected",
+			"err", err, "code", st.Code().String(), "status", httpCode,
+			"method", r.Method, "path", r.URL.Path)
+	}
 	writeError(w, httpCode, st.Message())
 }
 

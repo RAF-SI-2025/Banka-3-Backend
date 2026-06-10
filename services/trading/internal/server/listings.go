@@ -79,10 +79,14 @@ func (s *Server) ListListings(ctx context.Context, in *tradingpb.ListListingsReq
 func (s *Server) GetListingDailyHistory(ctx context.Context, in *tradingpb.GetListingDailyHistoryRequest) (*tradingpb.GetListingDailyHistoryResponse, error) {
 	from, err := parseHistoryDate(in.GetFrom())
 	if err != nil {
+		s.Svc.Log.WarnContext(ctx, "listing history: bad 'from' date in request",
+			"err", err, "from", in.GetFrom(), "listing_id", in.GetListingId())
 		return nil, apperr.Validation("from: očekivan format YYYY-MM-DD")
 	}
 	to, err := parseHistoryDate(in.GetTo())
 	if err != nil {
+		s.Svc.Log.WarnContext(ctx, "listing history: bad 'to' date in request",
+			"err", err, "to", in.GetTo(), "listing_id", in.GetListingId())
 		return nil, apperr.Validation("to: očekivan format YYYY-MM-DD")
 	}
 	if !to.IsZero() {

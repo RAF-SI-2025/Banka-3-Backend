@@ -124,7 +124,14 @@ func (s *Service) RunPriceAlertSweep(ctx context.Context) (int, error) {
 			s.Log.Warn("price alert: deactivate failed", "alert_id", a.ID, "err", err.Error())
 			continue
 		}
+		s.log().InfoContext(ctx, "price alert triggered",
+			"alert_id", a.ID, "user_id", a.UserID,
+			"security_id", a.SecurityID, "price", listing.Price)
 		triggered++
+	}
+	if triggered > 0 {
+		s.log().InfoContext(ctx, "price alert sweep completed",
+			"triggered", triggered, "active", len(alerts))
 	}
 	return triggered, nil
 }
@@ -151,6 +158,9 @@ func (s *Service) firePriceAlert(ctx context.Context, a *domain.PriceAlert, curr
 	ticker := a.SecurityID
 	if sec, err := s.Store.GetSecurity(ctx, a.SecurityID); err == nil && sec.Ticker != "" {
 		ticker = sec.Ticker
+	} else if err != nil {
+		s.log().WarnContext(ctx, "price alert security lookup failed",
+			"err", err, "alert_id", a.ID, "security_id", a.SecurityID)
 	}
 	dir := "prešla iznad"
 	if a.Condition == domain.PriceAlertBelow {

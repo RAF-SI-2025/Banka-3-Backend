@@ -6,6 +6,7 @@ import (
 	"time"
 
 	"github.com/RAF-SI-2025/Banka-3-Backend/pkg/apperr"
+	"github.com/RAF-SI-2025/Banka-3-Backend/pkg/logger"
 	"github.com/RAF-SI-2025/Banka-3-Backend/pkg/postgres"
 	"github.com/RAF-SI-2025/Banka-3-Backend/services/trading/internal/domain"
 	"github.com/jackc/pgx/v5"
@@ -111,6 +112,7 @@ func (s *Store) CreateOrder(ctx context.Context, o *domain.Order) (*domain.Order
 	)
 	out, err := scanOrder(row)
 	if err != nil {
+		logger.From(ctx).ErrorContext(ctx, "create order failed", "err", err)
 		return nil, apperr.Internal("create order", err)
 	}
 	return out, nil
@@ -124,6 +126,7 @@ func (s *Store) GetOrder(ctx context.Context, id string) (*domain.Order, error) 
 		if noRows(err) {
 			return nil, apperr.NotFound("nalog ne postoji")
 		}
+		logger.From(ctx).ErrorContext(ctx, "get order failed", "err", err, "id", id)
 		return nil, apperr.Internal("get order", err)
 	}
 	return out, nil
@@ -210,6 +213,7 @@ func (s *Store) ListOrders(ctx context.Context, f OrderFilter, page, pageSize in
 
 	var total int64
 	if err := s.DB.QueryRow(postgres.WithRead(ctx), `select count(*) from "trading".orders`+where, args...).Scan(&total); err != nil {
+		logger.From(ctx).ErrorContext(ctx, "count orders failed", "err", err)
 		return nil, 0, apperr.Internal("count orders", err)
 	}
 
@@ -222,6 +226,7 @@ func (s *Store) ListOrders(ctx context.Context, f OrderFilter, page, pageSize in
 
 	rows, err := s.DB.Query(postgres.WithRead(ctx), q, args...)
 	if err != nil {
+		logger.From(ctx).ErrorContext(ctx, "list orders failed", "err", err)
 		return nil, 0, apperr.Internal("list orders", err)
 	}
 	defer rows.Close()
@@ -229,11 +234,16 @@ func (s *Store) ListOrders(ctx context.Context, f OrderFilter, page, pageSize in
 	for rows.Next() {
 		o, err := scanOrder(rows)
 		if err != nil {
+			logger.From(ctx).ErrorContext(ctx, "scan order failed", "err", err)
 			return nil, 0, apperr.Internal("scan order", err)
 		}
 		out = append(out, o)
 	}
-	return out, total, rows.Err()
+	if err := rows.Err(); err != nil {
+		logger.From(ctx).ErrorContext(ctx, "list orders rows failed", "err", err)
+		return out, total, err
+	}
+	return out, total, nil
 }
 
 // ApproveOrder marks the order approved and stamps approver/timestamp.
@@ -251,6 +261,7 @@ func (s *Store) ApproveOrder(ctx context.Context, orderID, approverID string) (*
 		if noRows(err) {
 			return nil, apperr.FailedPrecondition("nalog nije u stanju 'pending'")
 		}
+		logger.From(ctx).ErrorContext(ctx, "approve order failed", "err", err, "order_id", orderID, "approver_id", approverID)
 		return nil, apperr.Internal("approve order", err)
 	}
 	return out, nil
@@ -269,6 +280,7 @@ func (s *Store) DeclineOrder(ctx context.Context, orderID, approverID string) (*
 		if noRows(err) {
 			return nil, apperr.FailedPrecondition("nalog nije u stanju 'pending'")
 		}
+		logger.From(ctx).ErrorContext(ctx, "decline order failed", "err", err, "order_id", orderID, "approver_id", approverID)
 		return nil, apperr.Internal("decline order", err)
 	}
 	return out, nil
@@ -288,6 +300,7 @@ func (s *Store) CancelOrder(ctx context.Context, orderID string) (*domain.Order,
 		if noRows(err) {
 			return nil, apperr.FailedPrecondition("nalog se ne može otkazati")
 		}
+		logger.From(ctx).ErrorContext(ctx, "cancel order failed", "err", err, "order_id", orderID)
 		return nil, apperr.Internal("cancel order", err)
 	}
 	return out, nil
@@ -315,6 +328,7 @@ func (s *Store) PartialCancelOrder(ctx context.Context, orderID string, qty int3
 		if noRows(err) {
 			return nil, apperr.FailedPrecondition("nalog se ne može delimično otkazati")
 		}
+		logger.From(ctx).ErrorContext(ctx, "partial cancel order failed", "err", err, "order_id", orderID)
 		return nil, apperr.Internal("partial cancel order", err)
 	}
 	return out, nil
@@ -331,6 +345,7 @@ func (s *Store) CancelOrderTx(ctx context.Context, tx pgx.Tx, orderID string) er
         set cancelled = true, last_modification = now()
         where id = $1 and cancelled = false`
 	if _, err := tx.Exec(ctx, q, orderID); err != nil {
+		logger.From(ctx).ErrorContext(ctx, "cancel order (tx) failed", "err", err, "order_id", orderID)
 		return apperr.Internal("cancel order (tx)", err)
 	}
 	return nil
@@ -349,6 +364,7 @@ func (s *Store) GetActiveOrdersForExecution(ctx context.Context, limit int) ([]*
 	      limit $1`
 	rows, err := s.DB.Query(ctx, q, limit)
 	if err != nil {
+		logger.From(ctx).ErrorContext(ctx, "active orders failed", "err", err)
 		return nil, apperr.Internal("active orders", err)
 	}
 	defer rows.Close()
@@ -356,11 +372,16 @@ func (s *Store) GetActiveOrdersForExecution(ctx context.Context, limit int) ([]*
 	for rows.Next() {
 		o, err := scanOrder(rows)
 		if err != nil {
+			logger.From(ctx).ErrorContext(ctx, "scan active order failed", "err", err)
 			return nil, apperr.Internal("scan active order", err)
 		}
 		out = append(out, o)
 	}
-	return out, rows.Err()
+	if err := rows.Err(); err != nil {
+		logger.From(ctx).ErrorContext(ctx, "get active orders for execution rows failed", "err", err)
+		return out, err
+	}
+	return out, nil
 }
 
 func scanOrder(row pgx.Row) (*domain.Order, error) {

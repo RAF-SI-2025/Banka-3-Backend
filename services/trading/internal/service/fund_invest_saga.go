@@ -218,7 +218,12 @@ func (s *Service) InvestInFund(ctx context.Context, in InvestInFundInput) (*Inve
 		AttemptsMax:   8,
 	})
 	if err != nil {
-		_ = s.markFundTxFailed(ctx, auditID, err.Error())
+		s.log().ErrorContext(ctx, "fund invest saga failed",
+			"err", err, "transaction_id", txID, "fund_id", f.ID)
+		if mErr := s.markFundTxFailed(ctx, auditID, err.Error()); mErr != nil {
+			s.log().WarnContext(ctx, "fund invest: mark tx failed errored",
+				"err", mErr, "transaction_id", txID, "fund_tx_id", auditID)
+		}
 		return nil, fmt.Errorf("fund invest saga: %w", err)
 	}
 	if row.Status != saga.StatusCompleted {
@@ -227,8 +232,13 @@ func (s *Service) InvestInFund(ctx context.Context, in InvestInFundInput) (*Inve
 		// polls/backoffs; recovery worker will drive it forward.
 		// See [[reference_saga_park_status_mapping]] for the pattern.
 		if row.Status == saga.StatusRunning {
+			s.log().WarnContext(ctx, "fund invest saga parked for retry",
+				"transaction_id", txID, "fund_id", f.ID, "last_error", row.LastError)
 			return nil, status.Error(codes.Unavailable, "fund invest saga parked for retry")
 		}
+		s.log().ErrorContext(ctx, "fund invest saga did not complete",
+			"transaction_id", txID, "fund_id", f.ID,
+			"saga_status", string(row.Status), "last_error", row.LastError)
 		return nil, apperr.Internal("fund invest saga did not complete", nil)
 	}
 
@@ -236,6 +246,9 @@ func (s *Service) InvestInFund(ctx context.Context, in InvestInFundInput) (*Inve
 	if err != nil {
 		return nil, err
 	}
+	s.log().InfoContext(ctx, "fund invest completed",
+		"transaction_id", txID, "fund_id", f.ID,
+		"amount_rsd", payload.AmountRSD, "units_delta", payload.UnitsDelta)
 	return &InvestInFundResult{Transaction: final, SagaID: txID, Pending: false}, nil
 }
 

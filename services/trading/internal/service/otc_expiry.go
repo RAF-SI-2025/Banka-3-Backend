@@ -129,6 +129,8 @@ func (s *Service) SweepExpiredOTCContracts(ctx context.Context) (*SweepExpiredOT
 		}
 		out.ContractsExpired++
 		out.SharesReleased += c.Quantity
+		s.log().InfoContext(ctx, "otc contract expired",
+			"contract_id", c.ID, "quantity", c.Quantity, "buyer_id", c.BuyerID)
 		if s.OTCNotifier != nil {
 			s.OTCNotifier.OnOTCContractExpired(ctx, c, c.BuyerID, c.BuyerKind)
 		}
@@ -190,6 +192,8 @@ func (s *Service) sweepExpiredOTCOffers(ctx context.Context, now time.Time, loc 
 			continue
 		}
 		out.OffersExpired++
+		s.log().InfoContext(ctx, "otc offer auto-expired",
+			"offer_id", o.ID, "thread_id", o.ThreadID)
 		if s.OTCNotifier != nil {
 			// Notify the party whose turn it was (modified_by is the other
 			// side); the offer aged out waiting on them.

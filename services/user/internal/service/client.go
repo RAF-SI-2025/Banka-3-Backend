@@ -58,10 +58,12 @@ func (s *Service) CreateClient(ctx context.Context, in CreateClientInput) (*doma
 		return nil, err
 	}
 
+	s.Log.InfoContext(ctx, "client created", "client_id", c.ID, "email", c.Email)
+
 	if err := s.sendInitialPasswordEmail(ctx, domain.KindClient, c.ID, c.Email, c.FirstName); err != nil {
 		// Don't roll back — the employee portal can resend by triggering
 		// the regular reset flow. Logged for ops visibility.
-		s.Log.Error("send initial-password email failed", "client_id", c.ID, "error", err)
+		s.Log.ErrorContext(ctx, "send initial-password email failed", "err", err, "client_id", c.ID)
 	}
 
 	return c, nil

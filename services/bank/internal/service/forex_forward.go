@@ -101,10 +101,14 @@ func (s *Service) resolveSpreadFactor(ctx context.Context, base, quote domain.Cu
 		if apperrIs(err, apperr.KindNotFound) {
 			return money.MustParse(defaultForexForwardSpread), defaultForexForwardSpread, nil
 		}
+		s.log().ErrorContext(ctx, "forex forward: spread lookup failed",
+			"err", err, "base_currency", base, "quote_currency", quote)
 		return nil, "", err
 	}
 	r, perr := money.Parse(sp.SpreadFactor)
 	if perr != nil {
+		s.log().ErrorContext(ctx, "forex forward: stored spread factor unparseable",
+			"err", perr, "base_currency", base, "quote_currency", quote, "spread_factor", sp.SpreadFactor)
 		return nil, "", apperr.Internal("parse spread factor", perr)
 	}
 	return r, sp.SpreadFactor, nil
@@ -130,6 +134,8 @@ func (s *Service) quoteForward(ctx context.Context, base, quote domain.Currency,
 		return nil, nil, apperr.Validation(err.Error())
 	}
 	if s.Rates == nil {
+		s.log().ErrorContext(ctx, "forex forward: exchange rate provider not configured",
+			"base_currency", base, "quote_currency", quote)
 		return nil, nil, apperr.Internal("exchange rate provider not configured", nil)
 	}
 
@@ -138,13 +144,19 @@ func (s *Service) quoteForward(ctx context.Context, base, quote domain.Currency,
 	// Spot ASK for base→RSD per spec p.26 (always sell-side).
 	_, ask, err := s.Rates.Quote(ctx, base, quote)
 	if err != nil {
+		s.log().ErrorContext(ctx, "forex forward: spot rate quote failed",
+			"err", err, "base_currency", base, "quote_currency", quote)
 		return nil, nil, err
 	}
 	spotAsk, perr := money.Parse(ask)
 	if perr != nil {
+		s.log().ErrorContext(ctx, "forex forward: parse spot ask failed",
+			"err", perr, "base_currency", base, "quote_currency", quote, "rate", ask)
 		return nil, nil, apperr.Internal("parse spot ask", perr)
 	}
 	if !money.IsPositive(spotAsk) {
+		s.log().ErrorContext(ctx, "forex forward: spot ask non-positive",
+			"base_currency", base, "quote_currency", quote, "rate", ask)
 		return nil, nil, apperr.Internal("spot ask non-positive", nil)
 	}
 
@@ -295,10 +307,27 @@ func (s *Service) CreateForexForward(ctx context.Context, in CreateForexForwardI
 		return nil
 	})
 	if err != nil {
+		if clientClassErr(err) {
+			s.log().WarnContext(ctx, "create forex forward rejected, releasing reservation",
+				"err", err, "client_id", p.UserID, "op_id", opID,
+				"base_currency", in.BaseCurrency, "notional", in.Notional)
+		} else {
+			s.log().ErrorContext(ctx, "create forex forward failed, releasing reservation",
+				"err", err, "client_id", p.UserID, "op_id", opID,
+				"base_currency", in.BaseCurrency, "notional", in.Notional)
+		}
 		// Roll back the reservation we made before the tx.
-		_, _ = s.ReleaseFunds(reserveCtx, opID)
+		if _, rerr := s.ReleaseFunds(reserveCtx, opID); rerr != nil {
+			s.log().ErrorContext(ctx, "create forex forward: release reservation failed",
+				"err", rerr, "client_id", p.UserID, "op_id", opID)
+		}
 		return nil, err
 	}
+	s.log().InfoContext(ctx, "forex forward created",
+		"forward_id", out.ID, "client_id", p.UserID, "op_id", opID,
+		"base_currency", out.BaseCurrency, "notional", out.Notional,
+		"forward_rate", out.ForwardRate, "settlement_date", out.SettlementDate,
+		"commission", out.Commission)
 	return out, nil
 }
 
@@ -333,9 +362,12 @@ func (s *Service) CancelForexForward(ctx context.Context, id string) (*domain.Fo
 	}
 	// Release the obligation reservation (best-effort, idempotent).
 	if _, rerr := s.ReleaseFunds(s.internalCtx(ctx), f.ReservationID); rerr != nil {
-		s.Log.WarnContext(ctx, "forex forward cancel: release reservation failed",
-			"id", f.ID, "reservation_id", f.ReservationID, "err", rerr.Error())
+		s.log().WarnContext(ctx, "forex forward cancel: release reservation failed",
+			"err", rerr, "forward_id", f.ID, "reservation_id", f.ReservationID)
 	}
+	s.log().InfoContext(ctx, "forex forward cancelled",
+		"forward_id", f.ID, "client_id", p.UserID, "reservation_id", f.ReservationID,
+		"base_currency", f.BaseCurrency, "notional", f.Notional)
 	return f, nil
 }
 
@@ -363,6 +395,7 @@ func (s *Service) RunForexForwardSettlement(ctx context.Context) (*ForexForwardS
 	now := s.now()
 	due, err := s.Store.ListDueForexForwards(ctx, now)
 	if err != nil {
+		s.log().ErrorContext(ctx, "forex forward settlement: list due contracts failed", "err", err)
 		return nil, err
 	}
 
@@ -374,10 +407,16 @@ func (s *Service) RunForexForwardSettlement(ctx context.Context) (*ForexForwardS
 		switch execErr {
 		case nil:
 			if merr := s.Store.MarkForexForwardSettled(ctx, f.ID, at); merr != nil {
-				s.Log.WarnContext(ctx, "forex forward mark-settled failed", "id", f.ID, "err", merr.Error())
+				// Funds moved but the row still reads 'active' — the next
+				// sweep retries idempotently, but flag the inconsistency.
+				s.log().ErrorContext(ctx, "forex forward settled but mark-settled failed",
+					"err", merr, "forward_id", f.ID, "client_id", f.ClientID, "reservation_id", f.ReservationID)
 				continue
 			}
 			res.Settled++
+			s.log().InfoContext(ctx, "forex forward settled",
+				"forward_id", f.ID, "client_id", f.ClientID, "reservation_id", f.ReservationID,
+				"base_currency", f.BaseCurrency, "notional", f.Notional, "forward_rate", f.ForwardRate)
 			s.notifyForexForwardSettled(ctx, f)
 		default:
 			// Settlement could not complete (e.g. the reserved funds were
@@ -388,14 +427,20 @@ func (s *Service) RunForexForwardSettlement(ctx context.Context) (*ForexForwardS
 				reason = "rezervisana sredstva više nisu dostupna"
 			}
 			if merr := s.Store.MarkForexForwardFailed(ctx, f.ID, reason, at); merr != nil {
-				s.Log.WarnContext(ctx, "forex forward mark-failed failed", "id", f.ID, "err", merr.Error())
+				s.log().ErrorContext(ctx, "forex forward mark-failed failed",
+					"err", merr, "forward_id", f.ID, "client_id", f.ClientID)
 				continue
 			}
-			_, _ = s.ReleaseFunds(s.internalCtx(ctx), f.ReservationID)
+			if _, rerr := s.ReleaseFunds(s.internalCtx(ctx), f.ReservationID); rerr != nil {
+				s.log().ErrorContext(ctx, "forex forward settlement: release reservation failed",
+					"err", rerr, "forward_id", f.ID, "reservation_id", f.ReservationID)
+			}
 			res.Failed++
 			s.notifyForexForwardFailed(ctx, f, reason)
-			s.Log.WarnContext(ctx, "forex forward settlement failed",
-				"id", f.ID, "client_id", f.ClientID, "err", execErr.Error())
+			s.log().WarnContext(ctx, "forex forward settlement failed",
+				"err", execErr, "forward_id", f.ID, "client_id", f.ClientID,
+				"reservation_id", f.ReservationID, "base_currency", f.BaseCurrency,
+				"notional", f.Notional, "reason", reason)
 		}
 	}
 	return res, nil
@@ -484,12 +529,21 @@ func (s *Service) SetForexForwardSpread(ctx context.Context, base, quote domain.
 	if sf.Sign() < 0 {
 		return nil, apperr.Validation("spread faktor ne sme biti negativan")
 	}
-	return s.Store.UpsertForexForwardSpread(ctx, &domain.ForexForwardSpread{
+	out, err := s.Store.UpsertForexForwardSpread(ctx, &domain.ForexForwardSpread{
 		BaseCurrency:  base,
 		QuoteCurrency: quote,
 		SpreadFactor:  money.FormatRate(sf),
 		UpdatedBy:     p.UserID,
 	})
+	if err != nil {
+		s.log().ErrorContext(ctx, "set forex forward spread failed",
+			"err", err, "base_currency", base, "quote_currency", quote, "user_id", p.UserID)
+		return nil, err
+	}
+	s.log().InfoContext(ctx, "forex forward spread updated",
+		"base_currency", base, "quote_currency", quote,
+		"spread_factor", out.SpreadFactor, "user_id", p.UserID)
+	return out, nil
 }
 
 // =====================================================================

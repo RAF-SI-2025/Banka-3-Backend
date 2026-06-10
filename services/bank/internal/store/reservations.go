@@ -8,6 +8,7 @@ import (
 	"github.com/jackc/pgx/v5"
 
 	"github.com/RAF-SI-2025/Banka-3-Backend/pkg/apperr"
+	"github.com/RAF-SI-2025/Banka-3-Backend/pkg/logger"
 	"github.com/RAF-SI-2025/Banka-3-Backend/services/bank/internal/domain"
 )
 
@@ -44,6 +45,7 @@ func (s *Store) InsertReservation(ctx context.Context, tx pgx.Tx, r *domain.Rese
 		if isUniqueViolation(err) {
 			return nil, ErrReservationExists
 		}
+		logger.From(ctx).ErrorContext(ctx, "insert reservation failed", "err", err, "op_id", r.OpID, "account_id", r.AccountID)
 		return nil, apperr.Internal("insert reservation", err)
 	}
 	return out, nil
@@ -60,6 +62,7 @@ func (s *Store) GetReservationByOpID(ctx context.Context, opID string) (*domain.
 		if noRows(err) {
 			return nil, apperr.NotFound("reservation not found")
 		}
+		logger.From(ctx).ErrorContext(ctx, "get reservation failed", "err", err, "op_id", opID)
 		return nil, apperr.Internal("get reservation", err)
 	}
 	return out, nil
@@ -74,6 +77,7 @@ func (s *Store) GetReservationByOpIDTx(ctx context.Context, tx pgx.Tx, opID stri
 		if noRows(err) {
 			return nil, apperr.NotFound("reservation not found")
 		}
+		logger.From(ctx).ErrorContext(ctx, "get reservation tx failed", "err", err, "op_id", opID)
 		return nil, apperr.Internal("get reservation tx", err)
 	}
 	return out, nil
@@ -94,6 +98,7 @@ func (s *Store) MarkReservationState(ctx context.Context, tx pgx.Tx, opID string
 		if noRows(err) {
 			return apperr.NotFound("reservation not found")
 		}
+		logger.From(ctx).ErrorContext(ctx, "update reservation state failed", "err", err, "op_id", opID, "state", string(state))
 		return apperr.Internal("update reservation state", err)
 	}
 	return nil

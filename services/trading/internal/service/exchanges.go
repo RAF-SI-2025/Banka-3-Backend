@@ -25,7 +25,12 @@ func (s *Service) UpsertExchange(ctx context.Context, in *domain.Exchange) (*dom
 	if err := validateExchange(in); err != nil {
 		return nil, err
 	}
-	return s.Store.UpsertExchange(ctx, in)
+	e, err := s.Store.UpsertExchange(ctx, in)
+	if err != nil {
+		return nil, err
+	}
+	s.log().InfoContext(ctx, "exchange upserted", "mic", e.MIC)
+	return e, nil
 }
 
 // SetExchangeOverride writes the four-state override (open / closed /
@@ -46,7 +51,16 @@ func (s *Service) SetExchangeOverride(ctx context.Context, mic string, state *do
 			return nil, apperr.Validation("invalid override state")
 		}
 	}
-	return s.Store.SetExchangeOverride(ctx, mic, state)
+	e, err := s.Store.SetExchangeOverride(ctx, mic, state)
+	if err != nil {
+		return nil, err
+	}
+	override := "cleared"
+	if state != nil {
+		override = string(*state)
+	}
+	s.log().InfoContext(ctx, "exchange override set", "mic", mic, "override", override)
+	return e, nil
 }
 
 // ListExchanges returns every exchange with the resolved is_open /
@@ -103,12 +117,17 @@ func (s *Service) resolveMarketState(e *domain.Exchange, now time.Time) *MarketS
 	}
 	loc, err := time.LoadLocation(e.Timezone)
 	if err != nil {
+		s.log().Warn("exchange timezone load failed; falling back to UTC",
+			"err", err, "mic", e.MIC, "timezone", e.Timezone)
 		loc = time.UTC
 	}
 	local := now.In(loc)
 	openT, err1 := parseHHMM(e.OpenLocal)
 	closeT, err2 := parseHHMM(e.CloseLocal)
 	if err1 != nil || err2 != nil {
+		s.log().Warn("exchange open/close hours unparseable; treating as closed",
+			"mic", e.MIC, "open", e.OpenLocal, "close", e.CloseLocal,
+			"open_err", err1, "close_err", err2)
 		return ms
 	}
 	openAt := time.Date(local.Year(), local.Month(), local.Day(), openT.h, openT.m, 0, 0, loc)

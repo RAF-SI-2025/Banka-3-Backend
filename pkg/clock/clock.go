@@ -17,7 +17,9 @@ package clock
 
 import (
 	"context"
+	"errors"
 	"fmt"
+	"log/slog"
 	"sync/atomic"
 	"time"
 
@@ -159,9 +161,15 @@ func (c *Adjustable) loadFromRedis(ctx context.Context) {
 		// alone. Any other error means redis is flaky and the cache
 		// stays stale — fail-open is safer than resetting business
 		// time mid-flight.
+		if !errors.Is(err, redis.Nil) {
+			slog.WarnContext(ctx, "clock offset refresh failed, keeping cached offset", "err", err)
+		}
 		return
 	}
-	if d, perr := time.ParseDuration(s); perr == nil {
-		c.cachedNS.Store(int64(d))
+	d, perr := time.ParseDuration(s)
+	if perr != nil {
+		slog.WarnContext(ctx, "clock offset malformed in redis, keeping cached offset", "err", perr)
+		return
 	}
+	c.cachedNS.Store(int64(d))
 }

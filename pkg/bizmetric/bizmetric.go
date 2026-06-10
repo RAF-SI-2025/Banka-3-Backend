@@ -18,6 +18,7 @@ package bizmetric
 
 import (
 	"context"
+	"log/slog"
 	"sync"
 
 	"go.opentelemetry.io/otel"
@@ -35,18 +36,28 @@ var (
 func ensure() {
 	once.Do(func() {
 		m := otel.Meter("github.com/RAF-SI-2025/Banka-3-Backend/pkg/bizmetric")
-		payments, _ = m.Int64Counter(
+		var err error
+		payments, err = m.Int64Counter(
 			"banka_payments_total",
 			metric.WithDescription("Number of payment/transfer operations the bank service processed."),
 		)
-		trades, _ = m.Int64Counter(
+		if err != nil {
+			slog.Warn("bizmetric counter registration failed", "err", err, "metric", "banka_payments_total")
+		}
+		trades, err = m.Int64Counter(
 			"banka_trades_total",
 			metric.WithDescription("Number of securities trade fills settled by the trading service."),
 		)
-		logins, _ = m.Int64Counter(
+		if err != nil {
+			slog.Warn("bizmetric counter registration failed", "err", err, "metric", "banka_trades_total")
+		}
+		logins, err = m.Int64Counter(
 			"banka_user_logins_total",
 			metric.WithDescription("Number of login attempts handled by the user service, by outcome."),
 		)
+		if err != nil {
+			slog.Warn("bizmetric counter registration failed", "err", err, "metric", "banka_user_logins_total")
+		}
 	})
 }
 
