@@ -70,6 +70,16 @@ func ParsePartnerKeys(raw string) map[string]string {
 	return out
 }
 
+// ParsePresentedRouting parses an INTERBANK_PRESENTED_ROUTING value of the
+// form "code:routing,code:routing,..." into a partner-code → our-presented-
+// routing map. It shares the generic "code:value" grammar with
+// ParsePartnerKeys; the distinct name documents intent at the call site.
+// Example: "222:265" — present routing 265 to Banka-2 (code 222) because
+// that is the routing they tied to our API key.
+func ParsePresentedRouting(raw string) map[string]string {
+	return ParsePartnerKeys(raw)
+}
+
 // BankCodes returns the configured partner bank codes in
 // non-deterministic order. Used by Discover to fan out.
 func (r Routes) BankCodes() []string {

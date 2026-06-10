@@ -31,9 +31,22 @@ services:
       # Append the Banka-2 route. The other two routes are kept so the
       # mock-partner + sibling banka-3 partner stacks (when up) stay
       # reachable.
-      INTERBANK_ROUTES: "${INTERBANK_ROUTES:-999:http://mock-partner:9099,334:http://banka-partner-gateway-1:8080,222:http://banka2_backend:8080}"
+      # Route to Banka-2's monolith via its underscore-FREE service alias
+      # `backend` — Tomcat rejects a Host header containing an underscore
+      # (banka2_backend → HTTP 400 before Spring), so never use the
+      # container_name here. The overlay adds a `banka2backend` alias too.
+      INTERBANK_ROUTES: "${INTERBANK_ROUTES:-222:http://backend:8080}"
       INTERBANK_API_KEY: "${INTERBANK_API_KEY:-dev-outbound-banka3}"
       BANK_ROUTING_NUMBER: "${BANK_ROUTING_NUMBER:-333}"
+      # Banka-2 registered our API key under their legacy "EXBanka" slot
+      # (routing 265), so every envelope we send them must present 265 as
+      # our routingNumber or they 400 with "mismatches X-Api-Key sender".
+      # Per-partner override; our real routing stays 333 for everyone else.
+      INTERBANK_PRESENTED_ROUTING: "${INTERBANK_PRESENTED_ROUTING:-222:265}"
+      # The outbound X-Api-Key Banka-2 issued us (they validate it on inbound).
+      # Secret — set in your shell/.env, never commit: e.g.
+      #   INTERBANK_PARTNER_KEYS=222:<token-banka-2-issued-us>
+      INTERBANK_PARTNER_KEYS: "${INTERBANK_PARTNER_KEYS:-}"
 
   gateway:
     environment:
@@ -43,6 +56,14 @@ services:
       # and BANKA2_OUTBOUND (what we send to them). For dev we collapse
       # both onto INTERBANK_API_KEY since trust is mutual + the protocol
       # checks routingNumber for partner identity.
-      INTERBANK_API_KEY: "${INTERBANK_API_KEY:-dev-outbound-banka3}"
+      # INBOUND auth: the X-Api-Key Banka-2 sends us (their outbound token for
+      # our 265 slot). Their OTC accept 2PC NEW_TX arrives carrying this.
+      # Secret — set in your shell/.env, never commit:
+      #   INTERBANK_GATEWAY_INBOUND_KEY=<token-banka-2-sends-us>
+      INTERBANK_API_KEY: "${INTERBANK_GATEWAY_INBOUND_KEY:-dev-inbound-banka2}"
       BANK_ROUTING_NUMBER: "${BANK_ROUTING_NUMBER:-333}"
       BANK_DISPLAY_NAME: "${BANK_DISPLAY_NAME:-Banka 3}"
+      # How each partner addresses US on inbound (inverse of trading's
+      # outbound presented routing). Banka-2 references our PERSON/OPTION OTC
+      # legs as routing 265, so the inbound shim must recognize 265 as ours.
+      INTERBANK_PRESENTED_ROUTING: "${INTERBANK_PRESENTED_ROUTING:-222:265}"
