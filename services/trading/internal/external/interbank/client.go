@@ -173,7 +173,11 @@ func (c *Client) probe(ctx context.Context, bankCode string) Protocol {
 
 // probeOK fires a single probe with a short timeout. withAPIKey
 // controls whether to send X-Api-Key (Banka2 always needs it; native
-// public discovery works either way).
+// public discovery works either way). Accepts the response only when
+// it is 2xx AND Content-Type is application/json — some partners host
+// their SPA on the same vhost as the API and an unknown path falls
+// through to a 200 + HTML catchall, which previously fooled the probe
+// into picking the wrong dialect.
 func (c *Client) probeOK(ctx context.Context, method, url string, withAPIKey bool) bool {
 	probeCtx, cancel := context.WithTimeout(ctx, 3*time.Second)
 	defer cancel()
@@ -195,10 +199,9 @@ func (c *Client) probeOK(ctx context.Context, method, url string, withAPIKey boo
 	defer resp.Body.Close()
 	_, _ = io.Copy(io.Discard, resp.Body)
 	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
-		c.log.WarnContext(ctx, "interbank probe rejected", "method", method, "url", url, "status", resp.StatusCode)
 		return false
 	}
-	return true
+	return strings.HasPrefix(resp.Header.Get("Content-Type"), "application/json")
 }
 
 // signRequest stamps the celina-5 digital-signature headers on an
