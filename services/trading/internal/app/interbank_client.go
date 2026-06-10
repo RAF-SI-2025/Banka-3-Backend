@@ -11,7 +11,9 @@ import (
 	"fmt"
 
 	bankpb "github.com/RAF-SI-2025/Banka-3-Backend/gen/proto/bank/v1"
+	"github.com/RAF-SI-2025/Banka-3-Backend/pkg/logger"
 	"github.com/RAF-SI-2025/Banka-3-Backend/services/trading/internal/service"
+	"google.golang.org/grpc/status"
 )
 
 // interbankPayerAdapter wraps bank's InterbankProtocolService client
@@ -35,6 +37,9 @@ func (a *interbankPayerAdapter) PreparePayment(ctx context.Context, in service.P
 		Purpose:             in.Purpose,
 	})
 	if err != nil {
+		logger.From(ctx).ErrorContext(ctx, "interbank 2pc: bank.PreparePayment failed",
+			"err", err, "code", status.Code(err).String(),
+			"transaction_id", in.TransactionID, "sender_routing", in.SenderRoutingNumber)
 		return service.PrepareInterbankResult{}, fmt.Errorf("bank.PreparePayment: %w", err)
 	}
 	return service.PrepareInterbankResult{
@@ -51,6 +56,9 @@ func (a *interbankPayerAdapter) CommitPayment(ctx context.Context, senderRouting
 		TransactionId:       txID,
 	})
 	if err != nil {
+		logger.From(ctx).ErrorContext(ctx, "interbank 2pc: bank.CommitPayment failed",
+			"err", err, "code", status.Code(err).String(),
+			"transaction_id", txID, "sender_routing", senderRouting)
 		return service.CommitInterbankResult{}, fmt.Errorf("bank.CommitPayment: %w", err)
 	}
 	return service.CommitInterbankResult{
@@ -68,6 +76,9 @@ func (a *interbankPayerAdapter) RollbackPayment(ctx context.Context, senderRouti
 		Reason:              reason,
 	})
 	if err != nil {
+		logger.From(ctx).ErrorContext(ctx, "interbank 2pc: bank.RollbackPayment failed",
+			"err", err, "code", status.Code(err).String(),
+			"transaction_id", txID, "sender_routing", senderRouting, "reason", reason)
 		return fmt.Errorf("bank.RollbackPayment: %w", err)
 	}
 	return nil

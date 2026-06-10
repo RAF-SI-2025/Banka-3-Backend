@@ -36,7 +36,7 @@ func (s *Server) CreateNotification(ctx context.Context, in *notifpb.CreateNotif
 	if err != nil {
 		return nil, err
 	}
-	s.Log.Info("in-app notification created",
+	s.Log.InfoContext(ctx, "in-app notification created",
 		"user_id", n.UserID, "kind", n.Kind)
 	return toProto(n), nil
 }

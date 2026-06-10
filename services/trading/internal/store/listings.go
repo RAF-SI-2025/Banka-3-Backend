@@ -6,6 +6,7 @@ import (
 	"time"
 
 	"github.com/RAF-SI-2025/Banka-3-Backend/pkg/apperr"
+	"github.com/RAF-SI-2025/Banka-3-Backend/pkg/logger"
 	"github.com/RAF-SI-2025/Banka-3-Backend/pkg/postgres"
 	"github.com/RAF-SI-2025/Banka-3-Backend/services/trading/internal/domain"
 	"github.com/jackc/pgx/v5"
@@ -47,6 +48,7 @@ func (s *Store) UpsertListing(ctx context.Context, l *domain.Listing) (*domain.L
 	)
 	out, err := scanListing(row)
 	if err != nil {
+		logger.From(ctx).ErrorContext(ctx, "upsert listing failed", "err", err)
 		return nil, apperr.Internal("upsert listing", err)
 	}
 	return out, nil
@@ -60,6 +62,7 @@ func (s *Store) GetListing(ctx context.Context, id string) (*domain.Listing, err
 		if noRows(err) {
 			return nil, apperr.NotFound("listing not found")
 		}
+		logger.From(ctx).ErrorContext(ctx, "get listing failed", "err", err, "id", id)
 		return nil, apperr.Internal("get listing", err)
 	}
 	return out, nil
@@ -74,6 +77,7 @@ func (s *Store) GetListingBySecurityID(ctx context.Context, securityID string) (
 		if noRows(err) {
 			return nil, apperr.NotFound("listing not found")
 		}
+		logger.From(ctx).ErrorContext(ctx, "get listing by security failed", "err", err, "security_id", securityID)
 		return nil, apperr.Internal("get listing by security", err)
 	}
 	return out, nil
@@ -139,6 +143,7 @@ func (s *Store) ListListings(ctx context.Context, f ListingFilter, page, pageSiz
 		`select count(*) from "trading".listings l join "trading".securities s on s.id = l.security_id`+where,
 		args...,
 	).Scan(&total); err != nil {
+		logger.From(ctx).ErrorContext(ctx, "count listings failed", "err", err)
 		return nil, 0, apperr.Internal("count listings", err)
 	}
 
@@ -167,6 +172,7 @@ func (s *Store) ListListings(ctx context.Context, f ListingFilter, page, pageSiz
 
 	rows, err := s.DB.Query(postgres.WithRead(ctx), q, args...)
 	if err != nil {
+		logger.From(ctx).ErrorContext(ctx, "list listings failed", "err", err)
 		return nil, 0, apperr.Internal("list listings", err)
 	}
 	defer rows.Close()
@@ -175,11 +181,16 @@ func (s *Store) ListListings(ctx context.Context, f ListingFilter, page, pageSiz
 	for rows.Next() {
 		sec, list, err := scanSecurityWithListing(rows)
 		if err != nil {
+			logger.From(ctx).ErrorContext(ctx, "scan listing row failed", "err", err)
 			return nil, 0, apperr.Internal("scan listing row", err)
 		}
 		out = append(out, &ListListingsRow{Security: sec, Listing: list})
 	}
-	return out, total, rows.Err()
+	if err := rows.Err(); err != nil {
+		logger.From(ctx).ErrorContext(ctx, "list listings rows failed", "err", err)
+		return out, total, err
+	}
+	return out, total, nil
 }
 
 // GetListingDailyHistory returns daily history rows in date asc order
@@ -200,6 +211,7 @@ func (s *Store) GetListingDailyHistory(ctx context.Context, listingID string, fr
 	q += " order by date asc"
 	rows, err := s.DB.Query(postgres.WithRead(ctx), q, args...)
 	if err != nil {
+		logger.From(ctx).ErrorContext(ctx, "listing daily failed", "err", err, "listing_id", listingID)
 		return nil, apperr.Internal("listing daily", err)
 	}
 	defer rows.Close()
@@ -207,12 +219,17 @@ func (s *Store) GetListingDailyHistory(ctx context.Context, listingID string, fr
 	for rows.Next() {
 		var r domain.ListingDailyPrice
 		if err := rows.Scan(&r.Date, &r.Price, &r.Ask, &r.Bid, &r.ChangeAmt, &r.Volume); err != nil {
+			logger.From(ctx).ErrorContext(ctx, "scan daily failed", "err", err, "listing_id", listingID)
 			return nil, apperr.Internal("scan daily", err)
 		}
 		r.ListingID = listingID
 		out = append(out, &r)
 	}
-	return out, rows.Err()
+	if err := rows.Err(); err != nil {
+		logger.From(ctx).ErrorContext(ctx, "get listing daily history rows failed", "err", err, "listing_id", listingID)
+		return out, err
+	}
+	return out, nil
 }
 
 // UpsertListingDaily writes one historical row per (listing, date).
@@ -225,6 +242,7 @@ func (s *Store) UpsertListingDaily(ctx context.Context, r *domain.ListingDailyPr
             price = excluded.price, ask = excluded.ask, bid = excluded.bid,
             change_amt = excluded.change_amt, volume = excluded.volume`
 	if _, err := s.DB.Exec(ctx, q, r.ListingID, r.Date, r.Price, r.Ask, r.Bid, r.ChangeAmt, r.Volume); err != nil {
+		logger.From(ctx).ErrorContext(ctx, "upsert listing daily failed", "err", err)
 		return apperr.Internal("upsert listing daily", err)
 	}
 	return nil

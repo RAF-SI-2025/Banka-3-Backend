@@ -19,6 +19,8 @@ import (
 	"strconv"
 	"strings"
 	"time"
+
+	"github.com/RAF-SI-2025/Banka-3-Backend/pkg/logger"
 )
 
 // ErrThrottled is returned when Alpha Vantage refuses with a quota note
@@ -117,6 +119,7 @@ func (c *Client) Quote(ctx context.Context, symbol string) (*StockQuote, error) 
 		GlobalQuote map[string]string `json:"Global Quote"`
 	}
 	if err := json.Unmarshal(body, &env); err != nil {
+		logger.From(ctx).ErrorContext(ctx, "alphavantage quote decode failed", "err", err, "symbol", symbol)
 		return nil, fmt.Errorf("alphavantage: decode quote: %w", err)
 	}
 	if len(env.GlobalQuote) == 0 {
@@ -134,12 +137,19 @@ func (c *Client) Quote(ctx context.Context, symbol string) (*StockQuote, error) 
 		ChangePercent: strings.TrimSpace(strings.TrimSuffix(q["10. change percent"], "%")),
 	}
 	if v := q["06. volume"]; v != "" {
-		n, _ := strconv.ParseInt(strings.TrimSpace(v), 10, 64)
+		n, perr := strconv.ParseInt(strings.TrimSpace(v), 10, 64)
+		if perr != nil {
+			logger.From(ctx).WarnContext(ctx, "alphavantage quote volume unparsable, defaulting to 0",
+				"err", perr, "symbol", symbol, "volume", v)
+		}
 		out.Volume = n
 	}
 	if v := q["07. latest trading day"]; v != "" {
-		if t, err := time.Parse("2006-01-02", v); err == nil {
+		if t, perr := time.Parse("2006-01-02", v); perr == nil {
 			out.LatestDay = t
+		} else {
+			logger.From(ctx).WarnContext(ctx, "alphavantage quote latest trading day unparsable, dropped",
+				"err", perr, "symbol", symbol, "latest_day", v)
 		}
 	}
 	if out.Price == "" {
@@ -167,6 +177,7 @@ func (c *Client) TimeSeriesDaily(ctx context.Context, symbol string) ([]DailyBar
 		Series map[string]map[string]string `json:"Time Series (Daily)"`
 	}
 	if err := json.Unmarshal(body, &env); err != nil {
+		logger.From(ctx).ErrorContext(ctx, "alphavantage daily series decode failed", "err", err, "symbol", symbol)
 		return nil, fmt.Errorf("alphavantage: decode daily series: %w", err)
 	}
 	if len(env.Series) == 0 {
@@ -176,6 +187,8 @@ func (c *Client) TimeSeriesDaily(ctx context.Context, symbol string) ([]DailyBar
 	for day, cols := range env.Series {
 		d, perr := time.Parse("2006-01-02", day)
 		if perr != nil {
+			logger.From(ctx).WarnContext(ctx, "alphavantage daily bar date unparsable, row skipped",
+				"err", perr, "symbol", symbol, "day", day)
 			continue
 		}
 		closePx := strings.TrimSpace(cols["4. close"])
@@ -184,7 +197,12 @@ func (c *Client) TimeSeriesDaily(ctx context.Context, symbol string) ([]DailyBar
 		}
 		var vol int64
 		if v := strings.TrimSpace(cols["5. volume"]); v != "" {
-			vol, _ = strconv.ParseInt(v, 10, 64)
+			var verr error
+			vol, verr = strconv.ParseInt(v, 10, 64)
+			if verr != nil {
+				logger.From(ctx).WarnContext(ctx, "alphavantage daily bar volume unparsable, defaulting to 0",
+					"err", verr, "symbol", symbol, "day", day, "volume", v)
+			}
 		}
 		out = append(out, DailyBar{Date: d, Close: closePx, Volume: vol})
 	}
@@ -207,6 +225,7 @@ func (c *Client) Overview(ctx context.Context, symbol string) (*CompanyOverview,
 	// OVERVIEW returns a flat object; an unknown symbol returns "{}".
 	var raw map[string]string
 	if err := json.Unmarshal(body, &raw); err != nil {
+		logger.From(ctx).ErrorContext(ctx, "alphavantage overview decode failed", "err", err, "symbol", symbol)
 		return nil, fmt.Errorf("alphavantage: decode overview: %w", err)
 	}
 	if len(raw) == 0 || raw["Symbol"] == "" {
@@ -220,7 +239,11 @@ func (c *Client) Overview(ctx context.Context, symbol string) (*CompanyOverview,
 		DividendYield: strings.TrimSpace(raw["DividendYield"]),
 	}
 	if v := raw["SharesOutstanding"]; v != "" {
-		n, _ := strconv.ParseInt(strings.TrimSpace(v), 10, 64)
+		n, perr := strconv.ParseInt(strings.TrimSpace(v), 10, 64)
+		if perr != nil {
+			logger.From(ctx).WarnContext(ctx, "alphavantage overview shares outstanding unparsable, defaulting to 0",
+				"err", perr, "symbol", symbol, "shares_outstanding", v)
+		}
 		out.OutstandingShares = n
 	}
 	// Alpha Vantage occasionally emits "None" or "-" for dividend yield;
@@ -245,6 +268,7 @@ func (c *Client) FXQuote(ctx context.Context, from, to string) (*FXQuote, error)
 		Realtime map[string]string `json:"Realtime Currency Exchange Rate"`
 	}
 	if err := json.Unmarshal(body, &env); err != nil {
+		logger.From(ctx).ErrorContext(ctx, "alphavantage fx decode failed", "err", err, "from", from, "to", to)
 		return nil, fmt.Errorf("alphavantage: decode fx: %w", err)
 	}
 	if len(env.Realtime) == 0 {
@@ -259,8 +283,11 @@ func (c *Client) FXQuote(ctx context.Context, from, to string) (*FXQuote, error)
 		Ask:          strings.TrimSpace(r["9. Ask Price"]),
 	}
 	if v := r["6. Last Refreshed"]; v != "" {
-		if t, err := time.Parse("2006-01-02 15:04:05", v); err == nil {
+		if t, perr := time.Parse("2006-01-02 15:04:05", v); perr == nil {
 			out.UpdatedAt = t
+		} else {
+			logger.From(ctx).WarnContext(ctx, "alphavantage fx last refreshed unparsable, dropped",
+				"err", perr, "from", from, "to", to, "last_refreshed", v)
 		}
 	}
 	if out.ExchangeRate == "" {
@@ -269,9 +296,23 @@ func (c *Client) FXQuote(ctx context.Context, from, to string) (*FXQuote, error)
 	return out, nil
 }
 
+// stripURLError unwraps a *url.Error to its transport cause. The
+// url.Error string embeds the full request URL — and with it the API
+// key in the query string — so it must never be logged or returned
+// upstream (callers log err.Error() too).
+func stripURLError(err error) error {
+	var uerr *url.Error
+	if errors.As(err, &uerr) {
+		return fmt.Errorf("alphavantage %s: %w", uerr.Op, uerr.Err)
+	}
+	return err
+}
+
 // do issues the GET, applies the API key, and rejects rate-limit and
-// error envelopes.
+// error envelopes. Log lines deliberately carry the request function +
+// symbol rather than the URL — the URL embeds the API key.
 func (c *Client) do(ctx context.Context, q url.Values) ([]byte, error) {
+	log := logger.From(ctx).With("function", q.Get("function"), "symbol", q.Get("symbol"))
 	q.Set("apikey", c.APIKey)
 	base := c.BaseURL
 	if base == "" {
@@ -279,6 +320,8 @@ func (c *Client) do(ctx context.Context, q url.Values) ([]byte, error) {
 	}
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, base+"?"+q.Encode(), nil)
 	if err != nil {
+		err = stripURLError(err)
+		log.ErrorContext(ctx, "alphavantage request build failed", "err", err)
 		return nil, err
 	}
 	httpc := c.HTTP
@@ -287,10 +330,13 @@ func (c *Client) do(ctx context.Context, q url.Values) ([]byte, error) {
 	}
 	resp, err := httpc.Do(req)
 	if err != nil {
+		err = stripURLError(err)
+		log.ErrorContext(ctx, "alphavantage request failed", "err", err)
 		return nil, err
 	}
 	defer resp.Body.Close()
 	if resp.StatusCode != http.StatusOK {
+		log.ErrorContext(ctx, "alphavantage request rejected", "status", resp.StatusCode)
 		return nil, fmt.Errorf("alphavantage: http %d", resp.StatusCode)
 	}
 	// Read first into a buffer so we can probe for the rate-limit
@@ -303,6 +349,7 @@ func (c *Client) do(ctx context.Context, q url.Values) ([]byte, error) {
 		if n > 0 {
 			buf = append(buf, tmp[:n]...)
 			if len(buf) > maxBody {
+				log.ErrorContext(ctx, "alphavantage response too large", "max_bytes", maxBody)
 				return nil, fmt.Errorf("alphavantage: response too large")
 			}
 		}
@@ -318,14 +365,19 @@ func (c *Client) do(ctx context.Context, q url.Values) ([]byte, error) {
 	var env map[string]json.RawMessage
 	if err := json.Unmarshal(buf, &env); err == nil {
 		if v, ok := env["Note"]; ok {
-			return nil, wrapEnvelope(ErrThrottled, v)
+			werr := wrapEnvelope(ErrThrottled, v)
+			log.WarnContext(ctx, "alphavantage rate-limited", "err", werr)
+			return nil, werr
 		}
 		if v, ok := env["Information"]; ok {
-			return nil, wrapEnvelope(ErrThrottled, v)
+			werr := wrapEnvelope(ErrThrottled, v)
+			log.WarnContext(ctx, "alphavantage rate-limited", "err", werr)
+			return nil, werr
 		}
 		if v, ok := env["Error Message"]; ok {
 			var msg string
 			_ = json.Unmarshal(v, &msg)
+			log.WarnContext(ctx, "alphavantage error envelope", "message", msg)
 			return nil, fmt.Errorf("alphavantage: %s", msg)
 		}
 	}

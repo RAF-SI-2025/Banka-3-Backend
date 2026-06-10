@@ -6,6 +6,7 @@ import (
 	"time"
 
 	"github.com/RAF-SI-2025/Banka-3-Backend/pkg/apperr"
+	"github.com/RAF-SI-2025/Banka-3-Backend/pkg/logger"
 	"github.com/RAF-SI-2025/Banka-3-Backend/pkg/postgres"
 	"github.com/RAF-SI-2025/Banka-3-Backend/services/trading/internal/domain"
 	"github.com/jackc/pgx/v5"
@@ -77,6 +78,7 @@ func (s *Store) InsertOTCOffer(ctx context.Context, tx pgx.Tx, o *domain.OTCOffe
 	)
 	out, err := scanOTCOffer(row)
 	if err != nil {
+		logger.From(ctx).ErrorContext(ctx, "insert otc offer failed", "err", err)
 		return nil, apperr.Internal("insert otc offer", err)
 	}
 	// First-iteration convention: thread_id == id when caller left it
@@ -86,6 +88,7 @@ func (s *Store) InsertOTCOffer(ctx context.Context, tx pgx.Tx, o *domain.OTCOffe
 		row := execer.QueryRow(ctx, u, out.ID)
 		out, err = scanOTCOffer(row)
 		if err != nil {
+			logger.From(ctx).ErrorContext(ctx, "update thread_id failed", "err", err)
 			return nil, apperr.Internal("update thread_id", err)
 		}
 	}
@@ -100,6 +103,7 @@ func (s *Store) GetOTCOffer(ctx context.Context, id string) (*domain.OTCOffer, e
 		if noRows(err) {
 			return nil, apperr.NotFound("ponuda ne postoji")
 		}
+		logger.From(ctx).ErrorContext(ctx, "get otc offer failed", "err", err, "id", id)
 		return nil, apperr.Internal("get otc offer", err)
 	}
 	return out, nil
@@ -128,6 +132,7 @@ func (s *Store) GetOpenOTCOfferByThread(ctx context.Context, tx pgx.Tx, threadID
 		if noRows(err) {
 			return nil, apperr.NotFound("nema aktivne iteracije")
 		}
+		logger.From(ctx).ErrorContext(ctx, "get open otc offer failed", "err", err, "thread_id", threadID)
 		return nil, apperr.Internal("get open otc offer", err)
 	}
 	return out, nil
@@ -139,6 +144,7 @@ func (s *Store) ListOTCThread(ctx context.Context, threadID string) ([]*domain.O
 	           where thread_id = $1 order by created_at`
 	rows, err := s.DB.Query(postgres.WithRead(ctx), q, threadID)
 	if err != nil {
+		logger.From(ctx).ErrorContext(ctx, "list otc thread failed", "err", err, "thread_id", threadID)
 		return nil, apperr.Internal("list otc thread", err)
 	}
 	defer rows.Close()
@@ -146,11 +152,16 @@ func (s *Store) ListOTCThread(ctx context.Context, threadID string) ([]*domain.O
 	for rows.Next() {
 		o, err := scanOTCOffer(rows)
 		if err != nil {
+			logger.From(ctx).ErrorContext(ctx, "scan otc offer failed", "err", err, "thread_id", threadID)
 			return nil, apperr.Internal("scan otc offer", err)
 		}
 		out = append(out, o)
 	}
-	return out, rows.Err()
+	if err := rows.Err(); err != nil {
+		logger.From(ctx).ErrorContext(ctx, "list otc thread rows failed", "err", err, "thread_id", threadID)
+		return out, err
+	}
+	return out, nil
 }
 
 // OTCThreadFilter narrows ListLatestOTCOffers — the "Aktivne ponude" view.
@@ -199,6 +210,7 @@ func (s *Store) ListLatestOTCOffers(ctx context.Context, f OTCThreadFilter) ([]*
         order by o.updated_at desc`
 	rows, err := s.DB.Query(postgres.WithRead(ctx), q, args...)
 	if err != nil {
+		logger.From(ctx).ErrorContext(ctx, "list otc threads failed", "err", err)
 		return nil, apperr.Internal("list otc threads", err)
 	}
 	defer rows.Close()
@@ -206,11 +218,16 @@ func (s *Store) ListLatestOTCOffers(ctx context.Context, f OTCThreadFilter) ([]*
 	for rows.Next() {
 		o, err := scanOTCOffer(rows)
 		if err != nil {
+			logger.From(ctx).ErrorContext(ctx, "scan otc offer failed", "err", err)
 			return nil, apperr.Internal("scan otc offer", err)
 		}
 		out = append(out, o)
 	}
-	return out, rows.Err()
+	if err := rows.Err(); err != nil {
+		logger.From(ctx).ErrorContext(ctx, "list latest otc offers rows failed", "err", err)
+		return out, err
+	}
+	return out, nil
 }
 
 // MarkOTCOfferStatus flips the status of a single iteration. Inside the
@@ -225,6 +242,7 @@ func (s *Store) MarkOTCOfferStatus(ctx context.Context, tx pgx.Tx, offerID strin
 		if noRows(err) {
 			return nil, apperr.NotFound("ponuda ne postoji")
 		}
+		logger.From(ctx).ErrorContext(ctx, "update otc offer status failed", "err", err, "offer_id", offerID)
 		return nil, apperr.Internal("update otc offer status", err)
 	}
 	return out, nil
@@ -240,6 +258,7 @@ func (s *Store) ListStaleOpenOTCOffers(ctx context.Context, cutoff time.Time) ([
 	           order by updated_at`
 	rows, err := s.DB.Query(ctx, q, cutoff)
 	if err != nil {
+		logger.From(ctx).ErrorContext(ctx, "list stale open otc offers failed", "err", err)
 		return nil, apperr.Internal("list stale open otc offers", err)
 	}
 	defer rows.Close()
@@ -247,11 +266,16 @@ func (s *Store) ListStaleOpenOTCOffers(ctx context.Context, cutoff time.Time) ([
 	for rows.Next() {
 		o, err := scanOTCOffer(rows)
 		if err != nil {
+			logger.From(ctx).ErrorContext(ctx, "scan otc offer failed", "err", err)
 			return nil, apperr.Internal("scan otc offer", err)
 		}
 		out = append(out, o)
 	}
-	return out, rows.Err()
+	if err := rows.Err(); err != nil {
+		logger.From(ctx).ErrorContext(ctx, "list stale open otc offers rows failed", "err", err)
+		return out, err
+	}
+	return out, nil
 }
 
 // ListOpenOTCOffersExpiringSoon returns open offer iterations whose last
@@ -268,6 +292,7 @@ func (s *Store) ListOpenOTCOffersExpiringSoon(ctx context.Context, warnFrom, war
 	           order by updated_at`
 	rows, err := s.DB.Query(ctx, q, warnFrom, warnTo)
 	if err != nil {
+		logger.From(ctx).ErrorContext(ctx, "list open otc offers expiring soon failed", "err", err)
 		return nil, apperr.Internal("list open otc offers expiring soon", err)
 	}
 	defer rows.Close()
@@ -275,11 +300,16 @@ func (s *Store) ListOpenOTCOffersExpiringSoon(ctx context.Context, warnFrom, war
 	for rows.Next() {
 		o, err := scanOTCOffer(rows)
 		if err != nil {
+			logger.From(ctx).ErrorContext(ctx, "scan otc offer failed", "err", err)
 			return nil, apperr.Internal("scan otc offer", err)
 		}
 		out = append(out, o)
 	}
-	return out, rows.Err()
+	if err := rows.Err(); err != nil {
+		logger.From(ctx).ErrorContext(ctx, "list open otc offers expiring soon rows failed", "err", err)
+		return out, err
+	}
+	return out, nil
 }
 
 // SupersedePriorOTCOffers flips every `open` iteration in a thread to
@@ -290,6 +320,7 @@ func (s *Store) SupersedePriorOTCOffers(ctx context.Context, tx pgx.Tx, threadID
 	           set status = 'superseded', updated_at = now()
 	           where thread_id = $1 and status = 'open'`
 	if _, err := tx.Exec(ctx, q, threadID); err != nil {
+		logger.From(ctx).ErrorContext(ctx, "supersede prior otc offers failed", "err", err, "thread_id", threadID)
 		return apperr.Internal("supersede prior otc offers", err)
 	}
 	return nil
@@ -304,12 +335,14 @@ func (s *Store) MarkAllOTCOffersAcceptedInThread(ctx context.Context, tx pgx.Tx,
 	            set status = 'accepted', updated_at = now()
 	            where id = $1`
 	if _, err := tx.Exec(ctx, q1, acceptedOfferID); err != nil {
+		logger.From(ctx).ErrorContext(ctx, "mark otc offer accepted failed", "err", err, "thread_id", threadID, "accepted_offer_id", acceptedOfferID)
 		return apperr.Internal("mark otc offer accepted", err)
 	}
 	const q2 = `update "trading".otc_offers
 	            set status = 'superseded', updated_at = now()
 	            where thread_id = $1 and id <> $2 and status = 'open'`
 	if _, err := tx.Exec(ctx, q2, threadID, acceptedOfferID); err != nil {
+		logger.From(ctx).ErrorContext(ctx, "mark prior accepted thread offers failed", "err", err, "thread_id", threadID, "accepted_offer_id", acceptedOfferID)
 		return apperr.Internal("mark prior accepted thread offers", err)
 	}
 	return nil
@@ -383,6 +416,7 @@ func (s *Store) InsertOTCContract(ctx context.Context, tx pgx.Tx, c *domain.OTCC
 	)
 	out, err := scanOTCContract(row)
 	if err != nil {
+		logger.From(ctx).ErrorContext(ctx, "insert otc contract failed", "err", err)
 		return nil, apperr.Internal("insert otc contract", err)
 	}
 	return out, nil
@@ -394,6 +428,7 @@ func (s *Store) InsertOTCContract(ctx context.Context, tx pgx.Tx, c *domain.OTCC
 func (s *Store) DeleteOTCContractByThread(ctx context.Context, tx pgx.Tx, threadID string) error {
 	const q = `delete from "trading".otc_contracts where thread_id = $1`
 	if _, err := tx.Exec(ctx, q, threadID); err != nil {
+		logger.From(ctx).ErrorContext(ctx, "delete otc contract by thread failed", "err", err, "thread_id", threadID)
 		return apperr.Internal("delete otc contract by thread", err)
 	}
 	return nil
@@ -407,6 +442,7 @@ func (s *Store) GetOTCContract(ctx context.Context, id string) (*domain.OTCContr
 		if noRows(err) {
 			return nil, apperr.NotFound("ugovor ne postoji")
 		}
+		logger.From(ctx).ErrorContext(ctx, "get otc contract failed", "err", err, "id", id)
 		return nil, apperr.Internal("get otc contract", err)
 	}
 	return out, nil
@@ -420,6 +456,7 @@ func (s *Store) GetOTCContractByThread(ctx context.Context, threadID string) (*d
 		if noRows(err) {
 			return nil, apperr.NotFound("ugovor ne postoji")
 		}
+		logger.From(ctx).ErrorContext(ctx, "get otc contract by thread failed", "err", err, "thread_id", threadID)
 		return nil, apperr.Internal("get otc contract by thread", err)
 	}
 	return out, nil
@@ -446,6 +483,7 @@ func (s *Store) MarkOTCContractStatus(
 		if noRows(err) {
 			return nil, apperr.NotFound("ugovor ne postoji")
 		}
+		logger.From(ctx).ErrorContext(ctx, "update otc contract status failed", "err", err, "exercised_op_id", exercisedOpID, "exercise_saga_id", exerciseSagaID)
 		return nil, apperr.Internal("update otc contract status", err)
 	}
 	return out, nil
@@ -481,6 +519,7 @@ func (s *Store) ListOTCContracts(ctx context.Context, f OTCContractFilter) ([]*d
 	q := `select ` + otcContractCols + ` from "trading".otc_contracts where ` + strings.Join(conds, " and ") + ` order by created_at desc`
 	rows, err := s.DB.Query(postgres.WithRead(ctx), q, args...)
 	if err != nil {
+		logger.From(ctx).ErrorContext(ctx, "list otc contracts failed", "err", err)
 		return nil, apperr.Internal("list otc contracts", err)
 	}
 	defer rows.Close()
@@ -488,11 +527,16 @@ func (s *Store) ListOTCContracts(ctx context.Context, f OTCContractFilter) ([]*d
 	for rows.Next() {
 		c, err := scanOTCContract(rows)
 		if err != nil {
+			logger.From(ctx).ErrorContext(ctx, "scan otc contract failed", "err", err)
 			return nil, apperr.Internal("scan otc contract", err)
 		}
 		out = append(out, c)
 	}
-	return out, rows.Err()
+	if err := rows.Err(); err != nil {
+		logger.From(ctx).ErrorContext(ctx, "list otc contracts rows failed", "err", err)
+		return out, err
+	}
+	return out, nil
 }
 
 // ListExpiredOTCContracts returns active contracts whose settlement_date
@@ -503,6 +547,7 @@ func (s *Store) ListExpiredOTCContracts(ctx context.Context, today time.Time) ([
 	           order by settlement_date`
 	rows, err := s.DB.Query(ctx, q, today)
 	if err != nil {
+		logger.From(ctx).ErrorContext(ctx, "list expired otc contracts failed", "err", err)
 		return nil, apperr.Internal("list expired otc contracts", err)
 	}
 	defer rows.Close()
@@ -510,11 +555,16 @@ func (s *Store) ListExpiredOTCContracts(ctx context.Context, today time.Time) ([
 	for rows.Next() {
 		c, err := scanOTCContract(rows)
 		if err != nil {
+			logger.From(ctx).ErrorContext(ctx, "scan otc contract failed", "err", err)
 			return nil, apperr.Internal("scan otc contract", err)
 		}
 		out = append(out, c)
 	}
-	return out, rows.Err()
+	if err := rows.Err(); err != nil {
+		logger.From(ctx).ErrorContext(ctx, "list expired otc contracts rows failed", "err", err)
+		return out, err
+	}
+	return out, nil
 }
 
 // ListOTCContractsExpiringSoon returns active contracts whose
@@ -536,6 +586,7 @@ func (s *Store) ListOTCContractsExpiringSoon(ctx context.Context, now time.Time,
 	           order by settlement_date`
 	rows, err := s.DB.Query(ctx, q, dayStart, dayEnd)
 	if err != nil {
+		logger.From(ctx).ErrorContext(ctx, "list otc contracts expiring soon failed", "err", err)
 		return nil, apperr.Internal("list otc contracts expiring soon", err)
 	}
 	defer rows.Close()
@@ -543,11 +594,16 @@ func (s *Store) ListOTCContractsExpiringSoon(ctx context.Context, now time.Time,
 	for rows.Next() {
 		c, err := scanOTCContract(rows)
 		if err != nil {
+			logger.From(ctx).ErrorContext(ctx, "scan otc contract expiring soon failed", "err", err)
 			return nil, apperr.Internal("scan otc contract expiring soon", err)
 		}
 		out = append(out, c)
 	}
-	return out, rows.Err()
+	if err := rows.Err(); err != nil {
+		logger.From(ctx).ErrorContext(ctx, "list otc contracts expiring soon rows failed", "err", err)
+		return out, err
+	}
+	return out, nil
 }
 
 // ListPublicHoldings returns holding rows with public_count > reserved_count
@@ -560,6 +616,7 @@ func (s *Store) ListPublicHoldings(ctx context.Context, excludeUserID string) ([
 	           order by updated_at desc`
 	rows, err := s.DB.Query(postgres.WithRead(ctx), q, excludeUserID)
 	if err != nil {
+		logger.From(ctx).ErrorContext(ctx, "list public holdings failed", "err", err, "exclude_user_id", excludeUserID)
 		return nil, apperr.Internal("list public holdings", err)
 	}
 	defer rows.Close()
@@ -567,9 +624,14 @@ func (s *Store) ListPublicHoldings(ctx context.Context, excludeUserID string) ([
 	for rows.Next() {
 		h, err := scanHolding(rows)
 		if err != nil {
+			logger.From(ctx).ErrorContext(ctx, "scan holding failed", "err", err, "exclude_user_id", excludeUserID)
 			return nil, apperr.Internal("scan holding", err)
 		}
 		out = append(out, h)
 	}
-	return out, rows.Err()
+	if err := rows.Err(); err != nil {
+		logger.From(ctx).ErrorContext(ctx, "list public holdings rows failed", "err", err, "exclude_user_id", excludeUserID)
+		return out, err
+	}
+	return out, nil
 }

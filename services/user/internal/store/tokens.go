@@ -5,6 +5,7 @@ import (
 	"time"
 
 	"github.com/RAF-SI-2025/Banka-3-Backend/pkg/apperr"
+	"github.com/RAF-SI-2025/Banka-3-Backend/pkg/logger"
 	"github.com/RAF-SI-2025/Banka-3-Backend/services/user/internal/domain"
 )
 
@@ -18,6 +19,7 @@ func (s *Store) CreateRefreshToken(ctx context.Context, kind domain.UserKind, us
         insert into "user".refresh_tokens (user_id, user_kind, token_hash, expires_at)
         values ($1, $2, $3, $4)`
 	if _, err := s.DB.Exec(ctx, q, userID, string(kind), hash, expiresAt); err != nil {
+		logger.From(ctx).ErrorContext(ctx, "create refresh token failed", "err", err, "user_id", userID, "kind", string(kind))
 		return apperr.Internal("create refresh token", err)
 	}
 	return nil
@@ -34,6 +36,7 @@ func (s *Store) LookupRefreshToken(ctx context.Context, hash string) (domain.Use
 		if noRows(err) {
 			return "", "", apperr.Unauthenticated("invalid or expired refresh token")
 		}
+		logger.From(ctx).ErrorContext(ctx, "lookup refresh token failed", "err", err)
 		return "", "", apperr.Internal("lookup refresh", err)
 	}
 	return domain.UserKind(kind), userID, nil
@@ -43,6 +46,7 @@ func (s *Store) LookupRefreshToken(ctx context.Context, hash string) (domain.Use
 func (s *Store) RevokeRefreshToken(ctx context.Context, hash string) error {
 	const q = `update "user".refresh_tokens set revoked_at = now() where token_hash = $1`
 	if _, err := s.DB.Exec(ctx, q, hash); err != nil {
+		logger.From(ctx).ErrorContext(ctx, "revoke refresh token failed", "err", err)
 		return apperr.Internal("revoke refresh", err)
 	}
 	return nil
@@ -55,6 +59,7 @@ func (s *Store) RevokeAllRefreshTokens(ctx context.Context, kind domain.UserKind
         update "user".refresh_tokens set revoked_at = now()
         where user_kind = $1 and user_id = $2 and revoked_at is null`
 	if _, err := s.DB.Exec(ctx, q, string(kind), userID); err != nil {
+		logger.From(ctx).ErrorContext(ctx, "revoke all refresh tokens failed", "err", err, "user_id", userID, "kind", string(kind))
 		return apperr.Internal("revoke all refresh", err)
 	}
 	return nil
@@ -69,6 +74,7 @@ func (s *Store) CreateActivationToken(ctx context.Context, employeeID, hash stri
         insert into "user".activation_tokens (employee_id, token_hash, expires_at)
         values ($1, $2, $3)`
 	if _, err := s.DB.Exec(ctx, q, employeeID, hash, expiresAt); err != nil {
+		logger.From(ctx).ErrorContext(ctx, "create activation token failed", "err", err, "employee_id", employeeID)
 		return apperr.Internal("create activation", err)
 	}
 	return nil
@@ -91,6 +97,7 @@ func (s *Store) LookupActivationToken(ctx context.Context, hash string) (string,
 		if noRows(err) {
 			return "", apperr.NotFound("activation token not found")
 		}
+		logger.From(ctx).ErrorContext(ctx, "lookup activation token failed", "err", err)
 		return "", apperr.Internal("lookup activation", err)
 	}
 	usedAtV = usedAt
@@ -98,9 +105,11 @@ func (s *Store) LookupActivationToken(ctx context.Context, hash string) (string,
 		expiresAtV = *expiresAt
 	}
 	if usedAtV != nil {
+		logger.From(ctx).WarnContext(ctx, "activation token already used", "employee_id", employeeID)
 		return "", apperr.FailedPrecondition("activation link already used")
 	}
 	if time.Now().After(expiresAtV) {
+		logger.From(ctx).WarnContext(ctx, "activation token expired", "employee_id", employeeID)
 		return "", apperr.FailedPrecondition("activation link has expired")
 	}
 	return employeeID, nil
@@ -110,6 +119,7 @@ func (s *Store) LookupActivationToken(ctx context.Context, hash string) (string,
 func (s *Store) MarkActivationTokenUsed(ctx context.Context, hash string) error {
 	const q = `update "user".activation_tokens set used_at = now() where token_hash = $1`
 	if _, err := s.DB.Exec(ctx, q, hash); err != nil {
+		logger.From(ctx).ErrorContext(ctx, "mark activation token used failed", "err", err)
 		return apperr.Internal("mark activation used", err)
 	}
 	return nil
@@ -122,6 +132,7 @@ func (s *Store) InvalidateActivationTokens(ctx context.Context, employeeID strin
         update "user".activation_tokens set used_at = now()
         where employee_id = $1 and used_at is null`
 	if _, err := s.DB.Exec(ctx, q, employeeID); err != nil {
+		logger.From(ctx).ErrorContext(ctx, "invalidate activation tokens failed", "err", err, "employee_id", employeeID)
 		return apperr.Internal("invalidate activation", err)
 	}
 	return nil
@@ -136,6 +147,7 @@ func (s *Store) CreatePasswordResetToken(ctx context.Context, kind domain.UserKi
         insert into "user".password_reset_tokens (user_id, user_kind, token_hash, expires_at)
         values ($1, $2, $3, $4)`
 	if _, err := s.DB.Exec(ctx, q, userID, string(kind), hash, expiresAt); err != nil {
+		logger.From(ctx).ErrorContext(ctx, "create reset token failed", "err", err, "user_id", userID, "kind", string(kind))
 		return apperr.Internal("create reset", err)
 	}
 	return nil
@@ -154,12 +166,15 @@ func (s *Store) LookupPasswordResetToken(ctx context.Context, hash string) (doma
 		if noRows(err) {
 			return "", "", apperr.NotFound("reset token not found")
 		}
+		logger.From(ctx).ErrorContext(ctx, "lookup reset token failed", "err", err)
 		return "", "", apperr.Internal("lookup reset", err)
 	}
 	if usedAt != nil {
+		logger.From(ctx).WarnContext(ctx, "reset token already used", "user_id", userID, "kind", kind)
 		return "", "", apperr.FailedPrecondition("reset link already used")
 	}
 	if time.Now().After(expiresAt) {
+		logger.From(ctx).WarnContext(ctx, "reset token expired", "user_id", userID, "kind", kind)
 		return "", "", apperr.FailedPrecondition("reset link has expired")
 	}
 	return domain.UserKind(kind), userID, nil
@@ -168,6 +183,7 @@ func (s *Store) LookupPasswordResetToken(ctx context.Context, hash string) (doma
 func (s *Store) MarkPasswordResetTokenUsed(ctx context.Context, hash string) error {
 	const q = `update "user".password_reset_tokens set used_at = now() where token_hash = $1`
 	if _, err := s.DB.Exec(ctx, q, hash); err != nil {
+		logger.From(ctx).ErrorContext(ctx, "mark reset token used failed", "err", err)
 		return apperr.Internal("mark reset used", err)
 	}
 	return nil

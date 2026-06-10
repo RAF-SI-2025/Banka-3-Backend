@@ -5,6 +5,7 @@ import (
 	"strings"
 
 	"github.com/RAF-SI-2025/Banka-3-Backend/pkg/apperr"
+	"github.com/RAF-SI-2025/Banka-3-Backend/pkg/logger"
 	"github.com/RAF-SI-2025/Banka-3-Backend/pkg/postgres"
 	"github.com/RAF-SI-2025/Banka-3-Backend/services/trading/internal/domain"
 	"github.com/jackc/pgx/v5"
@@ -25,6 +26,7 @@ func (s *Store) UpsertActuaryInfo(ctx context.Context, in *domain.ActuaryInfo) (
 	row := s.DB.QueryRow(ctx, q, in.EmployeeID, string(in.Type), in.DailyLimit, in.NeedApproval)
 	out, err := scanActuary(row)
 	if err != nil {
+		logger.From(ctx).ErrorContext(ctx, "upsert actuary failed", "err", err)
 		return nil, apperr.Internal("upsert actuary", err)
 	}
 	return out, nil
@@ -41,6 +43,7 @@ func (s *Store) GetActuaryInfo(ctx context.Context, employeeID string) (*domain.
 		if noRows(err) {
 			return nil, apperr.NotFound("actuary not found")
 		}
+		logger.From(ctx).ErrorContext(ctx, "get actuary failed", "err", err, "employee_id", employeeID)
 		return nil, apperr.Internal("get actuary", err)
 	}
 	return out, nil
@@ -58,6 +61,7 @@ func (s *Store) UpdateActuaryLimit(ctx context.Context, employeeID, dailyLimit s
 		if noRows(err) {
 			return nil, apperr.NotFound("actuary not found")
 		}
+		logger.From(ctx).ErrorContext(ctx, "update actuary limit failed", "err", err, "employee_id", employeeID)
 		return nil, apperr.Internal("update actuary limit", err)
 	}
 	return out, nil
@@ -75,6 +79,7 @@ func (s *Store) ResetActuaryUsedLimit(ctx context.Context, employeeID string) (*
 		if noRows(err) {
 			return nil, apperr.NotFound("actuary not found")
 		}
+		logger.From(ctx).ErrorContext(ctx, "reset used limit failed", "err", err, "employee_id", employeeID)
 		return nil, apperr.Internal("reset used limit", err)
 	}
 	return out, nil
@@ -86,6 +91,7 @@ func (s *Store) ResetAllUsedLimits(ctx context.Context) (int64, error) {
 	const q = `update "trading".actuary_info set used_limit = 0, updated_at = now() where used_limit <> 0`
 	tag, err := s.DB.Exec(ctx, q)
 	if err != nil {
+		logger.From(ctx).ErrorContext(ctx, "reset all used limits failed", "err", err)
 		return 0, apperr.Internal("reset all used limits", err)
 	}
 	return tag.RowsAffected(), nil
@@ -103,6 +109,7 @@ func (s *Store) SetActuaryNeedApproval(ctx context.Context, employeeID string, n
 		if noRows(err) {
 			return nil, apperr.NotFound("actuary not found")
 		}
+		logger.From(ctx).ErrorContext(ctx, "set need approval failed", "err", err, "employee_id", employeeID)
 		return nil, apperr.Internal("set need approval", err)
 	}
 	return out, nil
@@ -114,6 +121,7 @@ func (s *Store) AddUsedLimit(ctx context.Context, tx pgx.Tx, employeeID, deltaRS
 	const q = `update "trading".actuary_info set used_limit = used_limit + $2, updated_at = now() where employee_id = $1`
 	_, err := tx.Exec(ctx, q, employeeID, deltaRSD)
 	if err != nil {
+		logger.From(ctx).ErrorContext(ctx, "add used limit failed", "err", err, "employee_id", employeeID)
 		return apperr.Internal("add used limit", err)
 	}
 	return nil
@@ -131,6 +139,7 @@ func (s *Store) RefundUsedLimit(ctx context.Context, tx pgx.Tx, employeeID, delt
 	           where employee_id = $1`
 	_, err := tx.Exec(ctx, q, employeeID, deltaRSD)
 	if err != nil {
+		logger.From(ctx).ErrorContext(ctx, "refund used limit failed", "err", err, "employee_id", employeeID)
 		return apperr.Internal("refund used limit", err)
 	}
 	return nil
@@ -174,6 +183,7 @@ func (s *Store) ListActuaries(ctx context.Context, t domain.ActuaryType, page, p
 	countQ := "select count(*) from \"trading\".actuary_info" + where
 	var total int64
 	if err := s.DB.QueryRow(postgres.WithRead(ctx), countQ, args...).Scan(&total); err != nil {
+		logger.From(ctx).ErrorContext(ctx, "count actuaries failed", "err", err)
 		return nil, 0, apperr.Internal("count actuaries", err)
 	}
 
@@ -185,6 +195,7 @@ func (s *Store) ListActuaries(ctx context.Context, t domain.ActuaryType, page, p
 
 	rows, err := s.DB.Query(postgres.WithRead(ctx), q, args...)
 	if err != nil {
+		logger.From(ctx).ErrorContext(ctx, "list actuaries failed", "err", err)
 		return nil, 0, apperr.Internal("list actuaries", err)
 	}
 	defer rows.Close()
@@ -193,11 +204,16 @@ func (s *Store) ListActuaries(ctx context.Context, t domain.ActuaryType, page, p
 	for rows.Next() {
 		a, err := scanActuary(rows)
 		if err != nil {
+			logger.From(ctx).ErrorContext(ctx, "scan actuary failed", "err", err)
 			return nil, 0, apperr.Internal("scan actuary", err)
 		}
 		out = append(out, a)
 	}
-	return out, total, rows.Err()
+	if err := rows.Err(); err != nil {
+		logger.From(ctx).ErrorContext(ctx, "list actuaries rows failed", "err", err)
+		return out, total, err
+	}
+	return out, total, nil
 }
 
 // scanActuary reads one ActuaryInfo row.

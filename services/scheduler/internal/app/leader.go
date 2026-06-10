@@ -20,7 +20,7 @@ import (
 // every job loop returns and runJobs unblocks.
 func (a *App) runJobs(ctx context.Context) {
 	jobs := a.buildJobs()
-	a.log.Info("starting scheduled jobs", "count", len(jobs))
+	a.log.InfoContext(ctx, "starting scheduled jobs", "count", len(jobs))
 	var wg sync.WaitGroup
 	for _, j := range jobs {
 		wg.Add(1)
@@ -30,7 +30,7 @@ func (a *App) runJobs(ctx context.Context) {
 		}(j)
 	}
 	wg.Wait()
-	a.log.Info("all scheduled jobs stopped")
+	a.log.InfoContext(ctx, "all scheduled jobs stopped")
 }
 
 // runWithLeaderElection runs the jobs gated by a k8s Lease when
@@ -39,17 +39,19 @@ func (a *App) runJobs(ctx context.Context) {
 // the jobs directly as the sole leader.
 func (a *App) runWithLeaderElection(ctx context.Context) error {
 	if !config.Bool("LEADER_ELECTION", false) {
-		a.log.Info("leader election disabled; running as sole scheduler")
+		a.log.InfoContext(ctx, "leader election disabled; running as sole scheduler")
 		a.runJobs(ctx)
 		return nil
 	}
 
 	cfg, err := rest.InClusterConfig()
 	if err != nil {
+		a.log.ErrorContext(ctx, "in-cluster config failed", "err", err)
 		return fmt.Errorf("in-cluster config: %w", err)
 	}
 	client, err := kubernetes.NewForConfig(cfg)
 	if err != nil {
+		a.log.ErrorContext(ctx, "k8s client init failed", "err", err)
 		return fmt.Errorf("k8s client: %w", err)
 	}
 
@@ -66,7 +68,7 @@ func (a *App) runWithLeaderElection(ctx context.Context) error {
 		LockConfig: resourcelock.ResourceLockConfig{Identity: id},
 	}
 
-	a.log.Info("starting leader election", "lease", leaseName, "namespace", ns, "identity", id)
+	a.log.InfoContext(ctx, "starting leader election", "lease", leaseName, "namespace", ns, "identity", id)
 	leaderelection.RunOrDie(ctx, leaderelection.LeaderElectionConfig{
 		Lock:            lock,
 		ReleaseOnCancel: true,
@@ -75,7 +77,7 @@ func (a *App) runWithLeaderElection(ctx context.Context) error {
 		RetryPeriod:     2 * time.Second,
 		Callbacks: leaderelection.LeaderCallbacks{
 			OnStartedLeading: func(c context.Context) {
-				a.log.Info("acquired leadership; starting jobs", "identity", id)
+				a.log.InfoContext(c, "acquired leadership; starting jobs", "identity", id)
 				a.runJobs(c)
 			},
 			OnStoppedLeading: func() {

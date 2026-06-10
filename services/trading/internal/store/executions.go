@@ -5,6 +5,7 @@ import (
 	"time"
 
 	"github.com/RAF-SI-2025/Banka-3-Backend/pkg/apperr"
+	"github.com/RAF-SI-2025/Banka-3-Backend/pkg/logger"
 	"github.com/RAF-SI-2025/Banka-3-Backend/pkg/postgres"
 	"github.com/RAF-SI-2025/Banka-3-Backend/services/trading/internal/domain"
 	"github.com/jackc/pgx/v5"
@@ -32,6 +33,7 @@ func (s *Store) InsertPendingExecution(ctx context.Context, tx pgx.Tx, e *domain
 	)
 	out, err := scanExecution(row)
 	if err != nil {
+		logger.From(ctx).ErrorContext(ctx, "insert pending execution failed", "err", err)
 		return nil, apperr.Internal("insert pending execution", err)
 	}
 	return out, nil
@@ -47,6 +49,7 @@ func (s *Store) MarkExecutionSettled(ctx context.Context, tx pgx.Tx, execID, ban
             bank_op_id = nullif($2, '')::uuid
         where id = $1`
 	if _, err := tx.Exec(ctx, q, execID, bankOpID); err != nil {
+		logger.From(ctx).ErrorContext(ctx, "mark execution settled failed", "err", err, "exec_id", execID, "bank_op_id", bankOpID)
 		return apperr.Internal("mark execution settled", err)
 	}
 	return nil
@@ -66,6 +69,7 @@ func (s *Store) RecordResumeFailure(ctx context.Context, execID, errMsg string) 
         returning attempts`
 	var attempts int32
 	if err := s.DB.QueryRow(ctx, q, execID, errMsg).Scan(&attempts); err != nil {
+		logger.From(ctx).ErrorContext(ctx, "record resume failure failed", "err", err, "exec_id", execID)
 		return 0, apperr.Internal("record resume failure", err)
 	}
 	return attempts, nil
@@ -84,6 +88,7 @@ func (s *Store) MarkPendingAbandoned(ctx context.Context, tx pgx.Tx, execID, err
             last_error = $2
         where id = $1 and status = 'pending'`
 	if _, err := tx.Exec(ctx, q, execID, errMsg); err != nil {
+		logger.From(ctx).ErrorContext(ctx, "abandon pending execution failed", "err", err, "exec_id", execID)
 		return apperr.Internal("abandon pending execution", err)
 	}
 	return nil
@@ -104,6 +109,7 @@ func (s *Store) GetPendingExecutionForOrder(ctx context.Context, orderID string)
 		if noRows(err) {
 			return nil, nil
 		}
+		logger.From(ctx).ErrorContext(ctx, "get pending execution failed", "err", err, "order_id", orderID)
 		return nil, apperr.Internal("get pending execution", err)
 	}
 	return out, nil
@@ -128,6 +134,7 @@ func (s *Store) ListOrderIDsWithPendingExecutions(ctx context.Context, limit int
         limit $1`
 	rows, err := s.DB.Query(ctx, q, limit)
 	if err != nil {
+		logger.From(ctx).ErrorContext(ctx, "list pending exec orders failed", "err", err)
 		return nil, apperr.Internal("list pending exec orders", err)
 	}
 	defer rows.Close()
@@ -135,11 +142,16 @@ func (s *Store) ListOrderIDsWithPendingExecutions(ctx context.Context, limit int
 	for rows.Next() {
 		var id string
 		if err := rows.Scan(&id); err != nil {
+			logger.From(ctx).ErrorContext(ctx, "scan pending exec order id failed", "err", err)
 			return nil, apperr.Internal("scan pending exec order id", err)
 		}
 		out = append(out, id)
 	}
-	return out, rows.Err()
+	if err := rows.Err(); err != nil {
+		logger.From(ctx).ErrorContext(ctx, "list order i ds with pending executions rows failed", "err", err)
+		return out, err
+	}
+	return out, nil
 }
 
 // AdvanceOrderProgress decrements remaining_quantity by `delta` inside
@@ -172,6 +184,7 @@ func (s *Store) AdvanceOrderProgress(ctx context.Context, tx pgx.Tx, orderID str
 		if noRows(err) {
 			return 0, apperr.FailedPrecondition("nalog nije aktivan ili nedovoljno preostale količine")
 		}
+		logger.From(ctx).ErrorContext(ctx, "advance order failed", "err", err, "order_id", orderID)
 		return 0, apperr.Internal("advance order", err)
 	}
 	return remaining, nil
@@ -182,6 +195,7 @@ func (s *Store) AdvanceOrderProgress(ctx context.Context, tx pgx.Tx, orderID str
 func (s *Store) SetOrderTriggered(ctx context.Context, tx pgx.Tx, orderID string) error {
 	const q = `update "trading".orders set triggered = true, last_modification = now() where id = $1`
 	if _, err := tx.Exec(ctx, q, orderID); err != nil {
+		logger.From(ctx).ErrorContext(ctx, "set triggered failed", "err", err, "order_id", orderID)
 		return apperr.Internal("set triggered", err)
 	}
 	return nil
@@ -196,6 +210,7 @@ func (s *Store) ListExecutions(ctx context.Context, orderID string) ([]*domain.O
 	      order by executed_at`
 	rows, err := s.DB.Query(postgres.WithRead(ctx), q, orderID)
 	if err != nil {
+		logger.From(ctx).ErrorContext(ctx, "list executions failed", "err", err, "order_id", orderID)
 		return nil, apperr.Internal("list executions", err)
 	}
 	defer rows.Close()
@@ -203,11 +218,16 @@ func (s *Store) ListExecutions(ctx context.Context, orderID string) ([]*domain.O
 	for rows.Next() {
 		e, err := scanExecution(rows)
 		if err != nil {
+			logger.From(ctx).ErrorContext(ctx, "scan execution failed", "err", err, "order_id", orderID)
 			return nil, apperr.Internal("scan execution", err)
 		}
 		out = append(out, e)
 	}
-	return out, rows.Err()
+	if err := rows.Err(); err != nil {
+		logger.From(ctx).ErrorContext(ctx, "list executions rows failed", "err", err, "order_id", orderID)
+		return out, err
+	}
+	return out, nil
 }
 
 func scanExecution(row pgx.Row) (*domain.OrderExecution, error) {
@@ -233,6 +253,7 @@ func (s *Store) LatestExecutionAt(ctx context.Context, orderID string) (time.Tim
         where order_id = $1 and status = 'settled'`
 	var t *time.Time
 	if err := s.DB.QueryRow(ctx, q, orderID).Scan(&t); err != nil {
+		logger.From(ctx).ErrorContext(ctx, "latest execution failed", "err", err, "order_id", orderID)
 		return time.Time{}, false, apperr.Internal("latest execution", err)
 	}
 	if t == nil {

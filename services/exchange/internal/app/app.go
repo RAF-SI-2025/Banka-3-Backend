@@ -36,6 +36,7 @@ func Run() error {
 
 	prov, err := otelinit.Init(ctx, "exchange")
 	if err != nil {
+		log.ErrorContext(ctx, "otel init failed", "err", err)
 		return fmt.Errorf("otelinit: %w", err)
 	}
 	defer func() { _ = prov.Shutdown(context.Background()) }()
@@ -46,15 +47,17 @@ func Run() error {
 	// the standby; writes and transactions stay on the primary.
 	db, err := postgres.OpenPair(ctx, config.MustString("DATABASE_URL"), config.String("DATABASE_READ_URL", ""))
 	if err != nil {
+		log.ErrorContext(ctx, "postgres open failed", "err", err)
 		return fmt.Errorf("postgres: %w", err)
 	}
 	defer db.Close()
 	if db.RO != nil {
-		log.Info("read replica routing enabled")
+		log.InfoContext(ctx, "read replica routing enabled")
 	}
 
 	rdb, err := pkgredis.Open(ctx, config.MustString("REDIS_ADDR"), config.String("REDIS_PASSWORD", ""))
 	if err != nil {
+		log.ErrorContext(ctx, "redis open failed", "err", err)
 		return fmt.Errorf("redis: %w", err)
 	}
 	defer rdb.Close()
@@ -109,13 +112,14 @@ func Run() error {
 			return feeder.Run(gctx, feedInterval)
 		})
 	} else {
-		log.Info("fx feed loop disabled (JOBS_ENABLED=false or FX_FEED_INTERVAL=0); refresh available via RPC")
+		log.InfoContext(ctx, "fx feed loop disabled (JOBS_ENABLED=false or FX_FEED_INTERVAL=0); refresh available via RPC")
 	}
 
 	probeSrv.MarkReady()
-	log.Info("exchange service ready", "grpc", grpcAddr)
+	log.InfoContext(ctx, "exchange service ready", "grpc", grpcAddr)
 
 	if err := g.Wait(); err != nil && !errors.Is(err, context.Canceled) {
+		log.ErrorContext(ctx, "service terminated", "err", err)
 		return err
 	}
 	return nil

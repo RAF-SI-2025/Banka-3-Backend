@@ -5,7 +5,9 @@ import (
 	"fmt"
 
 	exchangepb "github.com/RAF-SI-2025/Banka-3-Backend/gen/proto/exchange/v1"
+	"github.com/RAF-SI-2025/Banka-3-Backend/pkg/logger"
 	"github.com/RAF-SI-2025/Banka-3-Backend/services/trading/internal/domain"
+	"google.golang.org/grpc/status"
 )
 
 // exchangeAdapter implements service.RateProvider by dialing the
@@ -21,6 +23,8 @@ func (a *exchangeAdapter) Quote(ctx context.Context, from, to domain.Currency) (
 		To:   currencyToExchangeProto(to),
 	})
 	if err != nil {
+		logger.From(ctx).WarnContext(ctx, "exchange adapter: Quote failed",
+			"err", err, "code", status.Code(err).String(), "from", string(from), "to", string(to))
 		return "", "", fmt.Errorf("exchange quote: %w", err)
 	}
 	return resp.GetBid(), resp.GetAsk(), nil

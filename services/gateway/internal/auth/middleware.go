@@ -23,6 +23,7 @@ import (
 
 	userpb "github.com/RAF-SI-2025/Banka-3-Backend/gen/proto/user/v1"
 	pkgauth "github.com/RAF-SI-2025/Banka-3-Backend/pkg/auth"
+	"github.com/RAF-SI-2025/Banka-3-Backend/pkg/logger"
 	"github.com/RAF-SI-2025/Banka-3-Backend/pkg/sessionversion"
 )
 
@@ -59,23 +60,39 @@ func Middleware(cfg Config) func(http.Handler) http.Handler {
 				return
 			}
 
+			ctx := r.Context()
+			log := logger.From(ctx)
+
 			tok := bearer(r)
 			if tok == "" {
+				log.WarnContext(ctx, "missing access token",
+					"method", r.Method, "path", r.URL.Path)
 				writeAuthError(w, http.StatusUnauthorized, "missing access token")
 				return
 			}
 			claims, err := pkgauth.Verify(tok, cfg.JWTKey)
 			if err != nil {
+				log.WarnContext(ctx, "jwt validation failed",
+					"err", err, "method", r.Method, "path", r.URL.Path)
 				writeAuthError(w, http.StatusUnauthorized, "invalid access token")
 				return
 			}
 
-			currentSV, err := currentSessionVersion(r.Context(), cfg, claims.UserKind, claims.UserID)
+			currentSV, err := currentSessionVersion(ctx, cfg, claims.UserKind, claims.UserID)
 			if err != nil {
+				// Redis miss + user-service lookup both failed — infra,
+				// not the client; maps to a 503.
+				log.ErrorContext(ctx, "session version lookup failed",
+					"err", err, "user_id", claims.UserID,
+					"method", r.Method, "path", r.URL.Path)
 				writeAuthError(w, http.StatusServiceUnavailable, "session check failed")
 				return
 			}
 			if claims.SessionVersion < currentSV {
+				log.WarnContext(ctx, "session revoked",
+					"user_id", claims.UserID,
+					"token_sv", claims.SessionVersion, "current_sv", currentSV,
+					"method", r.Method, "path", r.URL.Path)
 				writeAuthError(w, http.StatusUnauthorized, "session revoked")
 				return
 			}
@@ -86,7 +103,7 @@ func Middleware(cfg Config) func(http.Handler) http.Handler {
 				Permissions:    claims.Permissions,
 				SessionVersion: claims.SessionVersion,
 			}
-			ctx := pkgauth.WithPrincipal(r.Context(), p)
+			ctx = pkgauth.WithPrincipal(ctx, p)
 			ctx = pkgauth.AttachToOutgoing(ctx, p)
 			next.ServeHTTP(w, r.WithContext(ctx))
 		})
@@ -125,7 +142,12 @@ func currentSessionVersion(ctx context.Context, cfg Config, kind pkgauth.UserKin
 	if err != nil {
 		return 0, err
 	}
-	_ = cfg.SessionCache.Set(ctx, string(kind), userID, resp.GetSessionVersion())
+	if serr := cfg.SessionCache.Set(ctx, string(kind), userID, resp.GetSessionVersion()); serr != nil {
+		// Best-effort cache fill — the lookup already succeeded, so the
+		// request proceeds; the next request just re-hits the user service.
+		logger.From(ctx).WarnContext(ctx, "session version cache set failed",
+			"err", serr, "user_id", userID)
+	}
 	return resp.GetSessionVersion(), nil
 }
 

@@ -33,10 +33,11 @@ func (s *Service) RunSpentResetJob(ctx context.Context) (*SpentResetJobResult, e
 func (s *Service) RunSpentResetJobAuto(ctx context.Context) error {
 	res, err := s.runSpentResetJob(ctx)
 	if err != nil {
+		s.log().ErrorContext(ctx, "spent reset job failed", "err", err)
 		return err
 	}
 	if res.Daily > 0 || res.Monthly > 0 {
-		s.Log.Info("spent reset job ran", "daily", res.Daily, "monthly", res.Monthly)
+		s.log().InfoContext(ctx, "spent reset job ran", "daily", res.Daily, "monthly", res.Monthly)
 	}
 	return nil
 }

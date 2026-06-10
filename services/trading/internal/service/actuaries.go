@@ -54,12 +54,19 @@ func (s *Service) UpsertActuaryInfo(ctx context.Context, in UpsertActuaryInfoInp
 		}
 	}
 
-	return s.Store.UpsertActuaryInfo(ctx, &domain.ActuaryInfo{
+	out, err := s.Store.UpsertActuaryInfo(ctx, &domain.ActuaryInfo{
 		EmployeeID:   in.EmployeeID,
 		Type:         in.Type,
 		DailyLimit:   limit,
 		NeedApproval: need,
 	})
+	if err != nil {
+		return nil, err
+	}
+	s.log().InfoContext(ctx, "actuary info upserted",
+		"employee_id", in.EmployeeID, "type", string(in.Type),
+		"daily_limit", limit, "need_approval", need)
+	return out, nil
 }
 
 // GetActuaryInfo returns one actuary record. Visibility:
@@ -118,6 +125,8 @@ func (s *Service) UpdateActuaryLimit(ctx context.Context, employeeID, dailyLimit
 	newLimit, _ := money.Parse(dailyLimit)
 	usedLimit, err := money.Parse(cur.UsedLimit)
 	if err != nil {
+		s.log().ErrorContext(ctx, "actuary used_limit malformed",
+			"err", err, "employee_id", employeeID, "used_limit", cur.UsedLimit)
 		return nil, apperr.Validation("used_limit on actuary record is malformed")
 	}
 	if money.Cmp(newLimit, usedLimit) < 0 {
@@ -131,11 +140,17 @@ func (s *Service) UpdateActuaryLimit(ctx context.Context, employeeID, dailyLimit
 	// agent, with the old + new daily limit. Best-effort; never fails the op.
 	label := employeeID
 	if s.Users != nil {
-		if name, derr := s.Users.DisplayName(ctx, employeeID, domain.KindEmployee); derr == nil && name != "" {
+		name, derr := s.Users.DisplayName(ctx, employeeID, domain.KindEmployee)
+		if derr != nil {
+			s.log().WarnContext(ctx, "actuary display-name lookup failed",
+				"err", derr, "employee_id", employeeID)
+		} else if name != "" {
 			label = name
 		}
 	}
 	s.recordAudit(ctx, "limit.change", employeeID, label, cur.DailyLimit, dailyLimit, "")
+	s.log().InfoContext(ctx, "actuary limit updated",
+		"employee_id", employeeID, "old_limit", cur.DailyLimit, "new_limit", dailyLimit)
 	return out, nil
 }
 
@@ -144,7 +159,12 @@ func (s *Service) ResetActuaryUsedLimit(ctx context.Context, employeeID string) 
 	if _, err := s.requireSupervisor(ctx); err != nil {
 		return nil, err
 	}
-	return s.Store.ResetActuaryUsedLimit(ctx, employeeID)
+	out, err := s.Store.ResetActuaryUsedLimit(ctx, employeeID)
+	if err != nil {
+		return nil, err
+	}
+	s.log().InfoContext(ctx, "actuary used limit reset", "employee_id", employeeID)
+	return out, nil
 }
 
 // SetActuaryNeedApproval toggles the per-actuary approval requirement.
@@ -160,7 +180,13 @@ func (s *Service) SetActuaryNeedApproval(ctx context.Context, employeeID string,
 	if cur.Type == domain.ActuarySupervisor {
 		return nil, apperr.FailedPrecondition("supervizor uvek ima need_approval=false")
 	}
-	return s.Store.SetActuaryNeedApproval(ctx, employeeID, need)
+	out, err := s.Store.SetActuaryNeedApproval(ctx, employeeID, need)
+	if err != nil {
+		return nil, err
+	}
+	s.log().InfoContext(ctx, "actuary need-approval set",
+		"employee_id", employeeID, "need_approval", need)
+	return out, nil
 }
 
 // RunDailyResetActuaries zeroes used_limit across every actuary. The
@@ -178,7 +204,12 @@ func (s *Service) RunDailyResetActuaries(ctx context.Context) (int64, error) {
 			return 0, err
 		}
 	}
-	return s.Store.ResetAllUsedLimits(ctx)
+	n, err := s.Store.ResetAllUsedLimits(ctx)
+	if err != nil {
+		return 0, err
+	}
+	s.log().InfoContext(ctx, "daily actuary used-limit reset completed", "rows", n)
+	return n, nil
 }
 
 // validateNonNegativeAmount sanity-checks decimal-string amounts.

@@ -7,10 +7,12 @@ import (
 
 	bankpb "github.com/RAF-SI-2025/Banka-3-Backend/gen/proto/bank/v1"
 	"github.com/RAF-SI-2025/Banka-3-Backend/pkg/auth"
+	"github.com/RAF-SI-2025/Banka-3-Backend/pkg/logger"
 	"github.com/RAF-SI-2025/Banka-3-Backend/pkg/money"
 	"github.com/RAF-SI-2025/Banka-3-Backend/pkg/permissions"
 	"github.com/RAF-SI-2025/Banka-3-Backend/services/trading/internal/domain"
 	"github.com/RAF-SI-2025/Banka-3-Backend/services/trading/internal/service"
+	"google.golang.org/grpc/status"
 )
 
 // bankSettlerAdapter wraps the bank-service gRPC client and satisfies
@@ -81,6 +83,9 @@ func (a *bankSettlerAdapter) Settle(ctx context.Context, in service.SettleInput)
 		Purpose:   in.Purpose,
 	})
 	if err != nil {
+		logger.From(ctx).ErrorContext(ctx, "bank adapter: SettleTrade failed",
+			"err", err, "code", status.Code(err).String(),
+			"op_id", in.OpID, "account_id", in.AccountID, "direction", in.Direction)
 		return "", fmt.Errorf("bank.SettleTrade: %w", err)
 	}
 	return resp.GetOpId(), nil
@@ -100,6 +105,9 @@ func (a *bankSettlerAdapter) SettleForex(ctx context.Context, in service.SettleF
 		Purpose:       in.Purpose,
 	})
 	if err != nil {
+		logger.From(ctx).ErrorContext(ctx, "bank adapter: SettleForexFill failed",
+			"err", err, "code", status.Code(err).String(),
+			"op_id", in.OpID, "direction", in.Direction)
 		return "", fmt.Errorf("bank.SettleForexFill: %w", err)
 	}
 	return resp.GetOpId(), nil
@@ -127,6 +135,9 @@ func (a *bankSettlerAdapter) SettleTax(ctx context.Context, in service.TaxSettle
 		Purpose:   in.Purpose,
 	})
 	if err != nil {
+		logger.From(ctx).ErrorContext(ctx, "bank adapter: SettleCapitalGainsTax failed",
+			"err", err, "code", status.Code(err).String(),
+			"op_id", in.OpID, "account_id", in.AccountID)
 		return "", fmt.Errorf("bank.SettleCapitalGainsTax: %w", err)
 	}
 	return resp.GetOpId(), nil
@@ -155,6 +166,9 @@ func (a *bankSettlerAdapter) SettleDividend(ctx context.Context, in service.Divi
 		Purpose:   in.Purpose,
 	})
 	if err != nil {
+		logger.From(ctx).ErrorContext(ctx, "bank adapter: SettleDividend failed",
+			"err", err, "code", status.Code(err).String(),
+			"op_id", in.OpID, "account_id", in.AccountID)
 		return "", fmt.Errorf("bank.SettleDividend: %w", err)
 	}
 	return resp.GetOpId(), nil
@@ -176,6 +190,8 @@ func (a *bankSettlerAdapter) ListClientAccounts(ctx context.Context, ownerID str
 	}
 	resp, err := a.c.ListAccounts(ctx, req)
 	if err != nil {
+		logger.From(ctx).ErrorContext(ctx, "bank adapter: ListAccounts failed",
+			"err", err, "code", status.Code(err).String(), "owner_client_id", ownerID)
 		return nil, fmt.Errorf("bank.ListAccounts: %w", err)
 	}
 	out := make([]service.BankAccount, 0, len(resp.GetAccounts()))
@@ -196,6 +212,8 @@ func (a *bankSettlerAdapter) AccountAvailable(ctx context.Context, accountID str
 	ctx = withBankAdmin(ctx)
 	resp, err := a.c.GetAccount(ctx, &bankpb.GetAccountRequest{Id: accountID})
 	if err != nil {
+		logger.From(ctx).ErrorContext(ctx, "bank adapter: GetAccount (available) failed",
+			"err", err, "code", status.Code(err).String(), "account_id", accountID)
 		return "", "", fmt.Errorf("bank.GetAccount: %w", err)
 	}
 	return currencyFromBankProto(resp.GetCurrency()), resp.GetAvailableBalance(), nil
@@ -209,6 +227,8 @@ func (a *bankSettlerAdapter) AccountNumber(ctx context.Context, accountID string
 	ctx = withBankAdmin(ctx)
 	resp, err := a.c.GetAccount(ctx, &bankpb.GetAccountRequest{Id: accountID})
 	if err != nil {
+		logger.From(ctx).ErrorContext(ctx, "bank adapter: GetAccount (number) failed",
+			"err", err, "code", status.Code(err).String(), "account_id", accountID)
 		return "", fmt.Errorf("bank.GetAccount: %w", err)
 	}
 	return resp.GetNumber(), nil
@@ -226,6 +246,9 @@ func (a *bankSettlerAdapter) Reserve(ctx context.Context, in service.ReserveInpu
 		OpKind:    in.OpKind,
 	})
 	if err != nil {
+		logger.From(ctx).ErrorContext(ctx, "bank adapter: ReserveFunds failed",
+			"err", err, "code", status.Code(err).String(),
+			"op_id", in.OpID, "account_id", in.AccountID, "op_kind", in.OpKind)
 		return "", fmt.Errorf("bank.ReserveFunds: %w", err)
 	}
 	return resp.GetReservationId(), nil
@@ -238,6 +261,8 @@ func (a *bankSettlerAdapter) Release(ctx context.Context, opID string) (bool, er
 	ctx = withBankAdmin(ctx)
 	resp, err := a.c.ReleaseFunds(ctx, &bankpb.ReleaseFundsRequest{OpId: opID})
 	if err != nil {
+		logger.From(ctx).ErrorContext(ctx, "bank adapter: ReleaseFunds failed",
+			"err", err, "code", status.Code(err).String(), "op_id", opID)
 		return false, fmt.Errorf("bank.ReleaseFunds: %w", err)
 	}
 	return resp.GetReleased(), nil
@@ -255,6 +280,9 @@ func (a *bankSettlerAdapter) Commit(ctx context.Context, in service.CommitInput)
 		Purpose:       in.Purpose,
 	})
 	if err != nil {
+		logger.From(ctx).ErrorContext(ctx, "bank adapter: CommitReservedFunds failed",
+			"err", err, "code", status.Code(err).String(),
+			"op_id", in.OpID, "dest_account_id", in.DestAccountID)
 		return "", fmt.Errorf("bank.CommitReservedFunds: %w", err)
 	}
 	return resp.GetOpId(), nil
@@ -269,6 +297,8 @@ func (a *bankSettlerAdapter) CreateFundAccount(ctx context.Context, name string,
 		Currency: currencyToBankProto(currency),
 	})
 	if err != nil {
+		logger.From(ctx).ErrorContext(ctx, "bank adapter: CreateFundAccount failed",
+			"err", err, "code", status.Code(err).String(), "name", name, "currency", string(currency))
 		return "", fmt.Errorf("bank.CreateFundAccount: %w", err)
 	}
 	return resp.GetId(), nil
@@ -288,6 +318,9 @@ func (a *bankSettlerAdapter) Transfer(ctx context.Context, in service.TransferIn
 		Purpose:       in.Purpose,
 	})
 	if err != nil {
+		logger.From(ctx).ErrorContext(ctx, "bank adapter: TransferBetweenClients failed",
+			"err", err, "code", status.Code(err).String(),
+			"op_id", in.OpID, "from_account_id", in.FromAccountID, "to_account_id", in.ToAccountID)
 		return "", fmt.Errorf("bank.TransferBetweenClients: %w", err)
 	}
 	return resp.GetOpId(), nil
@@ -303,6 +336,8 @@ func (a *bankSettlerAdapter) ClientLargestActiveLoan(ctx context.Context, client
 		PageSize: 100,
 	})
 	if err != nil {
+		logger.From(ctx).ErrorContext(ctx, "bank adapter: ListLoans failed",
+			"err", err, "code", status.Code(err).String(), "client_id", clientID)
 		return "", "", fmt.Errorf("bank.ListLoans: %w", err)
 	}
 	var bestCur domain.Currency
@@ -315,6 +350,8 @@ func (a *bankSettlerAdapter) ClientLargestActiveLoan(ctx context.Context, client
 		}
 		r, err := money.Parse(amt)
 		if err != nil {
+			logger.From(ctx).WarnContext(ctx, "largest-loan scan: unparsable remaining_principal, skipping loan",
+				"err", err, "loan_id", l.GetId(), "client_id", clientID)
 			continue
 		}
 		if bestRat == nil || r.Cmp(bestRat) > 0 {

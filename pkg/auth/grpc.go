@@ -2,6 +2,7 @@ package auth
 
 import (
 	"context"
+	"log/slog"
 	"strconv"
 	"strings"
 
@@ -91,7 +92,11 @@ func MetadataInterceptor() grpc.UnaryServerInterceptor {
 		}
 		var sv int64
 		if raw := first(md, MDSessionVersion); raw != "" {
-			sv, _ = strconv.ParseInt(raw, 10, 64)
+			var perr error
+			sv, perr = strconv.ParseInt(raw, 10, 64)
+			if perr != nil {
+				slog.WarnContext(ctx, "malformed session-version metadata", "err", perr, "method", info.FullMethod, "user_id", userID)
+			}
 		}
 		p := Principal{
 			UserID:         userID,

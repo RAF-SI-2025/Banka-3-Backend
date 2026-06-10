@@ -249,8 +249,15 @@ func (s *Service) CreateOrder(ctx context.Context, in CreateOrderInput) (*Create
 	}
 	out, err := s.Store.CreateOrder(ctx, o)
 	if err != nil {
+		s.logOpErr(ctx, "order create failed", err,
+			"security_id", in.SecurityID, "direction", string(in.Direction),
+			"order_type", string(in.OrderType), "quantity", in.Quantity)
 		return nil, err
 	}
+	s.log().InfoContext(ctx, "order created",
+		"order_id", out.ID, "security_id", out.SecurityID, "ticker", sec.Ticker,
+		"direction", string(out.Direction), "order_type", string(out.OrderType),
+		"quantity", out.Quantity, "status", string(out.Status))
 	// Charge the agent's used_limit on auto-approved trades so the cap
 	// holds even when no supervisor approval was needed.
 	if status == domain.OrderStatusApproved && permissions.Has(p.Permissions, permissions.ActuaryAgent) {
@@ -363,8 +370,11 @@ func (s *Service) ApproveOrder(ctx context.Context, id string) (*domain.Order, e
 	}
 	out, err := s.Store.ApproveOrder(ctx, id, p.UserID)
 	if err != nil {
+		s.logOpErr(ctx, "order approve failed", err, "order_id", id)
 		return nil, err
 	}
+	s.log().InfoContext(ctx, "order approved",
+		"order_id", id, "approved_by", p.UserID)
 	// If the order belongs to an agent, charge the limit. We do this
 	// after the row-update so the audit stays clean even if the limit
 	// math fails — the supervisor can still see the order as approved.
@@ -390,8 +400,11 @@ func (s *Service) DeclineOrder(ctx context.Context, id, reason string) (*domain.
 	}
 	out, err := s.Store.DeclineOrder(ctx, id, p.UserID)
 	if err != nil {
+		s.logOpErr(ctx, "order decline failed", err, "order_id", id)
 		return nil, err
 	}
+	s.log().InfoContext(ctx, "order declined",
+		"order_id", id, "declined_by", p.UserID)
 	// S22: supervisor declined the order.
 	s.notifyOrderDeclined(ctx, out)
 	// S41 "odbijanje ordera": record the decline against the order id;
@@ -442,16 +455,21 @@ func (s *Service) CancelOrder(ctx context.Context, id string, partialQty int32) 
 	if fullCancel {
 		out, err = s.Store.CancelOrder(ctx, id)
 		if err != nil {
+			s.logOpErr(ctx, "order cancel failed", err, "order_id", id)
 			return nil, err
 		}
 		cancelledQty = cur.RemainingQuantity
 	} else {
 		out, err = s.Store.PartialCancelOrder(ctx, id, partialQty)
 		if err != nil {
+			s.logOpErr(ctx, "order partial cancel failed", err,
+				"order_id", id, "partial_qty", partialQty)
 			return nil, err
 		}
 		cancelledQty = partialQty
 	}
+	s.log().InfoContext(ctx, "order cancelled",
+		"order_id", id, "cancelled_qty", cancelledQty, "full_cancel", fullCancel)
 	if cur.Status == domain.OrderStatusApproved && cur.UserKind == domain.KindEmployee && cur.IsActuary {
 		s.maybeRefundAgentLimitQty(ctx, cur, cancelledQty)
 	}
@@ -692,10 +710,14 @@ func (s *Service) agentNeedsApproval(
 	}
 	limit, err := money.Parse(info.DailyLimit)
 	if err != nil {
+		s.log().ErrorContext(ctx, "agent daily_limit unparseable",
+			"err", err, "employee_id", employeeID, "daily_limit", info.DailyLimit)
 		return false, false, apperr.Internal("agent daily_limit unparseable", err)
 	}
 	used, err := money.Parse(info.UsedLimit)
 	if err != nil {
+		s.log().ErrorContext(ctx, "agent used_limit unparseable",
+			"err", err, "employee_id", employeeID, "used_limit", info.UsedLimit)
 		return false, false, apperr.Internal("agent used_limit unparseable", err)
 	}
 	// Spec p.38 reserves daily_limit=0 for supervisors (who have no cap).
@@ -1017,5 +1039,15 @@ func (s *Service) createFundActorOrder(ctx context.Context, in fundActorOrderInp
 		AfterHours:       afterHours,
 		ApprovedBy:       in.InitiatorUser,
 	}
-	return s.Store.CreateOrder(ctx, o)
+	out, err := s.Store.CreateOrder(ctx, o)
+	if err != nil {
+		s.logOpErr(ctx, "fund actor order create failed", err,
+			"fund_id", in.FundID, "security_id", in.SecurityID,
+			"direction", string(in.Direction), "quantity", in.Quantity)
+		return nil, err
+	}
+	s.log().InfoContext(ctx, "fund actor order created",
+		"order_id", out.ID, "fund_id", in.FundID, "ticker", sec.Ticker,
+		"direction", string(out.Direction), "quantity", out.Quantity)
+	return out, nil
 }

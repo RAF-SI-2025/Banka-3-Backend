@@ -6,6 +6,7 @@ import (
 	"time"
 
 	"github.com/RAF-SI-2025/Banka-3-Backend/pkg/apperr"
+	"github.com/RAF-SI-2025/Banka-3-Backend/pkg/logger"
 	"github.com/RAF-SI-2025/Banka-3-Backend/services/bank/internal/domain"
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgconn"
@@ -70,6 +71,7 @@ func (s *Store) InsertInterbankTx(ctx context.Context, tx pgx.Tx, t *domain.Inte
 		if IsUniqueViolation(err) {
 			return nil, apperr.Conflict("transaction already exists")
 		}
+		logger.From(ctx).ErrorContext(ctx, "insert interbank tx failed", "err", err, "sender_routing", t.SenderRoutingNumber, "tx_id", t.TransactionID)
 		return nil, apperr.Internal("insert interbank tx", err)
 	}
 	return out, nil
@@ -95,6 +97,7 @@ func (s *Store) GetInterbankTx(ctx context.Context, tx pgx.Tx, senderRouting int
 		if noRows(err) {
 			return nil, apperr.NotFound("interbank transaction not found")
 		}
+		logger.From(ctx).ErrorContext(ctx, "get interbank tx failed", "err", err, "sender_routing", senderRouting, "tx_id", txID)
 		return nil, apperr.Internal("get interbank tx", err)
 	}
 	return out, nil
@@ -117,6 +120,7 @@ func (s *Store) MarkInterbankTxStatus(ctx context.Context, tx pgx.Tx, senderRout
 		if noRows(err) {
 			return nil, apperr.NotFound("interbank transaction not found")
 		}
+		logger.From(ctx).ErrorContext(ctx, "mark interbank tx status failed", "err", err, "sender_routing", senderRouting, "tx_id", txID, "next_status", string(next))
 		return nil, apperr.Internal("mark interbank tx status", err)
 	}
 	return out, nil
@@ -164,6 +168,7 @@ func (s *Store) UpsertInterbankMessage(ctx context.Context, tx pgx.Tx, m *domain
 		m.TransactionID, m.ResponseStatus, m.ResponseBody,
 	)
 	if err != nil {
+		logger.From(ctx).ErrorContext(ctx, "upsert interbank message failed", "err", err, "sender_routing", m.SenderRoutingNumber, "idempotence_key", m.IdempotenceKey)
 		return apperr.Internal("upsert interbank message", err)
 	}
 	return nil
@@ -180,6 +185,7 @@ func (s *Store) GetInterbankMessage(ctx context.Context, senderRouting int, key 
 		if noRows(err) {
 			return nil, apperr.NotFound("interbank message not seen")
 		}
+		logger.From(ctx).ErrorContext(ctx, "get interbank message failed", "err", err, "sender_routing", senderRouting, "key", key)
 		return nil, apperr.Internal("get interbank message", err)
 	}
 	return out, nil
@@ -226,6 +232,7 @@ func (s *Store) ListInterbankTransactions(ctx context.Context, f InterbankTxFilt
 
 	var total int64
 	if err := s.DB.QueryRow(ctx, `select count(*) from "bank".interbank_protocol_transactions `+where, args...).Scan(&total); err != nil {
+		logger.From(ctx).ErrorContext(ctx, "count interbank transactions failed", "err", err)
 		return nil, 0, apperr.Internal("count interbank transactions", err)
 	}
 
@@ -235,6 +242,7 @@ func (s *Store) ListInterbankTransactions(ctx context.Context, f InterbankTxFilt
 		fmt.Sprintf(" order by created_at desc, transaction_id desc limit $%d offset $%d", len(args)-1, len(args))
 	rows, err := s.DB.Query(ctx, q, args...)
 	if err != nil {
+		logger.From(ctx).ErrorContext(ctx, "list interbank transactions failed", "err", err)
 		return nil, 0, apperr.Internal("list interbank transactions", err)
 	}
 	defer rows.Close()
@@ -242,11 +250,13 @@ func (s *Store) ListInterbankTransactions(ctx context.Context, f InterbankTxFilt
 	for rows.Next() {
 		t, serr := scanInterbankTx(rows)
 		if serr != nil {
+			logger.From(ctx).ErrorContext(ctx, "scan interbank transaction failed", "err", serr)
 			return nil, 0, apperr.Internal("scan interbank transaction", serr)
 		}
 		out = append(out, t)
 	}
 	if rows.Err() != nil {
+		logger.From(ctx).ErrorContext(ctx, "iterate interbank transactions failed", "err", rows.Err())
 		return nil, 0, apperr.Internal("iterate interbank transactions", rows.Err())
 	}
 	return out, total, nil
@@ -285,6 +295,7 @@ func (s *Store) ListInterbankMessages(ctx context.Context, f InterbankMsgFilter,
 
 	var total int64
 	if err := s.DB.QueryRow(ctx, `select count(*) from "bank".interbank_protocol_messages `+where, args...).Scan(&total); err != nil {
+		logger.From(ctx).ErrorContext(ctx, "count interbank messages failed", "err", err)
 		return nil, 0, apperr.Internal("count interbank messages", err)
 	}
 
@@ -294,6 +305,7 @@ func (s *Store) ListInterbankMessages(ctx context.Context, f InterbankMsgFilter,
 		fmt.Sprintf(" order by created_at desc, idempotence_key desc limit $%d offset $%d", len(args)-1, len(args))
 	rows, err := s.DB.Query(ctx, q, args...)
 	if err != nil {
+		logger.From(ctx).ErrorContext(ctx, "list interbank messages failed", "err", err)
 		return nil, 0, apperr.Internal("list interbank messages", err)
 	}
 	defer rows.Close()
@@ -301,11 +313,13 @@ func (s *Store) ListInterbankMessages(ctx context.Context, f InterbankMsgFilter,
 	for rows.Next() {
 		m, serr := scanInterbankMsg(rows)
 		if serr != nil {
+			logger.From(ctx).ErrorContext(ctx, "scan interbank message failed", "err", serr)
 			return nil, 0, apperr.Internal("scan interbank message", serr)
 		}
 		out = append(out, m)
 	}
 	if rows.Err() != nil {
+		logger.From(ctx).ErrorContext(ctx, "iterate interbank messages failed", "err", rows.Err())
 		return nil, 0, apperr.Internal("iterate interbank messages", rows.Err())
 	}
 	return out, total, nil
@@ -337,6 +351,7 @@ func (s *Store) IsBlacklisted(ctx context.Context, senderRouting int) (bool, err
 	    where sender_routing_number = $1 and active)`
 	var ok bool
 	if err := s.DB.QueryRow(ctx, q, senderRouting).Scan(&ok); err != nil {
+		logger.From(ctx).ErrorContext(ctx, "check interbank blacklist failed", "err", err, "sender_routing", senderRouting)
 		return false, apperr.Internal("check interbank blacklist", err)
 	}
 	return ok, nil
@@ -359,6 +374,7 @@ func (s *Store) BlockBank(ctx context.Context, senderRouting int, reason, blocke
 	    returning ` + interbankBlacklistCols
 	out, err := scanBlacklistEntry(s.DB.QueryRow(ctx, q, senderRouting, reason, blockedBy))
 	if err != nil {
+		logger.From(ctx).ErrorContext(ctx, "block bank failed", "err", err, "sender_routing", senderRouting)
 		return nil, apperr.Internal("block bank", err)
 	}
 	return out, nil
@@ -377,6 +393,7 @@ func (s *Store) UnblockBank(ctx context.Context, senderRouting int) (*domain.Int
 		if noRows(err) {
 			return nil, apperr.NotFound("no active blacklist entry for routing number")
 		}
+		logger.From(ctx).ErrorContext(ctx, "unblock bank failed", "err", err, "sender_routing", senderRouting)
 		return nil, apperr.Internal("unblock bank", err)
 	}
 	return out, nil
@@ -392,6 +409,7 @@ func (s *Store) ListBlacklist(ctx context.Context, activeOnly bool) ([]*domain.I
 	q += ` order by blocked_at desc`
 	rows, err := s.DB.Query(ctx, q)
 	if err != nil {
+		logger.From(ctx).ErrorContext(ctx, "list blacklist failed", "err", err)
 		return nil, apperr.Internal("list blacklist", err)
 	}
 	defer rows.Close()
@@ -399,11 +417,13 @@ func (s *Store) ListBlacklist(ctx context.Context, activeOnly bool) ([]*domain.I
 	for rows.Next() {
 		e, serr := scanBlacklistEntry(rows)
 		if serr != nil {
+			logger.From(ctx).ErrorContext(ctx, "scan blacklist entry failed", "err", serr)
 			return nil, apperr.Internal("scan blacklist entry", serr)
 		}
 		out = append(out, e)
 	}
 	if rows.Err() != nil {
+		logger.From(ctx).ErrorContext(ctx, "iterate blacklist failed", "err", rows.Err())
 		return nil, apperr.Internal("iterate blacklist", rows.Err())
 	}
 	return out, nil
@@ -423,6 +443,7 @@ func (s *Store) RecordPartnerFailure(ctx context.Context, senderRouting int) (in
 	    returning consecutive_failures`
 	var n int
 	if err := s.DB.QueryRow(ctx, q, senderRouting).Scan(&n); err != nil {
+		logger.From(ctx).ErrorContext(ctx, "record partner failure failed", "err", err, "sender_routing", senderRouting)
 		return 0, apperr.Internal("record partner failure", err)
 	}
 	return n, nil
@@ -437,6 +458,7 @@ func (s *Store) ResetPartnerFailures(ctx context.Context, senderRouting int) err
 	    set consecutive_failures = 0, updated_at = now()
 	    where sender_routing_number = $1 and consecutive_failures <> 0`
 	if _, err := s.DB.Exec(ctx, q, senderRouting); err != nil {
+		logger.From(ctx).ErrorContext(ctx, "reset partner failures failed", "err", err, "sender_routing", senderRouting)
 		return apperr.Internal("reset partner failures", err)
 	}
 	return nil

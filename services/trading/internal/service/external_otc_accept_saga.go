@@ -96,12 +96,20 @@ func (s *Service) acceptExternalOutgoing(ctx context.Context, thread *domain.Ext
 	// (modified_by_side = remote). Otherwise the buyer's accepting their
 	// own iteration.
 	if thread.ModifiedBySide != domain.ExternalOTCSideRemote {
+		s.log().WarnContext(ctx, "external otc accept rejected: not remote side's turn",
+			"thread_id", thread.ID, "remote_bank_code", thread.RemoteBankCode)
 		return nil, apperr.FailedPrecondition("druga strana je na potezu")
 	}
 	if thread.Status != domain.ExternalOTCThreadOpen {
+		s.log().WarnContext(ctx, "external otc accept rejected: thread not open",
+			"thread_id", thread.ID, "status", string(thread.Status),
+			"remote_bank_code", thread.RemoteBankCode)
 		return nil, apperr.FailedPrecondition("nit nije otvorena")
 	}
 	if thread.LocalRole != domain.ExternalOTCRoleBuyer {
+		s.log().WarnContext(ctx, "external otc accept rejected: local side is not buyer",
+			"thread_id", thread.ID, "local_role", string(thread.LocalRole),
+			"remote_bank_code", thread.RemoteBankCode)
 		return nil, apperr.FailedPrecondition("samo kupac može prihvatiti eksternu ponudu (za prodavca se koristi Receive*)")
 	}
 
@@ -142,23 +150,41 @@ func (s *Service) acceptExternalOutgoing(ctx context.Context, thread *domain.Ext
 		AttemptsMax:   8,
 	})
 	if err != nil {
+		s.log().ErrorContext(ctx, "external otc accept saga failed",
+			"err", err, "transaction_id", txID, "thread_id", thread.ID,
+			"remote_bank_code", thread.RemoteBankCode)
 		return nil, fmt.Errorf("external otc accept saga: %w", err)
 	}
 	if row.Status != saga.StatusCompleted {
 		if row.Status == saga.StatusRunning {
+			s.log().WarnContext(ctx, "external otc accept saga parked for retry",
+				"transaction_id", txID, "thread_id", thread.ID,
+				"remote_bank_code", thread.RemoteBankCode, "last_error", row.LastError)
 			return nil, status.Error(codes.Unavailable, "external otc accept saga parked for retry")
 		}
+		s.log().ErrorContext(ctx, "external otc accept saga did not complete",
+			"transaction_id", txID, "thread_id", thread.ID,
+			"remote_bank_code", thread.RemoteBankCode,
+			"saga_status", string(row.Status), "last_error", row.LastError)
 		return nil, apperr.Internal("external otc accept saga did not complete", nil)
 	}
 
 	tFresh, err := s.Store.GetExternalOTCThread(ctx, thread.ID)
 	if err != nil {
+		s.logOpErr(ctx, "external otc accept: thread refetch failed", err,
+			"thread_id", thread.ID, "transaction_id", txID)
 		return nil, err
 	}
 	contract, err := s.Store.GetExternalOTCContractByThread(ctx, thread.ID)
 	if err != nil {
+		s.logOpErr(ctx, "external otc accept: contract fetch after saga failed", err,
+			"thread_id", thread.ID, "transaction_id", txID)
 		return nil, err
 	}
+	s.log().InfoContext(ctx, "external otc accept saga completed; contract minted",
+		"transaction_id", txID, "thread_id", thread.ID, "contract_id", contract.ID,
+		"remote_bank_code", thread.RemoteBankCode, "ticker", thread.SecurityTicker,
+		"quantity", thread.Quantity)
 	return &AcceptExternalOTCOfferResult{Thread: tFresh, Contract: contract}, nil
 }
 
@@ -175,8 +201,13 @@ func registerExternalOTCAcceptSaga(reg *saga.Registry, svc *Service) {
 						// Partner (si-tx-proto/Banka-2) debits our buyer via an
 						// inbound NEW_TX during notify_partner_accept; nothing to
 						// prepare on our side.
+						sc.Log.DebugContext(ctx, "external otc accept: premium prepare skipped (partner coordinates)",
+							"thread_id", sc.State.ThreadID, "remote_bank_code", sc.State.RemoteBankCode)
 						return nil
 					}
+					sc.Log.DebugContext(ctx, "external otc accept: preparing premium leg",
+						"thread_id", sc.State.ThreadID, "remote_bank_code", sc.State.RemoteBankCode,
+						"premium", sc.State.Premium, "currency", sc.State.Currency)
 					_, err := svc.InterbankPayer.PreparePayment(ctx, PrepareInterbankInput{
 						SenderRoutingNumber: sc.State.SenderRoutingNumber,
 						TransactionID:       sc.TransactionID,
@@ -186,15 +217,28 @@ func registerExternalOTCAcceptSaga(reg *saga.Registry, svc *Service) {
 						Amount:              sc.State.Premium,
 						Purpose:             "OTC premija (eksterno) — nit " + sc.State.ThreadID,
 					})
+					if err != nil {
+						sc.Log.ErrorContext(ctx, "external otc accept: premium prepare failed",
+							"err", err, "thread_id", sc.State.ThreadID,
+							"remote_bank_code", sc.State.RemoteBankCode)
+					}
 					return err
 				},
 				Compensate: func(ctx context.Context, sc *saga.Context[externalOTCAcceptPayload]) error {
 					if sc.State.PartnerCoordinatesAccept {
 						return nil
 					}
-					return svc.InterbankPayer.RollbackPayment(ctx,
+					if err := svc.InterbankPayer.RollbackPayment(ctx,
 						sc.State.SenderRoutingNumber, sc.TransactionID,
-						"external otc accept compensation")
+						"external otc accept compensation"); err != nil {
+						sc.Log.ErrorContext(ctx, "external otc accept: premium rollback compensation failed",
+							"err", err, "thread_id", sc.State.ThreadID,
+							"remote_bank_code", sc.State.RemoteBankCode)
+						return err
+					}
+					sc.Log.InfoContext(ctx, "external otc accept: premium reservation rolled back",
+						"thread_id", sc.State.ThreadID, "remote_bank_code", sc.State.RemoteBankCode)
+					return nil
 				},
 			},
 			// 2. Tell the partner we're accepting. They mint a contract
@@ -205,9 +249,12 @@ func registerExternalOTCAcceptSaga(reg *saga.Registry, svc *Service) {
 				Forward: func(ctx context.Context, sc *saga.Context[externalOTCAcceptPayload]) error {
 					settle, perr := time.Parse("2006-01-02", sc.State.SettlementDate)
 					if perr != nil {
+						sc.Log.ErrorContext(ctx, "external otc accept: bad settlement_date in saga state",
+							"err", perr, "thread_id", sc.State.ThreadID,
+							"settlement_date", sc.State.SettlementDate)
 						return status.Error(codes.InvalidArgument, "bad settlement_date")
 					}
-					return svc.PartnerOTC.Accept(ctx, PartnerActionInput{
+					if err := svc.PartnerOTC.Accept(ctx, PartnerActionInput{
 						RemoteBankCode: sc.State.RemoteBankCode,
 						RemoteThreadID: sc.State.RemoteThreadID,
 						LocalThreadID:  sc.State.ThreadID,
@@ -215,7 +262,17 @@ func registerExternalOTCAcceptSaga(reg *saga.Registry, svc *Service) {
 						PricePerUnit:   sc.State.PricePerUnit,
 						Premium:        sc.State.Premium,
 						SettlementDate: settle,
-					})
+					}); err != nil {
+						sc.Log.ErrorContext(ctx, "external otc accept: partner accept notification failed",
+							"err", err, "thread_id", sc.State.ThreadID,
+							"remote_bank_code", sc.State.RemoteBankCode,
+							"remote_thread_id", sc.State.RemoteThreadID)
+						return err
+					}
+					sc.Log.InfoContext(ctx, "external otc accept: partner acked accept",
+						"thread_id", sc.State.ThreadID, "remote_bank_code", sc.State.RemoteBankCode,
+						"remote_thread_id", sc.State.RemoteThreadID)
+					return nil
 				},
 				// No partner-side compensation primitive — we'd have to
 				// re-counter with the prior terms or call Withdraw. For
@@ -236,7 +293,16 @@ func registerExternalOTCAcceptSaga(reg *saga.Registry, svc *Service) {
 					}
 					_, err := svc.InterbankPayer.CommitPayment(ctx,
 						sc.State.SenderRoutingNumber, sc.TransactionID)
-					return err
+					if err != nil {
+						sc.Log.ErrorContext(ctx, "external otc accept: premium commit failed",
+							"err", err, "thread_id", sc.State.ThreadID,
+							"remote_bank_code", sc.State.RemoteBankCode)
+						return err
+					}
+					sc.Log.InfoContext(ctx, "external otc accept: premium committed",
+						"thread_id", sc.State.ThreadID, "remote_bank_code", sc.State.RemoteBankCode,
+						"premium", sc.State.Premium, "currency", sc.State.Currency)
+					return nil
 				},
 				// Commit's already moved money; rollback isn't safe.
 				// Compensation here would need a refund-in-the-opposite-
@@ -249,9 +315,12 @@ func registerExternalOTCAcceptSaga(reg *saga.Registry, svc *Service) {
 				Forward: func(ctx context.Context, sc *saga.Context[externalOTCAcceptPayload]) error {
 					settle, perr := time.Parse("2006-01-02", sc.State.SettlementDate)
 					if perr != nil {
+						sc.Log.ErrorContext(ctx, "external otc accept: bad settlement_date in saga state",
+							"err", perr, "thread_id", sc.State.ThreadID,
+							"settlement_date", sc.State.SettlementDate)
 						return status.Error(codes.InvalidArgument, "bad settlement_date")
 					}
-					return svc.Store.ExecuteAtomic(ctx, func(tx pgx.Tx) error {
+					err := svc.Store.ExecuteAtomic(ctx, func(tx pgx.Tx) error {
 						_, ierr := svc.Store.InsertExternalOTCContract(ctx, tx, &domain.ExternalOTCContract{
 							ThreadID:           sc.State.ThreadID,
 							Direction:          domain.ExternalOTCOutgoing,
@@ -284,6 +353,16 @@ func registerExternalOTCAcceptSaga(reg *saga.Registry, svc *Service) {
 							domain.ExternalOTCThreadAccepted)
 						return err
 					})
+					if err != nil {
+						sc.Log.ErrorContext(ctx, "external otc accept: local contract create failed",
+							"err", err, "thread_id", sc.State.ThreadID,
+							"remote_bank_code", sc.State.RemoteBankCode)
+						return err
+					}
+					sc.Log.InfoContext(ctx, "external otc accept: local contract created, thread accepted",
+						"thread_id", sc.State.ThreadID, "remote_bank_code", sc.State.RemoteBankCode,
+						"ticker", sc.State.SecurityTicker, "quantity", sc.State.Quantity)
+					return nil
 				},
 				// Compensation: delete the contract; flip the thread back
 				// to open. The bank-side legs are already committed; not

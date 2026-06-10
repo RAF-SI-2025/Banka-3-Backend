@@ -82,6 +82,7 @@ func (s *Service) RunInterbankRetryTick(ctx context.Context) (int, error) {
 	now := s.now()
 	entries, err := s.Store.ListDueInterbankRetries(ctx, now)
 	if err != nil {
+		s.log().ErrorContext(ctx, "interbank retry: due-entry scan failed", "err", err)
 		return 0, err
 	}
 	settled := 0
@@ -206,7 +207,14 @@ func (s *Service) releaseLocalReservation(ctx context.Context, txID string) {
 		return
 	}
 	row, err := s.SagaStore.Get(ctx, txID)
-	if err != nil || row == nil {
+	if err != nil {
+		s.log().WarnContext(ctx, "interbank retry: saga load for rollback failed",
+			"err", err, "transaction_id", txID)
+		return
+	}
+	if row == nil {
+		s.log().WarnContext(ctx, "interbank retry: saga not found for rollback",
+			"transaction_id", txID)
 		return
 	}
 	var payload crossBankPaymentPayload

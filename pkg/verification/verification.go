@@ -30,6 +30,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"log/slog"
 	"math/big"
 	"strconv"
 	"time"
@@ -204,8 +205,12 @@ func (c *Cache) Issue(ctx context.Context, userID string, kind ActionKind) (stri
 	// issuance — the web verification flow doesn't depend on it, and
 	// ListPending prunes stale members lazily anyway.
 	idx := userKey(userID)
-	_ = c.R.ZAdd(ctx, idx, redis.Z{Score: float64(expiresAt.Unix()), Member: id}).Err()
-	_ = c.R.Expire(ctx, idx, CodeTTL).Err()
+	if err := c.R.ZAdd(ctx, idx, redis.Z{Score: float64(expiresAt.Unix()), Member: id}).Err(); err != nil {
+		slog.WarnContext(ctx, "verification pending-index add failed", "err", err, "id", id, "user_id", userID)
+	}
+	if err := c.R.Expire(ctx, idx, CodeTTL).Err(); err != nil {
+		slog.WarnContext(ctx, "verification pending-index expire failed", "err", err, "user_id", userID)
+	}
 	return id, code, expiresAt, nil
 }
 
@@ -216,7 +221,9 @@ func (c *Cache) ListPending(ctx context.Context, userID string) ([]Pending, erro
 	idx := userKey(userID)
 	now := time.Now().Unix()
 	// Drop index members whose expiry score is in the past.
-	_ = c.R.ZRemRangeByScore(ctx, idx, "0", strconv.FormatInt(now-1, 10)).Err()
+	if err := c.R.ZRemRangeByScore(ctx, idx, "0", strconv.FormatInt(now-1, 10)).Err(); err != nil {
+		slog.WarnContext(ctx, "verification pending-index prune failed", "err", err, "user_id", userID)
+	}
 
 	zs, err := c.R.ZRangeByScoreWithScores(ctx, idx, &redis.ZRangeBy{
 		Min: strconv.FormatInt(now, 10),
@@ -235,14 +242,17 @@ func (c *Cache) ListPending(ctx context.Context, userID string) ([]Pending, erro
 		raw, gerr := c.R.Get(ctx, key(id)).Bytes()
 		if errors.Is(gerr, redis.Nil) {
 			// Consumed or expired between the index write and now.
-			_ = c.R.ZRem(ctx, idx, id).Err()
+			if rerr := c.R.ZRem(ctx, idx, id).Err(); rerr != nil {
+				slog.WarnContext(ctx, "verification stale index member remove failed", "err", rerr, "id", id, "user_id", userID)
+			}
 			continue
 		}
 		if gerr != nil {
 			return nil, gerr
 		}
 		var rec record
-		if json.Unmarshal(raw, &rec) != nil {
+		if uerr := json.Unmarshal(raw, &rec); uerr != nil {
+			slog.WarnContext(ctx, "verification record corrupt, skipping", "err", uerr, "id", id, "user_id", userID)
 			continue
 		}
 		out = append(out, Pending{
@@ -278,12 +288,16 @@ func (c *Cache) Consume(ctx context.Context, id, code string, expectedKind Actio
 	}
 	if rec.Code == code {
 		// One-shot: a successful consume retires the record.
-		_ = c.R.Del(ctx, key(id)).Err()
+		if derr := c.R.Del(ctx, key(id)).Err(); derr != nil {
+			slog.WarnContext(ctx, "verification consumed record delete failed", "err", derr, "id", id)
+		}
 		return nil
 	}
 	rec.Attempts++
 	if rec.Attempts >= MaxAttempts {
-		_ = c.R.Del(ctx, key(id)).Err()
+		if derr := c.R.Del(ctx, key(id)).Err(); derr != nil {
+			slog.WarnContext(ctx, "verification exhausted record delete failed", "err", derr, "id", id)
+		}
 		return ErrTooMany
 	}
 	// Persist incremented attempts under the remaining TTL — the spec's
@@ -291,6 +305,9 @@ func (c *Cache) Consume(ctx context.Context, id, code string, expectedKind Actio
 	// expiry per attempt.
 	ttl, terr := c.R.TTL(ctx, key(id)).Result()
 	if terr != nil || ttl <= 0 {
+		if terr != nil {
+			slog.WarnContext(ctx, "verification ttl lookup failed, using full ttl", "err", terr, "id", id)
+		}
 		ttl = CodeTTL
 	}
 	updated, err := json.Marshal(rec)
@@ -331,6 +348,9 @@ func (c *Cache) Approve(ctx context.Context, userID, id string) error {
 	rec.Approved = true
 	ttl, terr := c.R.TTL(ctx, key(id)).Result()
 	if terr != nil || ttl <= 0 {
+		if terr != nil {
+			slog.WarnContext(ctx, "verification ttl lookup failed, using full ttl", "err", terr, "id", id)
+		}
 		ttl = CodeTTL
 	}
 	updated, err := json.Marshal(rec)
@@ -368,7 +388,9 @@ func (c *Cache) ConsumeApproved(ctx context.Context, userID, id string, expected
 		return ErrNotApproved
 	}
 	// One-shot: a successful quick-approve consume retires the record.
-	_ = c.R.Del(ctx, key(id)).Err()
+	if derr := c.R.Del(ctx, key(id)).Err(); derr != nil {
+		slog.WarnContext(ctx, "verification approved record delete failed", "err", derr, "id", id, "user_id", userID)
+	}
 	return nil
 }
 

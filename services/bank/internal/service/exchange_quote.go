@@ -94,9 +94,13 @@ func (s *Service) commissionRateFor(p auth.Principal) *big.Rat {
 // principal.
 func (s *Service) commissionRate() *big.Rat {
 	if s.Cfg.FXCommission != "" {
-		if r, err := money.Parse(s.Cfg.FXCommission); err == nil {
+		r, err := money.Parse(s.Cfg.FXCommission)
+		if err == nil {
 			return r
 		}
+		// Misconfigured FX_COMMISSION silently falling back to the
+		// default would be invisible otherwise.
+		s.log().Warn("fx commission config unparseable, using default", "err", err, "fx_commission", s.Cfg.FXCommission)
 	}
 	return money.MustParse("0.005")
 }
@@ -112,16 +116,19 @@ func (s *Service) commissionRate() *big.Rat {
 // RSD → Y at ASK_Y (primer 2). The BID column is unused by this path.
 func (s *Service) rateAndConvert(ctx context.Context, from, to domain.Currency, amt *big.Rat) (composite, toAmount *big.Rat, err error) {
 	if s.Rates == nil {
+		s.log().ErrorContext(ctx, "exchange rate provider not configured", "from_currency", from, "to_currency", to)
 		return nil, nil, apperr.Internal("exchange rate provider not configured", nil)
 	}
 	switch {
 	case from == domain.CurrencyRSD:
 		_, ask, err := s.Rates.Quote(ctx, to, domain.CurrencyRSD)
 		if err != nil {
+			s.log().ErrorContext(ctx, "exchange rate quote failed", "err", err, "currency", to)
 			return nil, nil, err
 		}
 		askR, perr := money.Parse(ask)
 		if perr != nil {
+			s.log().ErrorContext(ctx, "parse exchange rate failed", "err", perr, "currency", to, "rate", ask)
 			return nil, nil, apperr.Internal("parse rate", perr)
 		}
 		conv, derr := money.Div(amt, askR)
@@ -136,10 +143,12 @@ func (s *Service) rateAndConvert(ctx context.Context, from, to domain.Currency, 
 	case to == domain.CurrencyRSD:
 		_, ask, err := s.Rates.Quote(ctx, from, domain.CurrencyRSD)
 		if err != nil {
+			s.log().ErrorContext(ctx, "exchange rate quote failed", "err", err, "currency", from)
 			return nil, nil, err
 		}
 		askR, perr := money.Parse(ask)
 		if perr != nil {
+			s.log().ErrorContext(ctx, "parse exchange rate failed", "err", perr, "currency", from, "rate", ask)
 			return nil, nil, apperr.Internal("parse rate", perr)
 		}
 		conv := money.Mul(amt, askR)
@@ -147,18 +156,22 @@ func (s *Service) rateAndConvert(ctx context.Context, from, to domain.Currency, 
 	default:
 		_, askFrom, err := s.Rates.Quote(ctx, from, domain.CurrencyRSD)
 		if err != nil {
+			s.log().ErrorContext(ctx, "exchange rate quote failed", "err", err, "currency", from)
 			return nil, nil, err
 		}
 		_, askTo, err := s.Rates.Quote(ctx, to, domain.CurrencyRSD)
 		if err != nil {
+			s.log().ErrorContext(ctx, "exchange rate quote failed", "err", err, "currency", to)
 			return nil, nil, err
 		}
 		askFromR, perr := money.Parse(askFrom)
 		if perr != nil {
+			s.log().ErrorContext(ctx, "parse exchange rate failed", "err", perr, "currency", from, "rate", askFrom)
 			return nil, nil, apperr.Internal("parse from rate", perr)
 		}
 		askToR, perr := money.Parse(askTo)
 		if perr != nil {
+			s.log().ErrorContext(ctx, "parse exchange rate failed", "err", perr, "currency", to, "rate", askTo)
 			return nil, nil, apperr.Internal("parse to rate", perr)
 		}
 		rsdAmt := money.Mul(amt, askFromR)

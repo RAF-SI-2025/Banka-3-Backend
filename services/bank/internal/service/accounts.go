@@ -39,11 +39,15 @@ func (s *Service) CreateAccount(ctx context.Context, in CreateAccountInput) (*do
 		return nil, err
 	}
 	if err := s.validateCreateAccount(in); err != nil {
+		s.log().WarnContext(ctx, "create account validation failed",
+			"err", err, "owner_client_id", in.OwnerClientID, "kind", in.Kind, "currency", in.Currency)
 		return nil, err
 	}
 
 	number, err := account.Generate(s.Cfg.BankCode, s.Cfg.Branch, kindAndSubtypeToAccountType(in.Kind, in.Subtype))
 	if err != nil {
+		s.log().ErrorContext(ctx, "create account: generate account number failed",
+			"err", err, "owner_client_id", in.OwnerClientID, "kind", in.Kind)
 		return nil, apperr.Internal("generate account number", err)
 	}
 
@@ -77,8 +81,13 @@ func (s *Service) CreateAccount(ctx context.Context, in CreateAccountInput) (*do
 	}
 	created, err := s.Store.CreateAccount(ctx, a)
 	if err != nil {
+		s.log().ErrorContext(ctx, "create account failed",
+			"err", err, "owner_client_id", in.OwnerClientID, "kind", in.Kind, "currency", in.Currency, "number", number)
 		return nil, err
 	}
+	s.log().InfoContext(ctx, "account created",
+		"account_id", created.ID, "number", created.Number, "owner_client_id", created.OwnerClientID,
+		"kind", created.Kind, "currency", created.Currency)
 
 	// Account-opened email (spec E2E "Sistem kreira račun i klijent
 	// dobija email obaveštenje"). Best-effort: failures must not roll
@@ -96,6 +105,8 @@ func (s *Service) CreateAccount(ctx context.Context, in CreateAccountInput) (*do
 			Name:      defaultCompanionCardName(in.Kind),
 			CardLimit: created.DailyLimit,
 		}); err != nil {
+			s.log().ErrorContext(ctx, "create account: companion card create failed",
+				"err", err, "account_id", created.ID, "number", created.Number)
 			return nil, err
 		}
 	}
@@ -177,6 +188,7 @@ func (s *Service) GetAccount(ctx context.Context, id string) (*domain.Account, e
 		return nil, err
 	}
 	if !canSeeAccount(p, a) {
+		s.log().WarnContext(ctx, "get account denied", "account_id", id, "user_id", p.UserID)
 		return nil, apperr.PermissionDenied("nedovoljne permisije")
 	}
 	return a, nil
@@ -195,6 +207,8 @@ func (s *Service) ListAccounts(ctx context.Context, f domain.AccountFilter, page
 		// owner_client_id explicitly and it doesn't match, that's a
 		// permission error rather than a silent re-scope.
 		if f.OwnerClientID != "" && f.OwnerClientID != p.UserID {
+			s.log().WarnContext(ctx, "list accounts denied: owner filter mismatch",
+				"owner_client_id", f.OwnerClientID, "user_id", p.UserID)
 			return nil, 0, apperr.PermissionDenied("nedovoljne permisije")
 		}
 		f.OwnerClientID = p.UserID
@@ -236,9 +250,16 @@ func (s *Service) UpdateAccountLimits(ctx context.Context, id, daily, monthly st
 		return nil, apperr.Unauthenticated("not authenticated")
 	}
 	if current.OwnerClientID != p.UserID {
+		s.log().WarnContext(ctx, "update account limits denied: not owner", "account_id", id, "user_id", p.UserID)
 		return nil, apperr.PermissionDenied("samo vlasnik računa može menjati limit")
 	}
-	return s.Store.UpdateAccountLimits(ctx, id, strings.TrimSpace(daily), strings.TrimSpace(monthly))
+	updated, err := s.Store.UpdateAccountLimits(ctx, id, strings.TrimSpace(daily), strings.TrimSpace(monthly))
+	if err != nil {
+		return nil, err
+	}
+	s.log().InfoContext(ctx, "account limits updated",
+		"account_id", id, "daily_limit", updated.DailyLimit, "monthly_limit", updated.MonthlyLimit)
+	return updated, nil
 }
 
 // UpdateAccountName implements the spec p.20 "Promena naziva računa"
@@ -263,6 +284,7 @@ func (s *Service) UpdateAccountName(ctx context.Context, id, name string) (*doma
 	isOwner := current.OwnerClientID == p.UserID
 	hasEmployeePerm := permissions.Has(p.Permissions, permissions.AccountWrite)
 	if !isOwner && !hasEmployeePerm {
+		s.log().WarnContext(ctx, "update account name denied: not owner", "account_id", id, "user_id", p.UserID)
 		return nil, apperr.PermissionDenied("samo vlasnik računa može menjati naziv")
 	}
 	if name == current.Name {
@@ -274,10 +296,17 @@ func (s *Service) UpdateAccountName(ctx context.Context, id, name string) (*doma
 			return nil, err
 		}
 		if taken {
+			s.log().WarnContext(ctx, "update account name conflict",
+				"account_id", id, "owner_client_id", current.OwnerClientID)
 			return nil, apperr.Conflict("već imate račun sa tim nazivom")
 		}
 	}
-	return s.Store.UpdateAccountName(ctx, id, name)
+	updated, err := s.Store.UpdateAccountName(ctx, id, name)
+	if err != nil {
+		return nil, err
+	}
+	s.log().InfoContext(ctx, "account name updated", "account_id", id)
+	return updated, nil
 }
 
 func (s *Service) SetAccountStatus(ctx context.Context, id string, status domain.AccountStatus) (*domain.Account, error) {
@@ -287,7 +316,12 @@ func (s *Service) SetAccountStatus(ctx context.Context, id string, status domain
 	if status != domain.AccountActive && status != domain.AccountInactive {
 		return nil, apperr.Validation("status must be active or inactive")
 	}
-	return s.Store.SetAccountStatus(ctx, id, status)
+	updated, err := s.Store.SetAccountStatus(ctx, id, status)
+	if err != nil {
+		return nil, err
+	}
+	s.log().InfoContext(ctx, "account status updated", "account_id", id, "status", status)
+	return updated, nil
 }
 
 // GetSystemAccount returns the bank's house account for currency.
@@ -318,6 +352,7 @@ func (s *Service) CreateFundAccount(ctx context.Context, name string, currency d
 	}
 	number, err := account.Generate(s.Cfg.BankCode, s.Cfg.Branch, account.TypeFund)
 	if err != nil {
+		s.log().ErrorContext(ctx, "create fund account: generate account number failed", "err", err)
 		return nil, apperr.Internal("generate account number", err)
 	}
 	display := strings.TrimSpace(name)
@@ -341,7 +376,13 @@ func (s *Service) CreateFundAccount(ctx context.Context, name string, currency d
 		DailySpent:          "0",
 		MonthlySpent:        "0",
 	}
-	return s.Store.CreateAccount(ctx, a)
+	created, err := s.Store.CreateAccount(ctx, a)
+	if err != nil {
+		s.log().ErrorContext(ctx, "create fund account failed", "err", err, "number", number, "name", display)
+		return nil, err
+	}
+	s.log().InfoContext(ctx, "fund account created", "account_id", created.ID, "number", created.Number)
+	return created, nil
 }
 
 // EnsureSystemAccounts is called once at boot. For each supported
@@ -359,10 +400,12 @@ func (s *Service) EnsureSystemAccounts(ctx context.Context) error {
 		if _, err := s.Store.GetSystemAccount(ctx, c); err == nil {
 			continue
 		} else if !isNotFound(err) {
+			s.log().ErrorContext(ctx, "ensure system accounts: get system account failed", "err", err, "currency", c)
 			return err
 		}
 		number, err := account.Generate(s.Cfg.BankCode, s.Cfg.Branch, account.TypeSystem)
 		if err != nil {
+			s.log().ErrorContext(ctx, "ensure system accounts: generate account number failed", "err", err, "currency", c)
 			return err
 		}
 		_, err = s.Store.CreateAccount(ctx, &domain.Account{
@@ -383,9 +426,11 @@ func (s *Service) EnsureSystemAccounts(ctx context.Context) error {
 			MonthlySpent:        "0",
 		})
 		if err != nil {
+			s.log().ErrorContext(ctx, "ensure system accounts: create system account failed",
+				"err", err, "currency", c, "number", number)
 			return err
 		}
-		s.Log.Info("seeded system account", "currency", c, "number", number)
+		s.log().InfoContext(ctx, "seeded system account", "currency", c, "number", number)
 	}
 
 	// Spec p.62 capital-gains-tax destination. The state has only an
@@ -394,10 +439,12 @@ func (s *Service) EnsureSystemAccounts(ctx context.Context) error {
 	// it doesn't muddy the menjačnica's bank-house lookups.
 	if _, err := s.Store.GetStateTaxAccount(ctx); err != nil {
 		if !isNotFound(err) {
+			s.log().ErrorContext(ctx, "ensure system accounts: get state tax account failed", "err", err)
 			return err
 		}
 		number, err := account.Generate(s.Cfg.BankCode, s.Cfg.Branch, account.TypeSystem)
 		if err != nil {
+			s.log().ErrorContext(ctx, "ensure system accounts: generate state tax account number failed", "err", err)
 			return err
 		}
 		_, err = s.Store.CreateAccount(ctx, &domain.Account{
@@ -418,9 +465,10 @@ func (s *Service) EnsureSystemAccounts(ctx context.Context) error {
 			MonthlySpent:        "0",
 		})
 		if err != nil {
+			s.log().ErrorContext(ctx, "ensure system accounts: create state tax account failed", "err", err, "number", number)
 			return err
 		}
-		s.Log.Info("seeded state tax account", "number", number)
+		s.log().InfoContext(ctx, "seeded state tax account", "number", number)
 	}
 
 	// Spec p.42 forex book — one bank-owned account per supported
@@ -432,10 +480,12 @@ func (s *Service) EnsureSystemAccounts(ctx context.Context) error {
 		if _, err := s.Store.GetForexBookAccount(ctx, c); err == nil {
 			continue
 		} else if !isNotFound(err) {
+			s.log().ErrorContext(ctx, "ensure system accounts: get forex book account failed", "err", err, "currency", c)
 			return err
 		}
 		number, err := account.Generate(s.Cfg.BankCode, s.Cfg.Branch, account.TypeSystem)
 		if err != nil {
+			s.log().ErrorContext(ctx, "ensure system accounts: generate forex book account number failed", "err", err, "currency", c)
 			return err
 		}
 		_, err = s.Store.CreateAccount(ctx, &domain.Account{
@@ -456,9 +506,11 @@ func (s *Service) EnsureSystemAccounts(ctx context.Context) error {
 			MonthlySpent:        "0",
 		})
 		if err != nil {
+			s.log().ErrorContext(ctx, "ensure system accounts: create forex book account failed",
+				"err", err, "currency", c, "number", number)
 			return err
 		}
-		s.Log.Info("seeded forex book account", "currency", c, "number", number)
+		s.log().InfoContext(ctx, "seeded forex book account", "currency", c, "number", number)
 	}
 	return nil
 }

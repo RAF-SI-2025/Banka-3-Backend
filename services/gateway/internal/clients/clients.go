@@ -4,6 +4,7 @@ package clients
 
 import (
 	"fmt"
+	"log/slog"
 
 	bankpb "github.com/RAF-SI-2025/Banka-3-Backend/gen/proto/bank/v1"
 	exchangepb "github.com/RAF-SI-2025/Banka-3-Backend/gen/proto/exchange/v1"
@@ -121,7 +122,11 @@ func Dial(addrs Addrs, opts ...Option) (*Set, error) {
 // Close releases every dialed connection.
 func (s *Set) Close() {
 	for _, c := range s.conns {
-		_ = c.Close()
+		if err := c.Close(); err != nil {
+			// Shutdown-path only; nothing to recover, but don't swallow.
+			slog.Default().Warn("grpc conn close failed",
+				"err", err, "target", c.Target())
+		}
 	}
 }
 

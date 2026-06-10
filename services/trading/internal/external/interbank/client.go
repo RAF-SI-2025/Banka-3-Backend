@@ -142,8 +142,15 @@ func (c *Client) Protocol(ctx context.Context, bankCode string) Protocol {
 	}
 	p := c.probe(ctx, bankCode)
 	c.protocols.Store(bankCode, p)
-	c.log.Info("partner protocol detected",
-		"bank_code", bankCode, "protocol", string(p), "base_url", c.baseURL(bankCode))
+	if p == ProtocolUnknown {
+		// Sticky: the unknown result is cached, so this partner stays
+		// unreachable until the process restarts. Make that loud.
+		c.log.WarnContext(ctx, "partner protocol detection failed, partner disabled until restart",
+			"bank_code", bankCode, "base_url", c.baseURL(bankCode))
+	} else {
+		c.log.InfoContext(ctx, "partner protocol detected",
+			"bank_code", bankCode, "protocol", string(p), "base_url", c.baseURL(bankCode))
+	}
 	return p
 }
 
@@ -176,6 +183,7 @@ func (c *Client) probeOK(ctx context.Context, method, url string, withAPIKey boo
 	defer cancel()
 	req, err := http.NewRequestWithContext(probeCtx, method, url, nil)
 	if err != nil {
+		c.log.WarnContext(ctx, "interbank probe request build failed", "url", url, "err", err.Error())
 		return false
 	}
 	if withAPIKey {
@@ -185,6 +193,7 @@ func (c *Client) probeOK(ctx context.Context, method, url string, withAPIKey boo
 	}
 	resp, err := c.cfg.HTTPClient.Do(req)
 	if err != nil {
+		c.log.WarnContext(ctx, "interbank probe failed", "method", method, "url", url, "err", err.Error())
 		return false
 	}
 	defer resp.Body.Close()
@@ -229,12 +238,14 @@ func (c *Client) doJSON(ctx context.Context, method, url string, body any) (int,
 		var err error
 		buf, err = json.Marshal(body)
 		if err != nil {
+			c.log.ErrorContext(ctx, "interbank request marshal failed", "method", method, "url", url, "err", err.Error())
 			return 0, nil, fmt.Errorf("marshal: %w", err)
 		}
 		reader = bytes.NewReader(buf)
 	}
 	req, err := http.NewRequestWithContext(ctx, method, url, reader)
 	if err != nil {
+		c.log.ErrorContext(ctx, "interbank request build failed", "method", method, "url", url, "err", err.Error())
 		return 0, nil, fmt.Errorf("new request: %w", err)
 	}
 	if body != nil {
@@ -244,16 +255,43 @@ func (c *Client) doJSON(ctx context.Context, method, url string, body any) (int,
 		req.Header.Set("X-Api-Key", k)
 	}
 	c.signRequest(req, buf)
+	start := time.Now()
 	resp, err := c.cfg.HTTPClient.Do(req)
 	if err != nil {
+		c.log.ErrorContext(ctx, "interbank request failed",
+			"method", method, "url", url, "dur", time.Since(start), "err", err.Error())
 		return 0, nil, fmt.Errorf("do request: %w", err)
 	}
 	defer resp.Body.Close()
 	out, err := io.ReadAll(io.LimitReader(resp.Body, 1<<20))
 	if err != nil {
+		c.log.ErrorContext(ctx, "interbank response read failed",
+			"method", method, "url", url, "status", resp.StatusCode, "err", err.Error())
 		return resp.StatusCode, nil, fmt.Errorf("read body: %w", err)
 	}
+	logOutbound(ctx, c.log, method, url, resp.StatusCode, time.Since(start), out)
 	return resp.StatusCode, out, nil
+}
+
+// logOutbound is the shared access log for outbound interbank HTTP.
+// Non-2xx carries a snippet of the partner's response body — that text
+// is usually the only clue to why the partner rejected us.
+func logOutbound(ctx context.Context, log *slog.Logger, method, url string, status int, dur time.Duration, body []byte) {
+	if status < 200 || status >= 300 {
+		log.WarnContext(ctx, "interbank request rejected",
+			"method", method, "url", url, "status", status, "dur", dur, "body", bodySnippet(body, 512))
+		return
+	}
+	log.InfoContext(ctx, "interbank request ok",
+		"method", method, "url", url, "status", status, "dur", dur)
+}
+
+// bodySnippet returns up to n bytes of body as a string for log output.
+func bodySnippet(b []byte, n int) string {
+	if len(b) > n {
+		b = b[:n]
+	}
+	return string(b)
 }
 
 // errUnsupportedProtocol is returned when we'd need to speak a protocol

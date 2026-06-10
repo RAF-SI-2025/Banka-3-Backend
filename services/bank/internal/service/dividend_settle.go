@@ -59,10 +59,19 @@ func (s *Service) SettleDividend(ctx context.Context, in SettleDividendInput) (*
 
 	to, err := s.Store.GetAccountByID(ctx, in.AccountID)
 	if err != nil {
+		if apperrIs(err, apperr.KindNotFound) {
+			s.log().WarnContext(ctx, "settle dividend: account not found",
+				"err", err, "account_id", in.AccountID, "op_id", in.OpID)
+		} else {
+			s.log().ErrorContext(ctx, "settle dividend: account lookup failed",
+				"err", err, "account_id", in.AccountID, "op_id", in.OpID)
+		}
 		return nil, err
 	}
 	house, err := s.Store.GetSystemAccount(ctx, in.Currency)
 	if err != nil {
+		s.log().ErrorContext(ctx, "settle dividend: house account lookup failed",
+			"err", err, "currency", in.Currency, "op_id", in.OpID)
 		return nil, err
 	}
 
@@ -93,7 +102,14 @@ func (s *Service) SettleDividend(ctx context.Context, in SettleDividendInput) (*
 		purpose = "Isplata dividende"
 	}
 
-	return s.idempotentSettle(ctx, in.OpID, func(tx pgx.Tx) ([]*domain.Transaction, error) {
+	res, err := s.idempotentSettle(ctx, in.OpID, func(tx pgx.Tx) ([]*domain.Transaction, error) {
 		return s.executeMoneyMove(ctx, tx, house, to, amt, domain.TxKindDividend, in.OpID, initiator, paymentMeta{Purpose: purpose}, 0)
 	})
+	if err != nil {
+		return nil, err
+	}
+	s.log().InfoContext(ctx, "dividend settled",
+		"op_id", in.OpID, "account_id", in.AccountID, "amount", in.Amount,
+		"currency", in.Currency, "legs", len(res.Transactions))
+	return res, nil
 }

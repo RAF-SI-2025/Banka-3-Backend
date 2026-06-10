@@ -2,6 +2,7 @@ package server
 
 import (
 	"context"
+	"log/slog"
 	"time"
 
 	bankpb "github.com/RAF-SI-2025/Banka-3-Backend/gen/proto/bank/v1"
@@ -161,9 +162,18 @@ func loanToProto(l *domain.Loan) *bankpb.Loan {
 	// effective_rate = base + offset + margin (annual %).
 	effective := ""
 	if l.BaseRate != "" {
-		base, _ := money.Parse(l.BaseRate)
-		offset, _ := money.Parse(l.CurrentOffset)
-		margin, _ := money.Parse(l.Margin)
+		base, err := money.Parse(l.BaseRate)
+		if err != nil {
+			slog.Warn("parse loan base rate failed", "err", err, "loan_id", l.ID)
+		}
+		offset, err := money.Parse(l.CurrentOffset)
+		if err != nil {
+			slog.Warn("parse loan rate offset failed", "err", err, "loan_id", l.ID)
+		}
+		margin, err := money.Parse(l.Margin)
+		if err != nil {
+			slog.Warn("parse loan margin failed", "err", err, "loan_id", l.ID)
+		}
 		effective = money.Format(money.Add(money.Add(base, offset), margin), 4)
 	}
 	out := &bankpb.Loan{

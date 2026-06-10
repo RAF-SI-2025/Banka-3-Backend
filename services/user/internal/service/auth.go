@@ -94,6 +94,7 @@ func (s *Service) Login(ctx context.Context, email, password string, opts ...Log
 	// Email not in the system: return the same "Neispravni kredencijali"
 	// the wrong-password path uses. See the doc comment above for why we
 	// don't surface "Korisnik ne postoji" anymore.
+	s.Log.WarnContext(ctx, "login rejected: unknown email", "email", email)
 	return nil, apperr.Unauthenticated("Neispravni kredencijali")
 }
 
@@ -122,18 +123,30 @@ func (s *Service) completeLogin(
 	// Brute-force lockout (S7–S8): refuse a still-locked account before
 	// even checking the password.
 	if lockedUntil != nil && lockedUntil.After(s.Clock.Now()) {
+		s.Log.WarnContext(ctx, "login rejected: account locked", "user_id", userID, "kind", kind)
 		return nil, apperr.PermissionDenied("Nalog je privremeno zaključan zbog previše neuspešnih pokušaja. Pokušajte ponovo kasnije.")
 	}
 	ok, err := passwords.Verify(password, passwordHash)
 	if err != nil || !ok {
+		if err != nil {
+			// A verify error (malformed stored hash) is conflated with
+			// "wrong password" toward the caller; surface it for ops.
+			s.Log.ErrorContext(ctx, "password verify failed", "err", err, "user_id", userID, "kind", kind)
+		}
 		s.Log.WarnContext(ctx, "login rejected: bad password", "user_id", userID, "kind", kind)
 		// Wrong password: bump the counter and lock once the threshold
 		// is reached (S7–S8).
-		newCount, _ := s.Store.IncrementFailedLogin(ctx, kind, userID)
+		newCount, cerr := s.Store.IncrementFailedLogin(ctx, kind, userID)
+		if cerr != nil {
+			// Swallowed by design: a broken counter must not mask the
+			// auth failure. The store already logged the query error.
+			s.Log.WarnContext(ctx, "failed-login counter not bumped", "err", cerr, "user_id", userID, "kind", kind)
+		}
 		if newCount >= maxFailedLogins {
 			if lerr := s.Store.LockUser(ctx, kind, userID, s.Clock.Now().Add(lockoutDuration)); lerr != nil {
-				s.Log.Warn("lock user failed", "user_kind", string(kind), "user_id", userID, "error", lerr)
+				s.Log.WarnContext(ctx, "lock user failed", "err", lerr, "user_kind", string(kind), "user_id", userID)
 			}
+			s.Log.WarnContext(ctx, "account locked after repeated failed logins", "user_id", userID, "kind", kind)
 			s.sendLockoutEmail(ctx, email, firstName)
 			return nil, apperr.PermissionDenied("Nalog je zaključan zbog previše neuspešnih pokušaja prijave. Proverite email za uputstvo o resetovanju lozinke.")
 		}
@@ -142,7 +155,7 @@ func (s *Service) completeLogin(
 	// Successful login clears any accumulated failures / lock (S9, S11).
 	if failedAttempts > 0 || lockedUntil != nil {
 		if rerr := s.Store.ResetFailedLogin(ctx, kind, userID); rerr != nil {
-			s.Log.Warn("reset failed login failed", "user_kind", string(kind), "user_id", userID, "error", rerr)
+			s.Log.WarnContext(ctx, "reset failed login failed", "err", rerr, "user_kind", string(kind), "user_id", userID)
 		}
 	}
 	r, err := s.issueTokens(ctx, kind, userID, perms, sessionVersion, longLived)
@@ -151,6 +164,7 @@ func (s *Service) completeLogin(
 	}
 	r.FirstName = firstName
 	r.LastName = lastName
+	s.Log.InfoContext(ctx, "login ok", "user_id", userID, "kind", kind, "long_lived", longLived)
 	return r, nil
 }
 
@@ -163,11 +177,13 @@ func (s *Service) issueTokens(ctx context.Context, kind domain.UserKind, userID 
 		SessionVersion: sv,
 	}, s.Cfg.JWTSigningKey, s.Cfg.AccessTTL)
 	if err != nil {
+		s.Log.ErrorContext(ctx, "access token sign failed", "err", err, "user_id", userID, "kind", kind)
 		return nil, apperr.Internal("sign access", err)
 	}
 
 	refreshPlain, refreshHash, err := tokens.Generate(32)
 	if err != nil {
+		s.Log.ErrorContext(ctx, "refresh token generate failed", "err", err, "user_id", userID, "kind", kind)
 		return nil, apperr.Internal("generate refresh", err)
 	}
 	// Mobile (spec p.84 "no session interval") gets the long-lived
@@ -209,7 +225,7 @@ func (s *Service) sendLockoutEmail(ctx context.Context, to, firstName string) {
 		"lozinku i kontaktirate podršku.\n\n" +
 		"– Banka 3"
 	if err := s.Notifier.Send(ctx, to, subject, body, false); err != nil {
-		s.Log.Warn("lockout email failed", "to", to, "error", err)
+		s.Log.WarnContext(ctx, "lockout email failed", "err", err, "to", to)
 	}
 }
 
@@ -217,11 +233,15 @@ func (s *Service) sendLockoutEmail(ctx context.Context, to, firstName string) {
 // immediately on use; if it's already revoked or expired we reject.
 func (s *Service) Refresh(ctx context.Context, refreshPlain string, opts ...LoginOption) (*LoginResult, error) {
 	if refreshPlain == "" {
+		s.Log.WarnContext(ctx, "refresh rejected: missing token")
 		return nil, apperr.Unauthenticated("missing refresh token")
 	}
 	hash := tokens.Hash(refreshPlain)
 	kind, userID, err := s.Store.LookupRefreshToken(ctx, hash)
 	if err != nil {
+		if isUnauthenticated(err) {
+			s.Log.WarnContext(ctx, "refresh rejected: invalid or expired token")
+		}
 		return nil, err
 	}
 	// Look up current permissions and session_version (they may have
@@ -231,13 +251,19 @@ func (s *Service) Refresh(ctx context.Context, refreshPlain string, opts ...Logi
 		return nil, err
 	}
 	if !active {
+		s.Log.WarnContext(ctx, "refresh rejected: account disabled", "user_id", userID, "kind", kind)
 		return nil, apperr.PermissionDenied("nalog je deaktiviran")
 	}
 	// Rotate: revoke old, issue new.
 	if err := s.Store.RevokeRefreshToken(ctx, hash); err != nil {
 		return nil, err
 	}
-	return s.issueTokens(ctx, kind, userID, perms, sv, resolveOpts(opts).longLived)
+	r, err := s.issueTokens(ctx, kind, userID, perms, sv, resolveOpts(opts).longLived)
+	if err != nil {
+		return nil, err
+	}
+	s.Log.InfoContext(ctx, "refresh ok", "user_id", userID, "kind", kind)
+	return r, nil
 }
 
 // Logout revokes one refresh token. Idempotent.
@@ -245,7 +271,15 @@ func (s *Service) Logout(ctx context.Context, refreshPlain string) error {
 	if refreshPlain == "" {
 		return nil
 	}
-	return s.Store.RevokeRefreshToken(ctx, tokens.Hash(refreshPlain))
+	if err := s.Store.RevokeRefreshToken(ctx, tokens.Hash(refreshPlain)); err != nil {
+		return err
+	}
+	if p, ok := auth.PrincipalFrom(ctx); ok {
+		s.Log.InfoContext(ctx, "logout ok", "user_id", p.UserID, "kind", p.UserKind)
+	} else {
+		s.Log.InfoContext(ctx, "logout ok")
+	}
+	return nil
 }
 
 // MeResult is the authenticated user's view of itself. Exactly one of
@@ -276,6 +310,7 @@ func (s *Service) Me(ctx context.Context) (*MeResult, error) {
 		}
 		return &MeResult{Client: c}, nil
 	default:
+		s.Log.ErrorContext(ctx, "me failed: unknown user kind", "user_id", p.UserID, "kind", p.UserKind)
 		return nil, apperr.Internal("unknown user kind", nil)
 	}
 }
@@ -295,6 +330,7 @@ func (s *Service) lookupAuthState(ctx context.Context, kind domain.UserKind, use
 		}
 		return c.Permissions, c.SessionVersion, c.Active, nil
 	}
+	s.Log.ErrorContext(ctx, "auth state lookup failed: unknown user kind", "user_id", userID, "kind", kind)
 	return nil, 0, false, apperr.Internal("unknown user kind", nil)
 }
 
@@ -329,4 +365,12 @@ func isNotFound(err error) bool {
 		return false
 	}
 	return ae.Kind == apperr.KindNotFound
+}
+
+func isUnauthenticated(err error) bool {
+	var ae *apperr.Error
+	if !errors.As(err, &ae) {
+		return false
+	}
+	return ae.Kind == apperr.KindUnauthenticated
 }

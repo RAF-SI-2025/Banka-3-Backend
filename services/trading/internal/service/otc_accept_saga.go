@@ -107,6 +107,8 @@ func (s *Service) AcceptOTCOffer(ctx context.Context, in AcceptOTCOfferInput) (*
 		return nil, apperr.PermissionDenied("niste strana u niti")
 	}
 	if open.ModifiedBy == p.UserID {
+		s.log().WarnContext(ctx, "otc accept rejected: caller cannot accept own iteration",
+			"thread_id", in.ThreadID, "offer_id", open.ID)
 		return nil, apperr.FailedPrecondition("ne možete da prihvatite sopstvenu iteraciju")
 	}
 
@@ -147,6 +149,9 @@ func (s *Service) AcceptOTCOffer(ctx context.Context, in AcceptOTCOfferInput) (*
 		AttemptsMax:   8,
 	})
 	if err != nil {
+		s.log().ErrorContext(ctx, "otc accept saga failed",
+			"err", err, "transaction_id", txID, "thread_id", open.ThreadID,
+			"offer_id", open.ID)
 		return nil, fmt.Errorf("otc accept saga: %w", err)
 	}
 	if row.Status != saga.StatusCompleted {
@@ -155,16 +160,28 @@ func (s *Service) AcceptOTCOffer(ctx context.Context, in AcceptOTCOfferInput) (*
 		// polls/backoffs; recovery worker will drive it forward.
 		// See [[reference_saga_park_status_mapping]] for the pattern.
 		if row.Status == saga.StatusRunning {
+			s.log().WarnContext(ctx, "otc accept saga parked for retry",
+				"transaction_id", txID, "thread_id", open.ThreadID,
+				"last_error", row.LastError)
 			return nil, status.Error(codes.Unavailable, "otc accept saga parked for retry")
 		}
+		s.log().ErrorContext(ctx, "otc accept saga did not complete",
+			"transaction_id", txID, "thread_id", open.ThreadID,
+			"saga_status", string(row.Status), "last_error", row.LastError)
 		return nil, apperr.Internal("otc accept saga did not complete", nil)
 	}
 
 	contract, err := s.Store.GetOTCContractByThread(ctx, open.ThreadID)
 	if err != nil {
+		s.logOpErr(ctx, "otc accept: contract fetch after saga failed", err,
+			"thread_id", open.ThreadID, "transaction_id", txID)
 		return nil, err
 	}
 	premiumOp := saga.DeriveOpID(txID, "transfer_premium")
+	s.log().InfoContext(ctx, "otc offer accepted; contract minted",
+		"transaction_id", txID, "thread_id", open.ThreadID,
+		"contract_id", contract.ID, "quantity", contract.Quantity,
+		"premium", contract.PremiumPaid, "currency", string(contract.Currency))
 	if s.OTCNotifier != nil {
 		recipient, kind := otherContractParty(contract, p.UserID)
 		s.OTCNotifier.OnOTCAccepted(ctx, contract, recipient, kind)
@@ -182,6 +199,9 @@ func registerOTCAcceptSaga(reg *saga.Registry, svc *Service) {
 			{
 				Name: "reserve_buyer_premium",
 				Forward: func(ctx context.Context, sc *saga.Context[otcAcceptSagaPayload]) error {
+					sc.Log.DebugContext(ctx, "otc accept: reserving buyer premium",
+						"thread_id", sc.State.ThreadID, "premium", sc.State.Premium,
+						"currency", sc.State.Currency)
 					_, err := svc.Reservations.Reserve(ctx, ReserveInput{
 						AccountID: sc.State.BuyerAccountID,
 						Amount:    sc.State.Premium,
@@ -189,11 +209,24 @@ func registerOTCAcceptSaga(reg *saga.Registry, svc *Service) {
 						OpID:      sc.OpID,
 						OpKind:    "otc_premium",
 					})
+					if err != nil {
+						sc.Log.ErrorContext(ctx, "otc accept: buyer premium reserve failed",
+							"err", err, "thread_id", sc.State.ThreadID,
+							"buyer_account_id", sc.State.BuyerAccountID,
+							"premium", sc.State.Premium)
+					}
 					return err
 				},
 				Compensate: func(ctx context.Context, sc *saga.Context[otcAcceptSagaPayload]) error {
 					_, err := svc.Reservations.Release(ctx, sc.OpID)
-					return err
+					if err != nil {
+						sc.Log.ErrorContext(ctx, "otc accept: premium reservation release compensation failed",
+							"err", err, "thread_id", sc.State.ThreadID)
+						return err
+					}
+					sc.Log.InfoContext(ctx, "otc accept: premium reservation released",
+						"thread_id", sc.State.ThreadID)
+					return nil
 				},
 			},
 			// Step 2: verify the seller's holding still reserves at
@@ -205,9 +238,16 @@ func registerOTCAcceptSaga(reg *saga.Registry, svc *Service) {
 				Forward: func(ctx context.Context, sc *saga.Context[otcAcceptSagaPayload]) error {
 					h, err := svc.Store.GetHoldingByID(ctx, sc.State.SellerHoldingID)
 					if err != nil {
+						sc.Log.ErrorContext(ctx, "otc accept: seller holding lookup failed",
+							"err", err, "thread_id", sc.State.ThreadID,
+							"seller_holding_id", sc.State.SellerHoldingID)
 						return err
 					}
 					if h.ReservedCount < sc.State.Quantity {
+						sc.Log.WarnContext(ctx, "otc accept: seller holding reservation insufficient",
+							"thread_id", sc.State.ThreadID,
+							"seller_holding_id", sc.State.SellerHoldingID,
+							"reserved", h.ReservedCount, "quantity", sc.State.Quantity)
 						return status.Error(codes.FailedPrecondition,
 							"seller holding reservation insufficient")
 					}
@@ -229,7 +269,16 @@ func registerOTCAcceptSaga(reg *saga.Registry, svc *Service) {
 						IsActuary:     sc.State.IsActuary,
 						Purpose:       "OTC premija — nit " + sc.State.ThreadID,
 					})
-					return err
+					if err != nil {
+						sc.Log.ErrorContext(ctx, "otc accept: premium transfer failed",
+							"err", err, "thread_id", sc.State.ThreadID,
+							"premium", sc.State.Premium, "currency", sc.State.Currency)
+						return err
+					}
+					sc.Log.InfoContext(ctx, "otc accept: premium transferred to seller",
+						"thread_id", sc.State.ThreadID, "premium", sc.State.Premium,
+						"currency", sc.State.Currency)
+					return nil
 				},
 				// Best-effort compensation: re-release. Once a commit
 				// has succeeded, the bank's reservation row is
@@ -243,6 +292,10 @@ func registerOTCAcceptSaga(reg *saga.Registry, svc *Service) {
 				Compensate: func(ctx context.Context, sc *saga.Context[otcAcceptSagaPayload]) error {
 					reserveOp := saga.DeriveOpID(sc.TransactionID, "reserve_buyer_premium")
 					_, err := svc.Reservations.Release(ctx, reserveOp)
+					if err != nil {
+						sc.Log.ErrorContext(ctx, "otc accept: premium transfer compensation failed",
+							"err", err, "thread_id", sc.State.ThreadID)
+					}
 					return err
 				},
 			},
@@ -253,9 +306,12 @@ func registerOTCAcceptSaga(reg *saga.Registry, svc *Service) {
 					premiumOp := saga.DeriveOpID(sc.TransactionID, "transfer_premium")
 					settlement, err := time.Parse("2006-01-02", sc.State.SettlementDate)
 					if err != nil {
+						sc.Log.ErrorContext(ctx, "otc accept: bad settlement_date in saga state",
+							"err", err, "thread_id", sc.State.ThreadID,
+							"settlement_date", sc.State.SettlementDate)
 						return status.Error(codes.InvalidArgument, "bad settlement_date")
 					}
-					return svc.Store.ExecuteAtomic(ctx, func(tx pgx.Tx) error {
+					txErr := svc.Store.ExecuteAtomic(ctx, func(tx pgx.Tx) error {
 						_, err := svc.Store.InsertOTCContract(ctx, tx, &domain.OTCContract{
 							ThreadID:        sc.State.ThreadID,
 							SecurityID:      sc.State.SecurityID,
@@ -279,9 +335,18 @@ func registerOTCAcceptSaga(reg *saga.Registry, svc *Service) {
 						}
 						return svc.Store.MarkAllOTCOffersAcceptedInThread(ctx, tx, sc.State.ThreadID, sc.State.OfferID)
 					})
+					if txErr != nil {
+						sc.Log.ErrorContext(ctx, "otc accept: contract create failed",
+							"err", txErr, "thread_id", sc.State.ThreadID, "offer_id", sc.State.OfferID)
+						return txErr
+					}
+					sc.Log.InfoContext(ctx, "otc accept: contract created, thread accepted",
+						"thread_id", sc.State.ThreadID, "offer_id", sc.State.OfferID,
+						"quantity", sc.State.Quantity)
+					return nil
 				},
 				Compensate: func(ctx context.Context, sc *saga.Context[otcAcceptSagaPayload]) error {
-					return svc.Store.ExecuteAtomic(ctx, func(tx pgx.Tx) error {
+					err := svc.Store.ExecuteAtomic(ctx, func(tx pgx.Tx) error {
 						if err := svc.Store.DeleteOTCContractByThread(ctx, tx, sc.State.ThreadID); err != nil {
 							return err
 						}
@@ -290,6 +355,11 @@ func registerOTCAcceptSaga(reg *saga.Registry, svc *Service) {
 						_, err := svc.Store.MarkOTCOfferStatus(ctx, tx, sc.State.OfferID, domain.OTCStatusOpen)
 						return err
 					})
+					if err != nil {
+						sc.Log.ErrorContext(ctx, "otc accept: contract create compensation failed",
+							"err", err, "thread_id", sc.State.ThreadID, "offer_id", sc.State.OfferID)
+					}
+					return err
 				},
 			},
 		},

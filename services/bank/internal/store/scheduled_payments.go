@@ -5,6 +5,7 @@ import (
 	"time"
 
 	"github.com/RAF-SI-2025/Banka-3-Backend/pkg/apperr"
+	"github.com/RAF-SI-2025/Banka-3-Backend/pkg/logger"
 	"github.com/RAF-SI-2025/Banka-3-Backend/pkg/postgres"
 	"github.com/RAF-SI-2025/Banka-3-Backend/services/bank/internal/domain"
 )
@@ -46,6 +47,7 @@ func (s *Store) InsertScheduledPayment(ctx context.Context, sp *domain.Scheduled
 		sp.RecipientName, sp.PaymentCode, sp.Purpose, sp.Model, sp.ReferenceNumber, sp.ScheduledDate,
 	))
 	if err != nil {
+		logger.From(ctx).ErrorContext(ctx, "insert scheduled payment failed", "err", err, "client_id", sp.ClientID, "from_account_id", sp.FromAccountID)
 		return nil, apperr.Internal("insert scheduled payment", err)
 	}
 	return out, nil
@@ -58,6 +60,7 @@ func (s *Store) ListScheduledPaymentsByClient(ctx context.Context, clientID stri
         from "bank".scheduled_payments where client_id = $1 order by scheduled_date desc, created_at desc`
 	rows, err := s.DB.Query(postgres.WithRead(ctx), q, clientID)
 	if err != nil {
+		logger.From(ctx).ErrorContext(ctx, "list scheduled payments failed", "err", err, "client_id", clientID)
 		return nil, apperr.Internal("list scheduled payments", err)
 	}
 	defer rows.Close()
@@ -65,11 +68,16 @@ func (s *Store) ListScheduledPaymentsByClient(ctx context.Context, clientID stri
 	for rows.Next() {
 		sp, err := scanScheduledPayment(rows)
 		if err != nil {
+			logger.From(ctx).ErrorContext(ctx, "scan scheduled payment failed", "err", err)
 			return nil, apperr.Internal("scan scheduled payment", err)
 		}
 		out = append(out, sp)
 	}
-	return out, rows.Err()
+	if err := rows.Err(); err != nil {
+		logger.From(ctx).ErrorContext(ctx, "iterate scheduled payments failed", "err", err)
+		return out, err
+	}
+	return out, nil
 }
 
 // GetScheduledPayment loads a single row by id.
@@ -80,6 +88,7 @@ func (s *Store) GetScheduledPayment(ctx context.Context, id string) (*domain.Sch
 		if noRows(err) {
 			return nil, apperr.NotFound("zakazano plaćanje ne postoji")
 		}
+		logger.From(ctx).ErrorContext(ctx, "get scheduled payment failed", "err", err, "scheduled_payment_id", id)
 		return nil, apperr.Internal("get scheduled payment", err)
 	}
 	return sp, nil
@@ -108,6 +117,7 @@ func (s *Store) CancelScheduledPayment(ctx context.Context, id, clientID string)
 			}
 			return nil, apperr.FailedPrecondition("zakazano plaćanje se više ne može otkazati")
 		}
+		logger.From(ctx).ErrorContext(ctx, "cancel scheduled payment failed", "err", err, "scheduled_payment_id", id, "client_id", clientID)
 		return nil, apperr.Internal("cancel scheduled payment", err)
 	}
 	return sp, nil
@@ -123,6 +133,7 @@ func (s *Store) ListDueScheduledPayments(ctx context.Context, now time.Time) ([]
        order by scheduled_date asc`
 	rows, err := s.DB.Query(ctx, q, now)
 	if err != nil {
+		logger.From(ctx).ErrorContext(ctx, "list due scheduled payments failed", "err", err)
 		return nil, apperr.Internal("list due scheduled payments", err)
 	}
 	defer rows.Close()
@@ -130,11 +141,16 @@ func (s *Store) ListDueScheduledPayments(ctx context.Context, now time.Time) ([]
 	for rows.Next() {
 		sp, err := scanScheduledPayment(rows)
 		if err != nil {
+			logger.From(ctx).ErrorContext(ctx, "scan scheduled payment failed", "err", err)
 			return nil, apperr.Internal("scan scheduled payment", err)
 		}
 		out = append(out, sp)
 	}
-	return out, rows.Err()
+	if err := rows.Err(); err != nil {
+		logger.From(ctx).ErrorContext(ctx, "iterate due scheduled payments failed", "err", err)
+		return out, err
+	}
+	return out, nil
 }
 
 // MarkScheduledPaymentCompleted flips a 'scheduled' row to 'completed'
@@ -145,6 +161,7 @@ func (s *Store) MarkScheduledPaymentCompleted(ctx context.Context, id string, at
            set status = 'completed', executed_at = $2, failure_reason = null
          where id = $1 and status = 'scheduled'`
 	if _, err := s.DB.Exec(ctx, q, id, at); err != nil {
+		logger.From(ctx).ErrorContext(ctx, "mark scheduled payment completed failed", "err", err, "scheduled_payment_id", id)
 		return apperr.Internal("mark scheduled payment completed", err)
 	}
 	return nil
@@ -159,6 +176,7 @@ func (s *Store) MarkScheduledPaymentFailed(ctx context.Context, id, reason strin
            set status = 'failed', executed_at = $2, failure_reason = $3
          where id = $1 and status = 'scheduled'`
 	if _, err := s.DB.Exec(ctx, q, id, at, reason); err != nil {
+		logger.From(ctx).ErrorContext(ctx, "mark scheduled payment failed failed", "err", err, "scheduled_payment_id", id)
 		return apperr.Internal("mark scheduled payment failed", err)
 	}
 	return nil

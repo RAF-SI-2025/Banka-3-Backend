@@ -7,6 +7,7 @@ import (
 	"time"
 
 	"github.com/RAF-SI-2025/Banka-3-Backend/pkg/apperr"
+	"github.com/RAF-SI-2025/Banka-3-Backend/pkg/logger"
 	"github.com/RAF-SI-2025/Banka-3-Backend/pkg/postgres"
 	"github.com/RAF-SI-2025/Banka-3-Backend/services/bank/internal/domain"
 	"github.com/jackc/pgx/v5"
@@ -68,6 +69,7 @@ func (s *Store) CreateLoanRequest(ctx context.Context, r *domain.LoanRequest) (*
 		r.EmploymentDurationMonths, r.InstallmentsTotal, r.ContactPhone,
 	))
 	if err != nil {
+		logger.From(ctx).ErrorContext(ctx, "create loan request failed", "err", err, "client_id", r.ClientID, "account_id", r.AccountID)
 		return nil, apperr.Internal("create loan request", err)
 	}
 	return out, nil
@@ -80,6 +82,7 @@ func (s *Store) GetLoanRequestByID(ctx context.Context, id string) (*domain.Loan
 		if noRows(err) {
 			return nil, apperr.NotFound("zahtev za kredit ne postoji")
 		}
+		logger.From(ctx).ErrorContext(ctx, "get loan request failed", "err", err, "request_id", id)
 		return nil, apperr.Internal("get loan request", err)
 	}
 	return out, nil
@@ -98,6 +101,7 @@ func (s *Store) DecideLoanRequest(ctx context.Context, tx pgx.Tx, id, employeeID
 		if noRows(err) {
 			return nil, apperr.FailedPrecondition("zahtev je već obrađen ili ne postoji")
 		}
+		logger.From(ctx).ErrorContext(ctx, "decide loan request failed", "err", err, "request_id", id, "status", string(status))
 		return nil, apperr.Internal("decide loan request", err)
 	}
 	return out, nil
@@ -134,6 +138,7 @@ func (s *Store) ListLoanRequests(ctx context.Context, f domain.LoanRequestFilter
 	}
 	var total int64
 	if err := s.DB.QueryRow(postgres.WithRead(ctx), `select count(*) from "bank".loan_requests`+where, args...).Scan(&total); err != nil {
+		logger.From(ctx).ErrorContext(ctx, "count loan requests failed", "err", err)
 		return nil, 0, apperr.Internal("count loan requests", err)
 	}
 	listArgs := append([]any{}, args...)
@@ -142,6 +147,7 @@ func (s *Store) ListLoanRequests(ctx context.Context, f domain.LoanRequestFilter
 		fmt.Sprintf(" order by created_at desc limit $%d offset $%d", len(args)+1, len(args)+2)
 	rows, err := s.DB.Query(postgres.WithRead(ctx), listQ, listArgs...)
 	if err != nil {
+		logger.From(ctx).ErrorContext(ctx, "list loan requests failed", "err", err)
 		return nil, 0, apperr.Internal("list loan requests", err)
 	}
 	defer rows.Close()
@@ -149,11 +155,16 @@ func (s *Store) ListLoanRequests(ctx context.Context, f domain.LoanRequestFilter
 	for rows.Next() {
 		r, err := scanLoanRequest(rows)
 		if err != nil {
+			logger.From(ctx).ErrorContext(ctx, "scan loan request failed", "err", err)
 			return nil, 0, apperr.Internal("scan loan request", err)
 		}
 		out = append(out, r)
 	}
-	return out, total, rows.Err()
+	if err := rows.Err(); err != nil {
+		logger.From(ctx).ErrorContext(ctx, "iterate loan requests failed", "err", err)
+		return out, total, err
+	}
+	return out, total, nil
 }
 
 // =====================================================================
@@ -221,6 +232,7 @@ func (s *Store) CreateLoan(ctx context.Context, tx pgx.Tx, l *domain.Loan) (*dom
 		if isUniqueViolation(err) {
 			return nil, apperr.Conflict("loan number collision")
 		}
+		logger.From(ctx).ErrorContext(ctx, "create loan failed", "err", err, "client_id", l.ClientID, "request_id", l.RequestID)
 		return nil, apperr.Internal("create loan", err)
 	}
 	return out, nil
@@ -233,6 +245,7 @@ func (s *Store) GetLoanByID(ctx context.Context, id string) (*domain.Loan, error
 		if noRows(err) {
 			return nil, apperr.NotFound("kredit ne postoji")
 		}
+		logger.From(ctx).ErrorContext(ctx, "get loan failed", "err", err, "loan_id", id)
 		return nil, apperr.Internal("get loan", err)
 	}
 	return out, nil
@@ -252,6 +265,7 @@ func (s *Store) UpdateLoanAfterInstallment(ctx context.Context, tx pgx.Tx, loanI
             updated_at = now()
         where id = $1`
 	if _, err := tx.Exec(ctx, q, loanID, newRemaining, nextDate, nextAmount, string(status)); err != nil {
+		logger.From(ctx).ErrorContext(ctx, "update loan failed", "err", err, "loan_id", loanID)
 		return apperr.Internal("update loan", err)
 	}
 	return nil
@@ -271,6 +285,7 @@ func (s *Store) UpdateVariableRate(ctx context.Context, tx pgx.Tx, loanID, newOf
             updated_at = now()
         where id = $1`
 	if _, err := tx.Exec(ctx, q, loanID, newOffset, newInstallmentAmount); err != nil {
+		logger.From(ctx).ErrorContext(ctx, "update variable rate failed", "err", err, "loan_id", loanID)
 		return apperr.Internal("update variable rate", err)
 	}
 	return nil
@@ -307,6 +322,7 @@ func (s *Store) ListLoans(ctx context.Context, f domain.LoanFilter, page, pageSi
 	}
 	var total int64
 	if err := s.DB.QueryRow(postgres.WithRead(ctx), `select count(*) from "bank".loans`+where, args...).Scan(&total); err != nil {
+		logger.From(ctx).ErrorContext(ctx, "count loans failed", "err", err)
 		return nil, 0, apperr.Internal("count loans", err)
 	}
 	listArgs := append([]any{}, args...)
@@ -315,6 +331,7 @@ func (s *Store) ListLoans(ctx context.Context, f domain.LoanFilter, page, pageSi
 		fmt.Sprintf(" order by contracted_at desc limit $%d offset $%d", len(args)+1, len(args)+2)
 	rows, err := s.DB.Query(postgres.WithRead(ctx), listQ, listArgs...)
 	if err != nil {
+		logger.From(ctx).ErrorContext(ctx, "list loans failed", "err", err)
 		return nil, 0, apperr.Internal("list loans", err)
 	}
 	defer rows.Close()
@@ -322,11 +339,16 @@ func (s *Store) ListLoans(ctx context.Context, f domain.LoanFilter, page, pageSi
 	for rows.Next() {
 		l, err := scanLoan(rows)
 		if err != nil {
+			logger.From(ctx).ErrorContext(ctx, "scan loan failed", "err", err)
 			return nil, 0, apperr.Internal("scan loan", err)
 		}
 		out = append(out, l)
 	}
-	return out, total, rows.Err()
+	if err := rows.Err(); err != nil {
+		logger.From(ctx).ErrorContext(ctx, "iterate loans failed", "err", err)
+		return out, total, err
+	}
+	return out, total, nil
 }
 
 func (s *Store) ListActiveVariableLoans(ctx context.Context) ([]*domain.Loan, error) {
@@ -335,6 +357,7 @@ func (s *Store) ListActiveVariableLoans(ctx context.Context) ([]*domain.Loan, er
               order by id`
 	rows, err := s.DB.Query(ctx, q)
 	if err != nil {
+		logger.From(ctx).ErrorContext(ctx, "list variable loans failed", "err", err)
 		return nil, apperr.Internal("list variable loans", err)
 	}
 	defer rows.Close()
@@ -342,11 +365,16 @@ func (s *Store) ListActiveVariableLoans(ctx context.Context) ([]*domain.Loan, er
 	for rows.Next() {
 		l, err := scanLoan(rows)
 		if err != nil {
+			logger.From(ctx).ErrorContext(ctx, "scan variable loan failed", "err", err)
 			return nil, apperr.Internal("scan variable loan", err)
 		}
 		out = append(out, l)
 	}
-	return out, rows.Err()
+	if err := rows.Err(); err != nil {
+		logger.From(ctx).ErrorContext(ctx, "iterate variable loans failed", "err", err)
+		return out, err
+	}
+	return out, nil
 }
 
 // =====================================================================
@@ -388,6 +416,7 @@ func (s *Store) CreateInstallment(ctx context.Context, tx pgx.Tx, i *domain.Loan
 		i.ExpectedDueDate, string(i.Status),
 	))
 	if err != nil {
+		logger.From(ctx).ErrorContext(ctx, "create installment failed", "err", err, "loan_id", i.LoanID)
 		return nil, apperr.Internal("create installment", err)
 	}
 	return out, nil
@@ -396,6 +425,7 @@ func (s *Store) CreateInstallment(ctx context.Context, tx pgx.Tx, i *domain.Loan
 func (s *Store) MarkInstallmentPaid(ctx context.Context, tx pgx.Tx, id string) error {
 	const q = `update "bank".loan_installments set status = 'paid', actual_paid_at = now(), updated_at = now() where id = $1`
 	if _, err := tx.Exec(ctx, q, id); err != nil {
+		logger.From(ctx).ErrorContext(ctx, "mark installment paid failed", "err", err, "installment_id", id)
 		return apperr.Internal("mark installment paid", err)
 	}
 	return nil
@@ -408,6 +438,7 @@ func (s *Store) CountPaidInstallments(ctx context.Context, loanID string) (int, 
 	const q = `select count(*) from "bank".loan_installments where loan_id = $1 and status = 'paid'`
 	var n int
 	if err := s.DB.QueryRow(ctx, q, loanID).Scan(&n); err != nil {
+		logger.From(ctx).ErrorContext(ctx, "count paid installments failed", "err", err, "loan_id", loanID)
 		return 0, apperr.Internal("count paid installments", err)
 	}
 	return n, nil
@@ -425,6 +456,7 @@ func (s *Store) MarkInstallmentOverdue(ctx context.Context, tx pgx.Tx, id string
                updated_at    = now()
          where id = $1`
 	if _, err := tx.Exec(ctx, q, id); err != nil {
+		logger.From(ctx).ErrorContext(ctx, "mark installment overdue failed", "err", err, "installment_id", id)
 		return apperr.Internal("mark installment overdue", err)
 	}
 	return nil
@@ -440,6 +472,7 @@ func (s *Store) RescheduleOverdueRetry(ctx context.Context, tx pgx.Tx, id string
                updated_at    = now()
          where id = $1`
 	if _, err := tx.Exec(ctx, q, id); err != nil {
+		logger.From(ctx).ErrorContext(ctx, "reschedule overdue retry failed", "err", err, "installment_id", id)
 		return apperr.Internal("reschedule overdue retry", err)
 	}
 	return nil
@@ -472,8 +505,10 @@ func (s *Store) ApplyLatePenalty(
 	if err != nil {
 		if noRows(err) {
 			// Already applied — nothing to do.
+			logger.From(ctx).WarnContext(ctx, "late penalty already applied, skipping", "loan_id", loanID)
 			return nil
 		}
+		logger.From(ctx).ErrorContext(ctx, "apply late penalty failed", "err", err, "loan_id", loanID)
 		return apperr.Internal("apply late penalty", err)
 	}
 	const instQ = `
@@ -484,6 +519,7 @@ func (s *Store) ApplyLatePenalty(
          where loan_id = $1
            and status in ('unpaid','overdue')`
 	if _, err := tx.Exec(ctx, instQ, loanID, newInstallmentAmount, newRateAtDue); err != nil {
+		logger.From(ctx).ErrorContext(ctx, "rewrite installments after penalty failed", "err", err, "loan_id", loanID)
 		return apperr.Internal("rewrite installments after penalty", err)
 	}
 	return nil
@@ -511,6 +547,7 @@ func (s *Store) ListInstallmentsDueOn(ctx context.Context, dueOn time.Time) ([]*
          order by expected_due_date, sequence_number`
 	rows, err := s.DB.Query(ctx, q, dueOn)
 	if err != nil {
+		logger.From(ctx).ErrorContext(ctx, "list due installments failed", "err", err, "due_on", dueOn)
 		return nil, apperr.Internal("list due installments", err)
 	}
 	defer rows.Close()
@@ -518,11 +555,16 @@ func (s *Store) ListInstallmentsDueOn(ctx context.Context, dueOn time.Time) ([]*
 	for rows.Next() {
 		i, err := scanInstallment(rows)
 		if err != nil {
+			logger.From(ctx).ErrorContext(ctx, "scan installment failed", "err", err)
 			return nil, apperr.Internal("scan installment", err)
 		}
 		out = append(out, i)
 	}
-	return out, rows.Err()
+	if err := rows.Err(); err != nil {
+		logger.From(ctx).ErrorContext(ctx, "iterate due installments failed", "err", err)
+		return out, err
+	}
+	return out, nil
 }
 
 func (s *Store) ListInstallmentsByLoan(ctx context.Context, loanID string) ([]*domain.LoanInstallment, error) {
@@ -530,6 +572,7 @@ func (s *Store) ListInstallmentsByLoan(ctx context.Context, loanID string) ([]*d
               where loan_id = $1 order by sequence_number`
 	rows, err := s.DB.Query(postgres.WithRead(ctx), q, loanID)
 	if err != nil {
+		logger.From(ctx).ErrorContext(ctx, "list installments failed", "err", err, "loan_id", loanID)
 		return nil, apperr.Internal("list installments", err)
 	}
 	defer rows.Close()
@@ -537,9 +580,14 @@ func (s *Store) ListInstallmentsByLoan(ctx context.Context, loanID string) ([]*d
 	for rows.Next() {
 		i, err := scanInstallment(rows)
 		if err != nil {
+			logger.From(ctx).ErrorContext(ctx, "scan installment failed", "err", err)
 			return nil, apperr.Internal("scan installment", err)
 		}
 		out = append(out, i)
 	}
-	return out, rows.Err()
+	if err := rows.Err(); err != nil {
+		logger.From(ctx).ErrorContext(ctx, "iterate installments failed", "err", err)
+		return out, err
+	}
+	return out, nil
 }

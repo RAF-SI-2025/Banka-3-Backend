@@ -46,10 +46,19 @@ func (s *Service) SettleCapitalGainsTax(ctx context.Context, in SettleCapitalGai
 
 	from, err := s.Store.GetAccountByID(ctx, in.AccountID)
 	if err != nil {
+		if apperrIs(err, apperr.KindNotFound) {
+			s.log().WarnContext(ctx, "settle capital gains tax: account not found",
+				"err", err, "account_id", in.AccountID, "op_id", in.OpID)
+		} else {
+			s.log().ErrorContext(ctx, "settle capital gains tax: account lookup failed",
+				"err", err, "account_id", in.AccountID, "op_id", in.OpID)
+		}
 		return nil, err
 	}
 	state, err := s.Store.GetStateTaxAccount(ctx)
 	if err != nil {
+		s.log().ErrorContext(ctx, "settle capital gains tax: state tax account lookup failed",
+			"err", err, "op_id", in.OpID)
 		return nil, err
 	}
 
@@ -65,6 +74,9 @@ func (s *Service) SettleCapitalGainsTax(ctx context.Context, in SettleCapitalGai
 	if from.Currency != domain.CurrencyRSD {
 		_, conv, err := s.rateAndConvert(ctx, domain.CurrencyRSD, from.Currency, rsdAmt)
 		if err != nil {
+			s.log().ErrorContext(ctx, "settle capital gains tax: fx conversion failed",
+				"err", err, "op_id", in.OpID, "account_id", in.AccountID,
+				"amount_rsd", in.AmountRSD, "account_currency", from.Currency)
 			return nil, err
 		}
 		fromAmt = conv
@@ -91,7 +103,14 @@ func (s *Service) SettleCapitalGainsTax(ctx context.Context, in SettleCapitalGai
 		purpose = "Porez na kapitalni dobitak"
 	}
 
-	return s.idempotentSettle(ctx, in.OpID, func(tx pgx.Tx) ([]*domain.Transaction, error) {
+	res, err := s.idempotentSettle(ctx, in.OpID, func(tx pgx.Tx) ([]*domain.Transaction, error) {
 		return s.executeMoneyMove(ctx, tx, from, state, fromAmt, domain.TxKindTax, in.OpID, initiator, paymentMeta{Purpose: purpose}, 0)
 	})
+	if err != nil {
+		return nil, err
+	}
+	s.log().InfoContext(ctx, "capital gains tax settled",
+		"op_id", in.OpID, "account_id", in.AccountID, "amount_rsd", in.AmountRSD,
+		"account_currency", from.Currency, "legs", len(res.Transactions))
+	return res, nil
 }

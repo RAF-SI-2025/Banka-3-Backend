@@ -36,9 +36,11 @@ func (s *Service) CreateCompany(ctx context.Context, in CreateCompanyInput) (*do
 		return nil, err
 	}
 	if err := validateCompany(in); err != nil {
+		s.log().WarnContext(ctx, "create company validation failed",
+			"err", err, "owner_client_id", in.OwnerClientID, "registry_id", in.RegistryID)
 		return nil, err
 	}
-	return s.Store.CreateCompany(ctx, &domain.Company{
+	created, err := s.Store.CreateCompany(ctx, &domain.Company{
 		Name:          strings.TrimSpace(in.Name),
 		RegistryID:    strings.TrimSpace(in.RegistryID),
 		TaxID:         strings.TrimSpace(in.TaxID),
@@ -46,6 +48,12 @@ func (s *Service) CreateCompany(ctx context.Context, in CreateCompanyInput) (*do
 		Address:       strings.TrimSpace(in.Address),
 		OwnerClientID: strings.TrimSpace(in.OwnerClientID),
 	})
+	if err != nil {
+		return nil, err
+	}
+	s.log().InfoContext(ctx, "company created",
+		"company_id", created.ID, "owner_client_id", created.OwnerClientID, "registry_id", created.RegistryID)
+	return created, nil
 }
 
 func (s *Service) GetCompany(ctx context.Context, id string) (*domain.Company, error) {
@@ -96,6 +104,7 @@ func (s *Service) UpdateCompany(ctx context.Context, in UpdateCompanyInput) (*do
 	}
 	if v := strings.TrimSpace(in.ActivityCode); v != "" {
 		if !activityRe.MatchString(v) {
+			s.log().WarnContext(ctx, "update company validation failed: bad activity code", "company_id", in.ID)
 			return nil, apperr.Validation("activity code must match xx.xx")
 		}
 		target.ActivityCode = v
@@ -106,7 +115,12 @@ func (s *Service) UpdateCompany(ctx context.Context, in UpdateCompanyInput) (*do
 	if v := strings.TrimSpace(in.OwnerClientID); v != "" {
 		target.OwnerClientID = v
 	}
-	return s.Store.UpdateCompany(ctx, target)
+	updated, err := s.Store.UpdateCompany(ctx, target)
+	if err != nil {
+		return nil, err
+	}
+	s.log().InfoContext(ctx, "company updated", "company_id", updated.ID)
+	return updated, nil
 }
 
 func validateCompany(in CreateCompanyInput) error {

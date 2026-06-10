@@ -4,6 +4,7 @@ import (
 	"context"
 
 	"github.com/RAF-SI-2025/Banka-3-Backend/pkg/apperr"
+	"github.com/RAF-SI-2025/Banka-3-Backend/pkg/logger"
 	"github.com/RAF-SI-2025/Banka-3-Backend/services/trading/internal/domain"
 	"github.com/jackc/pgx/v5"
 )
@@ -51,6 +52,7 @@ func (s *Store) InsertExternalOTCSettlement(ctx context.Context, tx pgx.Tx, m *d
 			// Conflict — the row already existed; return it unchanged.
 			return s.GetExternalOTCSettlement(ctx, tx, m.SenderRoutingNumber, m.TransactionID)
 		}
+		logger.From(ctx).ErrorContext(ctx, "insert external otc settlement failed", "err", err)
 		return nil, apperr.Internal("insert external otc settlement", err)
 	}
 	return out, nil
@@ -68,6 +70,7 @@ func (s *Store) GetExternalOTCSettlement(ctx context.Context, tx pgx.Tx, senderR
 		if noRows(err) {
 			return nil, nil
 		}
+		logger.From(ctx).ErrorContext(ctx, "get external otc settlement failed", "err", err, "tx_id", txID)
 		return nil, apperr.Internal("get external otc settlement", err)
 	}
 	return out, nil
@@ -91,6 +94,7 @@ func (s *Store) SetExternalOTCSettlementStatus(ctx context.Context, tx pgx.Tx, s
 		if noRows(err) {
 			return apperr.NotFound("settlement ne postoji")
 		}
+		logger.From(ctx).ErrorContext(ctx, "set external otc settlement status failed", "err", err, "tx_id", txID, "contract_id", contractID)
 		return apperr.Internal("set external otc settlement status", err)
 	}
 	return nil

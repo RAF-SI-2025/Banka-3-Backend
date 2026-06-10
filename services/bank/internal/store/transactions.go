@@ -6,6 +6,7 @@ import (
 	"strings"
 
 	"github.com/RAF-SI-2025/Banka-3-Backend/pkg/apperr"
+	"github.com/RAF-SI-2025/Banka-3-Backend/pkg/logger"
 	"github.com/RAF-SI-2025/Banka-3-Backend/pkg/postgres"
 	"github.com/RAF-SI-2025/Banka-3-Backend/services/bank/internal/domain"
 	"github.com/jackc/pgx/v5"
@@ -131,6 +132,7 @@ func (s *Store) AdjustBalance(ctx context.Context, tx pgx.Tx, accountID, delta s
 		if noRows(err) {
 			return ErrInsufficientFunds
 		}
+		logger.From(ctx).ErrorContext(ctx, "adjust balance failed", "err", err, "account_id", accountID)
 		return apperr.Internal("adjust balance", err)
 	}
 	return nil
@@ -165,6 +167,7 @@ func (s *Store) AdjustAvailableBalance(ctx context.Context, tx pgx.Tx, accountID
 		if noRows(err) {
 			return ErrInsufficientFunds
 		}
+		logger.From(ctx).ErrorContext(ctx, "adjust available balance failed", "err", err, "account_id", accountID)
 		return apperr.Internal("adjust available balance", err)
 	}
 	return nil
@@ -189,6 +192,7 @@ func (s *Store) AdjustBalanceOnly(ctx context.Context, tx pgx.Tx, accountID, del
 		if noRows(err) {
 			return ErrInsufficientFunds
 		}
+		logger.From(ctx).ErrorContext(ctx, "adjust balance only failed", "err", err, "account_id", accountID)
 		return apperr.Internal("adjust balance only", err)
 	}
 	return nil
@@ -208,6 +212,7 @@ func (s *Store) CheckLimits(ctx context.Context, tx pgx.Tx, accountID, amount st
         from "bank".accounts where id = $1 for update`
 	var dl, ml, ds, ms string
 	if err := tx.QueryRow(ctx, q, accountID).Scan(&dl, &ml, &ds, &ms); err != nil {
+		logger.From(ctx).ErrorContext(ctx, "read limits failed", "err", err, "account_id", accountID)
 		return apperr.Internal("read limits", err)
 	}
 
@@ -224,6 +229,7 @@ func (s *Store) CheckLimits(ctx context.Context, tx pgx.Tx, accountID, amount st
 		var ok bool
 		err := tx.QueryRow(ctx, "select ($1::numeric + $2::numeric) <= $3::numeric", c.spent, amount, c.limit).Scan(&ok)
 		if err != nil {
+			logger.From(ctx).ErrorContext(ctx, "limit math failed", "err", err, "account_id", accountID)
 			return apperr.Internal("limit math", err)
 		}
 		if !ok {
@@ -261,6 +267,7 @@ func (s *Store) InsertTransaction(ctx context.Context, tx pgx.Tx, t *domain.Tran
 	)
 	out, err := scanTransaction(row)
 	if err != nil {
+		logger.From(ctx).ErrorContext(ctx, "insert transaction failed", "err", err, "op_id", t.OpID, "op_kind", string(t.Kind), "leg_index", t.LegIndex)
 		return nil, apperr.Internal("insert transaction", err)
 	}
 	return out, nil
@@ -309,6 +316,7 @@ func (s *Store) ListTransactions(ctx context.Context, f domain.TransactionFilter
 
 	var total int64
 	if err := s.DB.QueryRow(postgres.WithRead(ctx), `select count(*) from "bank".transactions t`+where, args...).Scan(&total); err != nil {
+		logger.From(ctx).ErrorContext(ctx, "count transactions failed", "err", err)
 		return nil, 0, apperr.Internal("count transactions", err)
 	}
 
@@ -319,6 +327,7 @@ func (s *Store) ListTransactions(ctx context.Context, f domain.TransactionFilter
 
 	rows, err := s.DB.Query(postgres.WithRead(ctx), listQ, listArgs...)
 	if err != nil {
+		logger.From(ctx).ErrorContext(ctx, "list transactions failed", "err", err)
 		return nil, 0, apperr.Internal("list transactions", err)
 	}
 	defer rows.Close()
@@ -326,11 +335,16 @@ func (s *Store) ListTransactions(ctx context.Context, f domain.TransactionFilter
 	for rows.Next() {
 		t, err := scanTransactionWithNumbers(rows)
 		if err != nil {
+			logger.From(ctx).ErrorContext(ctx, "scan transaction failed", "err", err)
 			return nil, 0, apperr.Internal("scan transaction", err)
 		}
 		out = append(out, t)
 	}
-	return out, total, rows.Err()
+	if err := rows.Err(); err != nil {
+		logger.From(ctx).ErrorContext(ctx, "iterate transactions failed", "err", err)
+		return out, total, err
+	}
+	return out, total, nil
 }
 
 // GetTransactionsByOpID returns every leg of a single op (UX-level
@@ -340,6 +354,7 @@ func (s *Store) GetTransactionsByOpID(ctx context.Context, opID string) ([]*doma
 	q := `select ` + transactionReadColumns + transactionReadFrom + ` where t.op_id = $1 order by t.leg_index`
 	rows, err := s.DB.Query(ctx, q, opID)
 	if err != nil {
+		logger.From(ctx).ErrorContext(ctx, "transactions by op failed", "err", err, "op_id", opID)
 		return nil, apperr.Internal("transactions by op", err)
 	}
 	defer rows.Close()
@@ -347,11 +362,16 @@ func (s *Store) GetTransactionsByOpID(ctx context.Context, opID string) ([]*doma
 	for rows.Next() {
 		t, err := scanTransactionWithNumbers(rows)
 		if err != nil {
+			logger.From(ctx).ErrorContext(ctx, "scan tx by op failed", "err", err)
 			return nil, apperr.Internal("scan tx by op", err)
 		}
 		out = append(out, t)
 	}
-	return out, rows.Err()
+	if err := rows.Err(); err != nil {
+		logger.From(ctx).ErrorContext(ctx, "iterate transactions by op failed", "err", err)
+		return out, err
+	}
+	return out, nil
 }
 
 // GetAccountByNumber returns the account row for an 18-digit number,
@@ -363,6 +383,7 @@ func (s *Store) GetAccountByNumber(ctx context.Context, number string) (*domain.
 		if noRows(err) {
 			return nil, apperr.NotFound("primalac (račun) ne postoji")
 		}
+		logger.From(ctx).ErrorContext(ctx, "get account by number failed", "err", err, "number", number)
 		return nil, apperr.Internal("get account by number", err)
 	}
 	return out, nil

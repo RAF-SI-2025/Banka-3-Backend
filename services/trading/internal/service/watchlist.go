@@ -141,9 +141,15 @@ func (s *Service) decorateWatchlistItem(ctx context.Context, it *domain.Watchlis
 		it.Name = sec.Name
 		it.SecurityType = sec.Type
 		it.Currency = sec.Currency
+	} else if err != nil {
+		s.log().WarnContext(ctx, "watchlist item security lookup failed",
+			"err", err, "item_id", it.ID, "security_id", it.SecurityID)
 	}
 	if listing, err := s.Store.GetListingBySecurityID(ctx, it.SecurityID); err == nil && listing != nil {
 		it.Price = listing.Price
 		it.DailyChange = listing.ChangeAmt
+	} else if err != nil {
+		s.log().WarnContext(ctx, "watchlist item listing lookup failed",
+			"err", err, "item_id", it.ID, "security_id", it.SecurityID)
 	}
 }

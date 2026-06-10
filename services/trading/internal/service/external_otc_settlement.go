@@ -57,7 +57,13 @@ type SettleExternalOTCOptionResult struct {
 }
 
 func (s *Service) SettleExternalOTCOption(ctx context.Context, in SettleExternalOTCOptionInput) (*SettleExternalOTCOptionResult, error) {
-	senderRouting, _ := strconv.Atoi(in.SenderBankCode)
+	senderRouting, aerr := strconv.Atoi(in.SenderBankCode)
+	if aerr != nil {
+		// Routing 0 makes the contract lookup miss and the system vote NO
+		// with "contract not found" — surface the real cause here.
+		s.log().WarnContext(ctx, "external otc settlement: malformed sender bank code, routing treated as 0",
+			"err", aerr, "sender_bank_code", in.SenderBankCode, "transaction_id", in.TransactionID)
+	}
 	switch strings.ToLower(in.Phase) {
 	case "prepare":
 		return s.settleOTCPrepare(ctx, senderRouting, in)
@@ -66,6 +72,9 @@ func (s *Service) SettleExternalOTCOption(ctx context.Context, in SettleExternal
 	case "rollback":
 		return s.settleOTCRollback(ctx, senderRouting, in)
 	default:
+		s.log().WarnContext(ctx, "external otc settlement: unknown phase",
+			"phase", in.Phase, "transaction_id", in.TransactionID,
+			"remote_bank_code", in.SenderBankCode)
 		return nil, apperr.Validation("nepoznata settlement faza")
 	}
 }
@@ -81,8 +90,14 @@ func (s *Service) settleOTCPrepare(ctx context.Context, senderRouting int, in Se
 	contract, err := s.Store.GetExternalOTCContractByThread(ctx, in.OptionRef)
 	if err != nil {
 		if isAppKind(err, apperr.KindNotFound) {
+			s.log().WarnContext(ctx, "external otc settlement prepare: negotiation not found, voting no",
+				"transaction_id", in.TransactionID, "option_ref", in.OptionRef,
+				"remote_bank_code", in.SenderBankCode)
 			return no("OPTION_NEGOTIATION_NOT_FOUND"), nil
 		}
+		s.log().ErrorContext(ctx, "external otc settlement prepare: contract lookup failed",
+			"err", err, "transaction_id", in.TransactionID, "option_ref", in.OptionRef,
+			"remote_bank_code", in.SenderBankCode)
 		return nil, err
 	}
 	res.SellerAccountNumber = contract.LocalAccountNumber
@@ -106,6 +121,9 @@ func (s *Service) settleOTCPrepare(ctx context.Context, senderRouting int, in Se
 		switch kind {
 		case domain.ExternalOTCSettlementKindAccept:
 			if contract.Status != domain.ExternalOTCContractActive {
+				s.log().WarnContext(ctx, "external otc settlement prepare: contract not active, voting no",
+					"transaction_id", in.TransactionID, "contract_id", contract.ID,
+					"status", string(contract.Status), "remote_bank_code", in.SenderBankCode)
 				res.Accepted = false
 				res.Reason = "OPTION_USED_OR_EXPIRED"
 				return nil
@@ -113,6 +131,9 @@ func (s *Service) settleOTCPrepare(ctx context.Context, senderRouting int, in Se
 			// Reserve the seller's shares for the life of the contract.
 			if _, err := s.Store.IncrementReservedHolding(ctx, tx, contract.SellerHoldingRef, contract.Quantity); err != nil {
 				if isAppKind(err, apperr.KindFailedPrecondition) {
+					s.log().WarnContext(ctx, "external otc settlement prepare: insufficient asset, voting no",
+						"err", err, "transaction_id", in.TransactionID, "contract_id", contract.ID,
+						"quantity", contract.Quantity, "remote_bank_code", in.SenderBankCode)
 					res.Accepted = false
 					res.Reason = "INSUFFICIENT_ASSET"
 					return nil
@@ -121,6 +142,9 @@ func (s *Service) settleOTCPrepare(ctx context.Context, senderRouting int, in Se
 			}
 		case domain.ExternalOTCSettlementKindExercise:
 			if contract.Status != domain.ExternalOTCContractActive {
+				s.log().WarnContext(ctx, "external otc settlement prepare: contract not active, voting no",
+					"transaction_id", in.TransactionID, "contract_id", contract.ID,
+					"status", string(contract.Status), "remote_bank_code", in.SenderBankCode)
 				res.Accepted = false
 				res.Reason = "OPTION_USED_OR_EXPIRED"
 				return nil
@@ -130,6 +154,10 @@ func (s *Service) settleOTCPrepare(ctx context.Context, senderRouting int, in Se
 				return err
 			}
 			if h.ReservedCount < contract.Quantity || h.Quantity < contract.Quantity {
+				s.log().WarnContext(ctx, "external otc settlement prepare: holding no longer covers contract, voting no",
+					"transaction_id", in.TransactionID, "contract_id", contract.ID,
+					"quantity", contract.Quantity, "reserved", h.ReservedCount,
+					"held", h.Quantity, "remote_bank_code", in.SenderBankCode)
 				res.Accepted = false
 				res.Reason = "INSUFFICIENT_ASSET"
 				return nil
@@ -153,7 +181,15 @@ func (s *Service) settleOTCPrepare(ctx context.Context, senderRouting int, in Se
 		return nil
 	})
 	if err != nil {
+		s.log().ErrorContext(ctx, "external otc settlement prepare failed",
+			"err", err, "transaction_id", in.TransactionID, "contract_id", contract.ID,
+			"kind", in.Kind, "remote_bank_code", in.SenderBankCode)
 		return nil, err
+	}
+	if res.Accepted {
+		s.log().InfoContext(ctx, "external otc settlement prepared",
+			"transaction_id", in.TransactionID, "contract_id", contract.ID,
+			"kind", in.Kind, "remote_bank_code", in.SenderBankCode)
 	}
 	return res, nil
 }
@@ -163,6 +199,8 @@ func (s *Service) settleOTCPrepare(ctx context.Context, senderRouting int, in Se
 // marks the contract exercised. Idempotent.
 func (s *Service) settleOTCCommit(ctx context.Context, senderRouting int, in SettleExternalOTCOptionInput) (*SettleExternalOTCOptionResult, error) {
 	res := &SettleExternalOTCOptionResult{}
+	// Captured for the post-tx log lines.
+	var logContractID, logKind string
 	err := s.Store.ExecuteAtomic(ctx, func(tx pgx.Tx) error {
 		st, err := s.Store.GetExternalOTCSettlement(ctx, tx, senderRouting, in.TransactionID)
 		if err != nil {
@@ -181,6 +219,7 @@ func (s *Service) settleOTCCommit(ctx context.Context, senderRouting int, in Set
 		if err != nil {
 			return err
 		}
+		logContractID, logKind = contract.ID, st.Kind
 
 		if st.Kind == domain.ExternalOTCSettlementKindExercise {
 			h, err := s.Store.GetHoldingByID(ctx, contract.SellerHoldingRef)
@@ -239,7 +278,15 @@ func (s *Service) settleOTCCommit(ctx context.Context, senderRouting int, in Set
 		return nil
 	})
 	if err != nil {
+		s.log().ErrorContext(ctx, "external otc settlement commit failed",
+			"err", err, "transaction_id", in.TransactionID, "contract_id", logContractID,
+			"kind", logKind, "remote_bank_code", in.SenderBankCode)
 		return nil, err
+	}
+	if res.Handled && res.Accepted {
+		s.log().InfoContext(ctx, "external otc settlement committed",
+			"transaction_id", in.TransactionID, "contract_id", logContractID,
+			"kind", logKind, "remote_bank_code", in.SenderBankCode)
 	}
 	return res, nil
 }
@@ -278,7 +325,14 @@ func (s *Service) settleOTCRollback(ctx context.Context, senderRouting int, in S
 		return nil
 	})
 	if err != nil {
+		s.log().ErrorContext(ctx, "external otc settlement rollback failed",
+			"err", err, "transaction_id", in.TransactionID,
+			"remote_bank_code", in.SenderBankCode)
 		return nil, err
+	}
+	if res.Handled {
+		s.log().InfoContext(ctx, "external otc settlement rolled back",
+			"transaction_id", in.TransactionID, "remote_bank_code", in.SenderBankCode)
 	}
 	return res, nil
 }

@@ -23,22 +23,22 @@ func (s *Service) notify(ctx context.Context, clientID, eventKind, subject, body
 	// user_id and the kind is always "client".
 	if s.InApp != nil {
 		if err := s.InApp.Notify(ctx, clientID, "client", eventKind, subject, body); err != nil {
-			s.Log.Warn("notify: in-app create failed", "client_id", clientID, "error", err)
+			s.log().WarnContext(ctx, "notify: in-app create failed", "err", err, "client_id", clientID, "kind", eventKind)
 		}
 	}
 
 	// Email leg.
 	if s.Notifier == nil || s.UserResolver == nil {
-		s.Log.Info("notification email skipped (no notifier wired)", "client_id", clientID, "subject", subject)
+		s.log().InfoContext(ctx, "notification email skipped (no notifier wired)", "client_id", clientID, "subject", subject)
 		return
 	}
 	to, err := s.UserResolver.ClientEmail(ctx, clientID)
 	if err != nil || to == "" {
-		s.Log.Warn("notify: client email lookup failed", "client_id", clientID, "error", err)
+		s.log().WarnContext(ctx, "notify: client email lookup failed", "err", err, "client_id", clientID)
 		return
 	}
 	if err := s.Notifier.Send(ctx, to, subject, body, false); err != nil {
-		s.Log.Warn("notify: send failed", "to", to, "subject", subject, "error", err)
+		s.log().WarnContext(ctx, "notify: send failed", "err", err, "to", to, "subject", subject)
 	}
 }
 

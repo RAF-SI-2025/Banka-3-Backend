@@ -6,6 +6,7 @@ import (
 	"strings"
 
 	"github.com/RAF-SI-2025/Banka-3-Backend/pkg/apperr"
+	"github.com/RAF-SI-2025/Banka-3-Backend/pkg/logger"
 	"github.com/RAF-SI-2025/Banka-3-Backend/pkg/postgres"
 	"github.com/RAF-SI-2025/Banka-3-Backend/services/user/internal/domain"
 )
@@ -53,6 +54,7 @@ func (s *Store) CreateClient(ctx context.Context, c *domain.Client) (*domain.Cli
 		if isUniqueViolation(err) {
 			return nil, apperr.Conflict("an account with this email already exists")
 		}
+		logger.From(ctx).ErrorContext(ctx, "create client failed", "err", err, "email", c.Email)
 		return nil, apperr.Internal("create client", err)
 	}
 	return out, nil
@@ -66,6 +68,7 @@ func (s *Store) GetClientByID(ctx context.Context, id string) (*domain.Client, e
 		if noRows(err) {
 			return nil, apperr.NotFound("client not found")
 		}
+		logger.From(ctx).ErrorContext(ctx, "get client failed", "err", err, "client_id", id)
 		return nil, apperr.Internal("get client", err)
 	}
 	return out, nil
@@ -79,6 +82,7 @@ func (s *Store) GetClientByEmail(ctx context.Context, email string) (*domain.Cli
 		if noRows(err) {
 			return nil, apperr.NotFound("client not found")
 		}
+		logger.From(ctx).ErrorContext(ctx, "get client by email failed", "err", err, "email", email)
 		return nil, apperr.Internal("get client by email", err)
 	}
 	return out, nil
@@ -105,6 +109,7 @@ func (s *Store) UpdateClientProfile(ctx context.Context, c *domain.Client) (*dom
 		if isUniqueViolation(err) {
 			return nil, apperr.Conflict("email already in use")
 		}
+		logger.From(ctx).ErrorContext(ctx, "update client failed", "err", err, "client_id", c.ID)
 		return nil, apperr.Internal("update client", err)
 	}
 	return out, nil
@@ -117,6 +122,7 @@ func (s *Store) SetClientPasswordHash(ctx context.Context, id, hash string) erro
         where id = $1`
 	tag, err := s.DB.Exec(ctx, q, id, hash)
 	if err != nil {
+		logger.From(ctx).ErrorContext(ctx, "set client password failed", "err", err, "client_id", id)
 		return apperr.Internal("set client password", err)
 	}
 	if tag.RowsAffected() == 0 {
@@ -136,6 +142,7 @@ func (s *Store) IncrementClientSessionVersion(ctx context.Context, id string) (i
 		if noRows(err) {
 			return 0, apperr.NotFound("client not found")
 		}
+		logger.From(ctx).ErrorContext(ctx, "bump client session version failed", "err", err, "client_id", id)
 		return 0, apperr.Internal("bump client session version", err)
 	}
 	return v, nil
@@ -172,6 +179,7 @@ func (s *Store) ListClients(ctx context.Context, f domain.ClientFilter, page, pa
 
 	var total int64
 	if err := s.DB.QueryRow(postgres.WithRead(ctx), `select count(*) from "user".clients`+where, args...).Scan(&total); err != nil {
+		logger.From(ctx).ErrorContext(ctx, "count clients failed", "err", err)
 		return nil, 0, apperr.Internal("count clients", err)
 	}
 
@@ -182,6 +190,7 @@ func (s *Store) ListClients(ctx context.Context, f domain.ClientFilter, page, pa
 
 	rows, err := s.DB.Query(postgres.WithRead(ctx), listQ, listArgs...)
 	if err != nil {
+		logger.From(ctx).ErrorContext(ctx, "list clients failed", "err", err)
 		return nil, 0, apperr.Internal("list clients", err)
 	}
 	defer rows.Close()
@@ -190,11 +199,13 @@ func (s *Store) ListClients(ctx context.Context, f domain.ClientFilter, page, pa
 	for rows.Next() {
 		c, err := scanClient(rows)
 		if err != nil {
+			logger.From(ctx).ErrorContext(ctx, "scan client failed", "err", err)
 			return nil, 0, apperr.Internal("scan client", err)
 		}
 		out = append(out, c)
 	}
 	if err := rows.Err(); err != nil {
+		logger.From(ctx).ErrorContext(ctx, "rows clients failed", "err", err)
 		return nil, 0, apperr.Internal("rows clients", err)
 	}
 	return out, total, nil

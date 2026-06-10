@@ -12,6 +12,7 @@ import (
 	"github.com/RAF-SI-2025/Banka-3-Backend/pkg/money"
 	"github.com/RAF-SI-2025/Banka-3-Backend/pkg/permissions"
 	"github.com/RAF-SI-2025/Banka-3-Backend/services/bank/internal/domain"
+	"github.com/RAF-SI-2025/Banka-3-Backend/services/bank/internal/store"
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5"
 )
@@ -42,7 +43,7 @@ func (s *Service) CreatePayment(ctx context.Context, in CreatePaymentInput) (res
 		}
 		bizmetric.PaymentCompleted(ctx, "payment", c, paymentStatus(err))
 		if err != nil {
-			s.Log.WarnContext(ctx, "CreatePayment failed",
+			s.log().WarnContext(ctx, "CreatePayment failed",
 				"from_account", in.FromAccountID,
 				"to_account_no", in.ToAccountNumber,
 				"amount", in.Amount,
@@ -94,12 +95,20 @@ func (s *Service) CreatePayment(ctx context.Context, in CreatePaymentInput) (res
 	}
 
 	if in.SaveRecipient && p.UserKind == auth.KindClient {
-		_, _ = s.Store.UpsertPaymentRecipient(ctx, &domain.PaymentRecipient{
+		if _, rerr := s.Store.UpsertPaymentRecipient(ctx, &domain.PaymentRecipient{
 			ClientID:      p.UserID,
 			Name:          strings.TrimSpace(in.RecipientName),
 			AccountNumber: to.Number,
-		})
+		}); rerr != nil {
+			// Best-effort convenience write — never fails the payment.
+			s.log().WarnContext(ctx, "save payment recipient failed",
+				"err", rerr, "client_id", p.UserID, "account_number", to.Number)
+		}
 	}
+
+	s.log().InfoContext(ctx, "payment executed",
+		"op_id", op, "from_account", from.Number, "to_account", to.Number,
+		"amount", money.FormatAmount(amt), "currency", from.Currency, "legs", len(result.Transactions))
 
 	// Spec E2E "Klijent dobija email potvrdu" — sender side only.
 	s.notifyPaymentSucceeded(ctx, from.OwnerClientID, from.Number, to.Number, money.FormatAmount(amt), from.Currency)
@@ -129,7 +138,7 @@ func (s *Service) CreateTransfer(ctx context.Context, in CreateTransferInput) (r
 		}
 		bizmetric.PaymentCompleted(ctx, k, c, paymentStatus(err))
 		if err != nil {
-			s.Log.WarnContext(ctx, "CreateTransfer failed",
+			s.log().WarnContext(ctx, "CreateTransfer failed",
 				"from", in.FromAccountID, "to", in.ToAccountID,
 				"amount", in.Amount, "currency", c, "err", err.Error())
 		}
@@ -193,6 +202,9 @@ func (s *Service) CreateTransfer(ctx context.Context, in CreateTransferInput) (r
 	if err != nil {
 		return nil, err
 	}
+	s.log().InfoContext(ctx, "transfer completed",
+		"op_id", op, "from_account", from.Number, "to_account", to.Number,
+		"amount", in.Amount, "currency", currency, "kind", kindLabel)
 	return result, nil
 }
 
@@ -234,10 +246,16 @@ type paymentMeta struct {
 // All other callers pass 0.
 func (s *Service) executeMoneyMove(ctx context.Context, tx pgx.Tx, from, to *domain.Account, fromAmt *big.Rat, kind domain.TransactionKind, opID string, initiator auth.Principal, meta paymentMeta, legOffset int) ([]*domain.Transaction, error) {
 	if from.Status != domain.AccountActive || to.Status != domain.AccountActive {
+		s.log().WarnContext(ctx, "money move rejected: account not active",
+			"op_id", opID, "kind", kind, "from_account", from.Number, "to_account", to.Number,
+			"from_status", from.Status, "to_status", to.Status)
 		return nil, apperr.FailedPrecondition("jedan od računa nije aktivan")
 	}
 
 	if err := s.Store.CheckLimits(ctx, tx, from.ID, money.FormatAmount(fromAmt)); err != nil {
+		s.log().WarnContext(ctx, "money move rejected: limit check failed",
+			"err", err, "op_id", opID, "kind", kind, "from_account", from.Number,
+			"amount", money.FormatAmount(fromAmt), "currency", from.Currency)
 		return nil, err
 	}
 
@@ -246,9 +264,13 @@ func (s *Service) executeMoneyMove(ctx context.Context, tx pgx.Tx, from, to *dom
 		fromStr := money.FormatAmount(fromAmt)
 		negFrom := money.FormatAmount(money.Sub(money.MustParse("0"), fromAmt))
 		if err := s.Store.AdjustBalance(ctx, tx, from.ID, negFrom); err != nil {
+			s.logMoneyMoveDebitErr(ctx, err, opID, kind, from.Number, fromStr, from.Currency)
 			return nil, err
 		}
 		if err := s.Store.AdjustBalance(ctx, tx, to.ID, fromStr); err != nil {
+			s.log().ErrorContext(ctx, "money move: credit destination failed",
+				"err", err, "op_id", opID, "kind", kind, "to_account", to.Number,
+				"amount", fromStr, "currency", to.Currency)
 			return nil, err
 		}
 		leg, err := s.Store.InsertTransaction(ctx, tx, &domain.Transaction{
@@ -261,6 +283,10 @@ func (s *Service) executeMoneyMove(ctx context.Context, tx pgx.Tx, from, to *dom
 			Status:            domain.TxStatusRealized,
 		})
 		if err != nil {
+			s.log().ErrorContext(ctx, "money move: insert ledger leg failed",
+				"err", err, "op_id", opID, "kind", kind, "leg_index", legOffset+1,
+				"from_account", from.Number, "to_account", to.Number,
+				"amount", fromStr, "currency", from.Currency)
 			return nil, err
 		}
 		return []*domain.Transaction{leg}, nil
@@ -269,20 +295,31 @@ func (s *Service) executeMoneyMove(ctx context.Context, tx pgx.Tx, from, to *dom
 	// Cross-currency — menjačnica via bank house accounts.
 	bankFrom, err := s.Store.GetSystemAccount(ctx, from.Currency)
 	if err != nil {
+		s.log().ErrorContext(ctx, "money move: source house account lookup failed",
+			"err", err, "op_id", opID, "kind", kind, "currency", from.Currency)
 		return nil, err
 	}
 	bankTo, err := s.Store.GetSystemAccount(ctx, to.Currency)
 	if err != nil {
+		s.log().ErrorContext(ctx, "money move: destination house account lookup failed",
+			"err", err, "op_id", opID, "kind", kind, "currency", to.Currency)
 		return nil, err
 	}
 
 	composite, toBefore, err := s.rateAndConvert(ctx, from.Currency, to.Currency, fromAmt)
 	if err != nil {
+		s.log().ErrorContext(ctx, "money move: fx conversion failed",
+			"err", err, "op_id", opID, "kind", kind,
+			"from_currency", from.Currency, "to_currency", to.Currency,
+			"amount", money.FormatAmount(fromAmt))
 		return nil, err
 	}
 	commission := money.Mul(toBefore, s.commissionRateFor(initiator))
 	toAmt := money.Sub(toBefore, commission)
 	if !money.IsPositive(toAmt) {
+		s.log().WarnContext(ctx, "money move rejected: amount too small after commission",
+			"op_id", opID, "kind", kind, "from_currency", from.Currency, "to_currency", to.Currency,
+			"amount", money.FormatAmount(fromAmt))
 		return nil, apperr.Validation("amount too small after commission")
 	}
 
@@ -293,18 +330,26 @@ func (s *Service) executeMoneyMove(ctx context.Context, tx pgx.Tx, from, to *dom
 
 	// Debit source, credit bank's source-currency house.
 	if err := s.Store.AdjustBalance(ctx, tx, from.ID, negFrom); err != nil {
+		s.logMoneyMoveDebitErr(ctx, err, opID, kind, from.Number, fromStr, from.Currency)
 		return nil, err
 	}
 	if err := s.Store.AdjustBalance(ctx, tx, bankFrom.ID, fromStr); err != nil {
+		s.log().ErrorContext(ctx, "money move: credit source house failed",
+			"err", err, "op_id", opID, "kind", kind, "amount", fromStr, "currency", from.Currency)
 		return nil, err
 	}
 	// Debit bank's to-currency house, credit destination (commission
 	// is the spread the bank keeps; bankTo loses toAmt only — not
 	// toBefore — so the difference accrues to the bank's books).
 	if err := s.Store.AdjustBalance(ctx, tx, bankTo.ID, negTo); err != nil {
+		s.log().ErrorContext(ctx, "money move: debit destination house failed",
+			"err", err, "op_id", opID, "kind", kind, "amount", toStr, "currency", to.Currency)
 		return nil, err
 	}
 	if err := s.Store.AdjustBalance(ctx, tx, to.ID, toStr); err != nil {
+		s.log().ErrorContext(ctx, "money move: credit destination failed",
+			"err", err, "op_id", opID, "kind", kind, "to_account", to.Number,
+			"amount", toStr, "currency", to.Currency)
 		return nil, err
 	}
 
@@ -318,6 +363,9 @@ func (s *Service) executeMoneyMove(ctx context.Context, tx pgx.Tx, from, to *dom
 		Status:            domain.TxStatusRealized,
 	})
 	if err != nil {
+		s.log().ErrorContext(ctx, "money move: insert ledger leg failed",
+			"err", err, "op_id", opID, "kind", kind, "leg_index", legOffset+1,
+			"from_account", from.Number, "amount", fromStr, "currency", from.Currency)
 		return nil, err
 	}
 	leg2, err := s.Store.InsertTransaction(ctx, tx, &domain.Transaction{
@@ -333,9 +381,27 @@ func (s *Service) executeMoneyMove(ctx context.Context, tx pgx.Tx, from, to *dom
 		Status:            domain.TxStatusRealized,
 	})
 	if err != nil {
+		s.log().ErrorContext(ctx, "money move: insert ledger leg failed",
+			"err", err, "op_id", opID, "kind", kind, "leg_index", legOffset+2,
+			"to_account", to.Number, "amount", toStr, "currency", to.Currency)
 		return nil, err
 	}
 	return []*domain.Transaction{leg1, leg2}, nil
+}
+
+// logMoneyMoveDebitErr classifies a source-debit failure: insufficient
+// funds is an expected client-class outcome (Warn); anything else is a
+// db-level Error.
+func (s *Service) logMoneyMoveDebitErr(ctx context.Context, err error, opID string, kind domain.TransactionKind, fromNumber, amount string, currency domain.Currency) {
+	if errors.Is(err, store.ErrInsufficientFunds) {
+		s.log().WarnContext(ctx, "money move rejected: insufficient funds",
+			"err", err, "op_id", opID, "kind", kind, "from_account", fromNumber,
+			"amount", amount, "currency", currency)
+		return
+	}
+	s.log().ErrorContext(ctx, "money move: debit source failed",
+		"err", err, "op_id", opID, "kind", kind, "from_account", fromNumber,
+		"amount", amount, "currency", currency)
 }
 
 // resolvePaymentEndpoints loads source + destination accounts, runs

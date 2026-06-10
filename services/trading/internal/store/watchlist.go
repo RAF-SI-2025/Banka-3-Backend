@@ -4,6 +4,7 @@ import (
 	"context"
 
 	"github.com/RAF-SI-2025/Banka-3-Backend/pkg/apperr"
+	"github.com/RAF-SI-2025/Banka-3-Backend/pkg/logger"
 	"github.com/RAF-SI-2025/Banka-3-Backend/pkg/postgres"
 	"github.com/RAF-SI-2025/Banka-3-Backend/services/trading/internal/domain"
 	"github.com/jackc/pgx/v5"
@@ -20,6 +21,7 @@ func (s *Store) CreateWatchlist(ctx context.Context, w *domain.Watchlist) (*doma
 	row := s.DB.QueryRow(ctx, q, w.UserID, string(w.UserKind), w.Name)
 	out, err := scanWatchlist(row)
 	if err != nil {
+		logger.From(ctx).ErrorContext(ctx, "insert watchlist failed", "err", err)
 		return nil, apperr.Internal("insert watchlist", err)
 	}
 	return out, nil
@@ -33,6 +35,7 @@ func (s *Store) ListWatchlists(ctx context.Context, userID string) ([]*domain.Wa
 	      where user_id = $1 order by created_at desc`
 	rows, err := s.DB.Query(postgres.WithRead(ctx), q, userID)
 	if err != nil {
+		logger.From(ctx).ErrorContext(ctx, "list watchlists failed", "err", err, "user_id", userID)
 		return nil, apperr.Internal("list watchlists", err)
 	}
 	defer rows.Close()
@@ -40,11 +43,16 @@ func (s *Store) ListWatchlists(ctx context.Context, userID string) ([]*domain.Wa
 	for rows.Next() {
 		w, err := scanWatchlist(rows)
 		if err != nil {
+			logger.From(ctx).ErrorContext(ctx, "scan watchlist failed", "err", err, "user_id", userID)
 			return nil, apperr.Internal("scan watchlist", err)
 		}
 		out = append(out, w)
 	}
-	return out, rows.Err()
+	if err := rows.Err(); err != nil {
+		logger.From(ctx).ErrorContext(ctx, "list watchlists rows failed", "err", err, "user_id", userID)
+		return out, err
+	}
+	return out, nil
 }
 
 // GetWatchlist returns one watchlist by id (without items). NotFound on
@@ -56,6 +64,7 @@ func (s *Store) GetWatchlist(ctx context.Context, id string) (*domain.Watchlist,
 		if noRows(err) {
 			return nil, apperr.NotFound("lista za praćenje nije pronađena")
 		}
+		logger.From(ctx).ErrorContext(ctx, "get watchlist failed", "err", err, "id", id)
 		return nil, apperr.Internal("get watchlist", err)
 	}
 	return out, nil
@@ -65,6 +74,7 @@ func (s *Store) GetWatchlist(ctx context.Context, id string) (*domain.Watchlist,
 func (s *Store) DeleteWatchlist(ctx context.Context, id string) error {
 	const q = `delete from "trading".watchlists where id = $1`
 	if _, err := s.DB.Exec(ctx, q, id); err != nil {
+		logger.From(ctx).ErrorContext(ctx, "delete watchlist failed", "err", err, "id", id)
 		return apperr.Internal("delete watchlist", err)
 	}
 	return nil
@@ -83,6 +93,7 @@ func (s *Store) AddItem(ctx context.Context, watchlistID, securityID string) (*d
 	var it domain.WatchlistItem
 	if err := s.DB.QueryRow(ctx, q, watchlistID, securityID).
 		Scan(&it.ID, &it.SecurityID, &it.CreatedAt); err != nil {
+		logger.From(ctx).ErrorContext(ctx, "add watchlist item failed", "err", err, "watchlist_id", watchlistID, "security_id", securityID)
 		return nil, apperr.Internal("add watchlist item", err)
 	}
 	return &it, nil
@@ -93,6 +104,7 @@ func (s *Store) RemoveItem(ctx context.Context, watchlistID, securityID string) 
 	const q = `delete from "trading".watchlist_items
 	           where watchlist_id = $1 and security_id = $2`
 	if _, err := s.DB.Exec(ctx, q, watchlistID, securityID); err != nil {
+		logger.From(ctx).ErrorContext(ctx, "remove watchlist item failed", "err", err, "watchlist_id", watchlistID, "security_id", securityID)
 		return apperr.Internal("remove watchlist item", err)
 	}
 	return nil
@@ -106,6 +118,7 @@ func (s *Store) ListItems(ctx context.Context, watchlistID string) ([]*domain.Wa
 	           where watchlist_id = $1 order by created_at desc`
 	rows, err := s.DB.Query(postgres.WithRead(ctx), q, watchlistID)
 	if err != nil {
+		logger.From(ctx).ErrorContext(ctx, "list watchlist items failed", "err", err, "watchlist_id", watchlistID)
 		return nil, apperr.Internal("list watchlist items", err)
 	}
 	defer rows.Close()
@@ -113,11 +126,16 @@ func (s *Store) ListItems(ctx context.Context, watchlistID string) ([]*domain.Wa
 	for rows.Next() {
 		var it domain.WatchlistItem
 		if err := rows.Scan(&it.ID, &it.SecurityID, &it.CreatedAt); err != nil {
+			logger.From(ctx).ErrorContext(ctx, "scan watchlist item failed", "err", err, "watchlist_id", watchlistID)
 			return nil, apperr.Internal("scan watchlist item", err)
 		}
 		out = append(out, &it)
 	}
-	return out, rows.Err()
+	if err := rows.Err(); err != nil {
+		logger.From(ctx).ErrorContext(ctx, "list items rows failed", "err", err, "watchlist_id", watchlistID)
+		return out, err
+	}
+	return out, nil
 }
 
 func scanWatchlist(row pgx.Row) (*domain.Watchlist, error) {

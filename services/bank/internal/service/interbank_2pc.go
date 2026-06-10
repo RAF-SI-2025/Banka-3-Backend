@@ -102,12 +102,30 @@ func (s *Service) PreparePayment(ctx context.Context, in PreparePaymentInput) (*
 		// the partner can be auto-blocked. Best-effort — never mask the
 		// original error.
 		s.onPrepareFailure(ctx, in, err)
+		if clientClassErr(err) {
+			s.log().WarnContext(ctx, "interbank prepare rejected",
+				"err", err, "transaction_id", in.TransactionID,
+				"sender_routing_number", in.SenderRoutingNumber, "direction", in.Direction,
+				"local_account", in.LocalAccountNumber, "remote_account", in.RemoteAccountNumber,
+				"amount", in.Amount, "currency", in.Currency)
+		} else {
+			s.log().ErrorContext(ctx, "interbank prepare failed",
+				"err", err, "transaction_id", in.TransactionID,
+				"sender_routing_number", in.SenderRoutingNumber, "direction", in.Direction,
+				"local_account", in.LocalAccountNumber, "remote_account", in.RemoteAccountNumber,
+				"amount", in.Amount, "currency", in.Currency)
+		}
 		return nil, err
 	}
 	// A clean prepare clears any prior failure streak.
 	if rerr := s.Store.ResetPartnerFailures(ctx, in.SenderRoutingNumber); rerr != nil {
-		s.Log.Warn("interbank: reset partner failures", "sender_routing_number", in.SenderRoutingNumber, "error", rerr)
+		s.log().WarnContext(ctx, "interbank: reset partner failures", "err", rerr, "sender_routing_number", in.SenderRoutingNumber)
 	}
+	s.log().InfoContext(ctx, "interbank tx prepared",
+		"transaction_id", res.TransactionID, "status", res.Status, "reservation_id", res.ReservationID,
+		"sender_routing_number", in.SenderRoutingNumber, "direction", in.Direction,
+		"local_account", in.LocalAccountNumber, "remote_account", in.RemoteAccountNumber,
+		"amount", in.Amount, "currency", in.Currency)
 	return res, nil
 }
 
@@ -202,12 +220,12 @@ func (s *Service) onPrepareFailure(ctx context.Context, in PreparePaymentInput, 
 	}); ierr != nil {
 		// A conflict means a row already exists (e.g. a partial prepare
 		// that did persist); not worth surfacing.
-		s.Log.Warn("interbank: record failed attempt", "sender_routing_number", in.SenderRoutingNumber, "transaction_id", in.TransactionID, "error", ierr)
+		s.log().WarnContext(ctx, "interbank: record failed attempt", "err", ierr, "sender_routing_number", in.SenderRoutingNumber, "transaction_id", in.TransactionID)
 	}
 
 	n, ferr := s.Store.RecordPartnerFailure(ctx, in.SenderRoutingNumber)
 	if ferr != nil {
-		s.Log.Warn("interbank: record partner failure", "sender_routing_number", in.SenderRoutingNumber, "error", ferr)
+		s.log().WarnContext(ctx, "interbank: record partner failure", "err", ferr, "sender_routing_number", in.SenderRoutingNumber)
 		return
 	}
 	if shouldAutoBlock(n) {
@@ -234,10 +252,10 @@ func isCountablePrepareFailure(err error) bool {
 func (s *Service) autoBlockPartner(ctx context.Context, senderRouting, failures int) {
 	reason := fmt.Sprintf("automatski blokirana posle %d uzastopnih neuspeha", failures)
 	if _, err := s.Store.BlockBank(ctx, senderRouting, reason, domain.BlacklistAutoBlockBy); err != nil {
-		s.Log.Warn("interbank: auto-block partner", "sender_routing_number", senderRouting, "error", err)
+		s.log().ErrorContext(ctx, "interbank: auto-block partner failed", "err", err, "sender_routing_number", senderRouting)
 		return
 	}
-	s.Log.Warn("interbank: partner auto-blacklisted",
+	s.log().WarnContext(ctx, "interbank: partner auto-blacklisted",
 		"sender_routing_number", senderRouting, "consecutive_failures", failures)
 	s.notifyInterbankAutoBlock(ctx, senderRouting, failures)
 }
@@ -256,7 +274,7 @@ func (s *Service) notifyInterbankAutoBlock(ctx context.Context, senderRouting, f
 		senderRouting, failures,
 	)
 	if err := s.InApp.Notify(ctx, domain.InterbankSupervisorAudience, "employee", "interbank", title, body); err != nil {
-		s.Log.Warn("interbank: auto-block notify", "error", err)
+		s.log().WarnContext(ctx, "interbank: auto-block notify failed", "err", err, "sender_routing_number", senderRouting)
 	}
 }
 
@@ -305,9 +323,17 @@ func (s *Service) prepareOutbound(ctx context.Context, in PreparePaymentInput, a
 		_, ierr := s.Store.InsertInterbankTx(ctx, tx, row)
 		return ierr
 	}); err != nil {
+		s.log().ErrorContext(ctx, "interbank prepare outbound: record prepared row failed, releasing reservation",
+			"err", err, "transaction_id", in.TransactionID, "sender_routing_number", in.SenderRoutingNumber,
+			"reservation_id", res.ReservationID, "op_id", opID,
+			"local_account", in.LocalAccountNumber, "amount", in.Amount, "currency", in.Currency)
 		// Release the reservation if recording the prepared row failed —
 		// avoids leaking a held debit.
-		_, _ = s.ReleaseFunds(ctx, opID)
+		if _, rerr := s.ReleaseFunds(ctx, opID); rerr != nil {
+			s.log().ErrorContext(ctx, "interbank prepare outbound: release reservation failed",
+				"err", rerr, "transaction_id", in.TransactionID, "sender_routing_number", in.SenderRoutingNumber,
+				"reservation_id", res.ReservationID, "op_id", opID)
+		}
 		return nil, err
 	}
 	_ = amt // already consumed by ReserveFunds via in.Amount
@@ -379,16 +405,27 @@ func (s *Service) CommitPayment(ctx context.Context, senderRouting int, txID str
 
 	row, err := s.Store.GetInterbankTx(ctx, nil, senderRouting, txID, false)
 	if err != nil {
+		if apperrIs(err, apperr.KindNotFound) {
+			s.log().WarnContext(ctx, "interbank commit: tx not found",
+				"err", err, "transaction_id", txID, "sender_routing_number", senderRouting)
+		} else {
+			s.log().ErrorContext(ctx, "interbank commit: tx lookup failed",
+				"err", err, "transaction_id", txID, "sender_routing_number", senderRouting)
+		}
 		return nil, err
 	}
 	switch row.Status {
 	case domain.InterbankTxCommitted:
 		return &CommitPaymentResult{TransactionID: txID, Status: row.Status, OpID: row.OpID}, nil
 	case domain.InterbankTxRolledBack:
+		s.log().WarnContext(ctx, "interbank commit rejected: transaction is rolled back",
+			"transaction_id", txID, "sender_routing_number", senderRouting, "direction", row.Direction)
 		return nil, apperr.FailedPrecondition("transaction is rolled back")
 	case domain.InterbankTxPrepared:
 		// fall through
 	default:
+		s.log().ErrorContext(ctx, "interbank commit: unknown tx status",
+			"transaction_id", txID, "sender_routing_number", senderRouting, "status", row.Status)
 		return nil, apperr.Internal("unknown interbank tx status", nil)
 	}
 
@@ -400,6 +437,8 @@ func (s *Service) CommitPayment(ctx context.Context, senderRouting int, txID str
 	case domain.InterbankInbound:
 		return s.commitInbound(ctx, row, opID)
 	default:
+		s.log().ErrorContext(ctx, "interbank commit: unknown direction",
+			"transaction_id", txID, "sender_routing_number", senderRouting, "direction", row.Direction)
 		return nil, apperr.Internal("unknown direction", nil)
 	}
 }
@@ -410,6 +449,9 @@ func (s *Service) commitOutbound(ctx context.Context, row *domain.InterbankProto
 	// (the partner credits their user separately on their side).
 	system, err := s.Store.GetSystemAccount(ctx, row.Currency)
 	if err != nil {
+		s.log().ErrorContext(ctx, "interbank commit outbound: bank system account missing",
+			"err", err, "transaction_id", row.TransactionID, "sender_routing_number", row.SenderRoutingNumber,
+			"currency", row.Currency)
 		return nil, apperr.FailedPrecondition("bank system account missing for currency")
 	}
 	if _, err := s.CommitReservedFunds(ctx, CommitReservedFundsInput{
@@ -420,6 +462,11 @@ func (s *Service) commitOutbound(ctx context.Context, row *domain.InterbankProto
 		IsActuary:     true, // internal — no commission
 		Purpose:       interbankPurpose(row),
 	}); err != nil {
+		s.log().ErrorContext(ctx, "interbank commit outbound: commit reserved funds failed",
+			"err", err, "transaction_id", row.TransactionID, "sender_routing_number", row.SenderRoutingNumber,
+			"op_id", opID, "reservation_id", row.ReservationID, "direction", row.Direction,
+			"local_account", row.LocalAccountNumber, "remote_account", row.RemoteAccountNumber,
+			"amount", row.Amount, "currency", row.Currency)
 		return nil, err
 	}
 	if err := s.Store.ExecuteAtomic(ctx, func(tx pgx.Tx) error {
@@ -427,8 +474,19 @@ func (s *Service) commitOutbound(ctx context.Context, row *domain.InterbankProto
 			domain.InterbankTxCommitted, opID, "")
 		return merr
 	}); err != nil {
+		// Money has moved but the row still reads 'prepared' — flag loudly
+		// so a stuck-looking 2PC can be traced to this exact spot.
+		s.log().ErrorContext(ctx, "interbank commit outbound: funds committed but status update failed",
+			"err", err, "transaction_id", row.TransactionID, "sender_routing_number", row.SenderRoutingNumber,
+			"op_id", opID, "reservation_id", row.ReservationID,
+			"amount", row.Amount, "currency", row.Currency)
 		return nil, err
 	}
+	s.log().InfoContext(ctx, "interbank tx committed",
+		"transaction_id", row.TransactionID, "sender_routing_number", row.SenderRoutingNumber,
+		"direction", row.Direction, "op_id", opID, "reservation_id", row.ReservationID,
+		"local_account", row.LocalAccountNumber, "remote_account", row.RemoteAccountNumber,
+		"amount", row.Amount, "currency", row.Currency)
 	return &CommitPaymentResult{TransactionID: row.TransactionID, Status: domain.InterbankTxCommitted, OpID: opID}, nil
 }
 
@@ -441,24 +499,50 @@ func (s *Service) commitInbound(ctx context.Context, row *domain.InterbankProtoc
 				domain.InterbankTxCommitted, opID, "")
 			return merr
 		}); err != nil {
+			// Ledger legs exist but the row still reads 'prepared' —
+			// inconsistent state worth a loud record.
+			s.log().ErrorContext(ctx, "interbank commit inbound: legs exist but status update failed",
+				"err", err, "transaction_id", row.TransactionID, "sender_routing_number", row.SenderRoutingNumber,
+				"op_id", opID, "amount", row.Amount, "currency", row.Currency)
 			return nil, err
 		}
+		s.log().InfoContext(ctx, "interbank tx committed",
+			"transaction_id", row.TransactionID, "sender_routing_number", row.SenderRoutingNumber,
+			"direction", row.Direction, "op_id", opID,
+			"local_account", row.LocalAccountNumber, "remote_account", row.RemoteAccountNumber,
+			"amount", row.Amount, "currency", row.Currency)
 		return &CommitPaymentResult{TransactionID: row.TransactionID, Status: domain.InterbankTxCommitted, OpID: opID}, nil
 	}
 
 	dst, err := s.Store.GetAccountByNumber(ctx, row.LocalAccountNumber)
 	if err != nil {
+		// Prepare already validated this account; vanishing at commit
+		// time is an inconsistency, not a client mistake.
+		s.log().ErrorContext(ctx, "interbank commit inbound: destination account lookup failed",
+			"err", err, "transaction_id", row.TransactionID, "sender_routing_number", row.SenderRoutingNumber,
+			"local_account", row.LocalAccountNumber)
 		return nil, apperr.Validation("destination account not found")
 	}
 	if dst.Status != domain.AccountActive {
+		s.log().WarnContext(ctx, "interbank commit inbound: destination account not active",
+			"transaction_id", row.TransactionID, "sender_routing_number", row.SenderRoutingNumber,
+			"local_account", row.LocalAccountNumber, "account_status", dst.Status)
 		return nil, apperr.FailedPrecondition("destination account is not active")
 	}
 	system, err := s.Store.GetSystemAccount(ctx, row.Currency)
 	if err != nil {
+		s.log().ErrorContext(ctx, "interbank commit inbound: bank system account missing",
+			"err", err, "transaction_id", row.TransactionID, "sender_routing_number", row.SenderRoutingNumber,
+			"currency", row.Currency)
 		return nil, apperr.FailedPrecondition("bank system account missing for currency")
 	}
 	amt, err := parsePositive(row.Amount)
 	if err != nil {
+		// The stored amount was validated at prepare time; failing to
+		// parse now means the row is corrupt.
+		s.log().ErrorContext(ctx, "interbank commit inbound: stored amount unparseable",
+			"err", err, "transaction_id", row.TransactionID, "sender_routing_number", row.SenderRoutingNumber,
+			"amount", row.Amount, "currency", row.Currency)
 		return nil, err
 	}
 
@@ -477,8 +561,18 @@ func (s *Service) commitInbound(ctx context.Context, row *domain.InterbankProtoc
 			domain.InterbankTxCommitted, opID, "")
 		return merr
 	}); err != nil {
+		s.log().ErrorContext(ctx, "interbank commit inbound failed",
+			"err", err, "transaction_id", row.TransactionID, "sender_routing_number", row.SenderRoutingNumber,
+			"op_id", opID, "direction", row.Direction,
+			"local_account", row.LocalAccountNumber, "remote_account", row.RemoteAccountNumber,
+			"amount", row.Amount, "currency", row.Currency)
 		return nil, err
 	}
+	s.log().InfoContext(ctx, "interbank tx committed",
+		"transaction_id", row.TransactionID, "sender_routing_number", row.SenderRoutingNumber,
+		"direction", row.Direction, "op_id", opID,
+		"local_account", row.LocalAccountNumber, "remote_account", row.RemoteAccountNumber,
+		"amount", row.Amount, "currency", row.Currency)
 	return &CommitPaymentResult{TransactionID: row.TransactionID, Status: domain.InterbankTxCommitted, OpID: opID}, nil
 }
 
@@ -501,16 +595,27 @@ func (s *Service) RollbackPayment(ctx context.Context, senderRouting int, txID, 
 
 	row, err := s.Store.GetInterbankTx(ctx, nil, senderRouting, txID, false)
 	if err != nil {
+		if apperrIs(err, apperr.KindNotFound) {
+			s.log().WarnContext(ctx, "interbank rollback: tx not found",
+				"err", err, "transaction_id", txID, "sender_routing_number", senderRouting)
+		} else {
+			s.log().ErrorContext(ctx, "interbank rollback: tx lookup failed",
+				"err", err, "transaction_id", txID, "sender_routing_number", senderRouting)
+		}
 		return nil, err
 	}
 	switch row.Status {
 	case domain.InterbankTxRolledBack:
 		return &RollbackPaymentResult{TransactionID: txID, Status: row.Status}, nil
 	case domain.InterbankTxCommitted:
+		s.log().WarnContext(ctx, "interbank rollback rejected: transaction is already committed",
+			"transaction_id", txID, "sender_routing_number", senderRouting, "direction", row.Direction)
 		return nil, apperr.FailedPrecondition("transaction is already committed")
 	case domain.InterbankTxPrepared:
 		// fall through
 	default:
+		s.log().ErrorContext(ctx, "interbank rollback: unknown tx status",
+			"transaction_id", txID, "sender_routing_number", senderRouting, "status", row.Status)
 		return nil, apperr.Internal("unknown interbank tx status", nil)
 	}
 
@@ -518,6 +623,10 @@ func (s *Service) RollbackPayment(ctx context.Context, senderRouting int, txID, 
 	if row.Direction == domain.InterbankOutbound {
 		opID := deriveOpID(senderRouting, txID)
 		if _, err := s.ReleaseFunds(ctx, opID); err != nil && !apperrIs(err, apperr.KindNotFound) {
+			s.log().ErrorContext(ctx, "interbank rollback: release reservation failed",
+				"err", err, "transaction_id", txID, "sender_routing_number", senderRouting,
+				"op_id", opID, "reservation_id", row.ReservationID,
+				"amount", row.Amount, "currency", row.Currency)
 			return nil, err
 		}
 	}
@@ -526,8 +635,18 @@ func (s *Service) RollbackPayment(ctx context.Context, senderRouting int, txID, 
 			domain.InterbankTxRolledBack, "", reason)
 		return merr
 	}); err != nil {
+		// Reservation (if any) is released but the row still reads
+		// 'prepared' — inconsistent state worth a loud record.
+		s.log().ErrorContext(ctx, "interbank rollback: reservation released but status update failed",
+			"err", err, "transaction_id", txID, "sender_routing_number", senderRouting,
+			"direction", row.Direction, "amount", row.Amount, "currency", row.Currency)
 		return nil, err
 	}
+	s.log().InfoContext(ctx, "interbank tx rolled back",
+		"transaction_id", txID, "sender_routing_number", senderRouting,
+		"direction", row.Direction, "reservation_id", row.ReservationID,
+		"local_account", row.LocalAccountNumber, "remote_account", row.RemoteAccountNumber,
+		"amount", row.Amount, "currency", row.Currency, "reason", reason)
 	return &RollbackPaymentResult{TransactionID: txID, Status: domain.InterbankTxRolledBack}, nil
 }
 
@@ -559,9 +678,16 @@ func (s *Service) RecordInboundMessage(ctx context.Context, in RecordInboundMess
 		ResponseStatus:      in.ResponseStatus,
 		ResponseBody:        in.ResponseBody,
 	}
-	return s.Store.ExecuteAtomic(ctx, func(tx pgx.Tx) error {
+	if err := s.Store.ExecuteAtomic(ctx, func(tx pgx.Tx) error {
 		return s.Store.UpsertInterbankMessage(ctx, tx, row)
-	})
+	}); err != nil {
+		s.log().ErrorContext(ctx, "interbank record inbound message failed",
+			"err", err, "sender_routing_number", in.SenderRoutingNumber,
+			"idempotence_key", in.IdempotenceKey, "message_type", in.MessageType,
+			"transaction_id", in.TransactionID)
+		return err
+	}
+	return nil
 }
 
 // GetInboundMessage returns the cached response for a (sender, key) or
@@ -575,6 +701,8 @@ func (s *Service) GetInboundMessage(ctx context.Context, senderRouting int, key 
 		if apperrIs(err, apperr.KindNotFound) {
 			return nil, nil
 		}
+		s.log().ErrorContext(ctx, "interbank get inbound message failed",
+			"err", err, "sender_routing_number", senderRouting, "idempotence_key", key)
 		return nil, err
 	}
 	return out, nil

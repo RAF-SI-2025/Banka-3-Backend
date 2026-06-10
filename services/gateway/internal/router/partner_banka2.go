@@ -44,6 +44,7 @@ import (
 	bankpb "github.com/RAF-SI-2025/Banka-3-Backend/gen/proto/bank/v1"
 	tradingpb "github.com/RAF-SI-2025/Banka-3-Backend/gen/proto/trading/v1"
 	userpb "github.com/RAF-SI-2025/Banka-3-Backend/gen/proto/user/v1"
+	"github.com/RAF-SI-2025/Banka-3-Backend/pkg/logger"
 
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
@@ -117,6 +118,11 @@ func (p *PartnerBanka2) guard(h http.HandlerFunc) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		got := []byte(r.Header.Get("X-Api-Key"))
 		if subtle.ConstantTimeCompare(got, expected) != 1 {
+			ctx := r.Context()
+			// Never log the presented key itself.
+			logger.From(ctx).WarnContext(ctx, "partner api key rejected",
+				"method", r.Method, "path", r.URL.Path,
+				"key_present", len(got) > 0, "remote", r.RemoteAddr)
 			writeError(w, http.StatusUnauthorized, "invalid X-Api-Key")
 			return
 		}
@@ -248,28 +254,49 @@ type b2UserInformation struct {
 // =====================================================================
 
 func (p *PartnerBanka2) handleEnvelope(w http.ResponseWriter, r *http.Request) {
+	ctx := r.Context()
+	log := logger.From(ctx)
 	raw, err := io.ReadAll(io.LimitReader(r.Body, 1<<20))
 	if err != nil {
+		log.WarnContext(ctx, "partner request body read failed",
+			"err", err, "method", r.Method, "path", r.URL.Path)
 		writeError(w, http.StatusBadRequest, "read body: "+err.Error())
 		return
 	}
 	var env b2Envelope
 	if err := json.Unmarshal(raw, &env); err != nil {
+		log.WarnContext(ctx, "interbank envelope decode failed",
+			"err", err, "path", r.URL.Path, "body", bodySnippet(raw))
 		writeError(w, http.StatusBadRequest, "invalid envelope JSON")
 		return
 	}
 	if env.IdempotenceKey.LocallyGeneratedKey == "" || env.IdempotenceKey.RoutingNumber == 0 {
+		log.WarnContext(ctx, "interbank envelope rejected: missing idempotenceKey",
+			"message_type", env.MessageType, "body", bodySnippet(raw))
 		writeError(w, http.StatusBadRequest, "envelope missing idempotenceKey")
 		return
 	}
 	sender := env.IdempotenceKey.RoutingNumber
+	// Carry the partner identity + envelope type on the request logger
+	// so every downstream line (votes, writeGRPCError, cache writes)
+	// names the exchange.
+	log = log.With("partner_bank", sender, "message_type", env.MessageType)
+	r = r.WithContext(logger.Inject(ctx, log))
+	ctx = r.Context()
 
 	// Idempotency replay — keyed by (sender_routing, locally_generated_key).
-	hit, _ := p.Interbank.GetInboundMessage(partnerCtx(r.Context()), &bankpb.GetInboundMessageRequest{
+	hit, herr := p.Interbank.GetInboundMessage(partnerCtx(r.Context()), &bankpb.GetInboundMessageRequest{
 		SenderRoutingNumber: int32(sender),
 		IdempotenceKey:      env.IdempotenceKey.LocallyGeneratedKey,
 	})
+	if herr != nil {
+		// Best-effort lookup — a miss just re-runs the handler, but a
+		// broken audit store deserves a line.
+		log.WarnContext(ctx, "interbank replay lookup failed; proceeding", "err", herr)
+	}
 	if hit != nil && hit.GetFound() {
+		log.InfoContext(ctx, "interbank envelope replayed from cache",
+			"status", hit.GetResponseStatus())
 		w.Header().Set("Content-Type", "application/json; charset=utf-8")
 		st := int(hit.GetResponseStatus())
 		if st == http.StatusNoContent {
@@ -277,7 +304,9 @@ func (p *PartnerBanka2) handleEnvelope(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 		w.WriteHeader(st)
-		_, _ = w.Write([]byte(hit.GetResponseBody()))
+		if _, werr := w.Write([]byte(hit.GetResponseBody())); werr != nil {
+			log.WarnContext(ctx, "response write failed", "err", werr)
+		}
 		return
 	}
 
@@ -285,6 +314,8 @@ func (p *PartnerBanka2) handleEnvelope(w http.ResponseWriter, r *http.Request) {
 	case "NEW_TX":
 		var tx b2Transaction
 		if err := json.Unmarshal(env.Message, &tx); err != nil {
+			log.WarnContext(ctx, "interbank envelope rejected: invalid NEW_TX body",
+				"err", err, "body", bodySnippet(env.Message))
 			writeError(w, http.StatusBadRequest, "NEW_TX: invalid Transaction body")
 			return
 		}
@@ -292,6 +323,8 @@ func (p *PartnerBanka2) handleEnvelope(w http.ResponseWriter, r *http.Request) {
 	case "COMMIT_TX":
 		var body b2CommitTransaction
 		if err := json.Unmarshal(env.Message, &body); err != nil {
+			log.WarnContext(ctx, "interbank envelope rejected: invalid COMMIT_TX body",
+				"err", err, "body", bodySnippet(env.Message))
 			writeError(w, http.StatusBadRequest, "COMMIT_TX: invalid body")
 			return
 		}
@@ -299,11 +332,14 @@ func (p *PartnerBanka2) handleEnvelope(w http.ResponseWriter, r *http.Request) {
 	case "ROLLBACK_TX":
 		var body b2RollbackTransaction
 		if err := json.Unmarshal(env.Message, &body); err != nil {
+			log.WarnContext(ctx, "interbank envelope rejected: invalid ROLLBACK_TX body",
+				"err", err, "body", bodySnippet(env.Message))
 			writeError(w, http.StatusBadRequest, "ROLLBACK_TX: invalid body")
 			return
 		}
 		p.handleRollbackTX(w, r, env.IdempotenceKey, body)
 	default:
+		log.WarnContext(ctx, "interbank envelope rejected: unknown messageType")
 		writeError(w, http.StatusBadRequest, "unknown messageType: "+env.MessageType)
 	}
 }
@@ -313,6 +349,10 @@ func (p *PartnerBanka2) handleEnvelope(w http.ResponseWriter, r *http.Request) {
 // TxAccount.OPTION pseudo-account) is rejected with UNACCEPTABLE_ASSET
 // for now — the SAGA exercise path is not wired through the envelope.
 func (p *PartnerBanka2) handleNewTX(w http.ResponseWriter, r *http.Request, key b2IdempotenceKey, tx b2Transaction) {
+	// Stamp the 2PC transaction id on the request logger so the vote
+	// decision lines (and any upstream-error lines) carry it.
+	r = r.WithContext(logger.Inject(r.Context(),
+		logger.From(r.Context()).With("transaction_id", tx.TransactionID.ID)))
 	if len(tx.Postings) == 0 {
 		p.respondVoteNO(w, r, key, tx.TransactionID.ID, "UNBALANCED_TX", nil)
 		return
@@ -337,8 +377,8 @@ func (p *PartnerBanka2) handleNewTX(w http.ResponseWriter, r *http.Request, key 
 	if ourRouting == "" {
 		ourRouting = "333"
 	}
-	var ourIdx = -1
-	var otherIdx = -1
+	ourIdx := -1
+	otherIdx := -1
 	for i, post := range tx.Postings {
 		if post.Account.Type != "ACCOUNT" || post.Account.Num == "" {
 			// PERSON / OPTION mid-payment — out of scope here.
@@ -397,6 +437,10 @@ func (p *PartnerBanka2) handleNewTX(w http.ResponseWriter, r *http.Request, key 
 	})
 	if err != nil {
 		// Map gRPC-level rejections to NO votes with a best-guess reason.
+		// The wire reason loses the upstream detail, so log it here.
+		ctx := r.Context()
+		logger.From(ctx).WarnContext(ctx, "interbank prepare failed",
+			"err", err, "currency", currency, "amount", amountStr)
 		reason := banka2NoVoteFromGRPC(err)
 		p.respondVoteNO(w, r, key, tx.TransactionID.ID, reason, nil)
 		return
@@ -432,6 +476,8 @@ func (p *PartnerBanka2) handleOTCSettlementNewTX(w http.ResponseWriter, r *http.
 	}
 	intent, err := parseB2OTCSettlement(tx, ourRoutings...)
 	if err != nil {
+		ctx := r.Context()
+		logger.From(ctx).WarnContext(ctx, "otc settlement envelope parse failed", "err", err)
 		p.respondVoteNO(w, r, key, tx.TransactionID.ID, "UNACCEPTABLE_ASSET", nil)
 		return
 	}
@@ -464,6 +510,8 @@ func (p *PartnerBanka2) handleOTCSettlementNewTX(w http.ResponseWriter, r *http.
 		Quantity:       intent.Quantity,
 	})
 	if err != nil {
+		logger.From(ctx).WarnContext(ctx, "otc settlement prepare failed",
+			"err", err, "kind", kind.String(), "ticker", intent.Ticker)
 		p.respondVoteNO(w, r, key, tx.TransactionID.ID, banka2NoVoteFromGRPC(err), nil)
 		return
 	}
@@ -490,12 +538,18 @@ func (p *PartnerBanka2) handleOTCSettlementNewTX(w http.ResponseWriter, r *http.
 			Purpose:             "OTC " + strings.ToLower(kind.String()),
 		})
 		if perr != nil || prep.GetStatus() != bankpb.InterbankTxStatus_INTERBANK_TX_STATUS_PREPARED {
+			logger.From(ctx).WarnContext(ctx, "otc settlement cash leg prepare failed",
+				"err", perr, "prepare_status", prep.GetStatus().String(),
+				"currency", intent.CashCurrency, "amount", intent.CashAmount)
 			// Release the trading prepare (shares) so we don't strand them.
-			_, _ = p.TradingOTC.SettleExternalOTCOption(ctx, &tradingpb.SettleExternalOTCOptionRequest{
+			if _, rbErr := p.TradingOTC.SettleExternalOTCOption(ctx, &tradingpb.SettleExternalOTCOptionRequest{
 				Phase:          tradingpb.ExternalOTCSettlementPhase_EXTERNAL_OTC_SETTLEMENT_PHASE_ROLLBACK,
 				SenderBankCode: strconv.Itoa(key.RoutingNumber),
 				TransactionId:  tx.TransactionID.ID,
-			})
+			}); rbErr != nil {
+				// Stranded share reservation — needs operator attention.
+				logger.From(ctx).ErrorContext(ctx, "otc settlement rollback failed", "err", rbErr)
+			}
 			reason := "INSUFFICIENT_ASSET"
 			if perr != nil {
 				reason = banka2NoVoteFromGRPC(perr)
@@ -523,6 +577,8 @@ func (p *PartnerBanka2) handleBuyerAcceptNewTX(w http.ResponseWriter, r *http.Re
 		RemoteBankCode: strconv.Itoa(key.RoutingNumber),
 	})
 	if err != nil {
+		logger.From(ctx).WarnContext(ctx, "buyer accept thread lookup failed",
+			"err", err, "option_ref", intent.OptionRef.ID)
 		p.respondVoteNO(w, r, key, tx.TransactionID.ID, "OPTION_NEGOTIATION_NOT_FOUND", nil)
 		return
 	}
@@ -551,6 +607,9 @@ func (p *PartnerBanka2) handleBuyerAcceptNewTX(w http.ResponseWriter, r *http.Re
 		Purpose:             "OTC premija (kupac) — nit " + t.GetId(),
 	})
 	if perr != nil {
+		logger.From(ctx).WarnContext(ctx, "buyer accept premium prepare failed",
+			"err", perr, "thread_id", t.GetId(),
+			"currency", intent.CashCurrency, "amount", intent.CashAmount)
 		p.respondVoteNO(w, r, key, tx.TransactionID.ID, banka2NoVoteFromGRPC(perr), nil)
 		return
 	}
@@ -574,6 +633,8 @@ func buyerAccountFromPostings(tx b2Transaction) string {
 }
 
 func (p *PartnerBanka2) handleCommitTX(w http.ResponseWriter, r *http.Request, key b2IdempotenceKey, body b2CommitTransaction) {
+	r = r.WithContext(logger.Inject(r.Context(),
+		logger.From(r.Context()).With("transaction_id", body.TransactionID.ID)))
 	ctx := partnerCtx(r.Context())
 	// OTC share/contract leg (no-op for a plain cash tx — handled=false).
 	if p.TradingOTC != nil {
@@ -582,7 +643,7 @@ func (p *PartnerBanka2) handleCommitTX(w http.ResponseWriter, r *http.Request, k
 			SenderBankCode: strconv.Itoa(key.RoutingNumber),
 			TransactionId:  body.TransactionID.ID,
 		}); err != nil {
-			writeGRPCError(w, err)
+			writeGRPCError(w, r, err)
 			return
 		}
 	}
@@ -591,13 +652,16 @@ func (p *PartnerBanka2) handleCommitTX(w http.ResponseWriter, r *http.Request, k
 		TransactionId:       body.TransactionID.ID,
 	})
 	if err != nil {
-		writeGRPCError(w, err)
+		writeGRPCError(w, r, err)
 		return
 	}
+	logger.From(r.Context()).InfoContext(r.Context(), "interbank commit applied")
 	p.write204AndCache(w, r, key, body.TransactionID.ID, bankpb.InterbankMessageType_INTERBANK_MESSAGE_TYPE_COMMIT_TX)
 }
 
 func (p *PartnerBanka2) handleRollbackTX(w http.ResponseWriter, r *http.Request, key b2IdempotenceKey, body b2RollbackTransaction) {
+	r = r.WithContext(logger.Inject(r.Context(),
+		logger.From(r.Context()).With("transaction_id", body.TransactionID.ID)))
 	ctx := partnerCtx(r.Context())
 	if p.TradingOTC != nil {
 		if _, err := p.TradingOTC.SettleExternalOTCOption(ctx, &tradingpb.SettleExternalOTCOptionRequest{
@@ -605,7 +669,7 @@ func (p *PartnerBanka2) handleRollbackTX(w http.ResponseWriter, r *http.Request,
 			SenderBankCode: strconv.Itoa(key.RoutingNumber),
 			TransactionId:  body.TransactionID.ID,
 		}); err != nil {
-			writeGRPCError(w, err)
+			writeGRPCError(w, r, err)
 			return
 		}
 	}
@@ -615,49 +679,74 @@ func (p *PartnerBanka2) handleRollbackTX(w http.ResponseWriter, r *http.Request,
 		Reason:              "partner rollback",
 	})
 	if err != nil {
-		writeGRPCError(w, err)
+		writeGRPCError(w, r, err)
 		return
 	}
+	logger.From(r.Context()).InfoContext(r.Context(), "interbank rollback applied")
 	p.write204AndCache(w, r, key, body.TransactionID.ID, bankpb.InterbankMessageType_INTERBANK_MESSAGE_TYPE_ROLLBACK_TX)
 }
 
 func (p *PartnerBanka2) respondVoteYES(w http.ResponseWriter, r *http.Request, key b2IdempotenceKey, txID string) {
-	body, _ := json.Marshal(b2TransactionVote{Vote: "YES"})
+	ctx := r.Context()
+	// partner_bank + transaction_id ride the injected request logger.
+	logger.From(ctx).InfoContext(ctx, "interbank tx vote YES")
+	body, err := json.Marshal(b2TransactionVote{Vote: "YES"})
+	if err != nil {
+		logger.From(ctx).ErrorContext(ctx, "interbank vote marshal failed", "err", err)
+	}
 	p.write200AndCache(w, r, key, txID, bankpb.InterbankMessageType_INTERBANK_MESSAGE_TYPE_NEW_TX, body)
 }
 
 func (p *PartnerBanka2) respondVoteNO(w http.ResponseWriter, r *http.Request, key b2IdempotenceKey, txID, reason string, posting *b2Posting) {
-	body, _ := json.Marshal(b2TransactionVote{
+	ctx := r.Context()
+	logger.From(ctx).WarnContext(ctx, "interbank tx vote NO", "reason", reason)
+	body, err := json.Marshal(b2TransactionVote{
 		Vote:    "NO",
 		Reasons: []b2NoVoteReason{{Reason: reason, Posting: posting}},
 	})
+	if err != nil {
+		logger.From(ctx).ErrorContext(ctx, "interbank vote marshal failed", "err", err)
+	}
 	p.write200AndCache(w, r, key, txID, bankpb.InterbankMessageType_INTERBANK_MESSAGE_TYPE_NEW_TX, body)
 }
 
 func (p *PartnerBanka2) write200AndCache(w http.ResponseWriter, r *http.Request, key b2IdempotenceKey, txID string, msgType bankpb.InterbankMessageType, body []byte) {
+	ctx := r.Context()
+	log := logger.From(ctx)
 	w.Header().Set("Content-Type", "application/json; charset=utf-8")
 	w.WriteHeader(http.StatusOK)
-	_, _ = w.Write(body)
-	_, _ = p.Interbank.RecordInboundMessage(partnerCtx(r.Context()), &bankpb.RecordInboundMessageRequest{
+	if _, err := w.Write(body); err != nil {
+		log.WarnContext(ctx, "response write failed", "err", err, "transaction_id", txID)
+	}
+	if _, err := p.Interbank.RecordInboundMessage(partnerCtx(ctx), &bankpb.RecordInboundMessageRequest{
 		SenderRoutingNumber: int32(key.RoutingNumber),
 		IdempotenceKey:      key.LocallyGeneratedKey,
 		MessageType:         msgType,
 		TransactionId:       txID,
 		ResponseStatus:      http.StatusOK,
 		ResponseBody:        string(body),
-	})
+	}); err != nil {
+		// Best-effort idempotency audit; a retry will simply re-run.
+		log.WarnContext(ctx, "interbank inbound message cache write failed",
+			"err", err, "transaction_id", txID)
+	}
 }
 
 func (p *PartnerBanka2) write204AndCache(w http.ResponseWriter, r *http.Request, key b2IdempotenceKey, txID string, msgType bankpb.InterbankMessageType) {
+	ctx := r.Context()
 	w.WriteHeader(http.StatusNoContent)
-	_, _ = p.Interbank.RecordInboundMessage(partnerCtx(r.Context()), &bankpb.RecordInboundMessageRequest{
+	if _, err := p.Interbank.RecordInboundMessage(partnerCtx(ctx), &bankpb.RecordInboundMessageRequest{
 		SenderRoutingNumber: int32(key.RoutingNumber),
 		IdempotenceKey:      key.LocallyGeneratedKey,
 		MessageType:         msgType,
 		TransactionId:       txID,
 		ResponseStatus:      http.StatusNoContent,
 		ResponseBody:        "",
-	})
+	}); err != nil {
+		// Best-effort idempotency audit; a retry will simply re-run.
+		logger.From(ctx).WarnContext(ctx, "interbank inbound message cache write failed",
+			"err", err, "transaction_id", txID)
+	}
 }
 
 func postingsBalanced(postings []b2Posting) bool {
@@ -721,7 +810,7 @@ func banka2NoVoteFromGRPC(err error) string {
 func (p *PartnerBanka2) handlePublicStock(w http.ResponseWriter, r *http.Request) {
 	resp, err := p.Trading.ListPublicHoldings(partnerCtx(r.Context()), &tradingpb.ListPublicHoldingsRequest{})
 	if err != nil {
-		writeGRPCError(w, err)
+		writeGRPCError(w, r, err)
 		return
 	}
 	ourRouting, _ := strconv.Atoi(p.BankRoutingNumber)
@@ -755,13 +844,22 @@ func (p *PartnerBanka2) handlePublicStock(w http.ResponseWriter, r *http.Request
 // =====================================================================
 
 func (p *PartnerBanka2) handleCreateNegotiation(w http.ResponseWriter, r *http.Request) {
+	ctx := r.Context()
+	log := logger.From(ctx)
 	var offer b2OtcOffer
-	if err := json.NewDecoder(r.Body).Decode(&offer); err != nil {
+	var snip snippetWriter
+	if err := json.NewDecoder(io.TeeReader(r.Body, &snip)).Decode(&offer); err != nil {
+		log.WarnContext(ctx, "partner negotiation payload decode failed",
+			"err", err, "path", r.URL.Path, "body", snip.String())
 		writeError(w, http.StatusBadRequest, "invalid OtcOffer JSON")
 		return
 	}
+	log = log.With("partner_bank", offer.BuyerID.RoutingNumber, "ticker", offer.Stock.Ticker)
+	r = r.WithContext(logger.Inject(ctx, log))
+	ctx = r.Context()
 	settle, perr := parseBanka2Date(offer.SettlementDate)
 	if perr != nil {
+		log.WarnContext(ctx, "partner negotiation rejected: bad settlement date", "err", perr)
 		writeError(w, http.StatusBadRequest, "settlementDate: "+perr.Error())
 		return
 	}
@@ -772,6 +870,7 @@ func (p *PartnerBanka2) handleCreateNegotiation(w http.ResponseWriter, r *http.R
 	// by the partner and persist via remote_thread_id.
 	syntheticThreadID, err := synthesizeBanka2ThreadID(offer.BuyerID.RoutingNumber)
 	if err != nil {
+		log.ErrorContext(ctx, "partner negotiation thread-id generation failed", "err", err)
 		writeError(w, http.StatusInternalServerError, "thread-id gen: "+err.Error())
 		return
 	}
@@ -780,10 +879,16 @@ func (p *PartnerBanka2) handleCreateNegotiation(w http.ResponseWriter, r *http.R
 	// (ticker, seller_user_ref) → holding_id by walking ListPublicHoldings.
 	holdingID, err := p.resolveBanka2Holding(r.Context(), offer.Stock.Ticker, offer.SellerID.ID)
 	if err != nil {
-		writeGRPCError(w, err)
+		writeGRPCError(w, r, err)
 		return
 	}
-	qty, _ := strconv.ParseInt(offer.Amount.String(), 10, 32)
+	qty, qerr := strconv.ParseInt(offer.Amount.String(), 10, 32)
+	if qerr != nil {
+		// The offer proceeds with quantity 0 (and is then judged by the
+		// trading service); record what the partner actually sent.
+		log.WarnContext(ctx, "partner negotiation amount unparsable; using 0",
+			"err", qerr, "amount", offer.Amount.String())
+	}
 	out, err := p.TradingOTC.ReceiveExternalOTCOffer(partnerCtx(r.Context()), &tradingpb.ReceiveExternalOTCOfferRequest{
 		SenderBankCode:    strconv.Itoa(offer.BuyerID.RoutingNumber),
 		SenderUserRef:     offer.BuyerID.ID,
@@ -796,9 +901,14 @@ func (p *PartnerBanka2) handleCreateNegotiation(w http.ResponseWriter, r *http.R
 		SettlementDate:    timestamppb.New(settle),
 	})
 	if err != nil {
-		writeGRPCError(w, err)
+		writeGRPCError(w, r, err)
 		return
 	}
+	log.InfoContext(ctx, "partner negotiation created",
+		"local_thread_id", out.GetLocalMirror().GetId(),
+		"sender_thread_id", syntheticThreadID, "quantity", qty,
+		"price_per_unit", offer.PricePerUnit.Amount.String(),
+		"premium", offer.Premium.Amount.String())
 	ourRouting, _ := strconv.Atoi(p.BankRoutingNumber)
 	writeJSON(w, http.StatusOK, b2ForeignID{
 		RoutingNumber: ourRouting,
@@ -807,8 +917,15 @@ func (p *PartnerBanka2) handleCreateNegotiation(w http.ResponseWriter, r *http.R
 }
 
 func (p *PartnerBanka2) handleReadNegotiation(w http.ResponseWriter, r *http.Request) {
+	ctx := r.Context()
+	log := logger.From(ctx).With(
+		"partner_bank", r.PathValue("routing_number"), "thread_id", r.PathValue("thread_id"),
+	)
+	r = r.WithContext(logger.Inject(ctx, log))
+	ctx = r.Context()
 	threadID := r.PathValue("thread_id")
 	if threadID == "" {
+		log.WarnContext(ctx, "partner negotiation read rejected: missing thread_id")
 		writeError(w, http.StatusBadRequest, "thread_id required")
 		return
 	}
@@ -817,11 +934,12 @@ func (p *PartnerBanka2) handleReadNegotiation(w http.ResponseWriter, r *http.Req
 		RemoteBankCode: r.PathValue("routing_number"),
 	})
 	if err != nil {
-		writeGRPCError(w, err)
+		writeGRPCError(w, r, err)
 		return
 	}
 	t := resp.GetThread()
 	if t == nil {
+		log.WarnContext(ctx, "partner negotiation not found")
 		writeError(w, http.StatusNotFound, "thread not found")
 		return
 	}
@@ -858,23 +976,37 @@ func (p *PartnerBanka2) handleReadNegotiation(w http.ResponseWriter, r *http.Req
 }
 
 func (p *PartnerBanka2) handleCounterNegotiation(w http.ResponseWriter, r *http.Request) {
+	ctx := r.Context()
+	log := logger.From(ctx).With(
+		"partner_bank", r.PathValue("routing_number"), "thread_id", r.PathValue("thread_id"),
+	)
+	r = r.WithContext(logger.Inject(ctx, log))
+	ctx = r.Context()
 	var offer b2OtcOffer
-	if err := json.NewDecoder(r.Body).Decode(&offer); err != nil {
+	var snip snippetWriter
+	if err := json.NewDecoder(io.TeeReader(r.Body, &snip)).Decode(&offer); err != nil {
+		log.WarnContext(ctx, "partner counter payload decode failed",
+			"err", err, "path", r.URL.Path, "body", snip.String())
 		writeError(w, http.StatusBadRequest, "invalid OtcOffer JSON")
 		return
 	}
 	settle, perr := parseBanka2Date(offer.SettlementDate)
 	if perr != nil {
+		log.WarnContext(ctx, "partner counter rejected: bad settlement date", "err", perr)
 		writeError(w, http.StatusBadRequest, "settlementDate: "+perr.Error())
 		return
 	}
 	threadID := r.PathValue("thread_id")
 	senderBank, senderThread, err := p.lookupRemoteRef(r.Context(), r.PathValue("routing_number"), threadID)
 	if err != nil {
-		writeGRPCError(w, err)
+		writeGRPCError(w, r, err)
 		return
 	}
-	qty, _ := strconv.ParseInt(offer.Amount.String(), 10, 32)
+	qty, qerr := strconv.ParseInt(offer.Amount.String(), 10, 32)
+	if qerr != nil {
+		log.WarnContext(ctx, "partner counter amount unparsable; using 0",
+			"err", qerr, "amount", offer.Amount.String())
+	}
 	_, err = p.TradingOTC.ReceiveExternalOTCCounter(partnerCtx(r.Context()), &tradingpb.ReceiveExternalOTCCounterRequest{
 		SenderBankCode: senderBank,
 		SenderThreadId: senderThread,
@@ -884,17 +1016,27 @@ func (p *PartnerBanka2) handleCounterNegotiation(w http.ResponseWriter, r *http.
 		SettlementDate: timestamppb.New(settle),
 	})
 	if err != nil {
-		writeGRPCError(w, err)
+		writeGRPCError(w, r, err)
 		return
 	}
+	log.InfoContext(ctx, "partner counter received",
+		"sender_thread_id", senderThread, "quantity", qty,
+		"price_per_unit", offer.PricePerUnit.Amount.String(),
+		"premium", offer.Premium.Amount.String())
 	w.WriteHeader(http.StatusNoContent)
 }
 
 func (p *PartnerBanka2) handleCloseNegotiation(w http.ResponseWriter, r *http.Request) {
+	ctx := r.Context()
+	log := logger.From(ctx).With(
+		"partner_bank", r.PathValue("routing_number"), "thread_id", r.PathValue("thread_id"),
+	)
+	r = r.WithContext(logger.Inject(ctx, log))
+	ctx = r.Context()
 	threadID := r.PathValue("thread_id")
 	senderBank, senderThread, err := p.lookupRemoteRef(r.Context(), r.PathValue("routing_number"), threadID)
 	if err != nil {
-		writeGRPCError(w, err)
+		writeGRPCError(w, r, err)
 		return
 	}
 	_, err = p.TradingOTC.ReceiveExternalOTCWithdraw(partnerCtx(r.Context()), &tradingpb.ReceiveExternalOTCActionRequest{
@@ -902,17 +1044,24 @@ func (p *PartnerBanka2) handleCloseNegotiation(w http.ResponseWriter, r *http.Re
 		SenderThreadId: senderThread,
 	})
 	if err != nil {
-		writeGRPCError(w, err)
+		writeGRPCError(w, r, err)
 		return
 	}
+	log.InfoContext(ctx, "partner withdraw received", "sender_thread_id", senderThread)
 	w.WriteHeader(http.StatusNoContent)
 }
 
 func (p *PartnerBanka2) handleAcceptNegotiation(w http.ResponseWriter, r *http.Request) {
+	ctx := r.Context()
+	log := logger.From(ctx).With(
+		"partner_bank", r.PathValue("routing_number"), "thread_id", r.PathValue("thread_id"),
+	)
+	r = r.WithContext(logger.Inject(ctx, log))
+	ctx = r.Context()
 	threadID := r.PathValue("thread_id")
 	senderBank, senderThread, err := p.lookupRemoteRef(r.Context(), r.PathValue("routing_number"), threadID)
 	if err != nil {
-		writeGRPCError(w, err)
+		writeGRPCError(w, r, err)
 		return
 	}
 	// Banka-2 spec §3.6: blocks until 2PC finishes; on failure surfaces
@@ -923,9 +1072,10 @@ func (p *PartnerBanka2) handleAcceptNegotiation(w http.ResponseWriter, r *http.R
 		SenderThreadId: senderThread,
 	})
 	if err != nil {
-		writeGRPCError(w, err)
+		writeGRPCError(w, r, err)
 		return
 	}
+	log.InfoContext(ctx, "partner accept settled", "sender_thread_id", senderThread)
 	w.WriteHeader(http.StatusNoContent)
 }
 
@@ -978,6 +1128,8 @@ func (p *PartnerBanka2) lookupRemoteRef(ctx context.Context, routing, threadID s
 // =====================================================================
 
 func (p *PartnerBanka2) handleUserInfo(w http.ResponseWriter, r *http.Request) {
+	ctx := r.Context()
+	log := logger.From(ctx)
 	wantRouting := r.PathValue("routing_number")
 	wantID := r.PathValue("user_id")
 	ours := p.BankRoutingNumber
@@ -985,20 +1137,30 @@ func (p *PartnerBanka2) handleUserInfo(w http.ResponseWriter, r *http.Request) {
 		ours = "333"
 	}
 	if wantRouting != ours {
+		log.WarnContext(ctx, "partner user lookup rejected: routing not ours",
+			"requested_routing", wantRouting, "our_routing", ours, "user_id", wantID)
 		writeError(w, http.StatusNotFound, "routing number is not ours")
 		return
 	}
 	// Try client first, then employee. Both share the UUID id space.
 	display := ""
-	if c, err := p.Users.GetClient(partnerCtx(r.Context()), &userpb.GetClientRequest{Id: wantID}); err == nil && c != nil {
+	c, cerr := p.Users.GetClient(partnerCtx(r.Context()), &userpb.GetClientRequest{Id: wantID})
+	if cerr == nil && c != nil {
 		display = strings.TrimSpace(c.GetFirstName() + " " + c.GetLastName())
 	}
+	var eerr error
 	if display == "" {
-		if e, err := p.Users.GetEmployee(partnerCtx(r.Context()), &userpb.GetEmployeeRequest{Id: wantID}); err == nil && e != nil {
+		e, err := p.Users.GetEmployee(partnerCtx(r.Context()), &userpb.GetEmployeeRequest{Id: wantID})
+		eerr = err
+		if err == nil && e != nil {
 			display = strings.TrimSpace(e.GetFirstName() + " " + e.GetLastName())
 		}
 	}
 	if display == "" {
+		// Both lookups missed (or errored) — surface the per-branch
+		// errors that the 404 body hides.
+		log.WarnContext(ctx, "partner user lookup failed",
+			"user_id", wantID, "client_err", cerr, "employee_err", eerr)
 		writeError(w, http.StatusNotFound, "user not found")
 		return
 	}

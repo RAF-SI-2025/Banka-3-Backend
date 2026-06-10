@@ -5,6 +5,7 @@ import (
 	"time"
 
 	"github.com/RAF-SI-2025/Banka-3-Backend/pkg/apperr"
+	"github.com/RAF-SI-2025/Banka-3-Backend/pkg/logger"
 	"github.com/RAF-SI-2025/Banka-3-Backend/services/user/internal/domain"
 )
 
@@ -28,6 +29,7 @@ func tableForKind(kind domain.UserKind) (string, error) {
 func (s *Store) IncrementFailedLogin(ctx context.Context, kind domain.UserKind, userID string) (int, error) {
 	tbl, err := tableForKind(kind)
 	if err != nil {
+		logger.From(ctx).ErrorContext(ctx, "increment failed login: unknown user kind", "err", err, "user_id", userID, "kind", string(kind))
 		return 0, err
 	}
 	q := `update "user".` + tbl + `
@@ -36,6 +38,7 @@ func (s *Store) IncrementFailedLogin(ctx context.Context, kind domain.UserKind, 
         returning failed_login_attempts`
 	var n int
 	if err := s.DB.QueryRow(ctx, q, userID).Scan(&n); err != nil {
+		logger.From(ctx).ErrorContext(ctx, "increment failed login failed", "err", err, "user_id", userID, "kind", string(kind))
 		return 0, apperr.Internal("increment failed login", err)
 	}
 	return n, nil
@@ -46,12 +49,14 @@ func (s *Store) IncrementFailedLogin(ctx context.Context, kind domain.UserKind, 
 func (s *Store) ResetFailedLogin(ctx context.Context, kind domain.UserKind, userID string) error {
 	tbl, err := tableForKind(kind)
 	if err != nil {
+		logger.From(ctx).ErrorContext(ctx, "reset failed login: unknown user kind", "err", err, "user_id", userID, "kind", string(kind))
 		return err
 	}
 	q := `update "user".` + tbl + `
         set failed_login_attempts = 0, locked_until = null, updated_at = now()
         where id = $1`
 	if _, err := s.DB.Exec(ctx, q, userID); err != nil {
+		logger.From(ctx).ErrorContext(ctx, "reset failed login failed", "err", err, "user_id", userID, "kind", string(kind))
 		return apperr.Internal("reset failed login", err)
 	}
 	return nil
@@ -61,12 +66,14 @@ func (s *Store) ResetFailedLogin(ctx context.Context, kind domain.UserKind, user
 func (s *Store) LockUser(ctx context.Context, kind domain.UserKind, userID string, until time.Time) error {
 	tbl, err := tableForKind(kind)
 	if err != nil {
+		logger.From(ctx).ErrorContext(ctx, "lock user: unknown user kind", "err", err, "user_id", userID, "kind", string(kind))
 		return err
 	}
 	q := `update "user".` + tbl + `
         set locked_until = $2, updated_at = now()
         where id = $1`
 	if _, err := s.DB.Exec(ctx, q, userID, until); err != nil {
+		logger.From(ctx).ErrorContext(ctx, "lock user failed", "err", err, "user_id", userID, "kind", string(kind))
 		return apperr.Internal("lock user", err)
 	}
 	return nil

@@ -3,6 +3,7 @@ package router
 import (
 	"encoding/json"
 	"fmt"
+	"log/slog"
 	"strconv"
 	"strings"
 )
@@ -188,7 +189,13 @@ func parseB2OTCSettlement(tx b2Transaction, ourRoutings ...int) (*b2OTCSettlemen
 				}
 			case "STOCK":
 				_, abs := b2AmountSign(p.Amount)
-				out.Quantity, _ = strconv.ParseInt(abs, 10, 64)
+				qty, qerr := strconv.ParseInt(abs, 10, 64)
+				if qerr != nil {
+					// No ctx in this parser — package-level slog.
+					slog.Warn("otc exercise settlement: malformed stock quantity",
+						"err", qerr, "amount", string(p.Amount))
+				}
+				out.Quantity = qty
 				out.Ticker = stockTicker(p.Asset)
 			}
 		}
@@ -209,6 +216,11 @@ func optionNegotiationID(a b2Asset) b2ForeignID {
 	}
 	var body b2OptionAssetBody
 	if err := json.Unmarshal(*a.Asset, &body); err != nil {
+		// No ctx in this parser — package-level slog. Returning the zero
+		// id makes the caller report "no OPTION posting"; this log keeps
+		// the real cause visible.
+		slog.Warn("otc settlement: option asset body unmarshal failed",
+			"err", err, "asset", bodySnippet(*a.Asset))
 		return b2ForeignID{}
 	}
 	return body.NegotiationID
@@ -221,6 +233,8 @@ func stockTicker(a b2Asset) string {
 	}
 	var body b2StockAssetBody
 	if err := json.Unmarshal(*a.Asset, &body); err != nil {
+		slog.Warn("otc settlement: stock asset body unmarshal failed",
+			"err", err, "asset", bodySnippet(*a.Asset))
 		return ""
 	}
 	return body.Ticker

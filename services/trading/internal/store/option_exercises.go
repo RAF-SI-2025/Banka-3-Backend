@@ -4,6 +4,7 @@ import (
 	"context"
 
 	"github.com/RAF-SI-2025/Banka-3-Backend/pkg/apperr"
+	"github.com/RAF-SI-2025/Banka-3-Backend/pkg/logger"
 	"github.com/RAF-SI-2025/Banka-3-Backend/services/trading/internal/domain"
 	"github.com/jackc/pgx/v5"
 )
@@ -37,6 +38,7 @@ func (s *Store) InsertPendingOptionExercise(ctx context.Context, tx pgx.Tx, e *d
 	)
 	out, err := scanOptionExercise(row)
 	if err != nil {
+		logger.From(ctx).ErrorContext(ctx, "insert pending option exercise failed", "err", err)
 		return nil, apperr.Internal("insert pending option exercise", err)
 	}
 	return out, nil
@@ -54,6 +56,7 @@ func (s *Store) MarkOptionExerciseSettled(ctx context.Context, tx pgx.Tx, exerci
             updated_at       = now()
         where id = $1`
 	if _, err := tx.Exec(ctx, q, exerciseID, bankOpID, realizedGainID); err != nil {
+		logger.From(ctx).ErrorContext(ctx, "mark option exercise settled failed", "err", err, "exercise_id", exerciseID, "bank_op_id", bankOpID)
 		return apperr.Internal("mark option exercise settled", err)
 	}
 	return nil
@@ -81,6 +84,7 @@ func (s *Store) AdjustHoldingQuantity(ctx context.Context, tx pgx.Tx, holdingID 
 		if noRows(err) {
 			return nil, apperr.FailedPrecondition("nedovoljno količine za promenu")
 		}
+		logger.From(ctx).ErrorContext(ctx, "adjust holding quantity failed", "err", err, "holding_id", holdingID)
 		return nil, apperr.Internal("adjust holding quantity", err)
 	}
 	return out, nil

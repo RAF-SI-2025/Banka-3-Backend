@@ -89,12 +89,24 @@ func (s *Service) ReserveFunds(ctx context.Context, in ReserveFundsInput) (*Rese
 
 	acc, err := s.Store.GetAccountByID(ctx, in.AccountID)
 	if err != nil {
+		if apperrIs(err, apperr.KindNotFound) {
+			s.log().WarnContext(ctx, "reserve funds: account not found",
+				"err", err, "account_id", in.AccountID, "op_id", in.OpID, "op_kind", in.OpKind)
+		} else {
+			s.log().ErrorContext(ctx, "reserve funds: account lookup failed",
+				"err", err, "account_id", in.AccountID, "op_id", in.OpID, "op_kind", in.OpKind)
+		}
 		return nil, err
 	}
 	if acc.Currency != in.Currency {
+		s.log().WarnContext(ctx, "reserve funds rejected: currency mismatch",
+			"account_id", in.AccountID, "op_id", in.OpID, "op_kind", in.OpKind,
+			"account_currency", acc.Currency, "currency", in.Currency)
 		return nil, apperr.Validation("reservation currency must match account")
 	}
 	if acc.Status != domain.AccountActive {
+		s.log().WarnContext(ctx, "reserve funds rejected: account not active",
+			"account_id", in.AccountID, "op_id", in.OpID, "op_kind", in.OpKind, "account_status", acc.Status)
 		return nil, apperr.FailedPrecondition("account not active")
 	}
 
@@ -129,9 +141,25 @@ func (s *Service) ReserveFunds(ctx context.Context, in ReserveFundsInput) (*Rese
 			if lerr == nil && winner != nil {
 				return &ReserveFundsResult{ReservationID: winner.ID, OpID: winner.OpID}, nil
 			}
+			if lerr != nil {
+				s.log().ErrorContext(ctx, "reserve funds: re-read of racing reservation failed",
+					"err", lerr, "account_id", in.AccountID, "op_id", in.OpID, "op_kind", in.OpKind)
+			}
+		}
+		if errors.Is(err, store.ErrInsufficientFunds) {
+			s.log().WarnContext(ctx, "reserve funds rejected: insufficient funds",
+				"err", err, "account_id", in.AccountID, "op_id", in.OpID, "op_kind", in.OpKind,
+				"amount", in.Amount, "currency", in.Currency)
+		} else {
+			s.log().ErrorContext(ctx, "reserve funds failed",
+				"err", err, "account_id", in.AccountID, "op_id", in.OpID, "op_kind", in.OpKind,
+				"amount", in.Amount, "currency", in.Currency)
 		}
 		return nil, err
 	}
+	s.log().InfoContext(ctx, "funds reserved",
+		"reservation_id", inserted.ID, "op_id", inserted.OpID, "op_kind", in.OpKind,
+		"account_id", in.AccountID, "amount", in.Amount, "currency", in.Currency)
 	return &ReserveFundsResult{ReservationID: inserted.ID, OpID: inserted.OpID}, nil
 }
 
@@ -180,7 +208,11 @@ func (s *Service) ReleaseFunds(ctx context.Context, opID string) (*ReleaseFundsR
 		return nil
 	})
 	if err != nil {
+		s.log().ErrorContext(ctx, "release funds failed", "err", err, "op_id", opID)
 		return nil, err
+	}
+	if released {
+		s.log().InfoContext(ctx, "reservation released", "op_id", opID)
 	}
 	return &ReleaseFundsResult{Released: released}, nil
 }
@@ -383,8 +415,20 @@ func (s *Service) CommitReservedFunds(ctx context.Context, in CommitReservedFund
 		return s.Store.MarkReservationState(ctx, tx, in.OpID, domain.ReservationCommitted)
 	})
 	if err != nil {
+		if clientClassErr(err) {
+			s.log().WarnContext(ctx, "commit reserved funds rejected",
+				"err", err, "op_id", in.OpID, "dest_account_id", in.DestAccountID,
+				"dest_amount", in.DestAmount, "dest_currency", in.DestCurrency)
+		} else {
+			s.log().ErrorContext(ctx, "commit reserved funds failed",
+				"err", err, "op_id", in.OpID, "dest_account_id", in.DestAccountID,
+				"dest_amount", in.DestAmount, "dest_currency", in.DestCurrency)
+		}
 		return nil, err
 	}
+	s.log().InfoContext(ctx, "reserved funds committed",
+		"op_id", in.OpID, "dest_account_id", in.DestAccountID,
+		"dest_amount", in.DestAmount, "dest_currency", in.DestCurrency, "legs", len(legs))
 	return &domain.PaymentResult{OpID: in.OpID, Status: domain.TxStatusRealized, Transactions: legs}, nil
 }
 
@@ -425,6 +469,13 @@ func (s *Service) TransferBetweenClients(ctx context.Context, in TransferBetween
 
 	from, err := s.Store.GetAccountByID(ctx, in.FromAccountID)
 	if err != nil {
+		if apperrIs(err, apperr.KindNotFound) {
+			s.log().WarnContext(ctx, "transfer between clients: source account not found",
+				"err", err, "from_account_id", in.FromAccountID, "op_id", in.OpID, "op_kind", in.OpKind)
+		} else {
+			s.log().ErrorContext(ctx, "transfer between clients: source account lookup failed",
+				"err", err, "from_account_id", in.FromAccountID, "op_id", in.OpID, "op_kind", in.OpKind)
+		}
 		return nil, err
 	}
 	// Reserve in source currency; commit produces dest currency amount
@@ -442,8 +493,13 @@ func (s *Service) TransferBetweenClients(ctx context.Context, in TransferBetween
 
 	to, err := s.Store.GetAccountByID(ctx, in.ToAccountID)
 	if err != nil {
+		s.log().WarnContext(ctx, "transfer between clients: destination account lookup failed, releasing reservation",
+			"err", err, "to_account_id", in.ToAccountID, "op_id", in.OpID, "op_kind", in.OpKind)
 		// Best-effort release so we don't leak a held reservation.
-		_, _ = s.ReleaseFunds(ctx, in.OpID)
+		if _, rerr := s.ReleaseFunds(ctx, in.OpID); rerr != nil {
+			s.log().ErrorContext(ctx, "transfer between clients: release reservation failed",
+				"err", rerr, "op_id", in.OpID, "from_account_id", in.FromAccountID)
+		}
 		return nil, err
 	}
 
@@ -469,13 +525,24 @@ func (s *Service) TransferBetweenClients(ctx context.Context, in TransferBetween
 	}
 	_, toBefore, err := s.rateAndConvert(ctx, from.Currency, to.Currency, amt)
 	if err != nil {
-		_, _ = s.ReleaseFunds(ctx, in.OpID)
+		s.log().ErrorContext(ctx, "transfer between clients: fx conversion failed, releasing reservation",
+			"err", err, "op_id", in.OpID, "from_currency", from.Currency, "to_currency", to.Currency,
+			"amount", in.Amount)
+		if _, rerr := s.ReleaseFunds(ctx, in.OpID); rerr != nil {
+			s.log().ErrorContext(ctx, "transfer between clients: release reservation failed",
+				"err", rerr, "op_id", in.OpID, "from_account_id", in.FromAccountID)
+		}
 		return nil, err
 	}
 	commission := money.Mul(toBefore, s.commissionRateFor(initiator))
 	toAmt := money.Sub(toBefore, commission)
 	if !money.IsPositive(toAmt) {
-		_, _ = s.ReleaseFunds(ctx, in.OpID)
+		s.log().WarnContext(ctx, "transfer between clients rejected: amount too small after commission, releasing reservation",
+			"op_id", in.OpID, "amount", in.Amount, "from_currency", from.Currency, "to_currency", to.Currency)
+		if _, rerr := s.ReleaseFunds(ctx, in.OpID); rerr != nil {
+			s.log().ErrorContext(ctx, "transfer between clients: release reservation failed",
+				"err", rerr, "op_id", in.OpID, "from_account_id", in.FromAccountID)
+		}
 		return nil, apperr.Validation("amount too small after commission")
 	}
 	return s.CommitReservedFunds(ctx, CommitReservedFundsInput{
@@ -510,4 +577,20 @@ func apperrIs(err error, kind apperr.Kind) bool {
 		return false
 	}
 	return ae.Kind == kind
+}
+
+// clientClassErr reports whether err is an expected client-class apperr
+// (validation, not-found, conflict, precondition, auth) — logged at Warn
+// — as opposed to an unexpected internal failure logged at Error.
+func clientClassErr(err error) bool {
+	var ae *apperr.Error
+	if !errors.As(err, &ae) {
+		return false
+	}
+	switch ae.Kind {
+	case apperr.KindNotFound, apperr.KindConflict, apperr.KindValidation,
+		apperr.KindUnauthenticated, apperr.KindPermissionDenied, apperr.KindFailedPrecondition:
+		return true
+	}
+	return false
 }

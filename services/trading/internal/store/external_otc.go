@@ -6,6 +6,7 @@ import (
 	"time"
 
 	"github.com/RAF-SI-2025/Banka-3-Backend/pkg/apperr"
+	"github.com/RAF-SI-2025/Banka-3-Backend/pkg/logger"
 	"github.com/RAF-SI-2025/Banka-3-Backend/pkg/postgres"
 	"github.com/RAF-SI-2025/Banka-3-Backend/services/trading/internal/domain"
 	"github.com/jackc/pgx/v5"
@@ -91,6 +92,7 @@ func (s *Store) InsertExternalOTCThread(ctx context.Context, tx pgx.Tx, t *domai
 		if isUniqueViolation(err) {
 			return nil, apperr.Conflict("nit sa istom partner-bankom već postoji")
 		}
+		logger.From(ctx).ErrorContext(ctx, "insert external otc thread failed", "err", err)
 		return nil, apperr.Internal("insert external otc thread", err)
 	}
 	return out, nil
@@ -104,6 +106,7 @@ func (s *Store) GetExternalOTCThread(ctx context.Context, id string) (*domain.Ex
 		if noRows(err) {
 			return nil, apperr.NotFound("eksterna ponuda ne postoji")
 		}
+		logger.From(ctx).ErrorContext(ctx, "get external otc thread failed", "err", err, "id", id)
 		return nil, apperr.Internal("get external otc thread", err)
 	}
 	return out, nil
@@ -131,6 +134,7 @@ func (s *Store) GetExternalOTCThreadByRemote(ctx context.Context, tx pgx.Tx, ban
 		if noRows(err) {
 			return nil, apperr.NotFound("eksterna nit ne postoji")
 		}
+		logger.From(ctx).ErrorContext(ctx, "get external otc thread by remote failed", "err", err, "remote_thread_id", remoteThreadID)
 		return nil, apperr.Internal("get external otc thread by remote", err)
 	}
 	return out, nil
@@ -169,6 +173,7 @@ func (s *Store) ListExternalOTCThreads(ctx context.Context, f ExternalOTCThreadF
 	      order by updated_at desc`
 	rows, err := s.DB.Query(postgres.WithRead(ctx), q, args...)
 	if err != nil {
+		logger.From(ctx).ErrorContext(ctx, "list external otc threads failed", "err", err)
 		return nil, apperr.Internal("list external otc threads", err)
 	}
 	defer rows.Close()
@@ -176,11 +181,16 @@ func (s *Store) ListExternalOTCThreads(ctx context.Context, f ExternalOTCThreadF
 	for rows.Next() {
 		t, err := scanExternalOTCThread(rows)
 		if err != nil {
+			logger.From(ctx).ErrorContext(ctx, "scan external otc thread failed", "err", err)
 			return nil, apperr.Internal("scan external otc thread", err)
 		}
 		out = append(out, t)
 	}
-	return out, rows.Err()
+	if err := rows.Err(); err != nil {
+		logger.From(ctx).ErrorContext(ctx, "list external otc threads rows failed", "err", err)
+		return out, err
+	}
+	return out, nil
 }
 
 // UpdateExternalOTCThreadTerms applies a counter-offer to an existing
@@ -207,6 +217,7 @@ func (s *Store) UpdateExternalOTCThreadTerms(
 		if noRows(err) {
 			return nil, apperr.FailedPrecondition("nit više nije otvorena")
 		}
+		logger.From(ctx).ErrorContext(ctx, "update external otc thread terms failed", "err", err, "id", id)
 		return nil, apperr.Internal("update external otc thread terms", err)
 	}
 	return out, nil
@@ -226,6 +237,7 @@ func (s *Store) SetExternalOTCThreadStatus(
 		if noRows(err) {
 			return nil, apperr.NotFound("nit ne postoji")
 		}
+		logger.From(ctx).ErrorContext(ctx, "set external otc thread status failed", "err", err, "id", id)
 		return nil, apperr.Internal("set external otc thread status", err)
 	}
 	return out, nil
@@ -248,6 +260,7 @@ func (s *Store) SetExternalOTCThreadRemoteThreadID(
 			// Already stamped — return the live row.
 			return s.GetExternalOTCThread(ctx, id)
 		}
+		logger.From(ctx).ErrorContext(ctx, "set external otc thread remote id failed", "err", err, "remote_thread_id", remoteThreadID, "id", id)
 		return nil, apperr.Internal("set external otc thread remote id", err)
 	}
 	return out, nil
@@ -274,6 +287,7 @@ func (s *Store) SetExternalOTCThreadRemoteIdentity(
 		if noRows(err) {
 			return s.GetExternalOTCThread(ctx, id)
 		}
+		logger.From(ctx).ErrorContext(ctx, "set external otc thread remote identity failed", "err", err, "remote_thread_id", remoteThreadID, "id", id)
 		return nil, apperr.Internal("set external otc thread remote identity", err)
 	}
 	return out, nil
@@ -314,6 +328,7 @@ func (s *Store) InsertExternalOTCIteration(ctx context.Context, tx pgx.Tx, it *d
 	)
 	out, err := scanExternalOTCIteration(row)
 	if err != nil {
+		logger.From(ctx).ErrorContext(ctx, "insert external otc iteration failed", "err", err)
 		return nil, apperr.Internal("insert external otc iteration", err)
 	}
 	return out, nil
@@ -327,6 +342,7 @@ func (s *Store) ListExternalOTCIterations(ctx context.Context, threadID string) 
 	           where thread_id = $1 order by created_at`
 	rows, err := s.DB.Query(postgres.WithRead(ctx), q, threadID)
 	if err != nil {
+		logger.From(ctx).ErrorContext(ctx, "list external otc iterations failed", "err", err, "thread_id", threadID)
 		return nil, apperr.Internal("list external otc iterations", err)
 	}
 	defer rows.Close()
@@ -334,11 +350,16 @@ func (s *Store) ListExternalOTCIterations(ctx context.Context, threadID string) 
 	for rows.Next() {
 		it, err := scanExternalOTCIteration(rows)
 		if err != nil {
+			logger.From(ctx).ErrorContext(ctx, "scan external otc iteration failed", "err", err, "thread_id", threadID)
 			return nil, apperr.Internal("scan external otc iteration", err)
 		}
 		out = append(out, it)
 	}
-	return out, rows.Err()
+	if err := rows.Err(); err != nil {
+		logger.From(ctx).ErrorContext(ctx, "list external otc iterations rows failed", "err", err, "thread_id", threadID)
+		return out, err
+	}
+	return out, nil
 }
 
 // =====================================================================
@@ -429,6 +450,7 @@ func (s *Store) InsertExternalOTCContract(ctx context.Context, tx pgx.Tx, c *dom
 	)
 	out, err := scanExternalOTCContract(row)
 	if err != nil {
+		logger.From(ctx).ErrorContext(ctx, "insert external otc contract failed", "err", err)
 		return nil, apperr.Internal("insert external otc contract", err)
 	}
 	return out, nil
@@ -442,6 +464,7 @@ func (s *Store) GetExternalOTCContract(ctx context.Context, id string) (*domain.
 		if noRows(err) {
 			return nil, apperr.NotFound("eksterni ugovor ne postoji")
 		}
+		logger.From(ctx).ErrorContext(ctx, "get external otc contract failed", "err", err, "id", id)
 		return nil, apperr.Internal("get external otc contract", err)
 	}
 	return out, nil
@@ -457,6 +480,7 @@ func (s *Store) GetExternalOTCContractByThread(ctx context.Context, threadID str
 		if noRows(err) {
 			return nil, apperr.NotFound("ugovor nije sklopljen")
 		}
+		logger.From(ctx).ErrorContext(ctx, "get external otc contract by thread failed", "err", err, "thread_id", threadID)
 		return nil, apperr.Internal("get external otc contract by thread", err)
 	}
 	return out, nil
@@ -486,6 +510,7 @@ func (s *Store) ListExternalOTCContracts(ctx context.Context, localUserID, statu
 	      order by updated_at desc`
 	rows, err := s.DB.Query(postgres.WithRead(ctx), q, args...)
 	if err != nil {
+		logger.From(ctx).ErrorContext(ctx, "list external otc contracts failed", "err", err, "local_user_id", localUserID)
 		return nil, apperr.Internal("list external otc contracts", err)
 	}
 	defer rows.Close()
@@ -493,11 +518,16 @@ func (s *Store) ListExternalOTCContracts(ctx context.Context, localUserID, statu
 	for rows.Next() {
 		c, err := scanExternalOTCContract(rows)
 		if err != nil {
+			logger.From(ctx).ErrorContext(ctx, "scan external otc contract failed", "err", err, "local_user_id", localUserID)
 			return nil, apperr.Internal("scan external otc contract", err)
 		}
 		out = append(out, c)
 	}
-	return out, rows.Err()
+	if err := rows.Err(); err != nil {
+		logger.From(ctx).ErrorContext(ctx, "list external otc contracts rows failed", "err", err, "local_user_id", localUserID)
+		return out, err
+	}
+	return out, nil
 }
 
 // SetExternalOTCContractStatus flips status (active → settling → exercised
@@ -516,6 +546,7 @@ func (s *Store) SetExternalOTCContractStatus(
 		if noRows(err) {
 			return nil, apperr.NotFound("ugovor ne postoji")
 		}
+		logger.From(ctx).ErrorContext(ctx, "set external otc contract status failed", "err", err, "id", id)
 		return nil, apperr.Internal("set external otc contract status", err)
 	}
 	return out, nil
@@ -541,6 +572,7 @@ func (s *Store) SetExternalOTCContractExercised(
 		if noRows(err) {
 			return nil, apperr.FailedPrecondition("ugovor je već iskorišćen drugim op_id-om")
 		}
+		logger.From(ctx).ErrorContext(ctx, "set external otc contract exercised failed", "err", err, "exercise_op_id", exerciseOpID, "id", id)
 		return nil, apperr.Internal("set external otc contract exercised", err)
 	}
 	return out, nil

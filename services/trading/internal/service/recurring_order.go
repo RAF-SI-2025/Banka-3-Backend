@@ -108,7 +108,7 @@ func (s *Service) CreateRecurringOrder(ctx context.Context, in CreateRecurringOr
 		nextRun = start
 	}
 
-	return s.Store.InsertRecurringOrder(ctx, &domain.RecurringOrder{
+	out, err := s.Store.InsertRecurringOrder(ctx, &domain.RecurringOrder{
 		UserID:     p.UserID,
 		UserKind:   domain.UserKind(p.UserKind),
 		SecurityID: in.SecurityID,
@@ -120,6 +120,15 @@ func (s *Service) CreateRecurringOrder(ctx context.Context, in CreateRecurringOr
 		Cadence:    string(in.Cadence),
 		NextRun:    nextRun,
 	})
+	if err != nil {
+		s.logOpErr(ctx, "recurring order create failed", err,
+			"security_id", in.SecurityID, "cadence", string(in.Cadence))
+		return nil, err
+	}
+	s.log().InfoContext(ctx, "recurring order created",
+		"recurring_order_id", out.ID, "security_id", out.SecurityID,
+		"mode", string(out.Mode), "cadence", out.Cadence, "next_run", out.NextRun)
+	return out, nil
 }
 
 // ListRecurringOrders returns the caller's own recurring orders (active
@@ -157,9 +166,13 @@ func (s *Service) setRecurringActive(ctx context.Context, id string, active bool
 		return nil, apperr.PermissionDenied("nedovoljne permisije")
 	}
 	if err := s.Store.SetRecurringOrderActive(ctx, id, active); err != nil {
+		s.logOpErr(ctx, "recurring order active flip failed", err,
+			"recurring_order_id", id, "active", active)
 		return nil, err
 	}
 	r.Active = active
+	s.log().InfoContext(ctx, "recurring order active flag set",
+		"recurring_order_id", id, "active", active)
 	return r, nil
 }
 
@@ -178,7 +191,12 @@ func (s *Service) CancelRecurringOrder(ctx context.Context, id string) error {
 	if r.UserID != p.UserID && !permissions.Has(p.Permissions, permissions.Admin) {
 		return apperr.PermissionDenied("nedovoljne permisije")
 	}
-	return s.Store.DeleteRecurringOrder(ctx, id)
+	if err := s.Store.DeleteRecurringOrder(ctx, id); err != nil {
+		s.logOpErr(ctx, "recurring order cancel failed", err, "recurring_order_id", id)
+		return err
+	}
+	s.log().InfoContext(ctx, "recurring order cancelled", "recurring_order_id", id)
+	return nil
 }
 
 // RunRecurringOrders is the DCA cron entrypoint (S49). For each due +
@@ -197,6 +215,7 @@ func (s *Service) RunRecurringOrders(ctx context.Context) (int, error) {
 	now := s.now()
 	rows, err := s.Store.ListDueRecurringOrders(ctx, now)
 	if err != nil {
+		s.log().ErrorContext(ctx, "recurring orders: due-row scan failed", "err", err)
 		return 0, err
 	}
 	created := 0
@@ -251,6 +270,8 @@ func (s *Service) runOneRecurringOrder(ctx context.Context, r *domain.RecurringO
 	if err != nil {
 		if isInsufficientFunds(err) {
 			// S50: skip + notify, still advance (handled by caller).
+			s.log().WarnContext(ctx, "recurring order: insufficient funds; skipping cycle",
+				"recurring_order_id", r.ID, "security_id", r.SecurityID)
 			s.notifyRecurringSkip(ctx, r, "nedovoljno sredstava na računu — kupovina je preskočena")
 			return false
 		}
