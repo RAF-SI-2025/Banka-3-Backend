@@ -1472,10 +1472,15 @@ func (x *ListExternalOTCThreadsResponse) GetThreads() []*ExternalOTCThread {
 }
 
 type GetExternalOTCThreadRequest struct {
-	state         protoimpl.MessageState `protogen:"open.v1"`
-	ThreadId      string                 `protobuf:"bytes,1,opt,name=thread_id,json=threadId,proto3" json:"thread_id,omitempty"`
-	unknownFields protoimpl.UnknownFields
-	sizeCache     protoimpl.SizeCache
+	state    protoimpl.MessageState `protogen:"open.v1"`
+	ThreadId string                 `protobuf:"bytes,1,opt,name=thread_id,json=threadId,proto3" json:"thread_id,omitempty"`
+	// Optional. When set and thread_id is not one of OUR local ids, resolve
+	// the thread by its remote ref (remote_bank_code, remote_thread_id=thread_id)
+	// instead. Used by the Banka-2 inbound shim for buyer-side (OUTGOING)
+	// threads, where the partner addresses us by the id THEY minted.
+	RemoteBankCode string `protobuf:"bytes,2,opt,name=remote_bank_code,json=remoteBankCode,proto3" json:"remote_bank_code,omitempty"`
+	unknownFields  protoimpl.UnknownFields
+	sizeCache      protoimpl.SizeCache
 }
 
 func (x *GetExternalOTCThreadRequest) Reset() {
@@ -1511,6 +1516,13 @@ func (*GetExternalOTCThreadRequest) Descriptor() ([]byte, []int) {
 func (x *GetExternalOTCThreadRequest) GetThreadId() string {
 	if x != nil {
 		return x.ThreadId
+	}
+	return ""
+}
+
+func (x *GetExternalOTCThreadRequest) GetRemoteBankCode() string {
+	if x != nil {
+		return x.RemoteBankCode
 	}
 	return ""
 }
@@ -2722,9 +2734,10 @@ const file_trading_v1_external_otc_proto_rawDesc = "" +
 	"\x1dListExternalOTCThreadsRequest\x12A\n" +
 	"\x06status\x18\x01 \x01(\x0e2).banka.trading.v1.ExternalOTCThreadStatusR\x06status\"_\n" +
 	"\x1eListExternalOTCThreadsResponse\x12=\n" +
-	"\athreads\x18\x01 \x03(\v2#.banka.trading.v1.ExternalOTCThreadR\athreads\"C\n" +
+	"\athreads\x18\x01 \x03(\v2#.banka.trading.v1.ExternalOTCThreadR\athreads\"m\n" +
 	"\x1bGetExternalOTCThreadRequest\x12$\n" +
-	"\tthread_id\x18\x01 \x01(\tB\a\xbaH\x04r\x02\x10\x01R\bthreadId\"\xe6\x01\n" +
+	"\tthread_id\x18\x01 \x01(\tB\a\xbaH\x04r\x02\x10\x01R\bthreadId\x12(\n" +
+	"\x10remote_bank_code\x18\x02 \x01(\tR\x0eremoteBankCode\"\xe6\x01\n" +
 	"\x1cGetExternalOTCThreadResponse\x12;\n" +
 	"\x06thread\x18\x01 \x01(\v2#.banka.trading.v1.ExternalOTCThreadR\x06thread\x12F\n" +
 	"\n" +

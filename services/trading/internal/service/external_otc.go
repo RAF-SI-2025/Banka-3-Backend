@@ -56,6 +56,40 @@ type PartnerOTC interface {
 	Counter(ctx context.Context, in PartnerActionInput) error
 	Withdraw(ctx context.Context, in PartnerActionInput) error
 	Accept(ctx context.Context, in PartnerActionInput) error
+
+	// AcceptCoordinatedByPartner reports whether the partner's bank
+	// coordinates the OTC accept premium 2PC itself (the si-tx-proto /
+	// Banka-2 model: the seller's bank forms the accept transaction and
+	// drives the 2PC, debiting our buyer via an inbound NEW_TX). When true,
+	// our buyer-side accept SAGA must NOT also prepare/commit a premium
+	// payment — that would double-debit the buyer. Native partners (the
+	// buyer's bank coordinates) return false.
+	AcceptCoordinatedByPartner(ctx context.Context, bankCode string) bool
+
+	// SpeaksBanka2Dialect reports whether the partner uses the si-tx-proto /
+	// Banka-2 multi-asset envelope rather than our native cash OTC. Gates the
+	// buyer-coordinated exercise path (ExerciseOption).
+	SpeaksBanka2Dialect(ctx context.Context, bankCode string) bool
+
+	// ExerciseOption runs the buyer-coordinated exercise 2PC against a
+	// Banka-2 dialect partner (the seller's bank hosting the OPTION escrow):
+	// it forms the four-posting exercise transaction (buyer pays strike +
+	// receives shares; the partner's OPTION-account legs release the seller's
+	// shares + credit the strike) and drives NEW_TX → COMMIT/ROLLBACK.
+	// Returns nil only on a committed exercise.
+	ExerciseOption(ctx context.Context, in PartnerExerciseInput) error
+}
+
+// PartnerExerciseInput is the buyer-side exercise relayed to the partner.
+type PartnerExerciseInput struct {
+	RemoteBankCode string
+	ContractID     string // the OTC reference the partner minted (our remote_thread_id)
+	TransactionID  string // our 2PC id
+	BuyerUserRef   string // our buyer's foreign id (the PERSON id we offered as)
+	Quantity       int32
+	StrikeTotal    string // strike × quantity, positive decimal string
+	Currency       string
+	Ticker         string
 }
 
 // PartnerHolding is one row from a partner's /otc/public response,
@@ -327,7 +361,12 @@ type GetExternalOTCThreadResult struct {
 
 // GetExternalOTCThread returns one thread + its iterations + the
 // contract (if any).
-func (s *Service) GetExternalOTCThread(ctx context.Context, threadID string) (*GetExternalOTCThreadResult, error) {
+// GetExternalOTCThread resolves a thread by our local id. When the id is not
+// one of ours and remoteBankCode is set, it falls back to a remote-ref lookup
+// (remote_bank_code, remote_thread_id=threadID). The fallback is what lets the
+// Banka-2 inbound shim resolve buyer-side (OUTGOING) threads, where the partner
+// addresses us by the id THEY minted (our remote_thread_id), not our local id.
+func (s *Service) GetExternalOTCThread(ctx context.Context, threadID, remoteBankCode string) (*GetExternalOTCThreadResult, error) {
 	p, err := s.requirePrincipal(ctx)
 	if err != nil {
 		return nil, err
@@ -337,17 +376,24 @@ func (s *Service) GetExternalOTCThread(ctx context.Context, threadID string) (*G
 	}
 	t, err := s.Store.GetExternalOTCThread(ctx, threadID)
 	if err != nil {
-		return nil, err
+		if isAppKind(err, apperr.KindNotFound) && remoteBankCode != "" {
+			t, err = s.Store.GetExternalOTCThreadByRemote(ctx, nil, remoteBankCode, threadID)
+		}
+		if err != nil {
+			return nil, err
+		}
 	}
 	if err := assertExternalOTCParty(p, t); err != nil {
 		return nil, err
 	}
-	its, err := s.Store.ListExternalOTCIterations(ctx, threadID)
+	// Iterations + contract are keyed by OUR local id, which may differ from
+	// the requested threadID when we resolved via remote ref.
+	its, err := s.Store.ListExternalOTCIterations(ctx, t.ID)
 	if err != nil {
 		return nil, err
 	}
 	res := &GetExternalOTCThreadResult{Thread: t, Iterations: its}
-	if c, err := s.Store.GetExternalOTCContractByThread(ctx, threadID); err == nil {
+	if c, err := s.Store.GetExternalOTCContractByThread(ctx, t.ID); err == nil {
 		res.Contract = c
 	}
 	return res, nil

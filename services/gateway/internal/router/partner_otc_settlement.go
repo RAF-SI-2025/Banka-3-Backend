@@ -93,6 +93,13 @@ type b2OTCSettlement struct {
 	// Ticker/Quantity describe the share leg on exercise.
 	Ticker   string
 	Quantity int64
+	// BuyerSide is true when WE host the buyer (an OUTGOING thread): the
+	// partner coordinates the accept 2PC and this NEW_TX debits our buyer's
+	// premium (PERSON MONAS, amount<0) and credits them the option right
+	// (PERSON OPTION, amount>0). Settled by debiting the buyer's bound
+	// account; the contract is recorded by our accept SAGA. The seller-side
+	// SellerID/Ticker/Quantity fields don't apply.
+	BuyerSide bool
 }
 
 // b2AmountSign splits a wire amount into sign + absolute decimal string.
@@ -112,12 +119,25 @@ func b2AmountSign(n json.Number) (positive bool, abs string) {
 // parseB2OTCSettlement extracts the seller-side settlement intent from an
 // accept/exercise envelope. ourRouting is this bank's routing number.
 // Returns an error for a cash envelope or one with no posting touching us.
-func parseB2OTCSettlement(tx b2Transaction, ourRouting int) (*b2OTCSettlement, error) {
+// parseB2OTCSettlement parses a Banka-2 OTC settlement envelope. ourRoutings
+// lists every routing number that identifies US — our real BANK_ROUTING_NUMBER
+// plus any presented routing a partner uses to address us (e.g. Banka-2 knows
+// Banka-3 as 265), so PERSON/OPTION legs the partner addresses to us are
+// recognized as local.
+func parseB2OTCSettlement(tx b2Transaction, ourRoutings ...int) (*b2OTCSettlement, error) {
 	kind := classifyB2Transaction(tx)
 	out := &b2OTCSettlement{Kind: kind}
 
 	ours := func(a b2TxAccount) bool {
-		return a.ID != nil && a.ID.RoutingNumber == ourRouting
+		if a.ID == nil {
+			return false
+		}
+		for _, rn := range ourRoutings {
+			if a.ID.RoutingNumber == rn {
+				return true
+			}
+		}
+		return false
 	}
 
 	switch kind {
@@ -129,21 +149,26 @@ func parseB2OTCSettlement(tx b2Transaction, ourRouting int) (*b2OTCSettlement, e
 			}
 			switch {
 			case p.Asset.Type == "OPTION" && p.Account.Type == "PERSON":
-				// Our seller gives the option right (amount < 0).
-				if pos, _ := b2AmountSign(p.Amount); !pos {
+				// OPTION right on our PERSON. amount<0 = our seller GIVES the
+				// right (we host the seller); amount>0 = our buyer RECEIVES it
+				// (we host the buyer — partner-coordinated accept into us).
+				out.OptionRef = optionNegotiationID(p.Asset)
+				if pos, _ := b2AmountSign(p.Amount); pos {
+					out.BuyerSide = true
+				} else {
 					out.SellerID = *p.Account.ID
-					out.OptionRef = optionNegotiationID(p.Asset)
 				}
 			case p.Asset.Type == "MONAS" && p.Account.Type == "PERSON":
-				// Premium credited to our seller (amount > 0).
-				if pos, abs := b2AmountSign(p.Amount); pos {
-					out.CashAmount = abs
-					out.CashCurrency = banka2CurrencyFromAsset(p.Asset)
-				}
+				// Premium leg on our PERSON — amount>0 credits our seller,
+				// amount<0 debits our buyer. Either way the magnitude is the
+				// premium; the sign is captured by BuyerSide above.
+				_, abs := b2AmountSign(p.Amount)
+				out.CashAmount = abs
+				out.CashCurrency = banka2CurrencyFromAsset(p.Asset)
 			}
 		}
 		if out.OptionRef.ID == "" {
-			return nil, fmt.Errorf("accept settlement: no OPTION posting for routing %d", ourRouting)
+			return nil, fmt.Errorf("accept settlement: no OPTION posting for routings %v", ourRoutings)
 		}
 
 	case b2KindOTCExercise:
@@ -168,7 +193,7 @@ func parseB2OTCSettlement(tx b2Transaction, ourRouting int) (*b2OTCSettlement, e
 			}
 		}
 		if out.OptionRef.ID == "" {
-			return nil, fmt.Errorf("exercise settlement: no OPTION account for routing %d", ourRouting)
+			return nil, fmt.Errorf("exercise settlement: no OPTION account for routings %v", ourRoutings)
 		}
 
 	default:

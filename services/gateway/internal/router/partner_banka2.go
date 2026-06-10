@@ -57,6 +57,12 @@ type PartnerBanka2 struct {
 	APIKey            string
 	BankRoutingNumber string // ours, e.g. "333"
 	BankDisplayName   string // ours, e.g. "Banka 3"
+	// PresentedRouting maps a partner bank code → the routing number THAT
+	// partner uses to address us (the inverse of trading's outbound presented
+	// routing). Banka-2 knows Banka-3 as 265, so its inbound OTC PERSON/OPTION
+	// legs reference routing 265, not our real 333. From
+	// INTERBANK_PRESENTED_ROUTING; empty means the partner uses our real routing.
+	PresentedRouting map[string]string
 
 	Users      userpb.UserServiceClient
 	Trading    tradingpb.TradingServiceClient
@@ -415,7 +421,16 @@ func (p *PartnerBanka2) handleOTCSettlementNewTX(w http.ResponseWriter, r *http.
 	if ourRouting == 0 {
 		ourRouting = 333
 	}
-	intent, err := parseB2OTCSettlement(tx, ourRouting)
+	// Recognize both our real routing and the routing this partner uses to
+	// address us (Banka-2 → 265): its inbound PERSON/OPTION legs reference the
+	// presented routing, not our 333.
+	ourRoutings := []int{ourRouting}
+	if pr := p.PresentedRouting[strconv.Itoa(key.RoutingNumber)]; pr != "" {
+		if n, err := strconv.Atoi(pr); err == nil && n != ourRouting {
+			ourRoutings = append(ourRoutings, n)
+		}
+	}
+	intent, err := parseB2OTCSettlement(tx, ourRoutings...)
 	if err != nil {
 		p.respondVoteNO(w, r, key, tx.TransactionID.ID, "UNACCEPTABLE_ASSET", nil)
 		return
@@ -425,6 +440,15 @@ func (p *PartnerBanka2) handleOTCSettlementNewTX(w http.ResponseWriter, r *http.
 		kind = tradingpb.ExternalOTCSettlementKind_EXTERNAL_OTC_SETTLEMENT_KIND_EXERCISE
 	}
 	ctx := partnerCtx(r.Context())
+
+	// Buyer-side accept (we host the buyer): the partner coordinates the 2PC
+	// and this NEW_TX debits our buyer's premium. No seller shares to reserve
+	// — the local contract is recorded by our accept SAGA. Settle the premium
+	// debit against the buyer's bound account and vote.
+	if intent.Kind == b2KindOTCAccept && intent.BuyerSide {
+		p.handleBuyerAcceptNewTX(w, r, key, tx, intent)
+		return
+	}
 
 	// 1. Trading prepare — reserve the seller's shares / validate the contract.
 	res, err := p.TradingOTC.SettleExternalOTCOption(ctx, &tradingpb.SettleExternalOTCOptionRequest{
@@ -479,6 +503,60 @@ func (p *PartnerBanka2) handleOTCSettlementNewTX(w http.ResponseWriter, r *http.
 			p.respondVoteNO(w, r, key, tx.TransactionID.ID, reason, nil)
 			return
 		}
+	}
+	p.respondVoteYES(w, r, key, tx.TransactionID.ID)
+}
+
+// handleBuyerAcceptNewTX settles the buyer side of a partner-coordinated OTC
+// accept (we host the buyer; the partner's bank drives the 2PC). The NEW_TX
+// debits our buyer's premium (PERSON MONAS, amount<0) and grants them the
+// option right (PERSON OPTION, amount>0). We resolve the buyer's bound account
+// from the negotiation thread (the OPTION negotiationId == our remote_thread_id)
+// and reserve the premium debit; the option contract itself is recorded by our
+// accept SAGA. Votes YES once the debit is prepared.
+func (p *PartnerBanka2) handleBuyerAcceptNewTX(w http.ResponseWriter, r *http.Request, key b2IdempotenceKey, tx b2Transaction, intent *b2OTCSettlement) {
+	ctx := partnerCtx(r.Context())
+	// Resolve OUR (OUTGOING/buyer) thread by the option negotiationId, which the
+	// partner minted and we stored as remote_thread_id (remote-ref lookup).
+	resp, err := p.TradingOTC.GetExternalOTCThread(ctx, &tradingpb.GetExternalOTCThreadRequest{
+		ThreadId:       intent.OptionRef.ID,
+		RemoteBankCode: strconv.Itoa(key.RoutingNumber),
+	})
+	if err != nil {
+		p.respondVoteNO(w, r, key, tx.TransactionID.ID, "OPTION_NEGOTIATION_NOT_FOUND", nil)
+		return
+	}
+	t := resp.GetThread()
+	if t == nil || t.GetLocalAccountNumber() == "" {
+		p.respondVoteNO(w, r, key, tx.TransactionID.ID, "NO_SUCH_ACCOUNT", nil)
+		return
+	}
+	// Option-only accept with no premium leg — nothing to reserve.
+	if intent.CashAmount == "" {
+		p.respondVoteYES(w, r, key, tx.TransactionID.ID)
+		return
+	}
+	// Reserve the premium debit from the buyer's bound account. Direction
+	// OUTBOUND = our account is the source (the buyer pays); the counterparty
+	// is our per-currency system account, so remote_account_number is empty
+	// (the seller is PERSON-addressed, not account-addressed).
+	prep, perr := p.Interbank.PreparePayment(ctx, &bankpb.PreparePaymentRequest{
+		SenderRoutingNumber: int32(key.RoutingNumber),
+		TransactionId:       tx.TransactionID.ID,
+		Direction:           bankpb.InterbankPaymentDirection_INTERBANK_PAYMENT_DIRECTION_OUTBOUND,
+		LocalAccountNumber:  t.GetLocalAccountNumber(),
+		RemoteAccountNumber: "",
+		Currency:            currencyFromWire(intent.CashCurrency),
+		Amount:              intent.CashAmount,
+		Purpose:             "OTC premija (kupac) — nit " + t.GetId(),
+	})
+	if perr != nil {
+		p.respondVoteNO(w, r, key, tx.TransactionID.ID, banka2NoVoteFromGRPC(perr), nil)
+		return
+	}
+	if prep.GetStatus() != bankpb.InterbankTxStatus_INTERBANK_TX_STATUS_PREPARED {
+		p.respondVoteNO(w, r, key, tx.TransactionID.ID, "INSUFFICIENT_ASSET", nil)
+		return
 	}
 	p.respondVoteYES(w, r, key, tx.TransactionID.ID)
 }
@@ -735,7 +813,8 @@ func (p *PartnerBanka2) handleReadNegotiation(w http.ResponseWriter, r *http.Req
 		return
 	}
 	resp, err := p.TradingOTC.GetExternalOTCThread(partnerCtx(r.Context()), &tradingpb.GetExternalOTCThreadRequest{
-		ThreadId: threadID,
+		ThreadId:       threadID,
+		RemoteBankCode: r.PathValue("routing_number"),
 	})
 	if err != nil {
 		writeGRPCError(w, err)
@@ -790,7 +869,7 @@ func (p *PartnerBanka2) handleCounterNegotiation(w http.ResponseWriter, r *http.
 		return
 	}
 	threadID := r.PathValue("thread_id")
-	senderBank, senderThread, err := p.lookupRemoteRef(r.Context(), threadID)
+	senderBank, senderThread, err := p.lookupRemoteRef(r.Context(), r.PathValue("routing_number"), threadID)
 	if err != nil {
 		writeGRPCError(w, err)
 		return
@@ -813,7 +892,7 @@ func (p *PartnerBanka2) handleCounterNegotiation(w http.ResponseWriter, r *http.
 
 func (p *PartnerBanka2) handleCloseNegotiation(w http.ResponseWriter, r *http.Request) {
 	threadID := r.PathValue("thread_id")
-	senderBank, senderThread, err := p.lookupRemoteRef(r.Context(), threadID)
+	senderBank, senderThread, err := p.lookupRemoteRef(r.Context(), r.PathValue("routing_number"), threadID)
 	if err != nil {
 		writeGRPCError(w, err)
 		return
@@ -831,7 +910,7 @@ func (p *PartnerBanka2) handleCloseNegotiation(w http.ResponseWriter, r *http.Re
 
 func (p *PartnerBanka2) handleAcceptNegotiation(w http.ResponseWriter, r *http.Request) {
 	threadID := r.PathValue("thread_id")
-	senderBank, senderThread, err := p.lookupRemoteRef(r.Context(), threadID)
+	senderBank, senderThread, err := p.lookupRemoteRef(r.Context(), r.PathValue("routing_number"), threadID)
 	if err != nil {
 		writeGRPCError(w, err)
 		return
@@ -866,14 +945,23 @@ func (p *PartnerBanka2) resolveBanka2Holding(ctx context.Context, ticker, seller
 	return "", status.Errorf(codes.NotFound, "no public holding for ticker=%s seller=%s", ticker, sellerUserID)
 }
 
-// lookupRemoteRef returns (remote_bank_code, remote_thread_id) for a
-// thread whose local id we received in the URL. Banka-2 only knows our
-// local id (we minted it on /negotiations POST), so we need to bounce
-// through the service to translate it back into the (sender_bank,
-// sender_thread) pair the receive-side handlers expect.
-func (p *PartnerBanka2) lookupRemoteRef(ctx context.Context, threadID string) (string, string, error) {
+// lookupRemoteRef returns the (sender_bank, sender_thread) = remote ref of the
+// thread addressed by the inbound URL's {routing_number}/{thread_id}, which the
+// receive-side handlers (ReceiveExternalOTCCounter/Withdraw/Accept) key on.
+//
+// The URL id can be EITHER:
+//   - OUR local id — when we're the seller (we minted it on the inbound
+//     /negotiations POST and returned it). GetExternalOTCThread by id resolves.
+//   - the PARTNER's id — when we're the buyer (they minted it; it's our
+//     remote_thread_id). Then the local-id lookup misses, so the service falls
+//     back to a remote-ref lookup keyed by (routing, thread_id).
+//
+// Either way the thread's stored (remote_bank_code, remote_thread_id) is the
+// remote ref the receive-side expects.
+func (p *PartnerBanka2) lookupRemoteRef(ctx context.Context, routing, threadID string) (string, string, error) {
 	resp, err := p.TradingOTC.GetExternalOTCThread(partnerCtx(ctx), &tradingpb.GetExternalOTCThreadRequest{
-		ThreadId: threadID,
+		ThreadId:       threadID,
+		RemoteBankCode: routing,
 	})
 	if err != nil {
 		return "", "", err

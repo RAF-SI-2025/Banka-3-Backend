@@ -80,7 +80,7 @@ func (s *Server) ListExternalOTCThreads(ctx context.Context, in *tradingpb.ListE
 }
 
 func (s *Server) GetExternalOTCThread(ctx context.Context, in *tradingpb.GetExternalOTCThreadRequest) (*tradingpb.GetExternalOTCThreadResponse, error) {
-	res, err := s.Svc.GetExternalOTCThread(ctx, in.GetThreadId())
+	res, err := s.Svc.GetExternalOTCThread(ctx, in.GetThreadId(), in.GetRemoteBankCode())
 	if err != nil {
 		return nil, err
 	}

@@ -355,6 +355,11 @@ message ListExternalOTCThreadsResponse {
 
 message GetExternalOTCThreadRequest {
   string thread_id = 1 [(buf.validate.field).string.min_len = 1];
+  // Optional. When set and thread_id is not one of OUR local ids, resolve
+  // the thread by its remote ref (remote_bank_code, remote_thread_id=thread_id)
+  // instead. Used by the Banka-2 inbound shim for buyer-side (OUTGOING)
+  // threads, where the partner addresses us by the id THEY minted.
+  string remote_bank_code = 2;
 }
 
 message GetExternalOTCThreadResponse {

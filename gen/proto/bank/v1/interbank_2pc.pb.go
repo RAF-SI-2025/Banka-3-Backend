@@ -189,7 +189,12 @@ type PreparePaymentRequest struct {
 	// local_account_number is the 18-digit account number on this bank;
 	// validated against the spec sum(digits)%11 checksum at the gateway
 	// before the RPC fires.
-	LocalAccountNumber  string   `protobuf:"bytes,4,opt,name=local_account_number,json=localAccountNumber,proto3" json:"local_account_number,omitempty"`
+	LocalAccountNumber string `protobuf:"bytes,4,opt,name=local_account_number,json=localAccountNumber,proto3" json:"local_account_number,omitempty"`
+	// remote_account_number is audit-only (the money moves between
+	// local_account_number and the bank's per-currency system account). It is
+	// 18 digits for account-addressed cash payments, but EMPTY for PERSON-
+	// addressed OTC settlements (si-tx-proto/Banka-2), where the counterparty
+	// is identified by foreign-bank id, not an account number. So: 18 or empty.
 	RemoteAccountNumber string   `protobuf:"bytes,5,opt,name=remote_account_number,json=remoteAccountNumber,proto3" json:"remote_account_number,omitempty"`
 	Currency            Currency `protobuf:"varint,6,opt,name=currency,proto3,enum=banka.bank.v1.Currency" json:"currency,omitempty"`
 	Amount              string   `protobuf:"bytes,7,opt,name=amount,proto3" json:"amount,omitempty"`
@@ -886,14 +891,14 @@ var File_bank_v1_interbank_2pc_proto protoreflect.FileDescriptor
 
 const file_bank_v1_interbank_2pc_proto_rawDesc = "" +
 	"\n" +
-	"\x1bbank/v1/interbank_2pc.proto\x12\rbanka.bank.v1\x1a\x12bank/v1/bank.proto\x1a\x1bbuf/validate/validate.proto\x1a\x1fgoogle/protobuf/timestamp.proto\"\xf9\x03\n" +
+	"\x1bbank/v1/interbank_2pc.proto\x12\rbanka.bank.v1\x1a\x12bank/v1/bank.proto\x1a\x1bbuf/validate/validate.proto\x1a\x1fgoogle/protobuf/timestamp.proto\"\xf8\x03\n" +
 	"\x15PreparePaymentRequest\x12;\n" +
 	"\x15sender_routing_number\x18\x01 \x01(\x05B\a\xbaH\x04\x1a\x02 \x00R\x13senderRoutingNumber\x12.\n" +
 	"\x0etransaction_id\x18\x02 \x01(\tB\a\xbaH\x04r\x02\x10\x01R\rtransactionId\x12R\n" +
 	"\tdirection\x18\x03 \x01(\x0e2(.banka.bank.v1.InterbankPaymentDirectionB\n" +
 	"\xbaH\a\x82\x01\x04\x10\x01 \x00R\tdirection\x12:\n" +
-	"\x14local_account_number\x18\x04 \x01(\tB\b\xbaH\x05r\x03\x98\x01\x12R\x12localAccountNumber\x12<\n" +
-	"\x15remote_account_number\x18\x05 \x01(\tB\b\xbaH\x05r\x03\x98\x01\x12R\x13remoteAccountNumber\x12?\n" +
+	"\x14local_account_number\x18\x04 \x01(\tB\b\xbaH\x05r\x03\x98\x01\x12R\x12localAccountNumber\x12;\n" +
+	"\x15remote_account_number\x18\x05 \x01(\tB\a\xbaH\x04r\x02\x18\x12R\x13remoteAccountNumber\x12?\n" +
 	"\bcurrency\x18\x06 \x01(\x0e2\x17.banka.bank.v1.CurrencyB\n" +
 	"\xbaH\a\x82\x01\x04\x10\x01 \x00R\bcurrency\x12\x1f\n" +
 	"\x06amount\x18\a \x01(\tB\a\xbaH\x04r\x02\x10\x01R\x06amount\x12)\n" +

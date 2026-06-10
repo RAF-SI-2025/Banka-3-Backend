@@ -4589,6 +4589,13 @@
             "in": "path",
             "required": true,
             "type": "string"
+          },
+          {
+            "name": "remoteBankCode",
+            "description": "Optional. When set and thread_id is not one of OUR local ids, resolve\nthe thread by its remote ref (remote_bank_code, remote_thread_id=thread_id)\ninstead. Used by the Banka-2 inbound shim for buyer-side (OUTGOING)\nthreads, where the partner addresses us by the id THEY minted.",
+            "in": "query",
+            "required": false,
+            "type": "string"
           }
         ],
         "tags": [

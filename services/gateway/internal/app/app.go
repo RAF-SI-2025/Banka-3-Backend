@@ -149,6 +149,7 @@ func Run() error {
 			APIKey:            apiKey,
 			BankRoutingNumber: config.String("BANK_ROUTING_NUMBER", "333"),
 			BankDisplayName:   config.String("BANK_DISPLAY_NAME", "Banka 3"),
+			PresentedRouting:  parseCodeValuePairs(config.String("INTERBANK_PRESENTED_ROUTING", "")),
 			Users:             cs.User,
 			Trading:           cs.Trading,
 			TradingOTC:        cs.ExternalOTC,
@@ -293,4 +294,28 @@ func Run() error {
 		return err
 	}
 	return nil
+}
+
+// parseCodeValuePairs parses a "code:value,code:value" string into a map.
+// Shared grammar with trading's INTERBANK_PRESENTED_ROUTING / partner keys;
+// malformed entries are dropped. Used here to tell the Banka-2 inbound shim
+// which routing each partner uses to address us.
+func parseCodeValuePairs(raw string) map[string]string {
+	out := make(map[string]string)
+	for _, part := range strings.Split(raw, ",") {
+		part = strings.TrimSpace(part)
+		if part == "" {
+			continue
+		}
+		code, val, ok := strings.Cut(part, ":")
+		if !ok {
+			continue
+		}
+		code, val = strings.TrimSpace(code), strings.TrimSpace(val)
+		if code == "" || val == "" {
+			continue
+		}
+		out[code] = val
+	}
+	return out
 }
