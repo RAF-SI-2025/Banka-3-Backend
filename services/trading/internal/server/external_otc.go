@@ -20,6 +20,10 @@ import (
 func (s *Server) ListExternalPublicHoldings(ctx context.Context, in *tradingpb.ListExternalPublicHoldingsRequest) (*tradingpb.ListExternalPublicHoldingsResponse, error) {
 	rows, err := s.Svc.ListExternalPublicHoldings(ctx, in.GetBankCode(), in.GetTicker())
 	if err != nil {
+		// The interceptor logs method+code; the partner fan-out params are
+		// what disambiguate which discovery target broke.
+		s.Svc.Log.ErrorContext(ctx, "external otc: partner holdings discovery failed",
+			"err", err, "bank_code", in.GetBankCode(), "ticker", in.GetTicker())
 		return nil, err
 	}
 	out := &tradingpb.ListExternalPublicHoldingsResponse{
@@ -238,9 +242,21 @@ var settlementKindToString = map[tradingpb.ExternalOTCSettlementKind]string{
 }
 
 func (s *Server) SettleExternalOTCOption(ctx context.Context, in *tradingpb.SettleExternalOTCOptionRequest) (*tradingpb.SettleExternalOTCOptionResponse, error) {
+	phase, phaseOK := settlementPhaseToString[in.GetPhase()]
+	if !phaseOK {
+		s.Svc.Log.WarnContext(ctx, "external otc settle: unknown settlement phase in request",
+			"phase", in.GetPhase().String(),
+			"transaction_id", in.GetTransactionId(), "sender_bank_code", in.GetSenderBankCode())
+	}
+	kind, kindOK := settlementKindToString[in.GetKind()]
+	if !kindOK {
+		s.Svc.Log.WarnContext(ctx, "external otc settle: unknown settlement kind in request",
+			"kind", in.GetKind().String(),
+			"transaction_id", in.GetTransactionId(), "sender_bank_code", in.GetSenderBankCode())
+	}
 	res, err := s.Svc.SettleExternalOTCOption(ctx, service.SettleExternalOTCOptionInput{
-		Phase:          settlementPhaseToString[in.GetPhase()],
-		Kind:           settlementKindToString[in.GetKind()],
+		Phase:          phase,
+		Kind:           kind,
 		SenderBankCode: in.GetSenderBankCode(),
 		TransactionID:  in.GetTransactionId(),
 		OptionRef:      in.GetOptionRef(),
@@ -251,7 +267,19 @@ func (s *Server) SettleExternalOTCOption(ctx context.Context, in *tradingpb.Sett
 		Quantity:       in.GetQuantity(),
 	})
 	if err != nil {
+		// 2PC money leg — the transaction id is the cross-bank correlation
+		// key, which the boundary interceptor doesn't capture.
+		s.Svc.Log.ErrorContext(ctx, "external otc settle: 2pc phase failed",
+			"err", err, "phase", phase, "kind", kind,
+			"transaction_id", in.GetTransactionId(), "sender_bank_code", in.GetSenderBankCode())
 		return nil, err
+	}
+	if !res.Accepted {
+		// Rejection rides back as an OK gRPC response — without this log
+		// the boundary shows code=OK while the settlement actually refused.
+		s.Svc.Log.WarnContext(ctx, "external otc settle: phase rejected",
+			"reason", res.Reason, "phase", phase, "kind", kind,
+			"transaction_id", in.GetTransactionId(), "sender_bank_code", in.GetSenderBankCode())
 	}
 	return &tradingpb.SettleExternalOTCOptionResponse{
 		Accepted:            res.Accepted,

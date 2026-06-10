@@ -42,7 +42,11 @@ func Run() error {
 	if err != nil {
 		return fmt.Errorf("otelinit: %w", err)
 	}
-	defer func() { _ = prov.Shutdown(context.Background()) }()
+	defer func() {
+		if err := prov.Shutdown(context.Background()); err != nil {
+			log.Warn("otel provider shutdown failed", "err", err)
+		}
+	}()
 
 	// OpenPair dials the primary (DATABASE_URL → banka-pg-pooler-rw) and,
 	// when set, a hot-standby read pool (DATABASE_READ_URL →

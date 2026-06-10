@@ -50,7 +50,7 @@ func (r *RecordingVerifier) Issue(ctx context.Context, userID string, kind verif
 		UserId:     userID,
 		ActionKind: string(kind),
 	}); rerr != nil {
-		r.Log.Warn("verification history: record failed", "error", rerr, "id", id)
+		r.Log.WarnContext(rctx, "verification history: record failed", "err", rerr, "id", id)
 	}
 	return id, code, exp, nil
 }
@@ -77,7 +77,7 @@ func (r *RecordingVerifier) resolve(ctx context.Context, id string, success bool
 		Id:      id,
 		Success: success,
 	}); err != nil {
-		r.Log.Warn("verification history: resolve failed", "error", err, "id", id, "success", success)
+		r.Log.WarnContext(rctx, "verification history: resolve failed", "err", err, "id", id, "success", success)
 	}
 }
 

@@ -27,6 +27,8 @@ func (s *Service) CreatePaymentRecipient(ctx context.Context, name, accountNumbe
 		return nil, apperr.Validation("naziv primaoca je obavezan")
 	}
 	if _, err := account.Validate(accountNumber); err != nil {
+		s.log().WarnContext(ctx, "create payment recipient validation failed",
+			"err", err, "account_number", accountNumber, "client_id", p.UserID)
 		return nil, apperr.Validation("broj računa nije ispravan: " + err.Error())
 	}
 	return s.Store.UpsertPaymentRecipient(ctx, &domain.PaymentRecipient{
@@ -56,6 +58,8 @@ func (s *Service) UpdatePaymentRecipient(ctx context.Context, id, name, accountN
 		return nil, apperr.PermissionDenied("samo klijent može da menja primaoce")
 	}
 	if _, err := account.Validate(strings.TrimSpace(accountNumber)); err != nil {
+		s.log().WarnContext(ctx, "update payment recipient validation failed",
+			"err", err, "recipient_id", id, "account_number", strings.TrimSpace(accountNumber), "client_id", p.UserID)
 		return nil, apperr.Validation("broj računa nije ispravan: " + err.Error())
 	}
 	return s.Store.UpdatePaymentRecipient(ctx, &domain.PaymentRecipient{

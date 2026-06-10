@@ -69,6 +69,8 @@ func Middleware(cache Cache, log *slog.Logger) func(http.Handler) http.Handler {
 				return
 			}
 			if len(key) > MaxKeyLen {
+				log.WarnContext(r.Context(), "idempotency key rejected: too long",
+					"key_len", len(key), "method", r.Method, "path", r.URL.Path)
 				http.Error(w, "Idempotency-Key too long", http.StatusBadRequest)
 				return
 			}
@@ -81,8 +83,8 @@ func Middleware(cache Cache, log *slog.Logger) func(http.Handler) http.Handler {
 				replay(w, entry)
 				return
 			} else if !errors.Is(err, pkgidem.ErrMiss) {
-				log.Warn("idempotency: cache get failed; bypassing",
-					"user", userID, "error", err)
+				log.WarnContext(r.Context(), "idempotency: cache get failed; bypassing",
+					"err", err, "user", userID, "method", r.Method, "path", r.URL.Path)
 			}
 
 			// Capture the response, run the handler, and cache on 2xx.
@@ -96,8 +98,8 @@ func Middleware(cache Cache, log *slog.Logger) func(http.Handler) http.Handler {
 					Body:    cw.body.Bytes(),
 				}
 				if err := cache.Set(r.Context(), userID, key, e); err != nil {
-					log.Warn("idempotency: cache set failed",
-						"user", userID, "error", err)
+					log.WarnContext(r.Context(), "idempotency: cache set failed",
+						"err", err, "user", userID, "method", r.Method, "path", r.URL.Path)
 				}
 			}
 		})

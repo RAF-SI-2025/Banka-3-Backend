@@ -67,6 +67,9 @@ func registerCrossBankPaymentSaga(reg *saga.Registry, svc *Service) {
 			{
 				Name: "prepare_local",
 				Forward: func(ctx context.Context, sc *saga.Context[crossBankPaymentPayload]) error {
+					sc.Log.DebugContext(ctx, "cross-bank payment: preparing local leg",
+						"remote_bank_code", sc.State.RemoteBankCode,
+						"amount", sc.State.Amount, "currency", sc.State.Currency)
 					_, err := svc.InterbankPayer.PreparePayment(ctx, PrepareInterbankInput{
 						SenderRoutingNumber: sc.State.SenderRoutingNumber,
 						TransactionID:       sc.TransactionID,
@@ -76,12 +79,24 @@ func registerCrossBankPaymentSaga(reg *saga.Registry, svc *Service) {
 						Amount:              sc.State.Amount,
 						Purpose:             sc.State.Purpose,
 					})
+					if err != nil {
+						sc.Log.ErrorContext(ctx, "cross-bank payment: local prepare failed",
+							"err", err, "remote_bank_code", sc.State.RemoteBankCode,
+							"amount", sc.State.Amount, "currency", sc.State.Currency)
+					}
 					return err
 				},
 				Compensate: func(ctx context.Context, sc *saga.Context[crossBankPaymentPayload]) error {
-					return svc.InterbankPayer.RollbackPayment(ctx,
+					if err := svc.InterbankPayer.RollbackPayment(ctx,
 						sc.State.SenderRoutingNumber, sc.TransactionID,
-						"cross-bank payment local rollback")
+						"cross-bank payment local rollback"); err != nil {
+						sc.Log.ErrorContext(ctx, "cross-bank payment: local rollback compensation failed",
+							"err", err, "remote_bank_code", sc.State.RemoteBankCode)
+						return err
+					}
+					sc.Log.InfoContext(ctx, "cross-bank payment: local reservation rolled back",
+						"remote_bank_code", sc.State.RemoteBankCode)
+					return nil
 				},
 			},
 			{
@@ -97,6 +112,9 @@ func registerCrossBankPaymentSaga(reg *saga.Registry, svc *Service) {
 						Purpose:             sc.State.Purpose,
 					})
 					if err != nil {
+						sc.Log.ErrorContext(ctx, "cross-bank payment: partner prepare failed",
+							"err", err, "remote_bank_code", sc.State.RemoteBankCode,
+							"amount", sc.State.Amount, "currency", sc.State.Currency)
 						return err
 					}
 					if !res.Accepted {
@@ -104,25 +122,42 @@ func registerCrossBankPaymentSaga(reg *saga.Registry, svc *Service) {
 						if len(res.NoReasons) > 0 {
 							reason = "partner refused: " + strings.Join(res.NoReasons, ",")
 						}
+						sc.Log.WarnContext(ctx, "cross-bank payment: partner voted no",
+							"remote_bank_code", sc.State.RemoteBankCode, "reason", reason)
 						// Wrap as InvalidArgument so the saga marks this as
 						// a permanent failure (not transient retry).
 						return status.Error(codes.InvalidArgument, reason)
 					}
+					sc.Log.InfoContext(ctx, "cross-bank payment: partner prepared",
+						"remote_bank_code", sc.State.RemoteBankCode,
+						"amount", sc.State.Amount, "currency", sc.State.Currency)
 					return nil
 				},
 				Compensate: func(ctx context.Context, sc *saga.Context[crossBankPaymentPayload]) error {
 					// Best-effort — if the partner never recorded the
 					// prepare row, this 404s and we swallow it.
-					return svc.PartnerPayer.RollbackPayment(ctx,
+					if err := svc.PartnerPayer.RollbackPayment(ctx,
 						sc.State.RemoteBankCode, sc.TransactionID,
-						"cross-bank payment partner rollback")
+						"cross-bank payment partner rollback"); err != nil {
+						sc.Log.ErrorContext(ctx, "cross-bank payment: partner rollback compensation failed",
+							"err", err, "remote_bank_code", sc.State.RemoteBankCode)
+						return err
+					}
+					return nil
 				},
 			},
 			{
 				Name: "commit_partner",
 				Forward: func(ctx context.Context, sc *saga.Context[crossBankPaymentPayload]) error {
-					return svc.PartnerPayer.CommitPayment(ctx,
-						sc.State.RemoteBankCode, sc.TransactionID)
+					if err := svc.PartnerPayer.CommitPayment(ctx,
+						sc.State.RemoteBankCode, sc.TransactionID); err != nil {
+						sc.Log.ErrorContext(ctx, "cross-bank payment: partner commit failed",
+							"err", err, "remote_bank_code", sc.State.RemoteBankCode)
+						return err
+					}
+					sc.Log.InfoContext(ctx, "cross-bank payment: partner committed",
+						"remote_bank_code", sc.State.RemoteBankCode)
+					return nil
 				},
 				// Past the point of no return for the partner; no
 				// compensation defined. A failure here parks the saga
@@ -135,7 +170,15 @@ func registerCrossBankPaymentSaga(reg *saga.Registry, svc *Service) {
 				Forward: func(ctx context.Context, sc *saga.Context[crossBankPaymentPayload]) error {
 					_, err := svc.InterbankPayer.CommitPayment(ctx,
 						sc.State.SenderRoutingNumber, sc.TransactionID)
-					return err
+					if err != nil {
+						sc.Log.ErrorContext(ctx, "cross-bank payment: local commit failed",
+							"err", err, "remote_bank_code", sc.State.RemoteBankCode)
+						return err
+					}
+					sc.Log.InfoContext(ctx, "cross-bank payment: local leg committed",
+						"remote_bank_code", sc.State.RemoteBankCode,
+						"amount", sc.State.Amount, "currency", sc.State.Currency)
+					return nil
 				},
 				Compensate: nil,
 			},

@@ -104,11 +104,13 @@ func (s *SMTPSender) Send(ctx context.Context, m Message) error {
 	select {
 	case r := <-done:
 		if r.err != nil {
+			s.Log.ErrorContext(ctx, "smtp send failed", "err", r.err, "to", m.To, "subject", m.Subject)
 			return fmt.Errorf("smtp send: %w", r.err)
 		}
-		s.Log.Info("email sent", "to", m.To, "subject", m.Subject)
+		s.Log.InfoContext(ctx, "email sent", "to", m.To, "subject", m.Subject)
 		return nil
 	case <-dialCtx.Done():
+		s.Log.ErrorContext(ctx, "smtp send timed out", "err", dialCtx.Err(), "to", m.To, "subject", m.Subject)
 		return fmt.Errorf("smtp send: %w", dialCtx.Err())
 	}
 }

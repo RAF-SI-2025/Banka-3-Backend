@@ -6,6 +6,7 @@ import (
 	"strings"
 
 	"github.com/RAF-SI-2025/Banka-3-Backend/pkg/apperr"
+	"github.com/RAF-SI-2025/Banka-3-Backend/pkg/logger"
 	"github.com/RAF-SI-2025/Banka-3-Backend/pkg/postgres"
 	"github.com/RAF-SI-2025/Banka-3-Backend/services/user/internal/domain"
 )
@@ -33,6 +34,7 @@ func (s *Store) InsertAudit(ctx context.Context, e *domain.AuditEntry) error {
 		e.Action, e.ActorID, e.ActorKind, e.ActorName,
 		e.TargetID, e.TargetLabel, e.OldValue, e.NewValue, e.Note,
 	); err != nil {
+		logger.From(ctx).ErrorContext(ctx, "insert audit failed", "err", err, "action", e.Action, "actor_id", e.ActorID)
 		return apperr.Internal("insert audit", err)
 	}
 	return nil
@@ -70,6 +72,7 @@ func (s *Store) ListAudit(ctx context.Context, f domain.AuditFilter, limit, offs
 	if err := s.DB.QueryRow(postgres.WithRead(ctx),
 		`select count(*) from "user".audit_log`+where, args...,
 	).Scan(&total); err != nil {
+		logger.From(ctx).ErrorContext(ctx, "count audit failed", "err", err)
 		return nil, 0, apperr.Internal("count audit", err)
 	}
 
@@ -78,6 +81,7 @@ func (s *Store) ListAudit(ctx context.Context, f domain.AuditFilter, limit, offs
 		fmt.Sprintf(" order by created_at desc limit $%d offset $%d", len(args)-1, len(args))
 	rows, err := s.DB.Query(postgres.WithRead(ctx), q, args...)
 	if err != nil {
+		logger.From(ctx).ErrorContext(ctx, "list audit failed", "err", err)
 		return nil, 0, apperr.Internal("list audit", err)
 	}
 	defer rows.Close()
@@ -85,9 +89,13 @@ func (s *Store) ListAudit(ctx context.Context, f domain.AuditFilter, limit, offs
 	for rows.Next() {
 		e, err := scanAudit(rows)
 		if err != nil {
+			logger.From(ctx).ErrorContext(ctx, "scan audit failed", "err", err)
 			return nil, 0, apperr.Internal("scan audit", err)
 		}
 		out = append(out, e)
+	}
+	if err := rows.Err(); err != nil {
+		logger.From(ctx).ErrorContext(ctx, "rows audit failed", "err", err)
 	}
 	return out, total, rows.Err()
 }

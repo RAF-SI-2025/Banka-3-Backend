@@ -4,6 +4,7 @@ import (
 	"context"
 
 	"github.com/RAF-SI-2025/Banka-3-Backend/pkg/apperr"
+	"github.com/RAF-SI-2025/Banka-3-Backend/pkg/logger"
 	"github.com/RAF-SI-2025/Banka-3-Backend/pkg/postgres"
 	"github.com/RAF-SI-2025/Banka-3-Backend/services/trading/internal/domain"
 	"github.com/jackc/pgx/v5"
@@ -34,6 +35,7 @@ func (s *Store) UpsertExchange(ctx context.Context, e *domain.Exchange) (*domain
 	)
 	out, err := scanExchange(row)
 	if err != nil {
+		logger.From(ctx).ErrorContext(ctx, "upsert exchange failed", "err", err)
 		return nil, apperr.Internal("upsert exchange", err)
 	}
 	return out, nil
@@ -47,11 +49,17 @@ func (s *Store) SetExchangeOverride(ctx context.Context, mic string, state *doma
 		q := `update "trading".exchanges set override_state = NULL, updated_at = now() where mic = $1
 		      returning ` + exchangeCols
 		out, err := scanExchange(s.DB.QueryRow(ctx, q, mic))
+		if err != nil && !noRows(err) {
+			logger.From(ctx).ErrorContext(ctx, "clear exchange override failed", "err", err, "mic", mic)
+		}
 		return wrapExchange(out, err)
 	}
 	q := `update "trading".exchanges set override_state = $2, updated_at = now() where mic = $1
 	      returning ` + exchangeCols
 	out, err := scanExchange(s.DB.QueryRow(ctx, q, mic, string(*state)))
+	if err != nil && !noRows(err) {
+		logger.From(ctx).ErrorContext(ctx, "set exchange override failed", "err", err, "mic", mic)
+	}
 	return wrapExchange(out, err)
 }
 
@@ -69,6 +77,9 @@ func wrapExchange(out *domain.Exchange, err error) (*domain.Exchange, error) {
 func (s *Store) GetExchange(ctx context.Context, mic string) (*domain.Exchange, error) {
 	const q = `select ` + exchangeCols + ` from "trading".exchanges where mic = $1`
 	out, err := scanExchange(s.DB.QueryRow(ctx, q, mic))
+	if err != nil && !noRows(err) {
+		logger.From(ctx).ErrorContext(ctx, "get exchange failed", "err", err, "mic", mic)
+	}
 	return wrapExchange(out, err)
 }
 
@@ -77,6 +88,7 @@ func (s *Store) ListExchanges(ctx context.Context) ([]*domain.Exchange, error) {
 	const q = `select ` + exchangeCols + ` from "trading".exchanges order by mic`
 	rows, err := s.DB.Query(postgres.WithRead(ctx), q)
 	if err != nil {
+		logger.From(ctx).ErrorContext(ctx, "list exchanges failed", "err", err)
 		return nil, apperr.Internal("list exchanges", err)
 	}
 	defer rows.Close()
@@ -84,11 +96,16 @@ func (s *Store) ListExchanges(ctx context.Context) ([]*domain.Exchange, error) {
 	for rows.Next() {
 		e, err := scanExchange(rows)
 		if err != nil {
+			logger.From(ctx).ErrorContext(ctx, "scan exchange failed", "err", err)
 			return nil, apperr.Internal("scan exchange", err)
 		}
 		out = append(out, e)
 	}
-	return out, rows.Err()
+	if err := rows.Err(); err != nil {
+		logger.From(ctx).ErrorContext(ctx, "list exchanges rows failed", "err", err)
+		return out, err
+	}
+	return out, nil
 }
 
 func scanExchange(row pgx.Row) (*domain.Exchange, error) {

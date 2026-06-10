@@ -45,9 +45,10 @@ func (s *Service) RunMaintenanceFeeJob(ctx context.Context, now time.Time) (*Mai
 func (s *Service) RunMaintenanceFeeJobAuto(ctx context.Context) error {
 	res, err := s.runMaintenanceFeeJob(ctx, s.now())
 	if err != nil {
+		s.log().ErrorContext(ctx, "maintenance fee job failed", "err", err)
 		return err
 	}
-	s.Log.Info("maintenance fee job ran",
+	s.log().InfoContext(ctx, "maintenance fee job ran",
 		"processed", res.Processed, "charged", res.Charged, "skipped", res.Skipped)
 	return nil
 }
@@ -62,17 +63,20 @@ func (s *Service) runMaintenanceFeeJob(ctx context.Context, now time.Time) (*Mai
 	cutoff := now.Add(-monthlyDebitCutoff)
 	due, err := s.Store.ListAccountsDueForMaintenance(ctx, cutoff)
 	if err != nil {
+		s.log().ErrorContext(ctx, "maintenance fee job: list due accounts failed", "err", err)
 		return nil, err
 	}
 	res := &MaintenanceFeeJobResult{Processed: len(due)}
 	for _, a := range due {
 		if err := s.chargeMaintenance(ctx, a); err != nil {
 			res.Skipped++
-			s.Log.Warn("maintenance fee skipped",
-				"account_id", a.ID, "currency", a.Currency, "fee", a.MaintenanceFee, "error", err)
+			s.log().WarnContext(ctx, "maintenance fee skipped",
+				"err", err, "account_id", a.ID, "currency", a.Currency, "fee", a.MaintenanceFee)
 			continue
 		}
 		res.Charged++
+		s.log().InfoContext(ctx, "maintenance fee charged",
+			"account_id", a.ID, "fee", a.MaintenanceFee, "currency", a.Currency)
 	}
 	return res, nil
 }

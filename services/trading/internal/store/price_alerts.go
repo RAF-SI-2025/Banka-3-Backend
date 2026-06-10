@@ -5,6 +5,7 @@ import (
 	"time"
 
 	"github.com/RAF-SI-2025/Banka-3-Backend/pkg/apperr"
+	"github.com/RAF-SI-2025/Banka-3-Backend/pkg/logger"
 	"github.com/RAF-SI-2025/Banka-3-Backend/pkg/postgres"
 	"github.com/RAF-SI-2025/Banka-3-Backend/services/trading/internal/domain"
 	"github.com/jackc/pgx/v5"
@@ -24,6 +25,7 @@ func (s *Store) InsertPriceAlert(ctx context.Context, a *domain.PriceAlert) (*do
 		a.UserID, string(a.UserKind), a.SecurityID, a.Threshold, string(a.Condition))
 	out, err := scanPriceAlert(row)
 	if err != nil {
+		logger.From(ctx).ErrorContext(ctx, "insert price alert failed", "err", err)
 		return nil, apperr.Internal("insert price alert", err)
 	}
 	return out, nil
@@ -36,10 +38,15 @@ func (s *Store) ListPriceAlertsByUser(ctx context.Context, userID string) ([]*do
 	      where user_id = $1 order by created_at desc`
 	rows, err := s.DB.Query(postgres.WithRead(ctx), q, userID)
 	if err != nil {
+		logger.From(ctx).ErrorContext(ctx, "list price alerts failed", "err", err, "user_id", userID)
 		return nil, apperr.Internal("list price alerts", err)
 	}
 	defer rows.Close()
-	return scanPriceAlerts(rows)
+	out, err := scanPriceAlerts(rows)
+	if err != nil {
+		logger.From(ctx).ErrorContext(ctx, "list price alerts by user failed", "err", err, "user_id", userID)
+	}
+	return out, err
 }
 
 // ListActivePriceAlerts returns every active alert across all users —
@@ -49,10 +56,15 @@ func (s *Store) ListActivePriceAlerts(ctx context.Context) ([]*domain.PriceAlert
 	      where is_active = true order by created_at asc`
 	rows, err := s.DB.Query(ctx, q)
 	if err != nil {
+		logger.From(ctx).ErrorContext(ctx, "list active price alerts failed", "err", err)
 		return nil, apperr.Internal("list active price alerts", err)
 	}
 	defer rows.Close()
-	return scanPriceAlerts(rows)
+	out, err := scanPriceAlerts(rows)
+	if err != nil {
+		logger.From(ctx).ErrorContext(ctx, "list active price alerts failed", "err", err)
+	}
+	return out, err
 }
 
 // GetPriceAlert returns one alert by id. NotFound on miss.
@@ -63,6 +75,7 @@ func (s *Store) GetPriceAlert(ctx context.Context, id string) (*domain.PriceAler
 		if noRows(err) {
 			return nil, apperr.NotFound("price alert not found")
 		}
+		logger.From(ctx).ErrorContext(ctx, "get price alert failed", "err", err, "id", id)
 		return nil, apperr.Internal("get price alert", err)
 	}
 	return out, nil
@@ -76,6 +89,7 @@ func (s *Store) DeactivatePriceAlert(ctx context.Context, id string, triggeredAt
 	           set is_active = false, triggered_at = $2
 	           where id = $1`
 	if _, err := s.DB.Exec(ctx, q, id, triggeredAt); err != nil {
+		logger.From(ctx).ErrorContext(ctx, "deactivate price alert failed", "err", err, "id", id)
 		return apperr.Internal("deactivate price alert", err)
 	}
 	return nil

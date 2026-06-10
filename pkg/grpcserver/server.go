@@ -126,11 +126,15 @@ func loggingInterceptor(log *slog.Logger) grpc.UnaryServerInterceptor {
 	return func(ctx context.Context, req any, info *grpc.UnaryServerInfo, handler grpc.UnaryHandler) (any, error) {
 		start := time.Now()
 		resp, err := handler(ctx, req)
-		log.LogAttrs(ctx, levelFor(err), "grpc",
+		attrs := []slog.Attr{
 			slog.String("method", info.FullMethod),
 			slog.Duration("dur", time.Since(start)),
 			slog.String("code", status.Code(err).String()),
-		)
+		}
+		if err != nil {
+			attrs = append(attrs, slog.String("err", err.Error()))
+		}
+		log.LogAttrs(ctx, levelFor(err), "grpc", attrs...)
 		return resp, err
 	}
 }
@@ -171,8 +175,11 @@ func levelFor(err error) slog.Level {
 		return slog.LevelInfo
 	}
 	switch status.Code(err) {
-	case codes.OK, codes.NotFound, codes.AlreadyExists, codes.InvalidArgument, codes.PermissionDenied, codes.Unauthenticated:
+	case codes.OK:
 		return slog.LevelInfo
+	// Expected client-class failures: visible as warnings, not errors.
+	case codes.NotFound, codes.AlreadyExists, codes.InvalidArgument, codes.PermissionDenied, codes.Unauthenticated, codes.FailedPrecondition:
+		return slog.LevelWarn
 	default:
 		return slog.LevelError
 	}

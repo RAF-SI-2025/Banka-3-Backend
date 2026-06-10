@@ -5,6 +5,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"log/slog"
 	"time"
 
 	bankpb "github.com/RAF-SI-2025/Banka-3-Backend/gen/proto/bank/v1"
@@ -39,15 +40,23 @@ import (
 // first non-nil error from any subsystem.
 func Run() error {
 	log := logger.New("trading")
+	// Make the JSON logger the process default so logger.From(ctx)
+	// fallbacks and library slog calls emit structured records too.
+	slog.SetDefault(log)
 
 	ctx, cancel := shutdown.Context()
 	defer cancel()
 
 	prov, err := otelinit.Init(ctx, "trading")
 	if err != nil {
+		log.Error("otelinit failed", "err", err)
 		return fmt.Errorf("otelinit: %w", err)
 	}
-	defer func() { _ = prov.Shutdown(context.Background()) }()
+	defer func() {
+		if serr := prov.Shutdown(context.Background()); serr != nil {
+			log.Warn("otel provider shutdown failed", "err", serr)
+		}
+	}()
 
 	// OpenPair dials the primary (DATABASE_URL → banka-pg-pooler-rw) and,
 	// when set, a hot-standby read pool (DATABASE_READ_URL →
@@ -57,6 +66,7 @@ func Run() error {
 	// idempotency reads stay on the primary.
 	db, err := postgres.OpenPair(ctx, config.MustString("DATABASE_URL"), config.String("DATABASE_READ_URL", ""))
 	if err != nil {
+		log.Error("postgres connect failed", "err", err)
 		return fmt.Errorf("postgres: %w", err)
 	}
 	defer db.Close()
@@ -66,13 +76,18 @@ func Run() error {
 
 	rdb, err := pkgredis.Open(ctx, config.MustString("REDIS_ADDR"), config.String("REDIS_PASSWORD", ""))
 	if err != nil {
+		log.Error("redis connect failed", "err", err)
 		return fmt.Errorf("redis: %w", err)
 	}
-	defer rdb.Close()
+	defer func() {
+		if cerr := rdb.Close(); cerr != nil {
+			log.Warn("redis close failed", "err", cerr)
+		}
+	}()
 
 	belgrade, err := time.LoadLocation("Europe/Belgrade")
 	if err != nil {
-		log.Warn("Europe/Belgrade timezone unavailable, falling back to UTC", "error", err)
+		log.Warn("Europe/Belgrade timezone unavailable, falling back to UTC", "err", err)
 		belgrade = time.UTC
 	}
 
@@ -105,9 +120,14 @@ func Run() error {
 			grpc.WithStatsHandler(prov.GRPCClientHandler()),
 		)
 		if err != nil {
+			log.Error("dial exchange grpc failed", "err", err, "addr", exAddr)
 			return fmt.Errorf("dial exchange: %w", err)
 		}
-		defer conn.Close()
+		defer func() {
+			if cerr := conn.Close(); cerr != nil {
+				log.Warn("close exchange grpc conn failed", "err", cerr)
+			}
+		}()
 		svc.Rates = &exchangeAdapter{c: exchangepb.NewExchangeServiceClient(conn)}
 	} else {
 		log.Warn("EXCHANGE_GRPC_ADDR not set; agent-limit math will use raw notional for foreign trades")
@@ -125,9 +145,14 @@ func Run() error {
 			grpc.WithStatsHandler(prov.GRPCClientHandler()),
 		)
 		if err != nil {
+			log.Error("dial user grpc failed", "err", err, "addr", userAddr)
 			return fmt.Errorf("dial user: %w", err)
 		}
-		defer conn.Close()
+		defer func() {
+			if cerr := conn.Close(); cerr != nil {
+				log.Warn("close user grpc conn failed", "err", cerr)
+			}
+		}()
 		userClient = userpb.NewUserServiceClient(conn)
 		svc.Users = &userResolverAdapter{c: userClient}
 	} else {
@@ -145,9 +170,14 @@ func Run() error {
 			grpc.WithStatsHandler(prov.GRPCClientHandler()),
 		)
 		if err != nil {
+			log.Error("dial notification grpc failed", "err", err, "addr", notifAddr)
 			return fmt.Errorf("dial notification: %w", err)
 		}
-		defer conn.Close()
+		defer func() {
+			if cerr := conn.Close(); cerr != nil {
+				log.Warn("close notification grpc conn failed", "err", cerr)
+			}
+		}()
 		notifClient := notifpb.NewNotificationServiceClient(conn)
 		emailSender = &notifEmailSender{c: notifClient}
 		// General-purpose fan-out (email + in-app) for C3 order/price-alert
@@ -175,9 +205,14 @@ func Run() error {
 			grpc.WithStatsHandler(prov.GRPCClientHandler()),
 		)
 		if err != nil {
+			log.Error("dial bank grpc failed", "err", err, "addr", bankAddr)
 			return fmt.Errorf("dial bank: %w", err)
 		}
-		defer conn.Close()
+		defer func() {
+			if cerr := conn.Close(); cerr != nil {
+				log.Warn("close bank grpc conn failed", "err", cerr)
+			}
+		}()
 		adapter := &bankSettlerAdapter{c: bankpb.NewBankServiceClient(conn)}
 		svc.Settler = adapter
 		svc.TaxSettler = adapter
@@ -208,6 +243,8 @@ func Run() error {
 			svc.PartnerOTC = client
 			svc.PartnerPayer = client
 			log.Info("interbank client configured", "partners", len(routes))
+		} else {
+			log.Warn("INTERBANK_ROUTES set but no valid routes parsed; partner OTC disabled")
 		}
 	}
 
@@ -366,6 +403,7 @@ func Run() error {
 	log.Info("trading service ready", "grpc", grpcAddr)
 
 	if err := g.Wait(); err != nil && !errors.Is(err, context.Canceled) {
+		log.Error("trading service exiting on subsystem failure", "err", err)
 		return err
 	}
 	return nil

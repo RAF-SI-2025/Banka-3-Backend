@@ -4,6 +4,7 @@ package redis
 import (
 	"context"
 	"fmt"
+	"log/slog"
 	"time"
 
 	"github.com/redis/go-redis/extra/redisotel/v9"
@@ -24,15 +25,15 @@ func Open(ctx context.Context, addr, password string) (*redis.Client, error) {
 	// request. Failure to install the hook is non-fatal — log only,
 	// keep serving; redis still works, just without trace correlation.
 	if err := redisotel.InstrumentTracing(c); err != nil {
-		// No logger here (pkg/redis is library-level). Swallow — the
-		// service main has the option to wire a logger later if this
-		// turns out to be useful to surface.
-		_ = err
+		slog.WarnContext(ctx, "redis otel instrumentation failed", "err", err, "addr", addr)
 	}
 	pingCtx, cancel := context.WithTimeout(ctx, 5*time.Second)
 	defer cancel()
 	if err := c.Ping(pingCtx).Err(); err != nil {
-		_ = c.Close()
+		slog.ErrorContext(ctx, "redis ping failed", "err", err, "addr", addr)
+		if cerr := c.Close(); cerr != nil {
+			slog.WarnContext(ctx, "redis close after failed ping failed", "err", cerr, "addr", addr)
+		}
 		return nil, fmt.Errorf("ping: %w", err)
 	}
 	return c, nil

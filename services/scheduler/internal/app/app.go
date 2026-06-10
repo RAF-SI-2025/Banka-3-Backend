@@ -48,13 +48,14 @@ func Run() error {
 
 	prov, err := otelinit.Init(ctx, "scheduler")
 	if err != nil {
+		log.ErrorContext(ctx, "otel init failed", "err", err)
 		return fmt.Errorf("otelinit: %w", err)
 	}
 	defer func() { _ = prov.Shutdown(context.Background()) }()
 
 	belgrade, err := time.LoadLocation("Europe/Belgrade")
 	if err != nil {
-		log.Warn("Europe/Belgrade timezone unavailable, falling back to UTC", "error", err)
+		log.WarnContext(ctx, "Europe/Belgrade timezone unavailable, falling back to UTC", "err", err)
 		belgrade = time.UTC
 	}
 
@@ -63,7 +64,7 @@ func Run() error {
 	var closers []func()
 	dial := func(name, addr string) *grpc.ClientConn {
 		if addr == "" {
-			log.Warn("grpc addr not set; jobs for this service disabled", "service", name)
+			log.WarnContext(ctx, "grpc addr not set; jobs for this service disabled", "service", name)
 			return nil
 		}
 		conn, err := grpc.NewClient(
@@ -72,7 +73,7 @@ func Run() error {
 			grpc.WithStatsHandler(prov.GRPCClientHandler()),
 		)
 		if err != nil {
-			log.Error("dial failed; jobs for this service disabled", "service", name, "err", err.Error())
+			log.ErrorContext(ctx, "dial failed; jobs for this service disabled", "err", err.Error(), "service", name)
 			return nil
 		}
 		closers = append(closers, func() { _ = conn.Close() })
@@ -109,9 +110,10 @@ func Run() error {
 	})
 
 	probeSrv.MarkReady()
-	log.Info("scheduler ready")
+	log.InfoContext(ctx, "scheduler ready")
 
 	if err := g.Wait(); err != nil && !errors.Is(err, context.Canceled) {
+		log.ErrorContext(ctx, "service terminated", "err", err)
 		return err
 	}
 	return nil

@@ -15,6 +15,7 @@ func (s *Service) RunSagaRecoveryTick(ctx context.Context) (int, error) {
 	}
 	due, err := s.SagaStore.DueForRecovery(ctx, 100)
 	if err != nil {
+		s.log().ErrorContext(ctx, "saga recovery: due-row scan failed", "err", err)
 		return 0, err
 	}
 	for _, row := range due {

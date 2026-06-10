@@ -83,8 +83,16 @@ func (s *Service) SchedulePayment(ctx context.Context, in SchedulePaymentInput) 
 	}
 	out, err := s.Store.InsertScheduledPayment(ctx, sp)
 	if err != nil {
+		s.log().ErrorContext(ctx, "schedule payment failed",
+			"err", err, "client_id", sp.ClientID, "from_account", from.Number,
+			"to_account", to.Number, "amount", sp.Amount, "currency", sp.Currency,
+			"scheduled_date", sp.ScheduledDate)
 		return nil, err
 	}
+	s.log().InfoContext(ctx, "payment scheduled",
+		"scheduled_payment_id", out.ID, "client_id", out.ClientID,
+		"from_account", from.Number, "to_account", out.ToAccountNumber,
+		"amount", out.Amount, "currency", out.Currency, "scheduled_date", out.ScheduledDate)
 	return out, nil
 }
 
@@ -115,7 +123,16 @@ func (s *Service) CancelScheduledPayment(ctx context.Context, id string) (*domai
 	if id == "" {
 		return nil, apperr.Validation("id is required")
 	}
-	return s.Store.CancelScheduledPayment(ctx, id, p.UserID)
+	out, err := s.Store.CancelScheduledPayment(ctx, id, p.UserID)
+	if err != nil {
+		s.log().WarnContext(ctx, "cancel scheduled payment failed",
+			"err", err, "scheduled_payment_id", id, "client_id", p.UserID)
+		return nil, err
+	}
+	s.log().InfoContext(ctx, "scheduled payment cancelled",
+		"scheduled_payment_id", out.ID, "client_id", p.UserID,
+		"amount", out.Amount, "currency", out.Currency)
+	return out, nil
 }
 
 // ScheduledPaymentRunResult tallies one due-sweep pass.
@@ -140,6 +157,7 @@ func (s *Service) RunDueScheduledPayments(ctx context.Context) (*ScheduledPaymen
 	now := s.now()
 	due, err := s.Store.ListDueScheduledPayments(ctx, now)
 	if err != nil {
+		s.log().ErrorContext(ctx, "scheduled payment sweep: list due payments failed", "err", err)
 		return nil, err
 	}
 
@@ -151,24 +169,36 @@ func (s *Service) RunDueScheduledPayments(ctx context.Context) (*ScheduledPaymen
 		switch {
 		case execErr == nil:
 			if err := s.Store.MarkScheduledPaymentCompleted(ctx, sp.ID, at); err != nil {
-				s.Log.WarnContext(ctx, "scheduled payment mark-completed failed", "id", sp.ID, "err", err.Error())
+				// Money moved but the row still reads 'scheduled' — the
+				// next sweep would re-execute it; flag loudly.
+				s.log().ErrorContext(ctx, "scheduled payment executed but mark-completed failed",
+					"err", err, "scheduled_payment_id", sp.ID, "client_id", sp.ClientID,
+					"amount", sp.Amount, "currency", sp.Currency)
 				continue
 			}
 			res.Succeeded++
+			s.log().InfoContext(ctx, "scheduled payment executed",
+				"scheduled_payment_id", sp.ID, "client_id", sp.ClientID,
+				"to_account", sp.ToAccountNumber, "amount", sp.Amount, "currency", sp.Currency)
 			s.notifyScheduledPaymentSucceeded(ctx, sp)
 		case isInsufficientFunds(execErr):
 			reason := "nedovoljno sredstava na računu"
 			if err := s.Store.MarkScheduledPaymentFailed(ctx, sp.ID, reason, at); err != nil {
-				s.Log.WarnContext(ctx, "scheduled payment mark-failed failed", "id", sp.ID, "err", err.Error())
+				s.log().ErrorContext(ctx, "scheduled payment mark-failed failed",
+					"err", err, "scheduled_payment_id", sp.ID, "client_id", sp.ClientID)
 				continue
 			}
 			res.Failed++
+			s.log().WarnContext(ctx, "scheduled payment failed: insufficient funds",
+				"scheduled_payment_id", sp.ID, "client_id", sp.ClientID,
+				"to_account", sp.ToAccountNumber, "amount", sp.Amount, "currency", sp.Currency)
 			s.notifyScheduledPaymentFailed(ctx, sp, reason)
 		default:
 			// Transient/other error — leave 'scheduled' for the next
 			// sweep, don't notify (avoids spamming on a flaky run).
-			s.Log.WarnContext(ctx, "scheduled payment execution deferred",
-				"id", sp.ID, "client_id", sp.ClientID, "err", execErr.Error())
+			s.log().WarnContext(ctx, "scheduled payment execution deferred",
+				"err", execErr, "scheduled_payment_id", sp.ID, "client_id", sp.ClientID,
+				"to_account", sp.ToAccountNumber, "amount", sp.Amount, "currency", sp.Currency)
 		}
 	}
 	return res, nil

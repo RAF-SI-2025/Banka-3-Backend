@@ -3,6 +3,7 @@ package service
 
 import (
 	"context"
+	"errors"
 	"log/slog"
 	"time"
 
@@ -409,6 +410,37 @@ func New(st *store.Store, cfg Config, log *slog.Logger) *Service {
 		cfg.BankName = "Banka 3"
 	}
 	return &Service{Store: st, Cfg: cfg, Log: log}
+}
+
+// log returns the service logger, falling back to slog.Default so log
+// sites stay nil-safe when a test constructs a bare &Service{}.
+func (s *Service) log() *slog.Logger {
+	if s != nil && s.Log != nil {
+		return s.Log
+	}
+	return slog.Default()
+}
+
+// logOpErr records a failed operation, choosing the level by error
+// class: expected client-class apperr kinds (validation, not-found,
+// conflict, permission, precondition, unauthenticated) log at Warn;
+// everything else (internal, unavailable, non-apperr) logs at Error.
+// Logging-only helper — never alters err. attrs follow the "err" key.
+func (s *Service) logOpErr(ctx context.Context, msg string, err error, attrs ...any) {
+	if err == nil {
+		return
+	}
+	level := slog.LevelError
+	var ae *apperr.Error
+	if errors.As(err, &ae) {
+		switch ae.Kind {
+		case apperr.KindInternal, apperr.KindUnavailable:
+			// stay at Error
+		default:
+			level = slog.LevelWarn
+		}
+	}
+	s.log().Log(ctx, level, msg, append([]any{"err", err}, attrs...)...)
 }
 
 func (s *Service) now() time.Time {

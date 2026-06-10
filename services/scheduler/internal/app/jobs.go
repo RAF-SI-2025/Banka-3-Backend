@@ -93,10 +93,10 @@ func (a *App) buildJobs() []job {
 func (a *App) interval(name string, d time.Duration, fireNow bool, fn func(context.Context) error) job {
 	return job{name: name, run: func(ctx context.Context) {
 		if d <= 0 {
-			a.log.Info("job disabled (interval<=0)", "job", name)
+			a.log.InfoContext(ctx, "job disabled (interval<=0)", "job", name)
 			return
 		}
-		a.log.Info("interval job started", "job", name, "interval", d.String())
+		a.log.InfoContext(ctx, "interval job started", "job", name, "interval", d.String())
 		if fireNow {
 			a.fire(ctx, name, fn)
 		}
@@ -118,7 +118,7 @@ func (a *App) daily(name string, h, m int, fn func(context.Context) error) job {
 	return job{name: name, run: func(ctx context.Context) {
 		for {
 			next := nextDailyOccurrence(time.Now().In(a.loc), h, m)
-			a.log.Info("daily job scheduled", "job", name, "next", next.Format(time.RFC3339))
+			a.log.InfoContext(ctx, "daily job scheduled", "job", name, "next", next.Format(time.RFC3339))
 			t := time.NewTimer(time.Until(next))
 			select {
 			case <-ctx.Done():
@@ -136,7 +136,7 @@ func (a *App) monthlyEnd(name string, h, m int, fn func(context.Context) error) 
 	return job{name: name, run: func(ctx context.Context) {
 		for {
 			next := nextEndOfMonthAfter(time.Now().In(a.loc), h, m)
-			a.log.Info("monthly job scheduled", "job", name, "next", next.Format(time.RFC3339))
+			a.log.InfoContext(ctx, "monthly job scheduled", "job", name, "next", next.Format(time.RFC3339))
 			t := time.NewTimer(time.Until(next))
 			select {
 			case <-ctx.Done():
@@ -159,12 +159,19 @@ func (a *App) once(name string, fn func(context.Context) error) job {
 // fire invokes one trigger with the admin context, logging failures
 // (but swallowing them so one bad tick never kills the job loop).
 func (a *App) fire(ctx context.Context, name string, fn func(context.Context) error) {
+	// Debug, not Info: the tightest jobs tick every 5s, and the target
+	// services already log batch summaries when a tick does real work.
+	a.log.DebugContext(ctx, "job triggered", "job", name)
+	start := time.Now()
 	if err := fn(a.adminCtx(ctx)); err != nil {
 		if ctx.Err() != nil {
 			return // shutting down / lost leadership
 		}
-		a.log.Warn("job failed", "job", name, "err", err.Error())
+		a.log.ErrorContext(ctx, "job failed",
+			"err", err.Error(), "job", name, "duration", time.Since(start).String())
+		return
 	}
+	a.log.DebugContext(ctx, "job completed", "job", name, "duration", time.Since(start).String())
 }
 
 // --- Triggers: one gRPC call each ---
@@ -175,7 +182,7 @@ func (a *App) bankInstallments(ctx context.Context) error {
 		return err
 	}
 	if r.GetProcessed() > 0 {
-		a.log.Info("installments ran", "processed", r.GetProcessed(), "paid", r.GetPaid(), "overdue", r.GetOverdue())
+		a.log.InfoContext(ctx, "installments ran", "processed", r.GetProcessed(), "paid", r.GetPaid(), "overdue", r.GetOverdue())
 	}
 	return nil
 }
@@ -186,7 +193,7 @@ func (a *App) bankVariableRate(ctx context.Context) error {
 		return err
 	}
 	if r.GetUpdated() > 0 {
-		a.log.Info("variable-rate ran", "updated", r.GetUpdated())
+		a.log.InfoContext(ctx, "variable-rate ran", "updated", r.GetUpdated())
 	}
 	return nil
 }
@@ -197,7 +204,7 @@ func (a *App) bankMaintenance(ctx context.Context) error {
 		return err
 	}
 	if r.GetProcessed() > 0 {
-		a.log.Info("maintenance-fee ran", "processed", r.GetProcessed(), "charged", r.GetCharged(), "skipped", r.GetSkipped())
+		a.log.InfoContext(ctx, "maintenance-fee ran", "processed", r.GetProcessed(), "charged", r.GetCharged(), "skipped", r.GetSkipped())
 	}
 	return nil
 }
@@ -208,7 +215,7 @@ func (a *App) bankSpentReset(ctx context.Context) error {
 		return err
 	}
 	if r.GetDaily() > 0 || r.GetMonthly() > 0 {
-		a.log.Info("spent-reset ran", "daily", r.GetDaily(), "monthly", r.GetMonthly())
+		a.log.InfoContext(ctx, "spent-reset ran", "daily", r.GetDaily(), "monthly", r.GetMonthly())
 	}
 	return nil
 }
@@ -219,7 +226,7 @@ func (a *App) bankScheduledPayments(ctx context.Context) error {
 		return err
 	}
 	if r.GetProcessed() > 0 {
-		a.log.Info("scheduled payments ran", "processed", r.GetProcessed(), "succeeded", r.GetSucceeded(), "failed", r.GetFailed())
+		a.log.InfoContext(ctx, "scheduled payments ran", "processed", r.GetProcessed(), "succeeded", r.GetSucceeded(), "failed", r.GetFailed())
 	}
 	return nil
 }
@@ -230,7 +237,7 @@ func (a *App) bankForexForwardSettlement(ctx context.Context) error {
 		return err
 	}
 	if r.GetProcessed() > 0 {
-		a.log.Info("forex forward settlement ran", "processed", r.GetProcessed(), "settled", r.GetSettled(), "failed", r.GetFailed())
+		a.log.InfoContext(ctx, "forex forward settlement ran", "processed", r.GetProcessed(), "settled", r.GetSettled(), "failed", r.GetFailed())
 	}
 	return nil
 }
@@ -241,7 +248,7 @@ func (a *App) tradingExecution(ctx context.Context) error {
 		return err
 	}
 	if r.GetFired() > 0 {
-		a.log.Info("execution tick", "fired", r.GetFired())
+		a.log.InfoContext(ctx, "execution tick", "fired", r.GetFired())
 	}
 	return nil
 }
@@ -252,7 +259,7 @@ func (a *App) tradingSagaRecovery(ctx context.Context) error {
 		return err
 	}
 	if r.GetResumed() > 0 {
-		a.log.Info("saga recovery tick", "resumed", r.GetResumed())
+		a.log.InfoContext(ctx, "saga recovery tick", "resumed", r.GetResumed())
 	}
 	return nil
 }
@@ -263,7 +270,7 @@ func (a *App) tradingOTCExpiry(ctx context.Context) error {
 		return err
 	}
 	if r.GetContractsExpired() > 0 {
-		a.log.Info("otc expiry sweep", "contracts", r.GetContractsExpired(), "shares_released", r.GetSharesReleased())
+		a.log.InfoContext(ctx, "otc expiry sweep", "contracts", r.GetContractsExpired(), "shares_released", r.GetSharesReleased())
 	}
 	return nil
 }
@@ -273,7 +280,7 @@ func (a *App) tradingOptionsRefresh(ctx context.Context) error {
 	if err != nil {
 		return err
 	}
-	a.log.Info("options refresh ran", "underlyings", r.GetUnderlyingsProcessed(), "options", r.GetOptionsUpserted(), "skipped", r.GetSkipped())
+	a.log.InfoContext(ctx, "options refresh ran", "underlyings", r.GetUnderlyingsProcessed(), "options", r.GetOptionsUpserted(), "skipped", r.GetSkipped())
 	return nil
 }
 
@@ -282,7 +289,7 @@ func (a *App) tradingMarketData(ctx context.Context) error {
 	if err != nil {
 		return err
 	}
-	a.log.Info("market-data refresh ran", "stocks", r.GetStocksUpdated(), "forex", r.GetForexUpdated(),
+	a.log.InfoContext(ctx, "market-data refresh ran", "stocks", r.GetStocksUpdated(), "forex", r.GetForexUpdated(),
 		"skipped", r.GetSkipped(), "errors", r.GetUpstreamErrors(), "throttled", r.GetUpstreamThrottled())
 	return nil
 }
@@ -292,7 +299,7 @@ func (a *App) tradingStockBackfill(ctx context.Context) error {
 	if err != nil {
 		return err
 	}
-	a.log.Info("stock-history backfill ran", "symbols", r.GetSymbolsBackfilled(), "rows", r.GetRowsWritten(),
+	a.log.InfoContext(ctx, "stock-history backfill ran", "symbols", r.GetSymbolsBackfilled(), "rows", r.GetRowsWritten(),
 		"skipped", r.GetSkipped(), "errors", r.GetUpstreamErrors(), "throttled", r.GetUpstreamThrottled())
 	return nil
 }
@@ -302,7 +309,7 @@ func (a *App) tradingActuaryReset(ctx context.Context) error {
 	if err != nil {
 		return err
 	}
-	a.log.Info("actuary used-limit reset ran", "affected", r.GetAffected())
+	a.log.InfoContext(ctx, "actuary used-limit reset ran", "affected", r.GetAffected())
 	return nil
 }
 
@@ -311,7 +318,7 @@ func (a *App) tradingTax(ctx context.Context) error {
 	if err != nil {
 		return err
 	}
-	a.log.Info("monthly tax ran", "users_taxed", r.GetUsersTaxed(), "total_rsd", r.GetTotalCollectedRsd())
+	a.log.InfoContext(ctx, "monthly tax ran", "users_taxed", r.GetUsersTaxed(), "total_rsd", r.GetTotalCollectedRsd())
 	return nil
 }
 
@@ -321,7 +328,7 @@ func (a *App) tradingDividends(ctx context.Context) error {
 		return err
 	}
 	if r.GetRan() {
-		a.log.Info("quarterly dividend payout ran", "paid", r.GetPaid(), "skipped", r.GetSkipped(), "total_rsd", r.GetTotalRsd())
+		a.log.InfoContext(ctx, "quarterly dividend payout ran", "paid", r.GetPaid(), "skipped", r.GetSkipped(), "total_rsd", r.GetTotalRsd())
 	}
 	return nil
 }
@@ -331,7 +338,7 @@ func (a *App) tradingFundPerf(ctx context.Context) error {
 	if err != nil {
 		return err
 	}
-	a.log.Info("fund performance snapshot ran", "funds", r.GetFunds())
+	a.log.InfoContext(ctx, "fund performance snapshot ran", "funds", r.GetFunds())
 	return nil
 }
 
@@ -341,7 +348,7 @@ func (a *App) tradingPriceAlerts(ctx context.Context) error {
 		return err
 	}
 	if r.GetTriggered() > 0 {
-		a.log.Info("price alert sweep ran", "triggered", r.GetTriggered())
+		a.log.InfoContext(ctx, "price alert sweep ran", "triggered", r.GetTriggered())
 	}
 	return nil
 }
@@ -352,7 +359,7 @@ func (a *App) tradingDCA(ctx context.Context) error {
 		return err
 	}
 	if r.GetCreated() > 0 {
-		a.log.Info("dca recurring orders ran", "created", r.GetCreated())
+		a.log.InfoContext(ctx, "dca recurring orders ran", "created", r.GetCreated())
 	}
 	return nil
 }
@@ -363,7 +370,7 @@ func (a *App) tradingInterbankRetry(ctx context.Context) error {
 		return err
 	}
 	if r.GetSettled() > 0 {
-		a.log.Info("interbank retry tick", "settled", r.GetSettled())
+		a.log.InfoContext(ctx, "interbank retry tick", "settled", r.GetSettled())
 	}
 	return nil
 }
@@ -374,7 +381,7 @@ func (a *App) tradingScheduledInterbank(ctx context.Context) error {
 		return err
 	}
 	if r.GetSubmitted() > 0 {
-		a.log.Info("scheduled interbank payments ran", "submitted", r.GetSubmitted())
+		a.log.InfoContext(ctx, "scheduled interbank payments ran", "submitted", r.GetSubmitted())
 	}
 	return nil
 }
@@ -385,7 +392,7 @@ func (a *App) exchangeFXRefresh(ctx context.Context) error {
 		return err
 	}
 	if r.GetWritten() > 0 {
-		a.log.Info("fx refresh ran", "written", r.GetWritten())
+		a.log.InfoContext(ctx, "fx refresh ran", "written", r.GetWritten())
 	}
 	return nil
 }

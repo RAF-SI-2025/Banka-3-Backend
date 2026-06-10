@@ -9,6 +9,7 @@ import (
 	"time"
 
 	bankpb "github.com/RAF-SI-2025/Banka-3-Backend/gen/proto/bank/v1"
+	"github.com/RAF-SI-2025/Banka-3-Backend/pkg/logger"
 	"github.com/RAF-SI-2025/Banka-3-Backend/services/bank/internal/domain"
 	"github.com/RAF-SI-2025/Banka-3-Backend/services/bank/internal/service"
 	"google.golang.org/protobuf/types/known/timestamppb"
@@ -88,16 +89,20 @@ func (s *Server) ListInterbankBlacklist(ctx context.Context, in *bankpb.ListInte
 func (s *Server) BlockInterbankPartner(ctx context.Context, in *bankpb.BlockInterbankPartnerRequest) (*bankpb.InterbankBlacklistEntry, error) {
 	e, err := s.Svc.BlockInterbankPartner(ctx, int(in.GetSenderRoutingNumber()), in.GetReason())
 	if err != nil {
+		logger.From(ctx).ErrorContext(ctx, "block interbank partner failed", "err", err, "sender_routing", in.GetSenderRoutingNumber(), "reason", in.GetReason())
 		return nil, err
 	}
+	logger.From(ctx).InfoContext(ctx, "interbank partner blocked", "sender_routing", in.GetSenderRoutingNumber(), "reason", in.GetReason())
 	return blacklistEntryToProto(e), nil
 }
 
 func (s *Server) UnblockInterbankPartner(ctx context.Context, in *bankpb.UnblockInterbankPartnerRequest) (*bankpb.InterbankBlacklistEntry, error) {
 	e, err := s.Svc.UnblockInterbankPartner(ctx, int(in.GetSenderRoutingNumber()))
 	if err != nil {
+		logger.From(ctx).ErrorContext(ctx, "unblock interbank partner failed", "err", err, "sender_routing", in.GetSenderRoutingNumber())
 		return nil, err
 	}
+	logger.From(ctx).InfoContext(ctx, "interbank partner unblocked", "sender_routing", in.GetSenderRoutingNumber())
 	return blacklistEntryToProto(e), nil
 }
 

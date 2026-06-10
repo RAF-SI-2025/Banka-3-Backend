@@ -7,6 +7,7 @@ package probes
 import (
 	"context"
 	"errors"
+	"log/slog"
 	"net/http"
 	"sync/atomic"
 	"time"
@@ -45,7 +46,10 @@ func (s *Server) Register(name string, c Check) {
 
 // MarkReady flips /readyz to start running checks. Until called, /readyz
 // returns 503.
-func (s *Server) MarkReady() { s.ready.Store(true) }
+func (s *Server) MarkReady() {
+	s.ready.Store(true)
+	slog.Info("probes marked ready", "addr", s.addr)
+}
 
 // ListenAndServe blocks until ctx is cancelled or the server errors.
 func (s *Server) ListenAndServe(ctx context.Context) error {
@@ -68,7 +72,9 @@ func (s *Server) ListenAndServe(ctx context.Context) error {
 	case <-ctx.Done():
 		shutdownCtx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 		defer cancel()
-		_ = s.srv.Shutdown(shutdownCtx)
+		if err := s.srv.Shutdown(shutdownCtx); err != nil {
+			slog.Warn("probe server shutdown failed", "err", err, "addr", s.addr)
+		}
 		return nil
 	case err := <-errCh:
 		return err
@@ -90,6 +96,7 @@ func (s *Server) handleReady(w http.ResponseWriter, r *http.Request) {
 		err := c.check(ctx)
 		cancel()
 		if err != nil {
+			slog.WarnContext(r.Context(), "readiness check failed", "err", err, "check", c.name)
 			http.Error(w, c.name+": "+err.Error(), http.StatusServiceUnavailable)
 			return
 		}

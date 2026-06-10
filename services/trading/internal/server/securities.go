@@ -88,11 +88,15 @@ func (s *Server) ListSecurities(ctx context.Context, in *tradingpb.ListSecuritie
 	}
 	minS, err := parseDatePtr(in.GetMinSettlement())
 	if err != nil {
+		s.Svc.Log.WarnContext(ctx, "list securities: bad min_settlement date in request",
+			"err", err, "min_settlement", in.GetMinSettlement())
 		return nil, apperr.Validation("min_settlement: očekivan format YYYY-MM-DD")
 	}
 	input.MinSettlement = minS
 	maxS, err := parseDatePtr(in.GetMaxSettlement())
 	if err != nil {
+		s.Svc.Log.WarnContext(ctx, "list securities: bad max_settlement date in request",
+			"err", err, "max_settlement", in.GetMaxSettlement())
 		return nil, apperr.Validation("max_settlement: očekivan format YYYY-MM-DD")
 	}
 	input.MaxSettlement = maxS

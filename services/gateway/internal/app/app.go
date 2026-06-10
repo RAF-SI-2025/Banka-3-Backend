@@ -6,6 +6,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"log/slog"
 	"net/http"
 	"strconv"
 	"strings"
@@ -42,6 +43,10 @@ import (
 // Run blocks until shutdown.
 func Run() error {
 	log := logger.New("gateway")
+	// Make logger.From(ctx) fallbacks and slog.Default() callers (e.g.
+	// the router's response-write helpers) emit through the same JSON
+	// handler instead of the stdlib text logger.
+	slog.SetDefault(log)
 
 	ctx, cancel := shutdown.Context()
 	defer cancel()
@@ -50,25 +55,40 @@ func Run() error {
 	if err != nil {
 		return fmt.Errorf("otelinit: %w", err)
 	}
-	defer func() { _ = prov.Shutdown(context.Background()) }()
+	defer func() {
+		if err := prov.Shutdown(context.Background()); err != nil {
+			log.Warn("otel provider shutdown failed", "err", err)
+		}
+	}()
 
-	cs, err := clients.Dial(clients.Addrs{
+	addrs := clients.Addrs{
 		User:         config.MustString("USER_GRPC_ADDR"),
 		Bank:         config.String("BANK_GRPC_ADDR", ""),
 		Trading:      config.String("TRADING_GRPC_ADDR", ""),
 		Exchange:     config.String("EXCHANGE_GRPC_ADDR", ""),
 		Notification: config.String("NOTIFICATION_GRPC_ADDR", ""),
-	}, clients.WithStatsHandler(prov.GRPCClientHandler()))
+	}
+	cs, err := clients.Dial(addrs, clients.WithStatsHandler(prov.GRPCClientHandler()))
 	if err != nil {
 		return fmt.Errorf("dial upstreams: %w", err)
 	}
 	defer cs.Close()
+	log.Info(
+		"upstream grpc clients dialed",
+		"user", addrs.User,
+		"bank", addrs.Bank,
+		"trading", addrs.Trading,
+		"exchange", addrs.Exchange,
+		"notification", addrs.Notification,
+	)
 
-	rdb, err := pkgredis.Open(ctx, config.MustString("REDIS_ADDR"), config.String("REDIS_PASSWORD", ""))
+	redisAddr := config.MustString("REDIS_ADDR")
+	rdb, err := pkgredis.Open(ctx, redisAddr, config.String("REDIS_PASSWORD", ""))
 	if err != nil {
 		return fmt.Errorf("redis: %w", err)
 	}
 	defer rdb.Close()
+	log.Info("redis connected", "addr", redisAddr)
 
 	sessionCache := &sessionversion.Cache{
 		R:   rdb,
@@ -155,6 +175,13 @@ func Run() error {
 			TradingOTC:        cs.ExternalOTC,
 			Interbank:         cs.InterbankProtocol,
 		}
+		log.Info(
+			"interbank partner surface enabled",
+			"otc", r.PartnerOTC != nil,
+			"payments", r.PartnerPayments != nil,
+			"banka2", true,
+			"sign_key_set", config.String("INTERBANK_SIGN_KEY", "") != "",
+		)
 	}
 
 	// Annotator forwards the authenticated principal (set on the request

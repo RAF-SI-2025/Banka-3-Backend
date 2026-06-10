@@ -8,6 +8,7 @@ import (
 	"github.com/jackc/pgx/v5"
 
 	"github.com/RAF-SI-2025/Banka-3-Backend/pkg/apperr"
+	"github.com/RAF-SI-2025/Banka-3-Backend/pkg/logger"
 	"github.com/RAF-SI-2025/Banka-3-Backend/services/notification/internal/domain"
 )
 
@@ -31,10 +32,13 @@ func (s *Store) Insert(ctx context.Context, n *domain.Notification) (*domain.Not
         insert into "notification".notifications (user_id, user_kind, kind, title, body)
         values ($1, $2, $3, $4, $5)
         returning ` + notifCols
-	out, err := scanNotification(s.Pool.QueryRow(ctx, q,
+	out, err := scanNotification(s.Pool.QueryRow(
+		ctx, q,
 		n.UserID, n.UserKind, n.Kind, n.Title, n.Body,
 	))
 	if err != nil {
+		logger.From(ctx).ErrorContext(ctx, "insert notification failed",
+			"err", err, "user_id", n.UserID, "kind", n.Kind)
 		return nil, apperr.Internal("insert notification", err)
 	}
 	return out, nil
@@ -50,6 +54,7 @@ func (s *Store) ListByUser(ctx context.Context, userID string, unreadOnly bool, 
 	q += ` order by created_at desc limit $2 offset $3`
 	rows, err := s.Pool.Query(ctx, q, userID, limit, offset)
 	if err != nil {
+		logger.From(ctx).ErrorContext(ctx, "list notifications failed", "err", err, "user_id", userID)
 		return nil, apperr.Internal("list notifications", err)
 	}
 	defer rows.Close()
@@ -57,11 +62,16 @@ func (s *Store) ListByUser(ctx context.Context, userID string, unreadOnly bool, 
 	for rows.Next() {
 		n, err := scanNotification(rows)
 		if err != nil {
+			logger.From(ctx).ErrorContext(ctx, "scan notification failed", "err", err, "user_id", userID)
 			return nil, apperr.Internal("scan notification", err)
 		}
 		out = append(out, n)
 	}
-	return out, rows.Err()
+	if err := rows.Err(); err != nil {
+		logger.From(ctx).ErrorContext(ctx, "list notifications rows failed", "err", err, "user_id", userID)
+		return out, err
+	}
+	return out, nil
 }
 
 // CountByUser counts the user's notifications matching the filter (used
@@ -73,6 +83,7 @@ func (s *Store) CountByUser(ctx context.Context, userID string, unreadOnly bool)
 	}
 	var total int64
 	if err := s.Pool.QueryRow(ctx, q, userID).Scan(&total); err != nil {
+		logger.From(ctx).ErrorContext(ctx, "count notifications failed", "err", err, "user_id", userID)
 		return 0, apperr.Internal("count notifications", err)
 	}
 	return total, nil
@@ -84,6 +95,7 @@ func (s *Store) CountUnread(ctx context.Context, userID string) (int64, error) {
 	const q = `select count(*) from "notification".notifications where user_id = $1 and read_at is null`
 	var n int64
 	if err := s.Pool.QueryRow(ctx, q, userID).Scan(&n); err != nil {
+		logger.From(ctx).ErrorContext(ctx, "count unread notifications failed", "err", err, "user_id", userID)
 		return 0, apperr.Internal("count unread notifications", err)
 	}
 	return n, nil
@@ -104,6 +116,8 @@ func (s *Store) MarkRead(ctx context.Context, userID, id string) (*domain.Notifi
 		if errors.Is(err, pgx.ErrNoRows) {
 			return nil, apperr.NotFound("notification not found")
 		}
+		logger.From(ctx).ErrorContext(ctx, "mark notification read failed",
+			"err", err, "notification_id", id, "user_id", userID)
 		return nil, apperr.Internal("mark notification read", err)
 	}
 	return out, nil
@@ -118,6 +132,7 @@ func (s *Store) MarkAllRead(ctx context.Context, userID string) (int64, error) {
         where user_id = $1 and read_at is null`
 	tag, err := s.Pool.Exec(ctx, q, userID)
 	if err != nil {
+		logger.From(ctx).ErrorContext(ctx, "mark all notifications read failed", "err", err, "user_id", userID)
 		return 0, apperr.Internal("mark all notifications read", err)
 	}
 	return tag.RowsAffected(), nil

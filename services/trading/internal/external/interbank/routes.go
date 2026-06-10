@@ -8,6 +8,7 @@
 package interbank
 
 import (
+	"log/slog"
 	"strings"
 )
 
@@ -23,18 +24,22 @@ type Routes map[string]string
 // reachable; the caller surfaces "unknown partner bank" on first use).
 func ParseRoutes(raw string) Routes {
 	out := make(Routes)
-	for _, part := range strings.Split(raw, ",") {
+	for i, part := range strings.Split(raw, ",") {
 		part = strings.TrimSpace(part)
 		if part == "" {
 			continue
 		}
 		key, value, ok := strings.Cut(part, ":")
 		if !ok {
+			// Entry value deliberately not logged: a fat-fingered env
+			// paste could land key material in the value slot.
+			slog.Default().Warn("interbank route entry malformed, dropped", "position", i)
 			continue
 		}
 		key = strings.TrimSpace(key)
 		value = strings.TrimSpace(value)
 		if key == "" || value == "" {
+			slog.Default().Warn("interbank route entry malformed, dropped", "position", i, "bank_code", key)
 			continue
 		}
 		out[key] = strings.TrimRight(value, "/")
@@ -58,11 +63,14 @@ func ParsePartnerKeys(raw string) map[string]string {
 		}
 		code, key, ok := strings.Cut(part, ":")
 		if !ok {
+			// Don't log the entry itself — the value side may be a secret key.
+			slog.Default().Warn("interbank code:value entry malformed, dropped")
 			continue
 		}
 		code = strings.TrimSpace(code)
 		key = strings.TrimSpace(key)
 		if code == "" || key == "" {
+			slog.Default().Warn("interbank code:value entry malformed, dropped", "bank_code", code)
 			continue
 		}
 		out[code] = key

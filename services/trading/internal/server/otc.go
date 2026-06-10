@@ -242,6 +242,9 @@ func otcOfferToProto(s *Server, ctx context.Context, o *domain.OTCOffer) *tradin
 	}
 	if sec, err := s.Svc.Store.GetSecurity(ctx, o.SecurityID); err == nil {
 		out.SecurityTicker = sec.Ticker
+	} else {
+		s.Svc.Log.WarnContext(ctx, "otc offer: security ticker lookup failed, leaving ticker empty",
+			"err", err, "security_id", o.SecurityID, "thread_id", o.ThreadID)
 	}
 	return out
 }
@@ -278,6 +281,9 @@ func otcContractToProto(s *Server, ctx context.Context, c *domain.OTCContract) *
 	}
 	if sec, err := s.Svc.Store.GetSecurity(ctx, c.SecurityID); err == nil {
 		out.SecurityTicker = sec.Ticker
+	} else {
+		s.Svc.Log.WarnContext(ctx, "otc contract: security ticker lookup failed, leaving ticker empty",
+			"err", err, "security_id", c.SecurityID, "contract_id", c.ID)
 	}
 	// Resolve the seller's human-readable name the same way the OTC
 	// discovery board does (service.ListPublicHoldings); without this
@@ -285,6 +291,9 @@ func otcContractToProto(s *Server, ctx context.Context, c *domain.OTCContract) *
 	if s.Svc.Users != nil {
 		if name, err := s.Svc.Users.DisplayName(ctx, c.SellerID, c.SellerKind); err == nil {
 			out.SellerDisplayName = name
+		} else {
+			s.Svc.Log.WarnContext(ctx, "otc contract: seller display-name lookup failed, leaving name empty",
+				"err", err, "seller_id", c.SellerID, "contract_id", c.ID)
 		}
 	}
 	return out

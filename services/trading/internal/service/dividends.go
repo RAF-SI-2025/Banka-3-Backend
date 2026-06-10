@@ -91,6 +91,7 @@ func (s *Service) RunDividendPayout(ctx context.Context) (*RunDividendPayoutResu
 
 	cands, err := s.Store.ListDividendCandidates(ctx)
 	if err != nil {
+		s.log().ErrorContext(ctx, "dividend payout: candidate scan failed", "err", err)
 		return nil, err
 	}
 
@@ -124,10 +125,18 @@ func (s *Service) RunDividendPayout(ctx context.Context) (*RunDividendPayoutResu
 func (s *Service) computeDividend(c *store.DividendCandidate) (*big.Rat, bool) {
 	price, err := money.Parse(c.Price)
 	if err != nil || price.Sign() <= 0 {
+		if err != nil {
+			s.log().Warn("dividend candidate price unparseable; skipping",
+				"err", err, "holding_id", c.HoldingID, "price", c.Price)
+		}
 		return nil, false
 	}
 	yield, err := money.Parse(c.DividendYield)
 	if err != nil || yield.Sign() <= 0 {
+		if err != nil {
+			s.log().Warn("dividend candidate yield unparseable; skipping",
+				"err", err, "holding_id", c.HoldingID, "yield", c.DividendYield)
+		}
 		return nil, false
 	}
 	gross := dividend.Quarterly(int64(c.Quantity), price, yield)

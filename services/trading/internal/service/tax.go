@@ -241,6 +241,9 @@ func (s *Service) RunTax(ctx context.Context, in RunTaxInput) (*RunTaxResult, er
 		UsersTaxed:        taxed,
 		TotalCollectedRSD: money.FormatAmount(total),
 	}
+	s.log().InfoContext(ctx, "tax run completed",
+		"users_taxed", result.UsersTaxed, "total_collected_rsd", result.TotalCollectedRSD,
+		"manual", isManual)
 	if isManual {
 		// note: users taxed / total collected (RSD). Best-effort.
 		note := "korisnika oporezovano: " + strconv.Itoa(int(result.UsersTaxed)) +
@@ -309,6 +312,9 @@ func (s *Service) runTaxForUser(ctx context.Context, userID string, kind domain.
 				InitiatorClientKind: kind,
 			})
 			if err != nil {
+				s.log().ErrorContext(ctx, "tax run: bank settle failed",
+					"err", err, "user_id", userID, "account_id", g.accountID,
+					"op_id", opID, "amount_rsd", money.FormatAmount(taxAmt))
 				return nil, err
 			}
 			if settledOpID != "" {
@@ -321,6 +327,8 @@ func (s *Service) runTaxForUser(ctx context.Context, userID string, kind domain.
 			return s.Store.MarkRealizedGainsTaxed(ctx, tx, g.ids, opID)
 		})
 		if err != nil {
+			s.log().ErrorContext(ctx, "tax run: mark gains taxed failed after bank settle",
+				"err", err, "user_id", userID, "account_id", g.accountID, "op_id", opID)
 			return nil, err
 		}
 	}

@@ -7,6 +7,7 @@ import (
 	"github.com/jackc/pgx/v5"
 
 	"github.com/RAF-SI-2025/Banka-3-Backend/pkg/apperr"
+	"github.com/RAF-SI-2025/Banka-3-Backend/pkg/logger"
 	"github.com/RAF-SI-2025/Banka-3-Backend/pkg/postgres"
 	"github.com/RAF-SI-2025/Banka-3-Backend/services/bank/internal/domain"
 )
@@ -39,6 +40,7 @@ func (s *Store) GetForexForwardSpread(ctx context.Context, base, quote domain.Cu
 		if noRows(err) {
 			return nil, apperr.NotFound("spread za valutni par nije podešen")
 		}
+		logger.From(ctx).ErrorContext(ctx, "get forex spread failed", "err", err, "base", string(base), "quote", string(quote))
 		return nil, apperr.Internal("get forex spread", err)
 	}
 	return sp, nil
@@ -50,6 +52,7 @@ func (s *Store) ListForexForwardSpreads(ctx context.Context) ([]*domain.ForexFor
         from "bank".forex_forward_spreads order by base_currency, quote_currency`
 	rows, err := s.DB.Query(postgres.WithRead(ctx), q)
 	if err != nil {
+		logger.From(ctx).ErrorContext(ctx, "list forex spreads failed", "err", err)
 		return nil, apperr.Internal("list forex spreads", err)
 	}
 	defer rows.Close()
@@ -57,11 +60,16 @@ func (s *Store) ListForexForwardSpreads(ctx context.Context) ([]*domain.ForexFor
 	for rows.Next() {
 		sp, err := scanForexSpread(rows)
 		if err != nil {
+			logger.From(ctx).ErrorContext(ctx, "scan forex spread failed", "err", err)
 			return nil, apperr.Internal("scan forex spread", err)
 		}
 		out = append(out, sp)
 	}
-	return out, rows.Err()
+	if err := rows.Err(); err != nil {
+		logger.From(ctx).ErrorContext(ctx, "iterate forex spreads failed", "err", err)
+		return out, err
+	}
+	return out, nil
 }
 
 // UpsertForexForwardSpread inserts or updates a pair's SpreadFactor,
@@ -78,6 +86,7 @@ func (s *Store) UpsertForexForwardSpread(ctx context.Context, sp *domain.ForexFo
 	out, err := scanForexSpread(s.DB.QueryRow(ctx, q,
 		string(sp.BaseCurrency), string(sp.QuoteCurrency), sp.SpreadFactor, sp.UpdatedBy))
 	if err != nil {
+		logger.From(ctx).ErrorContext(ctx, "upsert forex spread failed", "err", err, "base", string(sp.BaseCurrency), "quote", string(sp.QuoteCurrency))
 		return nil, apperr.Internal("upsert forex spread", err)
 	}
 	return out, nil
@@ -128,6 +137,7 @@ func (s *Store) InsertForexForward(ctx context.Context, tx pgx.Tx, f *domain.For
 		f.FromAccountID, f.ToAccountID, f.SettlementDate,
 	))
 	if err != nil {
+		logger.From(ctx).ErrorContext(ctx, "insert forex forward failed", "err", err, "client_id", f.ClientID, "from_account_id", f.FromAccountID)
 		return nil, apperr.Internal("insert forex forward", err)
 	}
 	return out, nil
@@ -141,6 +151,7 @@ func (s *Store) GetForexForward(ctx context.Context, id string) (*domain.ForexFo
 		if noRows(err) {
 			return nil, apperr.NotFound("terminski ugovor ne postoji")
 		}
+		logger.From(ctx).ErrorContext(ctx, "get forex forward failed", "err", err, "forward_id", id)
 		return nil, apperr.Internal("get forex forward", err)
 	}
 	return f, nil
@@ -167,6 +178,7 @@ func (s *Store) ListDueForexForwards(ctx context.Context, now time.Time) ([]*dom
 func (s *Store) queryForexForwards(ctx context.Context, q string, args ...any) ([]*domain.ForexForward, error) {
 	rows, err := s.DB.Query(ctx, q, args...)
 	if err != nil {
+		logger.From(ctx).ErrorContext(ctx, "list forex forwards failed", "err", err)
 		return nil, apperr.Internal("list forex forwards", err)
 	}
 	defer rows.Close()
@@ -174,11 +186,16 @@ func (s *Store) queryForexForwards(ctx context.Context, q string, args ...any) (
 	for rows.Next() {
 		f, err := scanForexForward(rows)
 		if err != nil {
+			logger.From(ctx).ErrorContext(ctx, "scan forex forward failed", "err", err)
 			return nil, apperr.Internal("scan forex forward", err)
 		}
 		out = append(out, f)
 	}
-	return out, rows.Err()
+	if err := rows.Err(); err != nil {
+		logger.From(ctx).ErrorContext(ctx, "iterate forex forwards failed", "err", err)
+		return out, err
+	}
+	return out, nil
 }
 
 // MarkForexForwardSettled flips an 'active' row to 'settled' and stamps
@@ -189,6 +206,7 @@ func (s *Store) MarkForexForwardSettled(ctx context.Context, id string, at time.
            set status = 'settled', settled_at = $2, failure_reason = null
          where id = $1 and status = 'active'`
 	if _, err := s.DB.Exec(ctx, q, id, at); err != nil {
+		logger.From(ctx).ErrorContext(ctx, "mark forex forward settled failed", "err", err, "forward_id", id)
 		return apperr.Internal("mark forex forward settled", err)
 	}
 	return nil
@@ -202,6 +220,7 @@ func (s *Store) MarkForexForwardFailed(ctx context.Context, id, reason string, a
            set status = 'failed', settled_at = $2, failure_reason = $3
          where id = $1 and status = 'active'`
 	if _, err := s.DB.Exec(ctx, q, id, at, reason); err != nil {
+		logger.From(ctx).ErrorContext(ctx, "mark forex forward failed failed", "err", err, "forward_id", id)
 		return apperr.Internal("mark forex forward failed", err)
 	}
 	return nil
@@ -228,6 +247,7 @@ func (s *Store) CancelForexForward(ctx context.Context, id, clientID string) (*d
 			}
 			return nil, apperr.FailedPrecondition("terminski ugovor se više ne može otkazati")
 		}
+		logger.From(ctx).ErrorContext(ctx, "cancel forex forward failed", "err", err, "forward_id", id, "client_id", clientID)
 		return nil, apperr.Internal("cancel forex forward", err)
 	}
 	return f, nil

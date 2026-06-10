@@ -24,5 +24,6 @@ func (s *Service) GetSessionVersion(ctx context.Context, kind domain.UserKind, u
 		}
 		return c.SessionVersion, nil
 	}
+	s.Log.ErrorContext(ctx, "session version lookup failed: unknown user kind", "user_id", userID, "kind", kind)
 	return 0, apperr.Internal("unknown user kind", nil)
 }

@@ -6,6 +6,7 @@ import (
 	"time"
 
 	"github.com/RAF-SI-2025/Banka-3-Backend/pkg/apperr"
+	"github.com/RAF-SI-2025/Banka-3-Backend/pkg/logger"
 	"github.com/RAF-SI-2025/Banka-3-Backend/pkg/postgres"
 	"github.com/RAF-SI-2025/Banka-3-Backend/services/trading/internal/domain"
 	"github.com/jackc/pgx/v5"
@@ -56,6 +57,7 @@ func (s *Store) InsertFund(ctx context.Context, f *domain.Fund) (*domain.Fund, e
 		if isUniqueViolation(err) {
 			return nil, apperr.Conflict("fond sa istim imenom već postoji")
 		}
+		logger.From(ctx).ErrorContext(ctx, "insert fund failed", "err", err)
 		return nil, apperr.Internal("insert fund", err)
 	}
 	return out, nil
@@ -69,6 +71,7 @@ func (s *Store) GetFund(ctx context.Context, id string) (*domain.Fund, error) {
 		if noRows(err) {
 			return nil, apperr.NotFound("fond ne postoji")
 		}
+		logger.From(ctx).ErrorContext(ctx, "get fund failed", "err", err, "id", id)
 		return nil, apperr.Internal("get fund", err)
 	}
 	return out, nil
@@ -84,6 +87,7 @@ func (s *Store) GetFundTx(ctx context.Context, tx pgx.Tx, id string) (*domain.Fu
 		if noRows(err) {
 			return nil, apperr.NotFound("fond ne postoji")
 		}
+		logger.From(ctx).ErrorContext(ctx, "get fund (tx) failed", "err", err, "id", id)
 		return nil, apperr.Internal("get fund (tx)", err)
 	}
 	return out, nil
@@ -128,6 +132,7 @@ func (s *Store) ListFunds(ctx context.Context, f FundFilter) ([]*domain.Fund, er
 		strings.Join(conds, " and ") + ` order by name`
 	rows, err := s.DB.Query(postgres.WithRead(ctx), q, args...)
 	if err != nil {
+		logger.From(ctx).ErrorContext(ctx, "list funds failed", "err", err)
 		return nil, apperr.Internal("list funds", err)
 	}
 	defer rows.Close()
@@ -135,11 +140,16 @@ func (s *Store) ListFunds(ctx context.Context, f FundFilter) ([]*domain.Fund, er
 	for rows.Next() {
 		fnd, err := scanFund(rows)
 		if err != nil {
+			logger.From(ctx).ErrorContext(ctx, "scan fund failed", "err", err)
 			return nil, apperr.Internal("scan fund", err)
 		}
 		out = append(out, fnd)
 	}
-	return out, rows.Err()
+	if err := rows.Err(); err != nil {
+		logger.From(ctx).ErrorContext(ctx, "list funds rows failed", "err", err)
+		return out, err
+	}
+	return out, nil
 }
 
 // SetFundManager flips manager_user_id on a fund (manager-demotion
@@ -149,6 +159,7 @@ func (s *Store) SetFundManager(ctx context.Context, tx pgx.Tx, fundID, managerID
 	           set manager_user_id = $2, updated_at = now()
 	           where id = $1`
 	if _, err := tx.Exec(ctx, q, fundID, managerID); err != nil {
+		logger.From(ctx).ErrorContext(ctx, "set fund manager failed", "err", err, "fund_id", fundID, "manager_id", managerID)
 		return apperr.Internal("set fund manager", err)
 	}
 	return nil
@@ -165,6 +176,7 @@ func (s *Store) ReassignFundManager(ctx context.Context, fromID, toID string) (i
 	             and status = 'active'`
 	tag, err := s.DB.Exec(ctx, q, fromID, toID)
 	if err != nil {
+		logger.From(ctx).ErrorContext(ctx, "reassign fund manager failed", "err", err, "from_id", fromID, "to_id", toID)
 		return 0, apperr.Internal("reassign fund manager", err)
 	}
 	return tag.RowsAffected(), nil
@@ -182,6 +194,7 @@ func (s *Store) AdjustFundUnits(ctx context.Context, tx pgx.Tx, fundID, delta st
 		if isCheckViolation(err) {
 			return apperr.FailedPrecondition("nedovoljno jedinica fonda")
 		}
+		logger.From(ctx).ErrorContext(ctx, "adjust fund units failed", "err", err, "fund_id", fundID)
 		return apperr.Internal("adjust fund units", err)
 	}
 	return nil
@@ -216,6 +229,7 @@ func (s *Store) GetFundPosition(ctx context.Context, fundID, clientID string) (*
 		if noRows(err) {
 			return nil, apperr.NotFound("pozicija ne postoji")
 		}
+		logger.From(ctx).ErrorContext(ctx, "get fund position failed", "err", err, "fund_id", fundID, "client_id", clientID)
 		return nil, apperr.Internal("get fund position", err)
 	}
 	return out, nil
@@ -240,6 +254,7 @@ func (s *Store) UpsertFundPositionInvest(
         returning ` + fundPositionCols
 	out, err := scanFundPosition(tx.QueryRow(ctx, q, fundID, clientID, unitsDelta, amountRSD))
 	if err != nil {
+		logger.From(ctx).ErrorContext(ctx, "upsert fund position invest failed", "err", err, "fund_id", fundID, "client_id", clientID)
 		return nil, apperr.Internal("upsert fund position invest", err)
 	}
 	return out, nil
@@ -272,6 +287,7 @@ func (s *Store) DecrementFundPositionWithdraw(
 		if isCheckViolation(err) {
 			return nil, apperr.FailedPrecondition("nedovoljno jedinica u poziciji")
 		}
+		logger.From(ctx).ErrorContext(ctx, "decrement fund position failed", "err", err, "fund_id", fundID, "client_id", clientID)
 		return nil, apperr.Internal("decrement fund position", err)
 	}
 	return out, nil
@@ -308,6 +324,7 @@ func (s *Store) ListFundPositions(ctx context.Context, f FundPositionFilter) ([]
 		strings.Join(conds, " and ") + ` order by updated_at desc`
 	rows, err := s.DB.Query(postgres.WithRead(ctx), q, args...)
 	if err != nil {
+		logger.From(ctx).ErrorContext(ctx, "list fund positions failed", "err", err)
 		return nil, apperr.Internal("list fund positions", err)
 	}
 	defer rows.Close()
@@ -315,11 +332,16 @@ func (s *Store) ListFundPositions(ctx context.Context, f FundPositionFilter) ([]
 	for rows.Next() {
 		p, err := scanFundPosition(rows)
 		if err != nil {
+			logger.From(ctx).ErrorContext(ctx, "scan fund position failed", "err", err)
 			return nil, apperr.Internal("scan fund position", err)
 		}
 		out = append(out, p)
 	}
-	return out, rows.Err()
+	if err := rows.Err(); err != nil {
+		logger.From(ctx).ErrorContext(ctx, "list fund positions rows failed", "err", err)
+		return out, err
+	}
+	return out, nil
 }
 
 // SumPositionsInvestedRSD totals total_invested_rsd across all
@@ -330,6 +352,7 @@ func (s *Store) SumPositionsInvestedRSD(ctx context.Context, fundID string) (str
 	           from "trading".client_fund_positions where fund_id = $1`
 	var out string
 	if err := s.DB.QueryRow(ctx, q, fundID).Scan(&out); err != nil {
+		logger.From(ctx).ErrorContext(ctx, "sum fund positions invested failed", "err", err, "fund_id", fundID)
 		return "", apperr.Internal("sum fund positions invested", err)
 	}
 	return out, nil
@@ -347,6 +370,7 @@ func (s *Store) SetFundReinvestDividends(ctx context.Context, fundID string, ena
 		if noRows(err) {
 			return nil, apperr.NotFound("fond ne postoji")
 		}
+		logger.From(ctx).ErrorContext(ctx, "set fund reinvest dividends failed", "err", err, "fund_id", fundID)
 		return nil, apperr.Internal("set fund reinvest dividends", err)
 	}
 	return out, nil
@@ -394,10 +418,12 @@ func (s *Store) InsertFundDividendDistribution(ctx context.Context, tx pgx.Tx, d
 			             where dividend_payout_id = $1 and client_id = $2`
 			out, gerr := scanFundDividendDistribution(tx.QueryRow(ctx, sel, d.DividendPayoutID, d.ClientID))
 			if gerr != nil {
+				logger.From(ctx).ErrorContext(ctx, "get fund dividend distribution failed", "err", gerr)
 				return nil, apperr.Internal("get fund dividend distribution", gerr)
 			}
 			return out, nil
 		}
+		logger.From(ctx).ErrorContext(ctx, "insert fund dividend distribution failed", "err", err)
 		return nil, apperr.Internal("insert fund dividend distribution", err)
 	}
 	return out, nil
@@ -411,6 +437,7 @@ func (s *Store) ListFundDividendDistributions(ctx context.Context, fundID string
 	           where fund_id = $1 order by created_at desc`
 	rows, err := s.DB.Query(postgres.WithRead(ctx), q, fundID)
 	if err != nil {
+		logger.From(ctx).ErrorContext(ctx, "list fund dividend distributions failed", "err", err, "fund_id", fundID)
 		return nil, apperr.Internal("list fund dividend distributions", err)
 	}
 	defer rows.Close()
@@ -418,11 +445,16 @@ func (s *Store) ListFundDividendDistributions(ctx context.Context, fundID string
 	for rows.Next() {
 		d, err := scanFundDividendDistribution(rows)
 		if err != nil {
+			logger.From(ctx).ErrorContext(ctx, "scan fund dividend distribution failed", "err", err, "fund_id", fundID)
 			return nil, apperr.Internal("scan fund dividend distribution", err)
 		}
 		out = append(out, d)
 	}
-	return out, rows.Err()
+	if err := rows.Err(); err != nil {
+		logger.From(ctx).ErrorContext(ctx, "list fund dividend distributions rows failed", "err", err, "fund_id", fundID)
+		return out, err
+	}
+	return out, nil
 }
 
 // =====================================================================
@@ -478,6 +510,7 @@ func (s *Store) InsertFundTransaction(ctx context.Context, tx pgx.Tx, t *domain.
 	)
 	out, err := scanFundTx(row)
 	if err != nil {
+		logger.From(ctx).ErrorContext(ctx, "insert fund tx failed", "err", err)
 		return nil, apperr.Internal("insert fund tx", err)
 	}
 	return out, nil
@@ -508,6 +541,7 @@ func (s *Store) MarkFundTransactionStatus(
 		if noRows(err) {
 			return nil, apperr.NotFound("fund transaction ne postoji")
 		}
+		logger.From(ctx).ErrorContext(ctx, "mark fund tx status failed", "err", err, "saga_id", sagaID)
 		return nil, apperr.Internal("mark fund tx status", err)
 	}
 	return out, nil
@@ -521,6 +555,7 @@ func (s *Store) GetFundTransaction(ctx context.Context, id string) (*domain.Fund
 		if noRows(err) {
 			return nil, apperr.NotFound("fund transaction ne postoji")
 		}
+		logger.From(ctx).ErrorContext(ctx, "get fund transaction failed", "err", err, "id", id)
 		return nil, apperr.Internal("get fund transaction", err)
 	}
 	return out, nil
@@ -536,6 +571,7 @@ func (s *Store) GetFundTransactionBySagaID(ctx context.Context, sagaID string) (
 		if noRows(err) {
 			return nil, apperr.NotFound("fund transaction za saga ne postoji")
 		}
+		logger.From(ctx).ErrorContext(ctx, "get fund transaction by saga failed", "err", err, "saga_id", sagaID)
 		return nil, apperr.Internal("get fund transaction by saga", err)
 	}
 	return out, nil
@@ -579,6 +615,7 @@ func (s *Store) ListFundTransactions(ctx context.Context, f FundTransactionFilte
 	countSQL := `select count(*) from "trading".client_fund_transactions` + where
 	var total int64
 	if err := s.DB.QueryRow(postgres.WithRead(ctx), countSQL, args...).Scan(&total); err != nil {
+		logger.From(ctx).ErrorContext(ctx, "count fund transactions failed", "err", err)
 		return nil, 0, apperr.Internal("count fund transactions", err)
 	}
 	args = append(args, pageSize, (page-1)*pageSize)
@@ -586,6 +623,7 @@ func (s *Store) ListFundTransactions(ctx context.Context, f FundTransactionFilte
 		` order by created_at desc limit ` + intArg(len(args)-1) + ` offset ` + intArg(len(args))
 	rows, err := s.DB.Query(postgres.WithRead(ctx), pageSQL, args...)
 	if err != nil {
+		logger.From(ctx).ErrorContext(ctx, "list fund transactions failed", "err", err)
 		return nil, 0, apperr.Internal("list fund transactions", err)
 	}
 	defer rows.Close()
@@ -593,11 +631,16 @@ func (s *Store) ListFundTransactions(ctx context.Context, f FundTransactionFilte
 	for rows.Next() {
 		t, err := scanFundTx(rows)
 		if err != nil {
+			logger.From(ctx).ErrorContext(ctx, "scan fund tx failed", "err", err)
 			return nil, 0, apperr.Internal("scan fund tx", err)
 		}
 		out = append(out, t)
 	}
-	return out, total, rows.Err()
+	if err := rows.Err(); err != nil {
+		logger.From(ctx).ErrorContext(ctx, "list fund transactions rows failed", "err", err)
+		return out, total, err
+	}
+	return out, total, nil
 }
 
 // =====================================================================
@@ -613,6 +656,7 @@ func (s *Store) InsertFundPerformanceSnapshot(ctx context.Context, snap *domain.
         values ($1, $2, $3::numeric, $4::numeric)
         on conflict (fund_id, snapshot_at) do nothing`
 	if _, err := s.DB.Exec(ctx, q, snap.FundID, snap.SnapshotAt, snap.LiquidRSD, snap.HoldingsValueRSD); err != nil {
+		logger.From(ctx).ErrorContext(ctx, "insert fund snapshot failed", "err", err)
 		return apperr.Internal("insert fund snapshot", err)
 	}
 	return nil
@@ -632,6 +676,7 @@ func (s *Store) ListFundPerformanceSnapshots(ctx context.Context, fundID string,
         order by snapshot_at`
 	rows, err := s.DB.Query(postgres.WithRead(ctx), q, fundID, since)
 	if err != nil {
+		logger.From(ctx).ErrorContext(ctx, "list fund snapshots failed", "err", err, "fund_id", fundID)
 		return nil, apperr.Internal("list fund snapshots", err)
 	}
 	defer rows.Close()
@@ -639,9 +684,14 @@ func (s *Store) ListFundPerformanceSnapshots(ctx context.Context, fundID string,
 	for rows.Next() {
 		var snap domain.FundPerformanceSnapshot
 		if err := rows.Scan(&snap.FundID, &snap.SnapshotAt, &snap.LiquidRSD, &snap.HoldingsValueRSD); err != nil {
+			logger.From(ctx).ErrorContext(ctx, "scan fund snapshot failed", "err", err, "fund_id", fundID)
 			return nil, apperr.Internal("scan fund snapshot", err)
 		}
 		out = append(out, &snap)
 	}
-	return out, rows.Err()
+	if err := rows.Err(); err != nil {
+		logger.From(ctx).ErrorContext(ctx, "list fund performance snapshots rows failed", "err", err, "fund_id", fundID)
+		return out, err
+	}
+	return out, nil
 }

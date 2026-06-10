@@ -4,6 +4,7 @@ import (
 	"context"
 
 	"github.com/RAF-SI-2025/Banka-3-Backend/pkg/apperr"
+	"github.com/RAF-SI-2025/Banka-3-Backend/pkg/logger"
 	"github.com/RAF-SI-2025/Banka-3-Backend/pkg/postgres"
 	"github.com/RAF-SI-2025/Banka-3-Backend/services/trading/internal/domain"
 	"github.com/jackc/pgx/v5"
@@ -36,6 +37,7 @@ func (s *Store) InsertDividendPayout(ctx context.Context, d *domain.DividendPayo
 			// Lost the op_id conflict — fetch the winning row.
 			return s.GetDividendPayoutByOpID(ctx, d.OpID)
 		}
+		logger.From(ctx).ErrorContext(ctx, "insert dividend payout failed", "err", err)
 		return nil, apperr.Internal("insert dividend payout", err)
 	}
 	return out, nil
@@ -50,6 +52,7 @@ func (s *Store) GetDividendPayoutByOpID(ctx context.Context, opID string) (*doma
 		if noRows(err) {
 			return nil, apperr.NotFound("dividend payout ne postoji")
 		}
+		logger.From(ctx).ErrorContext(ctx, "get dividend payout by op_id failed", "err", err, "op_id", opID)
 		return nil, apperr.Internal("get dividend payout by op_id", err)
 	}
 	return out, nil
@@ -62,10 +65,15 @@ func (s *Store) ListDividendPayoutsByUser(ctx context.Context, userID string, ki
 	      where user_id = $1 and user_kind = $2 order by created_at desc`
 	rows, err := s.DB.Query(postgres.WithRead(ctx), q, userID, string(kind))
 	if err != nil {
+		logger.From(ctx).ErrorContext(ctx, "list dividend payouts failed", "err", err, "user_id", userID)
 		return nil, apperr.Internal("list dividend payouts", err)
 	}
 	defer rows.Close()
-	return scanDividendPayouts(rows)
+	out, err := scanDividendPayouts(rows)
+	if err != nil {
+		logger.From(ctx).ErrorContext(ctx, "list dividend payouts by user failed", "err", err, "user_id", userID)
+	}
+	return out, err
 }
 
 // ListDividendPayoutsByPosition returns payouts for one holder's single
@@ -76,10 +84,15 @@ func (s *Store) ListDividendPayoutsByPosition(ctx context.Context, userID string
 	      order by created_at desc`
 	rows, err := s.DB.Query(postgres.WithRead(ctx), q, userID, string(kind), securityID)
 	if err != nil {
+		logger.From(ctx).ErrorContext(ctx, "list dividend payouts by position failed", "err", err, "user_id", userID, "security_id", securityID)
 		return nil, apperr.Internal("list dividend payouts by position", err)
 	}
 	defer rows.Close()
-	return scanDividendPayouts(rows)
+	out, err := scanDividendPayouts(rows)
+	if err != nil {
+		logger.From(ctx).ErrorContext(ctx, "list dividend payouts by position failed", "err", err, "user_id", userID, "security_id", securityID)
+	}
+	return out, err
 }
 
 // DividendCandidate is one stock holding eligible for a quarterly
@@ -116,6 +129,7 @@ func (s *Store) ListDividendCandidates(ctx context.Context) ([]*DividendCandidat
         order by h.user_id, h.security_id`
 	rows, err := s.DB.Query(ctx, q)
 	if err != nil {
+		logger.From(ctx).ErrorContext(ctx, "list dividend candidates failed", "err", err)
 		return nil, apperr.Internal("list dividend candidates", err)
 	}
 	defer rows.Close()
@@ -128,13 +142,18 @@ func (s *Store) ListDividendCandidates(ctx context.Context) ([]*DividendCandidat
 		)
 		if err := rows.Scan(&c.HoldingID, &c.UserID, &k, &c.SecurityID, &c.AccountID,
 			&c.Quantity, &c2, &c.DividendYield, &c.Price); err != nil {
+			logger.From(ctx).ErrorContext(ctx, "scan dividend candidate failed", "err", err)
 			return nil, apperr.Internal("scan dividend candidate", err)
 		}
 		c.UserKind = domain.UserKind(k)
 		c.Currency = domain.Currency(c2)
 		out = append(out, &c)
 	}
-	return out, rows.Err()
+	if err := rows.Err(); err != nil {
+		logger.From(ctx).ErrorContext(ctx, "list dividend candidates rows failed", "err", err)
+		return out, err
+	}
+	return out, nil
 }
 
 func scanDividendPayout(row pgx.Row) (*domain.DividendPayout, error) {

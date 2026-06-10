@@ -6,6 +6,7 @@ package config
 
 import (
 	"fmt"
+	"log/slog"
 	"os"
 	"strconv"
 	"time"
@@ -76,6 +77,11 @@ func Bool(name string, def bool) bool {
 	switch v {
 	case "1", "true", "TRUE", "yes":
 		return true
+	case "0", "false", "FALSE", "no", "":
+		return false
 	}
+	// Unrecognized value falls back to false (documented behaviour).
+	// Value is intentionally not logged in case the var holds a secret.
+	slog.Warn("unrecognized bool env value, using false", "var", name)
 	return false
 }

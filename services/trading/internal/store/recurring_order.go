@@ -5,6 +5,7 @@ import (
 	"time"
 
 	"github.com/RAF-SI-2025/Banka-3-Backend/pkg/apperr"
+	"github.com/RAF-SI-2025/Banka-3-Backend/pkg/logger"
 	"github.com/RAF-SI-2025/Banka-3-Backend/pkg/postgres"
 	"github.com/RAF-SI-2025/Banka-3-Backend/services/trading/internal/domain"
 	"github.com/jackc/pgx/v5"
@@ -38,6 +39,7 @@ func (s *Store) InsertRecurringOrder(ctx context.Context, r *domain.RecurringOrd
 		amount, qty, r.AccountID, r.Cadence, r.NextRun)
 	out, err := scanRecurringOrder(row)
 	if err != nil {
+		logger.From(ctx).ErrorContext(ctx, "insert recurring order failed", "err", err)
 		return nil, apperr.Internal("insert recurring order", err)
 	}
 	return out, nil
@@ -50,10 +52,15 @@ func (s *Store) ListRecurringOrdersByUser(ctx context.Context, userID string) ([
 	      where user_id = $1 order by created_at desc`
 	rows, err := s.DB.Query(postgres.WithRead(ctx), q, userID)
 	if err != nil {
+		logger.From(ctx).ErrorContext(ctx, "list recurring orders failed", "err", err, "user_id", userID)
 		return nil, apperr.Internal("list recurring orders", err)
 	}
 	defer rows.Close()
-	return scanRecurringOrders(rows)
+	out, err := scanRecurringOrders(rows)
+	if err != nil {
+		logger.From(ctx).ErrorContext(ctx, "list recurring orders by user failed", "err", err, "user_id", userID)
+	}
+	return out, err
 }
 
 // ListDueRecurringOrders returns every active recurring order whose
@@ -64,10 +71,15 @@ func (s *Store) ListDueRecurringOrders(ctx context.Context, now time.Time) ([]*d
 	      where active = true and next_run <= $1 order by next_run asc`
 	rows, err := s.DB.Query(ctx, q, now)
 	if err != nil {
+		logger.From(ctx).ErrorContext(ctx, "list due recurring orders failed", "err", err)
 		return nil, apperr.Internal("list due recurring orders", err)
 	}
 	defer rows.Close()
-	return scanRecurringOrders(rows)
+	out, err := scanRecurringOrders(rows)
+	if err != nil {
+		logger.From(ctx).ErrorContext(ctx, "list due recurring orders failed", "err", err)
+	}
+	return out, err
 }
 
 // GetRecurringOrder returns one recurring order by id. NotFound on miss.
@@ -78,6 +90,7 @@ func (s *Store) GetRecurringOrder(ctx context.Context, id string) (*domain.Recur
 		if noRows(err) {
 			return nil, apperr.NotFound("trajni nalog nije pronađen")
 		}
+		logger.From(ctx).ErrorContext(ctx, "get recurring order failed", "err", err, "id", id)
 		return nil, apperr.Internal("get recurring order", err)
 	}
 	return out, nil
@@ -89,6 +102,7 @@ func (s *Store) SetRecurringOrderActive(ctx context.Context, id string, active b
 	const q = `update "trading".recurring_orders
 	           set active = $2, updated_at = now() where id = $1`
 	if _, err := s.DB.Exec(ctx, q, id, active); err != nil {
+		logger.From(ctx).ErrorContext(ctx, "set recurring order active failed", "err", err, "id", id)
 		return apperr.Internal("set recurring order active", err)
 	}
 	return nil
@@ -100,6 +114,7 @@ func (s *Store) UpdateRecurringOrderNextRun(ctx context.Context, id string, next
 	const q = `update "trading".recurring_orders
 	           set next_run = $2, updated_at = now() where id = $1`
 	if _, err := s.DB.Exec(ctx, q, id, next); err != nil {
+		logger.From(ctx).ErrorContext(ctx, "update recurring order next_run failed", "err", err, "id", id)
 		return apperr.Internal("update recurring order next_run", err)
 	}
 	return nil
@@ -109,6 +124,7 @@ func (s *Store) UpdateRecurringOrderNextRun(ctx context.Context, id string, next
 func (s *Store) DeleteRecurringOrder(ctx context.Context, id string) error {
 	const q = `delete from "trading".recurring_orders where id = $1`
 	if _, err := s.DB.Exec(ctx, q, id); err != nil {
+		logger.From(ctx).ErrorContext(ctx, "delete recurring order failed", "err", err, "id", id)
 		return apperr.Internal("delete recurring order", err)
 	}
 	return nil

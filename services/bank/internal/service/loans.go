@@ -67,7 +67,7 @@ func (s *Service) SubmitLoanRequest(ctx context.Context, in SubmitLoanRequestInp
 		return nil, apperr.FailedPrecondition("račun nije aktivan")
 	}
 
-	return s.Store.CreateLoanRequest(ctx, &domain.LoanRequest{
+	created, err := s.Store.CreateLoanRequest(ctx, &domain.LoanRequest{
 		ClientID:                 p.UserID,
 		AccountID:                in.AccountID,
 		LoanType:                 in.LoanType,
@@ -81,6 +81,17 @@ func (s *Service) SubmitLoanRequest(ctx context.Context, in SubmitLoanRequestInp
 		InstallmentsTotal:        in.InstallmentsTotal,
 		ContactPhone:             strings.TrimSpace(in.ContactPhone),
 	})
+	if err != nil {
+		s.log().ErrorContext(ctx, "create loan request failed",
+			"err", err, "client_id", p.UserID, "account_id", in.AccountID,
+			"loan_type", in.LoanType, "amount", in.Amount, "currency", in.Currency)
+		return nil, err
+	}
+	s.log().InfoContext(ctx, "loan request submitted",
+		"request_id", created.ID, "client_id", p.UserID, "account_id", in.AccountID,
+		"loan_type", in.LoanType, "amount", created.Amount, "currency", created.Currency,
+		"installments_total", created.InstallmentsTotal)
+	return created, nil
 }
 
 // DecideLoanRequest is the employee's "Odobri" / "Odbij" path. On
@@ -99,6 +110,7 @@ func (s *Service) DecideLoanRequest(ctx context.Context, requestID string, appro
 	}
 
 	var decided *domain.LoanRequest
+	var materialized *domain.Loan
 	err = s.Store.ExecuteAtomic(ctx, func(tx pgx.Tx) error {
 		req, err := s.Store.GetLoanRequestByID(ctx, requestID)
 		if err != nil {
@@ -118,11 +130,28 @@ func (s *Service) DecideLoanRequest(ctx context.Context, requestID string, appro
 		}
 		decided = out
 
-		_, err = s.materializeLoan(ctx, tx, req)
+		materialized, err = s.materializeLoan(ctx, tx, req)
 		return err
 	})
 	if err != nil {
+		if clientClassErr(err) {
+			s.log().WarnContext(ctx, "decide loan request rejected",
+				"err", err, "request_id", requestID, "approve", approve, "employee_id", p.UserID)
+		} else {
+			s.log().ErrorContext(ctx, "decide loan request failed",
+				"err", err, "request_id", requestID, "approve", approve, "employee_id", p.UserID)
+		}
 		return nil, err
+	}
+	if materialized != nil {
+		s.log().InfoContext(ctx, "loan approved",
+			"request_id", requestID, "loan_id", materialized.ID, "loan_number", materialized.LoanNumber,
+			"client_id", materialized.ClientID, "account_id", materialized.AccountID,
+			"principal", materialized.Principal, "currency", materialized.Currency,
+			"installments_total", materialized.InstallmentsTotal, "employee_id", p.UserID)
+	} else {
+		s.log().InfoContext(ctx, "loan request rejected",
+			"request_id", requestID, "client_id", decided.ClientID, "employee_id", p.UserID)
 	}
 	s.notifyLoanDecision(ctx, decided)
 	return decided, nil
@@ -134,6 +163,8 @@ func (s *Service) DecideLoanRequest(ctx context.Context, requestID string, appro
 func (s *Service) materializeLoan(ctx context.Context, tx pgx.Tx, req *domain.LoanRequest) (*domain.Loan, error) {
 	principal, err := money.Parse(req.Amount)
 	if err != nil {
+		s.log().ErrorContext(ctx, "materialize loan: stored amount unparseable",
+			"err", err, "request_id", req.ID, "amount", req.Amount, "currency", req.Currency)
 		return nil, apperr.Internal("parse amount", err)
 	}
 
@@ -144,10 +175,14 @@ func (s *Service) materializeLoan(ctx context.Context, tx pgx.Tx, req *domain.Lo
 	if req.Currency != domain.CurrencyRSD {
 		_, ask, err := s.Rates.Quote(ctx, req.Currency, domain.CurrencyRSD)
 		if err != nil {
+			s.log().ErrorContext(ctx, "materialize loan: rate lookup failed",
+				"err", err, "request_id", req.ID, "currency", req.Currency)
 			return nil, apperr.Internal("rate lookup", err)
 		}
 		askR, perr := money.Parse(ask)
 		if perr != nil {
+			s.log().ErrorContext(ctx, "materialize loan: parse rate failed",
+				"err", perr, "request_id", req.ID, "currency", req.Currency, "rate", ask)
 			return nil, apperr.Internal("parse rate", perr)
 		}
 		amountRSD = money.Mul(principal, askR)
@@ -321,10 +356,11 @@ func (s *Service) RunInstallmentJob(ctx context.Context, dueOn time.Time) (*Inst
 func (s *Service) RunInstallmentJobAuto(ctx context.Context) error {
 	res, err := s.runInstallmentJob(ctx, s.now())
 	if err != nil {
+		s.log().ErrorContext(ctx, "installment job failed", "err", err)
 		return err
 	}
 	if res.Processed > 0 {
-		s.Log.Info("installment job ran",
+		s.log().InfoContext(ctx, "installment job ran",
 			"processed", res.Processed,
 			"paid", res.Paid, "missed", res.Missed,
 			"penalised", res.Penalised, "overdue", res.Overdue)
@@ -339,30 +375,44 @@ func (s *Service) RunInstallmentJobAuto(ctx context.Context) error {
 func (s *Service) runInstallmentJob(ctx context.Context, dueOn time.Time) (*InstallmentJobResult, error) {
 	due, err := s.Store.ListInstallmentsDueOn(ctx, dueOn)
 	if err != nil {
+		s.log().ErrorContext(ctx, "installment job: list due installments failed", "err", err)
 		return nil, err
 	}
 	res := &InstallmentJobResult{Processed: len(due)}
 	for _, inst := range due {
 		outcome, err := s.collectOneInstallment(ctx, inst)
 		if err != nil {
-			s.Log.Warn("installment job: unexpected error",
-				"installment_id", inst.ID, "loan_id", inst.LoanID, "error", err)
+			s.log().ErrorContext(ctx, "installment job: collect installment failed",
+				"err", err, "installment_id", inst.ID, "loan_id", inst.LoanID,
+				"amount", inst.Amount, "currency", inst.Currency)
 			res.Overdue++
 			continue
 		}
 		switch outcome {
 		case installmentPaid:
 			res.Paid++
+			s.log().InfoContext(ctx, "installment charged",
+				"installment_id", inst.ID, "loan_id", inst.LoanID,
+				"sequence_number", inst.SequenceNumber, "amount", inst.Amount, "currency", inst.Currency)
 		case installmentMissed:
 			res.Missed++
 			res.Overdue++
+			s.log().WarnContext(ctx, "installment missed: insufficient funds",
+				"installment_id", inst.ID, "loan_id", inst.LoanID,
+				"sequence_number", inst.SequenceNumber, "amount", inst.Amount, "currency", inst.Currency)
 			s.notifyMiss(ctx, inst)
 		case installmentPenalised:
 			res.Penalised++
 			res.Overdue++
+			s.log().WarnContext(ctx, "installment retry failed: late penalty applied",
+				"installment_id", inst.ID, "loan_id", inst.LoanID,
+				"sequence_number", inst.SequenceNumber, "amount", inst.Amount, "currency", inst.Currency)
 			s.notifyMiss(ctx, inst)
 		case installmentRetryFailed:
 			res.Overdue++
+			s.log().WarnContext(ctx, "installment retry failed: still overdue",
+				"installment_id", inst.ID, "loan_id", inst.LoanID,
+				"sequence_number", inst.SequenceNumber, "amount", inst.Amount, "currency", inst.Currency)
 			s.notifyMiss(ctx, inst)
 		}
 	}
@@ -404,7 +454,12 @@ func (s *Service) collectOneInstallment(ctx context.Context, inst *domain.LoanIn
 			return err
 		}
 
-		amt, _ := money.Parse(inst.Amount)
+		amt, perr := money.Parse(inst.Amount)
+		if perr != nil {
+			// Stored by us at schedule time — unparseable means corrupt data.
+			s.log().ErrorContext(ctx, "collect installment: stored amount unparseable",
+				"err", perr, "installment_id", inst.ID, "loan_id", inst.LoanID, "amount", inst.Amount)
+		}
 		neg := money.FormatAmount(money.Sub(money.MustParse("0"), amt))
 		if err := s.Store.AdjustBalance(ctx, tx, loan.AccountID, neg); err != nil {
 			if !errors.Is(err, store.ErrInsufficientFunds) {
@@ -446,9 +501,14 @@ func (s *Service) collectOneInstallment(ctx context.Context, inst *domain.LoanIn
 
 		// remaining_principal -= principal-part of this installment.
 		// principal-part = amount − (remaining × monthlyRate-at-due).
-		remaining, _ := money.Parse(loan.RemainingPrincipal)
-		annualPct, _ := money.Parse(inst.InterestRateAtDue)
-		monthlyRate, _ := money.Div(annualPct, money.MustParse("1200"))
+		remaining, rerr := money.Parse(loan.RemainingPrincipal)
+		annualPct, aerr := money.Parse(inst.InterestRateAtDue)
+		if rerr != nil || aerr != nil {
+			s.log().ErrorContext(ctx, "collect installment: stored loan figures unparseable",
+				"err", errors.Join(rerr, aerr), "installment_id", inst.ID, "loan_id", inst.LoanID,
+				"remaining_principal", loan.RemainingPrincipal, "interest_rate_at_due", inst.InterestRateAtDue)
+		}
+		monthlyRate, _ := money.Div(annualPct, money.MustParse("1200")) // divisor is a non-zero constant
 		interestPart := money.Mul(remaining, monthlyRate)
 		principalPart := money.Sub(amt, interestPart)
 		newRemaining := money.Sub(remaining, principalPart)
@@ -562,7 +622,7 @@ func (s *Service) applyLatePenalty(ctx context.Context, tx pgx.Tx, loan *domain.
 func (s *Service) notifyMiss(ctx context.Context, inst *domain.LoanInstallment) {
 	loan, err := s.Store.GetLoanByID(ctx, inst.LoanID)
 	if err != nil {
-		s.Log.Warn("notify miss: get loan failed", "loan_id", inst.LoanID, "error", err)
+		s.log().WarnContext(ctx, "notify miss: get loan failed", "err", err, "loan_id", inst.LoanID)
 		return
 	}
 	s.notifyInstallmentMissed(ctx, loan, inst)
@@ -594,10 +654,11 @@ func (s *Service) RunVariableRateJob(ctx context.Context) (*VariableRateJobResul
 func (s *Service) RunVariableRateJobAuto(ctx context.Context) error {
 	res, err := s.runVariableRateJob(ctx)
 	if err != nil {
+		s.log().ErrorContext(ctx, "variable-rate job failed", "err", err)
 		return err
 	}
 	if res.Processed > 0 {
-		s.Log.Info("variable-rate job ran",
+		s.log().InfoContext(ctx, "variable-rate job ran",
 			"processed", res.Processed,
 			"updated", res.Updated,
 			"failed", res.Failed)
@@ -611,12 +672,13 @@ func (s *Service) RunVariableRateJobAuto(ctx context.Context) error {
 func (s *Service) runVariableRateJob(ctx context.Context) (*VariableRateJobResult, error) {
 	loansList, err := s.Store.ListActiveVariableLoans(ctx)
 	if err != nil {
+		s.log().ErrorContext(ctx, "variable-rate job: list active variable loans failed", "err", err)
 		return nil, err
 	}
 	res := &VariableRateJobResult{Processed: len(loansList)}
 	for _, l := range loansList {
 		if err := s.refreshOneVariableLoan(ctx, l); err != nil {
-			s.Log.Warn("variable-rate refresh failed", "loan_id", l.ID, "error", err)
+			s.log().WarnContext(ctx, "variable-rate refresh failed", "err", err, "loan_id", l.ID, "loan_number", l.LoanNumber)
 			res.Failed++
 			continue
 		}
@@ -629,8 +691,13 @@ func (s *Service) runVariableRateJob(ctx context.Context) (*VariableRateJobResul
 // over its remaining installments at the new rate.
 func (s *Service) refreshOneVariableLoan(ctx context.Context, l *domain.Loan) error {
 	offset := randomPomeraj()
-	base, _ := money.Parse(l.BaseRate)
-	margin, _ := money.Parse(l.Margin)
+	base, berr := money.Parse(l.BaseRate)
+	margin, merr := money.Parse(l.Margin)
+	if berr != nil || merr != nil {
+		s.log().ErrorContext(ctx, "variable-rate refresh: stored loan rates unparseable",
+			"err", errors.Join(berr, merr), "loan_id", l.ID, "loan_number", l.LoanNumber,
+			"base_rate", l.BaseRate, "margin", l.Margin)
+	}
 	monthly := loans.MonthlyRate(base, offset, margin)
 	paid, err := s.countPaidInstallments(ctx, l.ID)
 	if err != nil {
@@ -640,7 +707,12 @@ func (s *Service) refreshOneVariableLoan(ctx context.Context, l *domain.Loan) er
 	if nRemaining <= 0 {
 		return nil
 	}
-	remaining, _ := money.Parse(l.RemainingPrincipal)
+	remaining, rerr := money.Parse(l.RemainingPrincipal)
+	if rerr != nil {
+		s.log().ErrorContext(ctx, "variable-rate refresh: stored remaining principal unparseable",
+			"err", rerr, "loan_id", l.ID, "loan_number", l.LoanNumber,
+			"remaining_principal", l.RemainingPrincipal)
+	}
 	annuity := loans.Annuity(remaining, monthly, nRemaining)
 	newAmount := money.FormatAmount(annuity)
 	return s.Store.ExecuteAtomic(ctx, func(tx pgx.Tx) error {
@@ -675,6 +747,9 @@ func (s *Service) generateLoanNumber() string {
 	// we use 10 digits for headroom.
 	v, err := rand.Int(rand.Reader, big.NewInt(1_000_000_0000))
 	if err != nil {
+		// Extremely unlikely; the timestamp fallback keeps the loan
+		// creation alive but is worth a record.
+		s.log().Warn("generate loan number: crypto rand failed, using timestamp fallback", "err", err)
 		return s.now().Format("20060102150405")
 	}
 	return fmt.Sprintf("%010d", v.Int64())

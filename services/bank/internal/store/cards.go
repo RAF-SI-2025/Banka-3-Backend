@@ -4,6 +4,7 @@ import (
 	"context"
 
 	"github.com/RAF-SI-2025/Banka-3-Backend/pkg/apperr"
+	"github.com/RAF-SI-2025/Banka-3-Backend/pkg/logger"
 	"github.com/RAF-SI-2025/Banka-3-Backend/pkg/postgres"
 	"github.com/RAF-SI-2025/Banka-3-Backend/services/bank/internal/domain"
 )
@@ -46,6 +47,7 @@ func (s *Store) CreateCard(ctx context.Context, c *domain.Card) (*domain.Card, e
 		if isUniqueViolation(err) {
 			return nil, apperr.Conflict("card number collision")
 		}
+		logger.From(ctx).ErrorContext(ctx, "create card failed", "err", err, "account_id", c.AccountID)
 		return nil, apperr.Internal("create card", err)
 	}
 	return out, nil
@@ -58,6 +60,7 @@ func (s *Store) GetCardByID(ctx context.Context, id string) (*domain.Card, error
 		if noRows(err) {
 			return nil, apperr.NotFound("kartica ne postoji")
 		}
+		logger.From(ctx).ErrorContext(ctx, "get card failed", "err", err, "card_id", id)
 		return nil, apperr.Internal("get card", err)
 	}
 	return out, nil
@@ -67,6 +70,7 @@ func (s *Store) ListCardsByAccount(ctx context.Context, accountID string) ([]*do
 	const q = `select ` + cardColumns + ` from "bank".cards where account_id = $1 order by created_at`
 	rows, err := s.DB.Query(postgres.WithRead(ctx), q, accountID)
 	if err != nil {
+		logger.From(ctx).ErrorContext(ctx, "list cards failed", "err", err, "account_id", accountID)
 		return nil, apperr.Internal("list cards", err)
 	}
 	defer rows.Close()
@@ -74,11 +78,16 @@ func (s *Store) ListCardsByAccount(ctx context.Context, accountID string) ([]*do
 	for rows.Next() {
 		c, err := scanCard(rows)
 		if err != nil {
+			logger.From(ctx).ErrorContext(ctx, "scan card failed", "err", err)
 			return nil, apperr.Internal("scan card", err)
 		}
 		out = append(out, c)
 	}
-	return out, rows.Err()
+	if err := rows.Err(); err != nil {
+		logger.From(ctx).ErrorContext(ctx, "iterate cards failed", "err", err)
+		return out, err
+	}
+	return out, nil
 }
 
 // ListCardsByOwner returns every card whose owning account belongs to
@@ -93,6 +102,7 @@ func (s *Store) ListCardsByOwner(ctx context.Context, ownerClientID string) ([]*
 	           order by c.created_at`
 	rows, err := s.DB.Query(postgres.WithRead(ctx), q, ownerClientID)
 	if err != nil {
+		logger.From(ctx).ErrorContext(ctx, "list cards by owner failed", "err", err, "owner_client_id", ownerClientID)
 		return nil, apperr.Internal("list cards by owner", err)
 	}
 	defer rows.Close()
@@ -100,11 +110,16 @@ func (s *Store) ListCardsByOwner(ctx context.Context, ownerClientID string) ([]*
 	for rows.Next() {
 		c, err := scanCard(rows)
 		if err != nil {
+			logger.From(ctx).ErrorContext(ctx, "scan card failed", "err", err)
 			return nil, apperr.Internal("scan card", err)
 		}
 		out = append(out, c)
 	}
-	return out, rows.Err()
+	if err := rows.Err(); err != nil {
+		logger.From(ctx).ErrorContext(ctx, "iterate cards by owner failed", "err", err)
+		return out, err
+	}
+	return out, nil
 }
 
 // ListAllCards returns every card in the system. Reserved for
@@ -114,6 +129,7 @@ func (s *Store) ListAllCards(ctx context.Context) ([]*domain.Card, error) {
 	const q = `select ` + cardColumns + ` from "bank".cards order by created_at`
 	rows, err := s.DB.Query(postgres.WithRead(ctx), q)
 	if err != nil {
+		logger.From(ctx).ErrorContext(ctx, "list all cards failed", "err", err)
 		return nil, apperr.Internal("list all cards", err)
 	}
 	defer rows.Close()
@@ -121,11 +137,16 @@ func (s *Store) ListAllCards(ctx context.Context) ([]*domain.Card, error) {
 	for rows.Next() {
 		c, err := scanCard(rows)
 		if err != nil {
+			logger.From(ctx).ErrorContext(ctx, "scan card failed", "err", err)
 			return nil, apperr.Internal("scan card", err)
 		}
 		out = append(out, c)
 	}
-	return out, rows.Err()
+	if err := rows.Err(); err != nil {
+		logger.From(ctx).ErrorContext(ctx, "iterate all cards failed", "err", err)
+		return out, err
+	}
+	return out, nil
 }
 
 // CountActiveCards returns the count of non-deactivated cards on
@@ -144,6 +165,7 @@ func (s *Store) CountActiveCards(ctx context.Context, accountID, authorizedPerso
 	}
 	var n int
 	if err := s.DB.QueryRow(ctx, q, args...).Scan(&n); err != nil {
+		logger.From(ctx).ErrorContext(ctx, "count cards failed", "err", err, "account_id", accountID)
 		return 0, apperr.Internal("count cards", err)
 	}
 	return n, nil
@@ -159,6 +181,7 @@ func (s *Store) SetCardStatus(ctx context.Context, id string, status domain.Card
 		if noRows(err) {
 			return nil, apperr.NotFound("kartica ne postoji")
 		}
+		logger.From(ctx).ErrorContext(ctx, "set card status failed", "err", err, "card_id", id, "status", string(status))
 		return nil, apperr.Internal("set card status", err)
 	}
 	return out, nil
@@ -174,6 +197,7 @@ func (s *Store) UpdateCardLimit(ctx context.Context, id, cardLimit string) (*dom
 		if noRows(err) {
 			return nil, apperr.NotFound("kartica ne postoji")
 		}
+		logger.From(ctx).ErrorContext(ctx, "update card limit failed", "err", err, "card_id", id)
 		return nil, apperr.Internal("update card limit", err)
 	}
 	return out, nil

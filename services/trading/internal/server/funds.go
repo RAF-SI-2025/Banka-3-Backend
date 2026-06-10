@@ -5,6 +5,7 @@ package server
 
 import (
 	"context"
+	"log/slog"
 
 	tradingpb "github.com/RAF-SI-2025/Banka-3-Backend/gen/proto/trading/v1"
 	"github.com/RAF-SI-2025/Banka-3-Backend/pkg/money"
@@ -359,10 +360,12 @@ func fundTxStatusToProto(s domain.FundTransactionStatus) tradingpb.FundTransacti
 func addDecimals(a, b string) string {
 	pa, ea := money.Parse(a)
 	if ea != nil {
+		slog.Warn("fund snapshot: unparsable liquid_rsd, defaulting to 0", "err", ea, "value", a)
 		pa = money.MustParse("0")
 	}
 	pb, eb := money.Parse(b)
 	if eb != nil {
+		slog.Warn("fund snapshot: unparsable holdings_value_rsd, defaulting to 0", "err", eb, "value", b)
 		pb = money.MustParse("0")
 	}
 	return money.FormatAmount(money.Add(pa, pb))

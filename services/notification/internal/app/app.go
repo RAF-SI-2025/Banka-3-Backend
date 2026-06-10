@@ -33,18 +33,21 @@ func Run() error {
 
 	prov, err := otelinit.Init(ctx, "notification")
 	if err != nil {
+		log.ErrorContext(ctx, "otel init failed", "err", err)
 		return fmt.Errorf("otelinit: %w", err)
 	}
 	defer func() { _ = prov.Shutdown(context.Background()) }()
 
 	pool, err := postgres.Open(ctx, config.MustString("DATABASE_URL"))
 	if err != nil {
+		log.ErrorContext(ctx, "postgres open failed", "err", err)
 		return fmt.Errorf("postgres: %w", err)
 	}
 	defer pool.Close()
 
 	rdb, err := pkgredis.Open(ctx, config.MustString("REDIS_ADDR"), config.String("REDIS_PASSWORD", ""))
 	if err != nil {
+		log.ErrorContext(ctx, "redis open failed", "err", err)
 		return fmt.Errorf("redis: %w", err)
 	}
 	defer rdb.Close()
@@ -83,9 +86,10 @@ func Run() error {
 	})
 
 	probeSrv.MarkReady()
-	log.Info("notification service ready", "grpc", grpcAddr)
+	log.InfoContext(ctx, "notification service ready", "grpc", grpcAddr)
 
 	if err := g.Wait(); err != nil && !errors.Is(err, context.Canceled) {
+		log.ErrorContext(ctx, "service terminated", "err", err)
 		return err
 	}
 	return nil

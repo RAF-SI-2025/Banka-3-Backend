@@ -6,6 +6,7 @@ import (
 	"time"
 
 	"github.com/RAF-SI-2025/Banka-3-Backend/pkg/apperr"
+	"github.com/RAF-SI-2025/Banka-3-Backend/pkg/logger"
 	"github.com/RAF-SI-2025/Banka-3-Backend/pkg/postgres"
 	"github.com/RAF-SI-2025/Banka-3-Backend/services/trading/internal/domain"
 	"github.com/jackc/pgx/v5"
@@ -63,6 +64,7 @@ func (s *Store) UpsertSecurity(ctx context.Context, in *domain.Security) (*domai
 		)
 		out, err := scanSecurity(row)
 		if err != nil {
+			logger.From(ctx).ErrorContext(ctx, "insert security failed", "err", err)
 			return nil, apperr.Internal("insert security", err)
 		}
 		return out, nil
@@ -92,6 +94,7 @@ func (s *Store) UpsertSecurity(ctx context.Context, in *domain.Security) (*domai
 		if noRows(err) {
 			return nil, apperr.NotFound("security not found")
 		}
+		logger.From(ctx).ErrorContext(ctx, "update security failed", "err", err)
 		return nil, apperr.Internal("update security", err)
 	}
 	return out, nil
@@ -105,6 +108,7 @@ func (s *Store) GetSecurity(ctx context.Context, id string) (*domain.Security, e
 		if noRows(err) {
 			return nil, apperr.NotFound("security not found")
 		}
+		logger.From(ctx).ErrorContext(ctx, "get security failed", "err", err, "id", id)
 		return nil, apperr.Internal("get security", err)
 	}
 	return out, nil
@@ -119,6 +123,7 @@ func (s *Store) GetSecurityByTicker(ctx context.Context, ticker string, t domain
 		if noRows(err) {
 			return nil, apperr.NotFound("security not found")
 		}
+		logger.From(ctx).ErrorContext(ctx, "get security by ticker failed", "err", err)
 		return nil, apperr.Internal("get security by ticker", err)
 	}
 	return out, nil
@@ -222,6 +227,7 @@ func (s *Store) ListSecurities(ctx context.Context, f SecurityFilter, page, page
 
 	var total int64
 	if err := s.DB.QueryRow(postgres.WithRead(ctx), "select count(*)"+fromJoin+where, args...).Scan(&total); err != nil {
+		logger.From(ctx).ErrorContext(ctx, "count securities failed", "err", err)
 		return nil, 0, apperr.Internal("count securities", err)
 	}
 
@@ -243,6 +249,7 @@ func (s *Store) ListSecurities(ctx context.Context, f SecurityFilter, page, page
 
 	rows, err := s.DB.Query(postgres.WithRead(ctx), q, args...)
 	if err != nil {
+		logger.From(ctx).ErrorContext(ctx, "list securities failed", "err", err)
 		return nil, 0, apperr.Internal("list securities", err)
 	}
 	defer rows.Close()
@@ -251,11 +258,16 @@ func (s *Store) ListSecurities(ctx context.Context, f SecurityFilter, page, page
 	for rows.Next() {
 		sec, err := scanSecurity(rows)
 		if err != nil {
+			logger.From(ctx).ErrorContext(ctx, "scan security failed", "err", err)
 			return nil, 0, apperr.Internal("scan security", err)
 		}
 		out = append(out, sec)
 	}
-	return out, total, rows.Err()
+	if err := rows.Err(); err != nil {
+		logger.From(ctx).ErrorContext(ctx, "list securities rows failed", "err", err)
+		return out, total, err
+	}
+	return out, total, nil
 }
 
 // ListOptionsForUnderlying returns every option whose underlying is
@@ -271,6 +283,7 @@ func (s *Store) ListOptionsForUnderlying(ctx context.Context, stockID string, se
 	q += ` order by settlement_date asc, strike_price asc, option_type asc`
 	rows, err := s.DB.Query(postgres.WithRead(ctx), q, args...)
 	if err != nil {
+		logger.From(ctx).ErrorContext(ctx, "list options failed", "err", err, "stock_id", stockID)
 		return nil, apperr.Internal("list options", err)
 	}
 	defer rows.Close()
@@ -278,11 +291,16 @@ func (s *Store) ListOptionsForUnderlying(ctx context.Context, stockID string, se
 	for rows.Next() {
 		sec, err := scanSecurity(rows)
 		if err != nil {
+			logger.From(ctx).ErrorContext(ctx, "scan option failed", "err", err, "stock_id", stockID)
 			return nil, apperr.Internal("scan option", err)
 		}
 		out = append(out, sec)
 	}
-	return out, rows.Err()
+	if err := rows.Err(); err != nil {
+		logger.From(ctx).ErrorContext(ctx, "list options for underlying rows failed", "err", err, "stock_id", stockID)
+		return out, err
+	}
+	return out, nil
 }
 
 func scanSecurity(row pgx.Row) (*domain.Security, error) {

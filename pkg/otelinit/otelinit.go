@@ -29,6 +29,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"log/slog"
 	"net/http"
 	"os"
 	"strconv"
@@ -103,6 +104,7 @@ func Init(ctx context.Context, serviceName string) (*Provider, error) {
 	if os.Getenv("OTEL_SDK_DISABLED") != "true" {
 		exp, err := newTraceExporter(ctx, endpoint)
 		if err != nil {
+			slog.ErrorContext(ctx, "otel trace exporter init failed", "err", err, "endpoint", endpoint)
 			return nil, fmt.Errorf("otel trace exporter: %w", err)
 		}
 		tpOpts = append(tpOpts,
@@ -127,6 +129,7 @@ func Init(ctx context.Context, serviceName string) (*Provider, error) {
 	reg := prometheus.NewRegistry()
 	promExp, err := otelprom.New(otelprom.WithRegisterer(reg))
 	if err != nil {
+		slog.ErrorContext(ctx, "otel prometheus exporter init failed", "err", err)
 		return nil, fmt.Errorf("otel prom exporter: %w", err)
 	}
 	mp := sdkmetric.NewMeterProvider(
@@ -228,6 +231,7 @@ func headSampler() sdktrace.Sampler {
 	}
 	ratio, err := strconv.ParseFloat(arg, 64)
 	if err != nil || ratio < 0 || ratio > 1 {
+		slog.Warn("invalid OTEL_TRACES_SAMPLER_ARG, sampling everything", "err", err, "value", arg)
 		return sdktrace.ParentBased(sdktrace.AlwaysSample())
 	}
 	return sdktrace.ParentBased(sdktrace.TraceIDRatioBased(ratio))

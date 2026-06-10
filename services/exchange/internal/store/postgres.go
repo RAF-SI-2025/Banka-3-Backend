@@ -7,6 +7,7 @@ import (
 	"time"
 
 	"github.com/RAF-SI-2025/Banka-3-Backend/pkg/apperr"
+	"github.com/RAF-SI-2025/Banka-3-Backend/pkg/logger"
 	"github.com/RAF-SI-2025/Banka-3-Backend/pkg/postgres"
 	"github.com/RAF-SI-2025/Banka-3-Backend/services/exchange/internal/domain"
 	"github.com/jackc/pgx/v5"
@@ -40,8 +41,12 @@ func (s *Store) UpsertRate(ctx context.Context, r *domain.Rate) (*domain.Rate, e
 		// returns 400.
 		var pe interface{ SQLState() string }
 		if errors.As(err, &pe) && pe.SQLState() == "23514" {
+			logger.From(ctx).WarnContext(ctx, "upsert fx rate rejected by check constraint",
+				"err", err, "from", string(r.From), "to", string(r.To))
 			return nil, apperr.Validation("fx rate violates a check constraint (positive amounts and ask ≥ bid)")
 		}
+		logger.From(ctx).ErrorContext(ctx, "upsert fx rate failed",
+			"err", err, "from", string(r.From), "to", string(r.To))
 		return nil, apperr.Internal("upsert fx rate", err)
 	}
 	return out, nil
@@ -58,6 +63,8 @@ func (s *Store) GetRate(ctx context.Context, from, to domain.Currency) (*domain.
 		if noRows(err) {
 			return nil, apperr.NotFound("fx rate not found")
 		}
+		logger.From(ctx).ErrorContext(ctx, "get fx rate failed",
+			"err", err, "from", string(from), "to", string(to))
 		return nil, apperr.Internal("get fx rate", err)
 	}
 	return out, nil
@@ -76,6 +83,7 @@ func (s *Store) ListRates(ctx context.Context, from domain.Currency) ([]*domain.
 
 	rows, err := s.DB.Query(postgres.WithRead(ctx), q, args...)
 	if err != nil {
+		logger.From(ctx).ErrorContext(ctx, "list fx rates failed", "err", err, "from", string(from))
 		return nil, apperr.Internal("list fx rates", err)
 	}
 	defer rows.Close()
@@ -84,11 +92,16 @@ func (s *Store) ListRates(ctx context.Context, from domain.Currency) ([]*domain.
 	for rows.Next() {
 		r, err := scanRate(rows)
 		if err != nil {
+			logger.From(ctx).ErrorContext(ctx, "scan fx rate failed", "err", err)
 			return nil, apperr.Internal("scan fx rate", err)
 		}
 		out = append(out, r)
 	}
-	return out, rows.Err()
+	if err := rows.Err(); err != nil {
+		logger.From(ctx).ErrorContext(ctx, "list fx rates rows failed", "err", err, "from", string(from))
+		return out, err
+	}
+	return out, nil
 }
 
 // InsertRateHistory appends one append-only observation of a pair. Called
@@ -101,8 +114,12 @@ func (s *Store) InsertRateHistory(ctx context.Context, r *domain.Rate) error {
 	if _, err := s.DB.Exec(ctx, q, string(r.From), string(r.To), r.Bid, r.Ask); err != nil {
 		var pe interface{ SQLState() string }
 		if errors.As(err, &pe) && pe.SQLState() == "23514" {
+			logger.From(ctx).WarnContext(ctx, "insert fx rate history rejected by check constraint",
+				"err", err, "from", string(r.From), "to", string(r.To))
 			return apperr.Validation("fx rate history violates a check constraint (positive amounts and ask ≥ bid)")
 		}
+		logger.From(ctx).ErrorContext(ctx, "insert fx rate history failed",
+			"err", err, "from", string(r.From), "to", string(r.To))
 		return apperr.Internal("insert fx rate history", err)
 	}
 	return nil
@@ -118,6 +135,8 @@ func (s *Store) ListRateHistory(ctx context.Context, from, to domain.Currency, s
         order by recorded_at desc`
 	rows, err := s.DB.Query(postgres.WithRead(ctx), q, string(from), string(to), since)
 	if err != nil {
+		logger.From(ctx).ErrorContext(ctx, "list fx rate history failed",
+			"err", err, "from", string(from), "to", string(to))
 		return nil, apperr.Internal("list fx rate history", err)
 	}
 	defer rows.Close()
@@ -126,11 +145,18 @@ func (s *Store) ListRateHistory(ctx context.Context, from, to domain.Currency, s
 	for rows.Next() {
 		var p domain.RateHistoryPoint
 		if err := rows.Scan(&p.Bid, &p.Ask, &p.RecordedAt); err != nil {
+			logger.From(ctx).ErrorContext(ctx, "scan fx rate history failed",
+				"err", err, "from", string(from), "to", string(to))
 			return nil, apperr.Internal("scan fx rate history", err)
 		}
 		out = append(out, &p)
 	}
-	return out, rows.Err()
+	if err := rows.Err(); err != nil {
+		logger.From(ctx).ErrorContext(ctx, "list fx rate history rows failed",
+			"err", err, "from", string(from), "to", string(to))
+		return out, err
+	}
+	return out, nil
 }
 
 func scanRate(row interface{ Scan(...any) error }) (*domain.Rate, error) {

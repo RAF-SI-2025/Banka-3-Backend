@@ -513,10 +513,12 @@ func (o *Orchestrator) runForward(ctx context.Context, row *Row, drv driver, log
 			row.Attempts = 0
 			row.NextAttemptAt = o.now()
 			if err := o.Store.Update(ctx, row); err != nil {
+				log.ErrorContext(ctx, "saga persist step failed", "err", err, "step", s.name)
 				return err
 			}
 			continue
 		}
+		log.DebugContext(ctx, "saga step start", "step", s.name, "step_no", i+1)
 		var err error
 		if ferr := forceForwardErr(ctx, s.name, i); ferr != nil {
 			log.Warn("saga: fault-injection forward fail",
@@ -533,16 +535,18 @@ func (o *Orchestrator) runForward(ctx context.Context, row *Row, drv driver, log
 			row.Attempts = 0
 			row.NextAttemptAt = o.now()
 			if err := o.Store.Update(ctx, row); err != nil {
+				log.ErrorContext(ctx, "saga persist step failed", "err", err, "step", s.name)
 				return err
 			}
+			log.InfoContext(ctx, "saga step completed", "step", s.name, "step_no", i+1)
 			continue
 		}
 		// Forward error. Record the attempt, then decide: roll back, or
 		// (for forward-recovery sagas) park the transient for retry.
 		row.appendLog("F", i, resultErr, err)
 		if isPermanent(err) || drv.compensateOnTransient {
-			log.Warn("saga: forward error → compensating",
-				"step", s.name, "permanent", isPermanent(err), "err", err.Error())
+			log.ErrorContext(ctx, "saga step forward failed, compensating",
+				"err", err.Error(), "step", s.name, "permanent", isPermanent(err))
 			row.LastError = err.Error()
 			row.Status = StatusCompensating
 			// Don't bump CurrentStep — the failed step never committed,
@@ -550,6 +554,7 @@ func (o *Orchestrator) runForward(ctx context.Context, row *Row, drv driver, log
 			row.NextAttemptAt = o.now()
 			row.Attempts = 0
 			if uerr := o.Store.Update(ctx, row); uerr != nil {
+				log.ErrorContext(ctx, "saga persist compensating flip failed", "err", uerr, "step", s.name)
 				return uerr
 			}
 			return o.runCompensations(ctx, row, drv, log)
@@ -570,6 +575,7 @@ func (o *Orchestrator) runForward(ctx context.Context, row *Row, drv driver, log
 				"err", err.Error())
 		}
 		if uerr := o.Store.Update(ctx, row); uerr != nil {
+			log.ErrorContext(ctx, "saga persist retry schedule failed", "err", uerr, "step", s.name)
 			return uerr
 		}
 		return err
@@ -580,7 +586,12 @@ func (o *Orchestrator) runForward(ctx context.Context, row *Row, drv driver, log
 	row.StepNo = len(drv.steps)
 	row.LastError = ""
 	row.NextAttemptAt = o.now()
-	return o.Store.Update(ctx, row)
+	if err := o.Store.Update(ctx, row); err != nil {
+		log.ErrorContext(ctx, "saga persist completion failed", "err", err)
+		return err
+	}
+	log.InfoContext(ctx, "saga completed", "steps", len(drv.steps))
+	return nil
 }
 
 // runCompensations walks the completed steps in reverse and runs each
@@ -597,7 +608,12 @@ func (o *Orchestrator) runCompensations(ctx context.Context, row *Row, drv drive
 		// no side effects committed. This is a clean rollback.
 		row.Status = StatusCompensated
 		row.NextAttemptAt = o.now()
-		return o.Store.Update(ctx, row)
+		if err := o.Store.Update(ctx, row); err != nil {
+			log.ErrorContext(ctx, "saga persist compensated terminal failed", "err", err)
+			return err
+		}
+		log.InfoContext(ctx, "saga compensated", "last_error", row.LastError)
+		return nil
 	}
 	// Preserve the original forward-step error across compensation
 	// updates — it's the audit-trail "why did this saga roll back" line.
@@ -615,6 +631,7 @@ func (o *Orchestrator) runCompensations(ctx context.Context, row *Row, drv drive
 			row.LastError = ""
 			row.Attempts = 0
 			if err := o.Store.Update(ctx, row); err != nil {
+				log.ErrorContext(ctx, "saga persist compensation step failed", "err", err, "step", s.name)
 				return err
 			}
 			continue
@@ -626,6 +643,7 @@ func (o *Orchestrator) runCompensations(ctx context.Context, row *Row, drv drive
 			Log:           log.With("step", s.name, "phase", "compensate"),
 			StateRaw:      &row.State,
 		}
+		log.DebugContext(ctx, "saga compensation step start", "step", s.name, "step_no", i+1)
 		var err error
 		if ferr := forceCompensateErr(ctx, s.name, i, row.Attempts); ferr != nil {
 			log.Warn("saga: fault-injection compensate fail",
@@ -642,8 +660,10 @@ func (o *Orchestrator) runCompensations(ctx context.Context, row *Row, drv drive
 			row.Attempts = 0
 			row.NextAttemptAt = o.now()
 			if uerr := o.Store.Update(ctx, row); uerr != nil {
+				log.ErrorContext(ctx, "saga persist compensation step failed", "err", uerr, "step", s.name)
 				return uerr
 			}
+			log.InfoContext(ctx, "saga compensation step completed", "step", s.name, "step_no", i+1)
 			continue
 		}
 		// Compensation failed. Record the attempt. A compensator must
@@ -660,6 +680,7 @@ func (o *Orchestrator) runCompensations(ctx context.Context, row *Row, drv drive
 			row.LastError = err.Error()
 			row.NextAttemptAt = o.now()
 			if uerr := o.Store.Update(ctx, row); uerr != nil {
+				log.ErrorContext(ctx, "saga persist failed terminal failed", "err", uerr, "step", s.name)
 				return uerr
 			}
 			return err
@@ -672,11 +693,16 @@ func (o *Orchestrator) runCompensations(ctx context.Context, row *Row, drv drive
 				"step", s.name, "attempts", row.Attempts, "err", err.Error())
 			row.Status = StatusFailed
 			if uerr := o.Store.Update(ctx, row); uerr != nil {
+				log.ErrorContext(ctx, "saga persist failed terminal failed", "err", uerr, "step", s.name)
 				return uerr
 			}
 			return err
 		}
+		log.WarnContext(ctx, "saga compensation transient error, will retry",
+			"err", err.Error(), "step", s.name, "attempts", row.Attempts,
+			"retry_after", row.NextAttemptAt.UTC().Format(time.RFC3339))
 		if uerr := o.Store.Update(ctx, row); uerr != nil {
+			log.ErrorContext(ctx, "saga persist retry schedule failed", "err", uerr, "step", s.name)
 			return uerr
 		}
 		return err
@@ -688,7 +714,12 @@ func (o *Orchestrator) runCompensations(ctx context.Context, row *Row, drv drive
 		row.LastError = origFailure
 	}
 	row.NextAttemptAt = o.now()
-	return o.Store.Update(ctx, row)
+	if err := o.Store.Update(ctx, row); err != nil {
+		log.ErrorContext(ctx, "saga persist compensated terminal failed", "err", err)
+		return err
+	}
+	log.InfoContext(ctx, "saga compensated", "last_error", row.LastError)
+	return nil
 }
 
 // =====================================================================

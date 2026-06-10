@@ -117,6 +117,9 @@ func (s *Service) ListPublicHoldings(ctx context.Context, tickerFilter string) (
 		}
 		if listing, err := s.Store.GetListingBySecurityID(ctx, sec.ID); err == nil {
 			row.CurrentPrice = listing.Price
+		} else if !isAppKind(err, apperr.KindNotFound) {
+			s.log().WarnContext(ctx, "public holding listing lookup failed",
+				"err", err, "security_id", sec.ID, "holding_id", h.ID)
 		}
 		// Spec p.67: an actuary's holding is held "in the name of the
 		// bank", so on the supervisor-side board the Owner column shows
@@ -229,6 +232,10 @@ func (s *Service) SuggestOTCMatches(ctx context.Context, in SuggestOTCMatchInput
 		}
 		listing, err := s.Store.GetListingBySecurityID(ctx, sec.ID)
 		if err != nil {
+			if !isAppKind(err, apperr.KindNotFound) {
+				s.log().WarnContext(ctx, "otc suggestion listing lookup failed",
+					"err", err, "security_id", sec.ID, "holding_id", h.ID)
+			}
 			continue // no priceable listing → can't band-match
 		}
 		unit, err := money.Parse(listing.Price)
@@ -388,9 +395,14 @@ func (s *Service) CreateOTCOffer(ctx context.Context, in CreateOTCOfferInput) (*
 		}
 		available := locked.PublicCount - locked.ReservedCount
 		if available <= 0 {
+			s.log().WarnContext(ctx, "otc offer rejected: holding no longer available",
+				"seller_holding_id", locked.ID, "ticker", sec.Ticker)
 			return apperr.FailedPrecondition("hartija više nije dostupna na OTC")
 		}
 		if in.Quantity > available {
+			s.log().WarnContext(ctx, "otc offer rejected: insufficient available shares",
+				"seller_holding_id", locked.ID, "ticker", sec.Ticker,
+				"requested", in.Quantity, "available", available)
 			return apperr.FailedPrecondition("nedovoljno raspoloživih akcija")
 		}
 		if _, err := s.Store.IncrementReservedHolding(ctx, tx, locked.ID, in.Quantity); err != nil {
@@ -421,8 +433,15 @@ func (s *Service) CreateOTCOffer(ctx context.Context, in CreateOTCOfferInput) (*
 		return nil
 	})
 	if err != nil {
+		s.logOpErr(ctx, "otc offer create failed", err,
+			"seller_holding_id", in.SellerHoldingID, "ticker", sec.Ticker,
+			"quantity", in.Quantity)
 		return nil, err
 	}
+	s.log().InfoContext(ctx, "otc offer created",
+		"thread_id", out.ThreadID, "offer_id", out.ID,
+		"seller_holding_id", out.SellerHoldingID, "ticker", sec.Ticker,
+		"quantity", out.Quantity)
 	if s.OTCNotifier != nil {
 		s.OTCNotifier.OnOTCCounterOffer(ctx, out, out.SellerID, out.SellerKind)
 	}
@@ -471,6 +490,8 @@ func (s *Service) CounterOfferOTC(ctx context.Context, in CounterOfferOTCInput) 
 			return apperr.PermissionDenied("niste strana u ovoj pregovaračkoj niti")
 		}
 		if open.ModifiedBy == p.UserID {
+			s.log().WarnContext(ctx, "otc counter rejected: not caller's turn",
+				"thread_id", in.ThreadID, "offer_id", open.ID)
 			return apperr.FailedPrecondition("čeka se odgovor druge strane")
 		}
 
@@ -515,8 +536,12 @@ func (s *Service) CounterOfferOTC(ctx context.Context, in CounterOfferOTCInput) 
 		return nil
 	})
 	if err != nil {
+		s.logOpErr(ctx, "otc counter failed", err,
+			"thread_id", in.ThreadID, "quantity", in.Quantity)
 		return nil, err
 	}
+	s.log().InfoContext(ctx, "otc counter applied",
+		"thread_id", out.ThreadID, "offer_id", out.ID, "quantity", out.Quantity)
 	if s.OTCNotifier != nil {
 		recipient, kind := otherParty(out, p.UserID)
 		s.OTCNotifier.OnOTCCounterOffer(ctx, out, recipient, kind)
@@ -559,8 +584,11 @@ func (s *Service) WithdrawOTCOffer(ctx context.Context, threadID string) (*domai
 		return nil
 	})
 	if err != nil {
+		s.logOpErr(ctx, "otc withdraw failed", err, "thread_id", threadID)
 		return nil, err
 	}
+	s.log().InfoContext(ctx, "otc offer withdrawn",
+		"thread_id", out.ThreadID, "offer_id", out.ID)
 	if s.OTCNotifier != nil {
 		recipient, kind := otherParty(out, p.UserID)
 		s.OTCNotifier.OnOTCWithdrawn(ctx, out, recipient, kind)
@@ -630,8 +658,12 @@ func (s *Service) terminateOTCOffer(ctx context.Context, threadID string, target
 		return nil
 	})
 	if err != nil {
+		s.logOpErr(ctx, "otc offer termination failed", err,
+			"thread_id", threadID, "target_status", string(target))
 		return nil, err
 	}
+	s.log().InfoContext(ctx, "otc offer terminated",
+		"thread_id", out.ThreadID, "offer_id", out.ID, "status", string(target))
 	if s.OTCNotifier != nil {
 		recipient, kind := otherParty(out, p.UserID)
 		s.OTCNotifier.OnOTCOfferStateChanged(ctx, out, recipient, kind)
@@ -725,6 +757,11 @@ func (s *Service) GetOTCThread(ctx context.Context, threadID string) (*GetOTCThr
 	res := &GetOTCThreadResult{Iterations: iters}
 	if c, err := s.Store.GetOTCContractByThread(ctx, threadID); err == nil {
 		res.Contract = c
+	} else if !isAppKind(err, apperr.KindNotFound) {
+		// Best-effort decoration — absence is normal, anything else is
+		// a real lookup failure being swallowed.
+		s.log().WarnContext(ctx, "otc thread contract lookup failed",
+			"err", err, "thread_id", threadID)
 	}
 	return res, nil
 }

@@ -6,6 +6,7 @@ import (
 	"strings"
 
 	"github.com/RAF-SI-2025/Banka-3-Backend/pkg/apperr"
+	"github.com/RAF-SI-2025/Banka-3-Backend/pkg/logger"
 	"github.com/RAF-SI-2025/Banka-3-Backend/pkg/postgres"
 	"github.com/RAF-SI-2025/Banka-3-Backend/services/bank/internal/domain"
 )
@@ -40,6 +41,7 @@ func (s *Store) CreateCompany(ctx context.Context, c *domain.Company) (*domain.C
 		if isUniqueViolation(err) {
 			return nil, apperr.Conflict("company with this matični broj or PIB already exists")
 		}
+		logger.From(ctx).ErrorContext(ctx, "create company failed", "err", err, "owner_client_id", c.OwnerClientID)
 		return nil, apperr.Internal("create company", err)
 	}
 	return out, nil
@@ -52,6 +54,7 @@ func (s *Store) GetCompanyByID(ctx context.Context, id string) (*domain.Company,
 		if noRows(err) {
 			return nil, apperr.NotFound("company not found")
 		}
+		logger.From(ctx).ErrorContext(ctx, "get company failed", "err", err, "company_id", id)
 		return nil, apperr.Internal("get company", err)
 	}
 	return out, nil
@@ -72,6 +75,7 @@ func (s *Store) UpdateCompany(ctx context.Context, c *domain.Company) (*domain.C
 		if noRows(err) {
 			return nil, apperr.NotFound("company not found")
 		}
+		logger.From(ctx).ErrorContext(ctx, "update company failed", "err", err, "company_id", c.ID)
 		return nil, apperr.Internal("update company", err)
 	}
 	return out, nil
@@ -102,6 +106,7 @@ func (s *Store) ListCompanies(ctx context.Context, f domain.CompanyFilter, page,
 
 	var total int64
 	if err := s.DB.QueryRow(postgres.WithRead(ctx), `select count(*) from "bank".companies`+where, args...).Scan(&total); err != nil {
+		logger.From(ctx).ErrorContext(ctx, "count companies failed", "err", err)
 		return nil, 0, apperr.Internal("count companies", err)
 	}
 
@@ -112,6 +117,7 @@ func (s *Store) ListCompanies(ctx context.Context, f domain.CompanyFilter, page,
 
 	rows, err := s.DB.Query(postgres.WithRead(ctx), listQ, listArgs...)
 	if err != nil {
+		logger.From(ctx).ErrorContext(ctx, "list companies failed", "err", err)
 		return nil, 0, apperr.Internal("list companies", err)
 	}
 	defer rows.Close()
@@ -119,9 +125,14 @@ func (s *Store) ListCompanies(ctx context.Context, f domain.CompanyFilter, page,
 	for rows.Next() {
 		c, err := scanCompany(rows)
 		if err != nil {
+			logger.From(ctx).ErrorContext(ctx, "scan company failed", "err", err)
 			return nil, 0, apperr.Internal("scan company", err)
 		}
 		out = append(out, c)
 	}
-	return out, total, rows.Err()
+	if err := rows.Err(); err != nil {
+		logger.From(ctx).ErrorContext(ctx, "iterate companies failed", "err", err)
+		return out, total, err
+	}
+	return out, total, nil
 }

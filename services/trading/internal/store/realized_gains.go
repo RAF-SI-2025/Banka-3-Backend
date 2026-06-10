@@ -6,6 +6,7 @@ import (
 	"time"
 
 	"github.com/RAF-SI-2025/Banka-3-Backend/pkg/apperr"
+	"github.com/RAF-SI-2025/Banka-3-Backend/pkg/logger"
 	"github.com/RAF-SI-2025/Banka-3-Backend/pkg/postgres"
 	"github.com/RAF-SI-2025/Banka-3-Backend/services/trading/internal/domain"
 	"github.com/jackc/pgx/v5"
@@ -42,6 +43,7 @@ func (s *Store) InsertRealizedGain(ctx context.Context, tx pgx.Tx, g *domain.Rea
 	)
 	out, err := scanRealizedGain(row)
 	if err != nil {
+		logger.From(ctx).ErrorContext(ctx, "insert realized gain failed", "err", err)
 		return nil, apperr.Internal("insert realized gain", err)
 	}
 	return out, nil
@@ -87,6 +89,7 @@ func (s *Store) ListRealizedGains(ctx context.Context, f RealizedGainFilter) ([]
 	q := `select ` + realizedGainCols + ` from "trading".realized_gains` + where + ` order by realized_at desc`
 	rows, err := s.DB.Query(postgres.WithRead(ctx), q, args...)
 	if err != nil {
+		logger.From(ctx).ErrorContext(ctx, "list realized gains failed", "err", err)
 		return nil, apperr.Internal("list realized gains", err)
 	}
 	defer rows.Close()
@@ -94,11 +97,16 @@ func (s *Store) ListRealizedGains(ctx context.Context, f RealizedGainFilter) ([]
 	for rows.Next() {
 		g, err := scanRealizedGain(rows)
 		if err != nil {
+			logger.From(ctx).ErrorContext(ctx, "scan realized gain failed", "err", err)
 			return nil, apperr.Internal("scan realized gain", err)
 		}
 		out = append(out, g)
 	}
-	return out, rows.Err()
+	if err := rows.Err(); err != nil {
+		logger.From(ctx).ErrorContext(ctx, "list realized gains rows failed", "err", err)
+		return out, err
+	}
+	return out, nil
 }
 
 // MarkRealizedGainsTaxed flips taxed=true and stamps tax_op_id +
@@ -113,6 +121,7 @@ func (s *Store) MarkRealizedGainsTaxed(ctx context.Context, tx pgx.Tx, ids []str
         set taxed = true, taxed_at = now(), tax_op_id = $2::uuid
         where id = any($1::uuid[]) and taxed = false`
 	if _, err := tx.Exec(ctx, q, ids, taxOpID); err != nil {
+		logger.From(ctx).ErrorContext(ctx, "mark gains taxed failed", "err", err, "tax_op_id", taxOpID)
 		return apperr.Internal("mark gains taxed", err)
 	}
 	return nil
@@ -147,6 +156,7 @@ func (s *Store) ListTaxAggregates(ctx context.Context, kind domain.UserKind) ([]
         order by user_id`
 	rows, err := s.DB.Query(ctx, q, string(kind))
 	if err != nil {
+		logger.From(ctx).ErrorContext(ctx, "list tax aggregates failed", "err", err)
 		return nil, apperr.Internal("list tax aggregates", err)
 	}
 	defer rows.Close()
@@ -157,12 +167,17 @@ func (s *Store) ListTaxAggregates(ctx context.Context, kind domain.UserKind) ([]
 			k string
 		)
 		if err := rows.Scan(&a.UserID, &k, &a.UnpaidGainRSD, &a.PaidGainYTDRSD); err != nil {
+			logger.From(ctx).ErrorContext(ctx, "scan tax aggregate failed", "err", err)
 			return nil, apperr.Internal("scan tax aggregate", err)
 		}
 		a.UserKind = domain.UserKind(k)
 		out = append(out, &a)
 	}
-	return out, rows.Err()
+	if err := rows.Err(); err != nil {
+		logger.From(ctx).ErrorContext(ctx, "list tax aggregates rows failed", "err", err)
+		return out, err
+	}
+	return out, nil
 }
 
 // ListUnpaidGainsForUser returns the not-yet-taxed positive-gain rows
@@ -177,6 +192,7 @@ func (s *Store) ListUnpaidGainsForUser(ctx context.Context, userID string, kind 
         order by realized_at asc`
 	rows, err := s.DB.Query(ctx, q, userID, string(kind))
 	if err != nil {
+		logger.From(ctx).ErrorContext(ctx, "list unpaid gains failed", "err", err, "user_id", userID)
 		return nil, apperr.Internal("list unpaid gains", err)
 	}
 	defer rows.Close()
@@ -184,11 +200,16 @@ func (s *Store) ListUnpaidGainsForUser(ctx context.Context, userID string, kind 
 	for rows.Next() {
 		g, err := scanRealizedGain(rows)
 		if err != nil {
+			logger.From(ctx).ErrorContext(ctx, "scan unpaid gain failed", "err", err, "user_id", userID)
 			return nil, apperr.Internal("scan unpaid gain", err)
 		}
 		out = append(out, g)
 	}
-	return out, rows.Err()
+	if err := rows.Err(); err != nil {
+		logger.From(ctx).ErrorContext(ctx, "list unpaid gains for user rows failed", "err", err, "user_id", userID)
+		return out, err
+	}
+	return out, nil
 }
 
 // ActuaryPerformance is one row of ListActuaryPerformances — one per
@@ -229,6 +250,7 @@ func (s *Store) ListActuaryPerformances(ctx context.Context, typeFilter string) 
                  ai.employee_id`
 	rows, err := s.DB.Query(postgres.WithRead(ctx), q, typeFilter)
 	if err != nil {
+		logger.From(ctx).ErrorContext(ctx, "list actuary performances failed", "err", err)
 		return nil, apperr.Internal("list actuary performances", err)
 	}
 	defer rows.Close()
@@ -239,12 +261,17 @@ func (s *Store) ListActuaryPerformances(ctx context.Context, typeFilter string) 
 			t string
 		)
 		if err := rows.Scan(&p.UserID, &t, &p.ProfitRSD, &p.RealizedCount); err != nil {
+			logger.From(ctx).ErrorContext(ctx, "scan actuary performance failed", "err", err)
 			return nil, apperr.Internal("scan actuary performance", err)
 		}
 		p.ActuaryType = domain.ActuaryType(t)
 		out = append(out, &p)
 	}
-	return out, rows.Err()
+	if err := rows.Err(); err != nil {
+		logger.From(ctx).ErrorContext(ctx, "list actuary performances rows failed", "err", err)
+		return out, err
+	}
+	return out, nil
 }
 
 // BankProfitBucket is one calendar period of realized bank profit.
@@ -271,6 +298,7 @@ func (s *Store) LatestEmployeeRealizedAt(ctx context.Context) (time.Time, bool, 
 	const q = `select max(realized_at) from "trading".realized_gains where user_kind = 'employee'`
 	var t *time.Time
 	if err := s.DB.QueryRow(postgres.WithRead(ctx), q).Scan(&t); err != nil {
+		logger.From(ctx).ErrorContext(ctx, "latest employee realized_at failed", "err", err)
 		return time.Time{}, false, apperr.Internal("latest employee realized_at", err)
 	}
 	if t == nil {
@@ -309,6 +337,7 @@ func (s *Store) BankProfitTimeseries(ctx context.Context, bucket string, from, t
         order by period_start asc`
 	rows, err := s.DB.Query(postgres.WithRead(ctx), q, bucket, from, to)
 	if err != nil {
+		logger.From(ctx).ErrorContext(ctx, "bank profit timeseries failed", "err", err)
 		return nil, apperr.Internal("bank profit timeseries", err)
 	}
 	defer rows.Close()
@@ -317,11 +346,16 @@ func (s *Store) BankProfitTimeseries(ctx context.Context, bucket string, from, t
 		var b BankProfitBucket
 		if err := rows.Scan(&b.PeriodStart, &b.ProfitRSD, &b.TradingRSD,
 			&b.FundRSD, &b.CumulativeRSD, &b.RealizedCount); err != nil {
+			logger.From(ctx).ErrorContext(ctx, "scan bank profit bucket failed", "err", err)
 			return nil, apperr.Internal("scan bank profit bucket", err)
 		}
 		out = append(out, &b)
 	}
-	return out, rows.Err()
+	if err := rows.Err(); err != nil {
+		logger.From(ctx).ErrorContext(ctx, "bank profit timeseries rows failed", "err", err)
+		return out, err
+	}
+	return out, nil
 }
 
 func scanRealizedGain(row pgx.Row) (*domain.RealizedGain, error) {

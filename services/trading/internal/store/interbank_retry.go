@@ -5,6 +5,7 @@ import (
 	"time"
 
 	"github.com/RAF-SI-2025/Banka-3-Backend/pkg/apperr"
+	"github.com/RAF-SI-2025/Banka-3-Backend/pkg/logger"
 	"github.com/RAF-SI-2025/Banka-3-Backend/services/trading/internal/domain"
 	"github.com/jackc/pgx/v5"
 )
@@ -36,6 +37,7 @@ func (s *Store) EnqueueInterbankRetry(ctx context.Context, e *domain.InterbankRe
 		string(e.UserKind), e.NextRetryAt, e.DeadlineAt)
 	out, err := scanInterbankRetry(row)
 	if err != nil {
+		logger.From(ctx).ErrorContext(ctx, "enqueue interbank retry failed", "err", err)
 		return nil, apperr.Internal("enqueue interbank retry", err)
 	}
 	return out, nil
@@ -48,10 +50,15 @@ func (s *Store) ListDueInterbankRetries(ctx context.Context, now time.Time) ([]*
 	      where status = 'pending' and next_retry_at <= $1 order by next_retry_at asc`
 	rows, err := s.DB.Query(ctx, q, now)
 	if err != nil {
+		logger.From(ctx).ErrorContext(ctx, "list due interbank retries failed", "err", err)
 		return nil, apperr.Internal("list due interbank retries", err)
 	}
 	defer rows.Close()
-	return scanInterbankRetries(rows)
+	out, err := scanInterbankRetries(rows)
+	if err != nil {
+		logger.From(ctx).ErrorContext(ctx, "list due interbank retries failed", "err", err)
+	}
+	return out, err
 }
 
 // ListInterbankRetriesByUser returns every retry entry (any status) for
@@ -61,10 +68,15 @@ func (s *Store) ListInterbankRetriesByUser(ctx context.Context, userID string) (
 	      where user_id = $1 order by created_at desc`
 	rows, err := s.DB.Query(ctx, q, userID)
 	if err != nil {
+		logger.From(ctx).ErrorContext(ctx, "list interbank retries failed", "err", err, "user_id", userID)
 		return nil, apperr.Internal("list interbank retries", err)
 	}
 	defer rows.Close()
-	return scanInterbankRetries(rows)
+	out, err := scanInterbankRetries(rows)
+	if err != nil {
+		logger.From(ctx).ErrorContext(ctx, "list interbank retries by user failed", "err", err, "user_id", userID)
+	}
+	return out, err
 }
 
 // MarkInterbankRetrySucceeded flips an entry to succeeded.
@@ -72,6 +84,7 @@ func (s *Store) MarkInterbankRetrySucceeded(ctx context.Context, id string) erro
 	const q = `update "trading".interbank_retry_queue
 	           set status = 'succeeded', updated_at = now() where id = $1`
 	if _, err := s.DB.Exec(ctx, q, id); err != nil {
+		logger.From(ctx).ErrorContext(ctx, "mark interbank retry succeeded failed", "err", err, "id", id)
 		return apperr.Internal("mark interbank retry succeeded", err)
 	}
 	return nil
@@ -82,6 +95,7 @@ func (s *Store) MarkInterbankRetryFailed(ctx context.Context, id, lastErr string
 	const q = `update "trading".interbank_retry_queue
 	           set status = 'failed', last_error = $2, updated_at = now() where id = $1`
 	if _, err := s.DB.Exec(ctx, q, id, lastErr); err != nil {
+		logger.From(ctx).ErrorContext(ctx, "mark interbank retry failed failed", "err", err, "id", id)
 		return apperr.Internal("mark interbank retry failed", err)
 	}
 	return nil
@@ -97,6 +111,7 @@ func (s *Store) RescheduleInterbankRetry(ctx context.Context, id string, nextRet
 	               updated_at = now()
 	           where id = $1`
 	if _, err := s.DB.Exec(ctx, q, id, nextRetryAt, lastErr); err != nil {
+		logger.From(ctx).ErrorContext(ctx, "reschedule interbank retry failed", "err", err, "id", id)
 		return apperr.Internal("reschedule interbank retry", err)
 	}
 	return nil

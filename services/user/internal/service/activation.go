@@ -25,11 +25,17 @@ func (s *Service) ActivateAccount(ctx context.Context, token, newPassword string
 	hash := tokens.Hash(token)
 	employeeID, err := s.Store.LookupActivationToken(ctx, hash)
 	if err != nil {
+		// Used/expired tokens and query errors are logged by the store;
+		// an unknown token value is only classified here.
+		if isNotFound(err) {
+			s.Log.WarnContext(ctx, "activation rejected: unknown token")
+		}
 		return err
 	}
 
 	pwHash, err := passwords.Hash(newPassword)
 	if err != nil {
+		s.Log.ErrorContext(ctx, "password hash failed", "err", err, "employee_id", employeeID)
 		return apperr.Internal("hash password", err)
 	}
 	if err := s.Store.SetEmployeePasswordHash(ctx, employeeID, pwHash); err != nil {
@@ -38,16 +44,17 @@ func (s *Service) ActivateAccount(ctx context.Context, token, newPassword string
 	if err := s.Store.MarkActivationTokenUsed(ctx, hash); err != nil {
 		return err
 	}
+	s.Log.InfoContext(ctx, "account activated", "employee_id", employeeID)
 
 	emp, err := s.Store.GetEmployeeByID(ctx, employeeID)
 	if err != nil {
 		// Activation already succeeded; failing the confirmation email
 		// shouldn't roll it back. Log and move on.
-		s.Log.Warn("activation confirmation: load employee", "employee_id", employeeID, "error", err)
+		s.Log.WarnContext(ctx, "activation confirmation: load employee failed", "err", err, "employee_id", employeeID)
 		return nil
 	}
 	if err := s.sendActivationConfirmation(ctx, emp); err != nil {
-		s.Log.Warn("activation confirmation email failed", "employee_id", employeeID, "error", err)
+		s.Log.WarnContext(ctx, "activation confirmation email failed", "err", err, "employee_id", employeeID)
 	}
 	return nil
 }
@@ -74,12 +81,17 @@ func (s *Service) ResendActivation(ctx context.Context, employeeID string) error
 		return err
 	}
 	if emp.Activated() {
+		s.Log.WarnContext(ctx, "resend activation rejected: already activated", "employee_id", employeeID)
 		return apperr.FailedPrecondition("nalog je već aktiviran")
 	}
 	if err := s.Store.InvalidateActivationTokens(ctx, employeeID); err != nil {
 		return err
 	}
-	return s.sendActivationEmail(ctx, emp)
+	if err := s.sendActivationEmail(ctx, emp); err != nil {
+		s.Log.ErrorContext(ctx, "activation email send failed", "err", err, "employee_id", employeeID)
+		return err
+	}
+	return nil
 }
 
 // RequestPasswordReset emails a reset link if the email belongs to a
@@ -100,7 +112,7 @@ func (s *Service) RequestPasswordReset(ctx context.Context, email string) error 
 
 	if emp, err := s.Store.GetEmployeeByEmail(ctx, email); err == nil {
 		if serr := s.sendResetEmail(ctx, domain.KindEmployee, emp.ID, emp.Email, emp.FirstName); serr != nil {
-			s.Log.Warn("password reset email failed", "user_kind", "employee", "user_id", emp.ID, "error", serr)
+			s.Log.WarnContext(ctx, "password reset email failed", "err", serr, "user_kind", "employee", "user_id", emp.ID)
 		}
 		return nil
 	} else if !isNotFound(err) {
@@ -108,13 +120,15 @@ func (s *Service) RequestPasswordReset(ctx context.Context, email string) error 
 	}
 	if cl, err := s.Store.GetClientByEmail(ctx, email); err == nil {
 		if serr := s.sendResetEmail(ctx, domain.KindClient, cl.ID, cl.Email, cl.FirstName); serr != nil {
-			s.Log.Warn("password reset email failed", "user_kind", "client", "user_id", cl.ID, "error", serr)
+			s.Log.WarnContext(ctx, "password reset email failed", "err", serr, "user_kind", "client", "user_id", cl.ID)
 		}
 		return nil
 	} else if !isNotFound(err) {
 		return err
 	}
-	// Unknown email — silently succeed.
+	// Unknown email — silently succeed toward the caller; logged as a
+	// probe signal.
+	s.Log.WarnContext(ctx, "password reset requested for unknown email", "email", email)
 	return nil
 }
 
@@ -130,11 +144,17 @@ func (s *Service) ConfirmPasswordReset(ctx context.Context, token, newPassword s
 	hash := tokens.Hash(token)
 	kind, userID, err := s.Store.LookupPasswordResetToken(ctx, hash)
 	if err != nil {
+		// Used/expired tokens and query errors are logged by the store;
+		// an unknown token value is only classified here.
+		if isNotFound(err) {
+			s.Log.WarnContext(ctx, "password reset rejected: unknown token")
+		}
 		return err
 	}
 
 	pwHash, err := passwords.Hash(newPassword)
 	if err != nil {
+		s.Log.ErrorContext(ctx, "password hash failed", "err", err, "user_id", userID, "kind", kind)
 		return apperr.Internal("hash password", err)
 	}
 
@@ -148,6 +168,7 @@ func (s *Service) ConfirmPasswordReset(ctx context.Context, token, newPassword s
 			return err
 		}
 	default:
+		s.Log.ErrorContext(ctx, "password reset failed: unknown user kind", "user_id", userID, "kind", kind)
 		return apperr.Internal("unknown user kind", nil)
 	}
 
@@ -159,8 +180,9 @@ func (s *Service) ConfirmPasswordReset(ctx context.Context, token, newPassword s
 	}
 	// Resetting the password clears any brute-force lockout (S10).
 	if err := s.Store.ResetFailedLogin(ctx, kind, userID); err != nil {
-		s.Log.Warn("reset failed login on password reset failed", "user_kind", string(kind), "user_id", userID, "error", err)
+		s.Log.WarnContext(ctx, "reset failed login on password reset failed", "err", err, "user_kind", string(kind), "user_id", userID)
 	}
+	s.Log.InfoContext(ctx, "password reset completed", "user_id", userID, "kind", kind)
 	return nil
 }
 
@@ -173,6 +195,7 @@ func (s *Service) ConfirmPasswordReset(ctx context.Context, token, newPassword s
 func (s *Service) sendInitialPasswordEmail(ctx context.Context, kind domain.UserKind, userID, email, firstName string) error {
 	plaintext, hash, err := tokens.Generate(32)
 	if err != nil {
+		s.Log.ErrorContext(ctx, "initial-password token generate failed", "err", err, "user_id", userID, "kind", kind)
 		return err
 	}
 	if err := s.Store.CreatePasswordResetToken(ctx, kind, userID, hash, s.Clock.Now().Add(s.Cfg.ResetTTL)); err != nil {
@@ -192,6 +215,7 @@ func (s *Service) sendInitialPasswordEmail(ctx context.Context, kind domain.User
 func (s *Service) sendResetEmail(ctx context.Context, kind domain.UserKind, userID, email, firstName string) error {
 	plaintext, hash, err := tokens.Generate(32)
 	if err != nil {
+		s.Log.ErrorContext(ctx, "reset token generate failed", "err", err, "user_id", userID, "kind", kind)
 		return err
 	}
 	if err := s.Store.CreatePasswordResetToken(ctx, kind, userID, hash, s.Clock.Now().Add(s.Cfg.ResetTTL)); err != nil {

@@ -195,6 +195,8 @@ func (m *MarketData) BackfillStockHistory(ctx context.Context) (*StockHistoryBac
 		for _, b := range bars {
 			bid, ask, serr := stockSpread(b.Close, m.StockSpread)
 			if serr != nil {
+				m.Log.WarnContext(ctx, "stock-history backfill: spread compute failed, bar dropped",
+					"err", serr, "symbol", sym, "date", b.Date, "close", b.Close)
 				continue
 			}
 			change, cerr := changeAmt(prev, b.Close)

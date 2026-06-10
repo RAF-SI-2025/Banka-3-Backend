@@ -35,6 +35,8 @@ func (s *Service) ListTransactions(ctx context.Context, f domain.TransactionFilt
 				return nil, 0, err
 			}
 			if a.OwnerClientID != p.UserID {
+				s.log().WarnContext(ctx, "list transactions denied: account not owned by caller",
+					"account_id", f.AccountID, "user_id", p.UserID)
 				return nil, 0, apperr.PermissionDenied("nedovoljne permisije")
 			}
 		}

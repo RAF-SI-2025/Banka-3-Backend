@@ -16,7 +16,7 @@ import (
 func (s *Service) recordAudit(ctx context.Context, action, targetID, targetLabel, oldVal, newVal, note string) {
 	p, ok := auth.PrincipalFrom(ctx)
 	if !ok {
-		s.Log.Warn("audit skipped: no principal", "action", action)
+		s.Log.WarnContext(ctx, "audit skipped: no principal", "action", action, "target_id", targetID)
 		return
 	}
 	if err := s.Store.InsertAudit(ctx, &domain.AuditEntry{
@@ -30,7 +30,9 @@ func (s *Service) recordAudit(ctx context.Context, action, targetID, targetLabel
 		NewValue:    newVal,
 		Note:        note,
 	}); err != nil {
-		s.Log.Warn("audit insert failed", "action", action, "error", err)
+		// Swallowed by design: a failed audit write must not fail the
+		// business operation that triggered it.
+		s.Log.WarnContext(ctx, "audit insert failed", "err", err, "action", action, "target_id", targetID)
 	}
 }
 
@@ -44,6 +46,11 @@ func (s *Service) resolveActorName(ctx context.Context, userID, kind string) str
 	}
 	e, err := s.Store.GetEmployeeByID(ctx, userID)
 	if err != nil || e == nil {
+		if err != nil && !isNotFound(err) {
+			// Swallowed by design: the audit row still lands without a
+			// display name. The store already logged the query error.
+			s.Log.WarnContext(ctx, "resolve actor name failed", "err", err, "user_id", userID)
+		}
 		return ""
 	}
 	return strings.TrimSpace(e.FirstName + " " + e.LastName)
@@ -93,5 +100,6 @@ func (s *Service) requireAuditReader(ctx context.Context) error {
 		permissions.Has(p.Permissions, permissions.ActuarySupervisor) {
 		return nil
 	}
+	s.Log.WarnContext(ctx, "audit read denied", "user_id", p.UserID, "kind", p.UserKind)
 	return apperr.PermissionDenied("nedovoljne permisije")
 }

@@ -104,7 +104,7 @@ func (s *Service) CreateScheduledInterbankPayment(ctx context.Context, in Create
 		nextRun = schedule.Advance(now, in.Cadence)
 	}
 
-	return s.Store.InsertScheduledInterbankPayment(ctx, &domain.ScheduledInterbankPayment{
+	row, err := s.Store.InsertScheduledInterbankPayment(ctx, &domain.ScheduledInterbankPayment{
 		UserID:            p.UserID,
 		UserKind:          domain.UserKind(p.UserKind),
 		SourceAccountID:   in.SourceAccountID,
@@ -116,6 +116,16 @@ func (s *Service) CreateScheduledInterbankPayment(ctx context.Context, in Create
 		Cadence:           string(in.Cadence),
 		NextRun:           nextRun,
 	})
+	if err != nil {
+		s.logOpErr(ctx, "scheduled interbank payment create failed", err,
+			"remote_bank_code", in.DestBankCode, "cadence", string(in.Cadence))
+		return nil, err
+	}
+	s.log().InfoContext(ctx, "scheduled interbank payment created",
+		"scheduled_interbank_id", row.ID, "remote_bank_code", row.DestBankCode,
+		"amount", row.Amount, "currency", string(row.Currency),
+		"cadence", row.Cadence, "next_run", row.NextRun)
+	return row, nil
 }
 
 // ListScheduledInterbankPayments returns the caller's own scheduled
@@ -152,9 +162,13 @@ func (s *Service) setScheduledInterbankActive(ctx context.Context, id string, ac
 		return nil, apperr.PermissionDenied("nedovoljne permisije")
 	}
 	if err := s.Store.SetScheduledInterbankPaymentActive(ctx, id, active); err != nil {
+		s.logOpErr(ctx, "scheduled interbank payment active flip failed", err,
+			"scheduled_interbank_id", id, "active", active)
 		return nil, err
 	}
 	row.Active = active
+	s.log().InfoContext(ctx, "scheduled interbank payment active flag set",
+		"scheduled_interbank_id", id, "active", active)
 	return row, nil
 }
 
@@ -171,7 +185,14 @@ func (s *Service) CancelScheduledInterbankPayment(ctx context.Context, id string
 	if row.UserID != p.UserID && !permissions.Has(p.Permissions, permissions.Admin) {
 		return apperr.PermissionDenied("nedovoljne permisije")
 	}
-	return s.Store.DeleteScheduledInterbankPayment(ctx, id)
+	if err := s.Store.DeleteScheduledInterbankPayment(ctx, id); err != nil {
+		s.logOpErr(ctx, "scheduled interbank payment cancel failed", err,
+			"scheduled_interbank_id", id)
+		return err
+	}
+	s.log().InfoContext(ctx, "scheduled interbank payment cancelled",
+		"scheduled_interbank_id", id, "remote_bank_code", row.DestBankCode)
+	return nil
 }
 
 // RunDueInterbankPayments is the sweep entrypoint. For each due + active
@@ -184,6 +205,7 @@ func (s *Service) RunDueInterbankPayments(ctx context.Context) (int, error) {
 	now := s.now()
 	rows, err := s.Store.ListDueScheduledInterbankPayments(ctx, now)
 	if err != nil {
+		s.log().ErrorContext(ctx, "scheduled interbank: due-row scan failed", "err", err)
 		return 0, err
 	}
 	submitted := 0
@@ -238,6 +260,10 @@ func (s *Service) runOneScheduledInterbank(ctx context.Context, r *domain.Schedu
 	// A 'running' status means the partner was unavailable and the retry
 	// queue is now driving it — that's a successful submit from the
 	// sweep's POV (the retry worker owns the outcome + client notice).
+	s.log().InfoContext(ctx, "scheduled interbank payment submitted",
+		"scheduled_interbank_id", r.ID, "transaction_id", res.TransactionID,
+		"remote_bank_code", r.DestBankCode, "amount", r.Amount,
+		"currency", string(r.Currency), "saga_status", res.Status)
 	return res.Status, ""
 }
 

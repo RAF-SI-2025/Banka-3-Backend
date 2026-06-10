@@ -122,7 +122,15 @@ func (s *Service) BlockInterbankPartner(ctx context.Context, senderRouting int, 
 	if p, ok := auth.PrincipalFrom(ctx); ok {
 		by = p.UserID
 	}
-	return s.Store.BlockBank(ctx, senderRouting, reason, by)
+	out, err := s.Store.BlockBank(ctx, senderRouting, reason, by)
+	if err != nil {
+		s.log().ErrorContext(ctx, "interbank block partner failed",
+			"err", err, "sender_routing_number", senderRouting, "blocked_by", by)
+		return nil, err
+	}
+	s.log().InfoContext(ctx, "interbank partner blocked",
+		"sender_routing_number", senderRouting, "blocked_by", by, "reason", reason)
+	return out, nil
 }
 
 // UnblockInterbankPartner lifts an active blacklist entry. The
@@ -137,11 +145,19 @@ func (s *Service) UnblockInterbankPartner(ctx context.Context, senderRouting int
 	}
 	out, err := s.Store.UnblockBank(ctx, senderRouting)
 	if err != nil {
+		if clientClassErr(err) {
+			s.log().WarnContext(ctx, "interbank unblock partner rejected",
+				"err", err, "sender_routing_number", senderRouting)
+		} else {
+			s.log().ErrorContext(ctx, "interbank unblock partner failed",
+				"err", err, "sender_routing_number", senderRouting)
+		}
 		return nil, err
 	}
 	if rerr := s.Store.ResetPartnerFailures(ctx, senderRouting); rerr != nil {
-		s.Log.Warn("interbank: reset failures on unblock", "sender_routing_number", senderRouting, "error", rerr)
+		s.log().WarnContext(ctx, "interbank: reset failures on unblock", "err", rerr, "sender_routing_number", senderRouting)
 	}
+	s.log().InfoContext(ctx, "interbank partner unblocked", "sender_routing_number", senderRouting)
 	return out, nil
 }
 

@@ -111,13 +111,20 @@ func (s *Service) SubmitCrossBankPayment(ctx context.Context, in SubmitCrossBank
 	// Resolve source account: currency match + active.
 	srcCcy, _, err := s.Reservations.AccountAvailable(ctx, in.SourceAccountID)
 	if err != nil {
+		s.logOpErr(ctx, "cross-bank payment: source account lookup failed", err,
+			"source_account_id", in.SourceAccountID, "remote_bank_code", in.RemoteBankCode)
 		return nil, err
 	}
 	if srcCcy != in.Currency {
+		s.log().WarnContext(ctx, "cross-bank payment rejected: currency mismatch",
+			"source_account_id", in.SourceAccountID, "account_currency", string(srcCcy),
+			"requested_currency", string(in.Currency))
 		return nil, apperr.Validation("valuta računa se ne poklapa")
 	}
 	srcNumber, err := s.Reservations.AccountNumber(ctx, in.SourceAccountID)
 	if err != nil {
+		s.logOpErr(ctx, "cross-bank payment: source account number lookup failed", err,
+			"source_account_id", in.SourceAccountID)
 		return nil, err
 	}
 
@@ -142,8 +149,15 @@ func (s *Service) SubmitCrossBankPayment(ctx context.Context, in SubmitCrossBank
 		AttemptsMax:   8,
 	})
 	if err != nil {
+		s.log().ErrorContext(ctx, "cross-bank payment saga failed",
+			"err", err, "transaction_id", txID, "remote_bank_code", in.RemoteBankCode,
+			"amount", in.Amount, "currency", string(in.Currency))
 		return nil, err
 	}
+	s.log().InfoContext(ctx, "cross-bank payment submitted",
+		"transaction_id", txID, "status", string(row.Status),
+		"remote_bank_code", in.RemoteBankCode, "amount", in.Amount,
+		"currency", string(in.Currency), "user_id", p.UserID)
 	// Retry queue (todoSpec): a saga left parked (status=running) means a
 	// transient failure — typically the partner bank being unavailable at
 	// prepare_partner. Enqueue a retry entry so the 5s/30s worker drives
@@ -180,6 +194,8 @@ func (s *Service) GetCrossBankPayment(ctx context.Context, txID string) (*CrossB
 	}
 	var payload crossBankPaymentPayload
 	if err := json.Unmarshal(row.State, &payload); err != nil {
+		s.log().ErrorContext(ctx, "cross-bank payment saga state decode failed",
+			"err", err, "transaction_id", txID)
 		return nil, apperr.Internal("decode saga state", err)
 	}
 	if payload.UserID != p.UserID && !permissions.Has(p.Permissions, permissions.Admin) {

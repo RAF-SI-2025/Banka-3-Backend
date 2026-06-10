@@ -4,6 +4,7 @@ import (
 	"context"
 
 	"github.com/RAF-SI-2025/Banka-3-Backend/pkg/apperr"
+	"github.com/RAF-SI-2025/Banka-3-Backend/pkg/logger"
 	"github.com/RAF-SI-2025/Banka-3-Backend/pkg/postgres"
 	"github.com/RAF-SI-2025/Banka-3-Backend/services/bank/internal/domain"
 )
@@ -27,6 +28,7 @@ func (s *Store) UpsertPaymentRecipient(ctx context.Context, r *domain.PaymentRec
         returning ` + recipientColumns
 	out, err := scanRecipient(s.DB.QueryRow(ctx, q, r.ClientID, r.Name, r.AccountNumber))
 	if err != nil {
+		logger.From(ctx).ErrorContext(ctx, "upsert recipient failed", "err", err, "client_id", r.ClientID)
 		return nil, apperr.Internal("upsert recipient", err)
 	}
 	return out, nil
@@ -36,6 +38,7 @@ func (s *Store) ListPaymentRecipients(ctx context.Context, clientID string) ([]*
 	const q = `select ` + recipientColumns + ` from "bank".payment_recipients where client_id = $1 order by lower(name)`
 	rows, err := s.DB.Query(postgres.WithRead(ctx), q, clientID)
 	if err != nil {
+		logger.From(ctx).ErrorContext(ctx, "list recipients failed", "err", err, "client_id", clientID)
 		return nil, apperr.Internal("list recipients", err)
 	}
 	defer rows.Close()
@@ -43,11 +46,16 @@ func (s *Store) ListPaymentRecipients(ctx context.Context, clientID string) ([]*
 	for rows.Next() {
 		r, err := scanRecipient(rows)
 		if err != nil {
+			logger.From(ctx).ErrorContext(ctx, "scan recipient failed", "err", err)
 			return nil, apperr.Internal("scan recipient", err)
 		}
 		out = append(out, r)
 	}
-	return out, rows.Err()
+	if err := rows.Err(); err != nil {
+		logger.From(ctx).ErrorContext(ctx, "iterate recipients failed", "err", err)
+		return out, err
+	}
+	return out, nil
 }
 
 func (s *Store) UpdatePaymentRecipient(ctx context.Context, r *domain.PaymentRecipient) (*domain.PaymentRecipient, error) {
@@ -60,6 +68,7 @@ func (s *Store) UpdatePaymentRecipient(ctx context.Context, r *domain.PaymentRec
 		if noRows(err) {
 			return nil, apperr.NotFound("primalac ne postoji")
 		}
+		logger.From(ctx).ErrorContext(ctx, "update recipient failed", "err", err, "recipient_id", r.ID, "client_id", r.ClientID)
 		return nil, apperr.Internal("update recipient", err)
 	}
 	return out, nil
@@ -69,6 +78,7 @@ func (s *Store) DeletePaymentRecipient(ctx context.Context, id, clientID string)
 	const q = `delete from "bank".payment_recipients where id = $1 and client_id = $2`
 	tag, err := s.DB.Exec(ctx, q, id, clientID)
 	if err != nil {
+		logger.From(ctx).ErrorContext(ctx, "delete recipient failed", "err", err, "recipient_id", id, "client_id", clientID)
 		return apperr.Internal("delete recipient", err)
 	}
 	if tag.RowsAffected() == 0 {
