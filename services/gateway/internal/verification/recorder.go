@@ -36,6 +36,7 @@ var (
 	_ verification.Verifier      = (*RecordingVerifier)(nil)
 	_ verification.PendingLister = (*RecordingVerifier)(nil)
 	_ verification.Approver      = (*RecordingVerifier)(nil)
+	_ verification.Rejecter      = (*RecordingVerifier)(nil)
 )
 
 func (r *RecordingVerifier) Issue(ctx context.Context, userID string, kind verification.ActionKind) (string, string, time.Time, error) {
@@ -104,6 +105,24 @@ func (r *RecordingVerifier) Approve(ctx context.Context, userID, id string) erro
 		return verification.ErrNotFound
 	}
 	return ap.Approve(ctx, userID, id)
+}
+
+// Reject forwards to the inner verifier (the Redis Cache implements
+// Rejecter) and, on a clean reject, resolves the durable history row to
+// unsuccessful — so an ignored request shows up as neuspešno in the
+// mobile "Verifikacija" history (spec p.84 mode 2 "Ignore"). A verifier
+// without the capability reports ErrNotFound so the gateway surfaces a
+// clean 404.
+func (r *RecordingVerifier) Reject(ctx context.Context, userID, id string) error {
+	rj, ok := r.Inner.(verification.Rejecter)
+	if !ok {
+		return verification.ErrNotFound
+	}
+	err := rj.Reject(ctx, userID, id)
+	if err == nil {
+		r.resolve(ctx, id, false)
+	}
+	return err
 }
 
 // ConsumeApproved forwards to the inner verifier and, on a clean

@@ -79,6 +79,10 @@ func (r *Router) Mount(ctx context.Context, gwMux *runtime.ServeMux, registerGW 
 		// caller's own pending record approved so the next gated request
 		// passes with X-Verification-Id only. Auth-gated.
 		mux.Handle("POST /api/v1/verification/{id}/approve", r.AuthMW(http.HandlerFunc(r.VerificationApproveHandler())))
+		// Additive: mobile "Ignore" action (spec p.84 mode 2). Retires the
+		// caller's own pending record so the gated web action fails
+		// verification; records the request as unsuccessful. Auth-gated.
+		mux.Handle("POST /api/v1/verification/{id}/reject", r.AuthMW(http.HandlerFunc(r.VerificationRejectHandler())))
 		// Additive: web poll-mode dialog reads pending|approved|expired
 		// for a single id to know when the phone approved (todoSpec S12).
 		mux.Handle("GET /api/v1/verification/{id}/status", r.AuthMW(http.HandlerFunc(r.VerificationStatusHandler())))

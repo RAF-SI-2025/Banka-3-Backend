@@ -246,6 +246,45 @@ func TestApproveOwnershipScoped(t *testing.T) {
 	}
 }
 
+func TestRejectRetiresRecord(t *testing.T) {
+	c := setup(t)
+	ctx := context.Background()
+	id, code, _, _ := c.Issue(ctx, "owner", ActionPayment)
+
+	// A different user cannot reject the record (opaque ErrNotFound).
+	if err := c.Reject(ctx, "intruder", id); !errors.Is(err, ErrNotFound) {
+		t.Errorf("foreign reject: want ErrNotFound, got %v", err)
+	}
+	// It is still listed and still consumable for the owner.
+	if got, _ := c.ListPending(ctx, "owner"); len(got) != 1 {
+		t.Fatalf("pre-reject pending: want 1, got %d", len(got))
+	}
+
+	// Owner rejects → record retired.
+	if err := c.Reject(ctx, "owner", id); err != nil {
+		t.Fatalf("owner reject: %v", err)
+	}
+	// Gone from the pending list.
+	if got, _ := c.ListPending(ctx, "owner"); len(got) != 0 {
+		t.Errorf("post-reject pending: want 0, got %d", len(got))
+	}
+	// The code can no longer be consumed — the gated action fails.
+	if err := c.Consume(ctx, id, code, ActionPayment); !errors.Is(err, ErrNotFound) {
+		t.Errorf("consume after reject: want ErrNotFound, got %v", err)
+	}
+	// Rejecting again is a clean ErrNotFound (idempotent in effect).
+	if err := c.Reject(ctx, "owner", id); !errors.Is(err, ErrNotFound) {
+		t.Errorf("double reject: want ErrNotFound, got %v", err)
+	}
+}
+
+func TestRejectMissing(t *testing.T) {
+	c := setup(t)
+	if err := c.Reject(context.Background(), "u", "deadbeef"); !errors.Is(err, ErrNotFound) {
+		t.Errorf("reject missing id: want ErrNotFound, got %v", err)
+	}
+}
+
 func TestConsumeApprovedMissing(t *testing.T) {
 	c := setup(t)
 	if err := c.ConsumeApproved(context.Background(), "u", "deadbeef", ActionPayment); !errors.Is(err, ErrNotFound) {

@@ -314,6 +314,51 @@ func (r *Router) VerificationApproveHandler() http.HandlerFunc {
 	}
 }
 
+// rejectResponse confirms a reject ("Ignore", spec p.84 mode 2).
+type rejectResponse struct {
+	ID       string `json:"id"`
+	Rejected bool   `json:"rejected"`
+}
+
+// VerificationRejectHandler returns POST /api/v1/verification/{id}/reject
+// — the mobile app's "Ignore" action (spec p.84 mode 2: the phone offers
+// "Confirm" AND "Ignore"). It retires the pending record so any in-flight
+// gated web action fails verification, and records the request as
+// unsuccessful in the durable history. Auth-gated so the caller can only
+// reject their own records (ownership enforced in verification.Reject).
+func (r *Router) VerificationRejectHandler() http.HandlerFunc {
+	return func(w http.ResponseWriter, req *http.Request) {
+		if r.Verifier == nil {
+			writeError(w, http.StatusServiceUnavailable, "Verifikacija nije konfigurisana.")
+			return
+		}
+		rj, ok := r.Verifier.(verification.Rejecter)
+		if !ok {
+			writeError(w, http.StatusServiceUnavailable, "Odbijanje nije dostupno.")
+			return
+		}
+		id := req.PathValue("id")
+		if id == "" {
+			writeError(w, http.StatusBadRequest, "neispravan zahtev")
+			return
+		}
+		p, ok := pkgauth.PrincipalFrom(req.Context())
+		if !ok {
+			writeError(w, http.StatusUnauthorized, "missing access token")
+			return
+		}
+		err := rj.Reject(req.Context(), p.UserID, id)
+		switch {
+		case err == nil:
+			writeJSON(w, http.StatusOK, rejectResponse{ID: id, Rejected: true})
+		case errors.Is(err, verification.ErrNotFound):
+			writeError(w, http.StatusNotFound, "Zahtev za verifikaciju nije pronađen ili je istekao.")
+		default:
+			writeError(w, http.StatusServiceUnavailable, "Verifikacija privremeno nedostupna.")
+		}
+	}
+}
+
 // statusResponse reports a single verification record's state to the web
 // app's poll-mode dialog (todoSpec S12): pending | approved | expired.
 type statusResponse struct {

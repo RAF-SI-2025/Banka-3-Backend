@@ -133,6 +133,18 @@ type Approver interface {
 	ConsumeApproved(ctx context.Context, userID, id string, expectedKind ActionKind) error
 }
 
+// Rejecter is the optional reject ("Ignore") capability (spec p.84
+// mode 2: the phone offers "Confirm" AND "Ignore"). Rejecting a pending
+// record retires it so the gated web action can never proceed — the
+// inverse of Approve. Kept separate from Verifier/Approver so existing
+// stubs don't have to implement it; the gateway type-asserts for it.
+type Rejecter interface {
+	// Reject retires the pending record id (which must belong to userID),
+	// causing any in-flight gated action to fail verification. Returns
+	// ErrNotFound when the record is missing, expired, or not owned.
+	Reject(ctx context.Context, userID, id string) error
+}
+
 // Pending is one active (not yet consumed/expired) verification record,
 // as seen by the owning user. Used by the mobile app's "Verifikacija"
 // screen (spec p.84) — it displays Code and the user types it back on
@@ -165,6 +177,7 @@ var (
 	_ Verifier      = (*Cache)(nil)
 	_ PendingLister = (*Cache)(nil)
 	_ Approver      = (*Cache)(nil)
+	_ Rejecter      = (*Cache)(nil)
 )
 
 func key(id string) string      { return "verif:" + id }
@@ -358,6 +371,29 @@ func (c *Cache) Approve(ctx context.Context, userID, id string) error {
 		return err
 	}
 	return c.R.Set(ctx, key(id), updated, ttl).Err()
+}
+
+// Reject retires the record id without consuming it (spec p.84 "Ignore").
+// The record must exist and belong to userID; otherwise ErrNotFound
+// (same opaque error as Approve so a caller can't probe foreign ids).
+// Idempotent in effect: a second reject of an already-gone record reads
+// as ErrNotFound. The per-user index self-prunes on the next ListPending.
+func (c *Cache) Reject(ctx context.Context, userID, id string) error {
+	raw, err := c.R.Get(ctx, key(id)).Bytes()
+	if errors.Is(err, redis.Nil) {
+		return ErrNotFound
+	}
+	if err != nil {
+		return err
+	}
+	var rec record
+	if err := json.Unmarshal(raw, &rec); err != nil {
+		return err
+	}
+	if rec.UserID != userID {
+		return ErrNotFound
+	}
+	return c.R.Del(ctx, key(id)).Err()
 }
 
 // ConsumeApproved retires record id without a code, succeeding only if
