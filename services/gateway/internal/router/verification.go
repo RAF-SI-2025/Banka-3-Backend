@@ -20,16 +20,20 @@ type VerificationRequest struct {
 	ActionKind string `json:"actionKind"`
 }
 
-// VerificationResponse carries the issued id and absolute expiry, plus
-// the 6-digit code itself. The mobile app is c5; until then every
-// action kind — payments, transfers, limit changes, card issuance —
-// returns the code inline so the FE can display it next to a fake-QR
-// placeholder.
+// VerificationResponse carries the issued id and absolute expiry. The
+// code itself is NOT returned here — it is delivered only to the mobile
+// app, which polls GET /verification/pending (the phone is the real
+// second factor). The web app shows no code: the user either approves
+// the request on the phone (quick-approve, id-only) or types the code
+// the phone displays. Code stays in the struct (omitempty, always empty
+// now) only so the JSON shape is a strict superset of the old one.
 type VerificationResponse struct {
 	VerificationID string    `json:"verificationId"`
-	Code           string    `json:"code"`
+	Code           string    `json:"code,omitempty"`
 	ExpiresAt      time.Time `json:"expiresAt"`
-	Delivery       string    `json:"delivery"`
+	// Delivery tells the FE where the code lives: "mobile" (on the
+	// phone, via /verification/pending) or "email" (card issuance).
+	Delivery string `json:"delivery"`
 }
 
 // allowedKinds gates which action kinds the FE may issue. Hard-coded
@@ -94,10 +98,11 @@ type pendingResponse struct {
 }
 
 // VerificationPendingHandler returns GET /api/v1/verification/pending —
-// the additive endpoint the mobile app polls (spec p.84, Option 1: the
-// phone shows the 6-digit code, the user types it on the web app). It
-// is purely additive: the web /verification/request flow and its
-// dev-mode in-body code are untouched.
+// the endpoint the mobile app polls (spec p.84, Option 1: the phone
+// shows the 6-digit code, the user types it on the web app). This is
+// now the ONLY place the code is delivered: /verification/request no
+// longer returns it, so the phone (this poll) or quick-approve is the
+// second factor.
 func (r *Router) VerificationPendingHandler() http.HandlerFunc {
 	return func(w http.ResponseWriter, req *http.Request) {
 		lister, ok := r.Verifier.(verification.PendingLister)
@@ -235,7 +240,11 @@ func (r *Router) VerificationHandler() http.HandlerFunc {
 			writeError(w, http.StatusUnauthorized, "missing access token")
 			return
 		}
-		id, code, exp, err := r.Verifier.Issue(req.Context(), p.UserID, kind)
+		// The code is intentionally discarded here: it reaches the user
+		// only through the mobile app (GET /verification/pending). The
+		// web app never sees it, so possession of the phone is required
+		// to read the code or to quick-approve the request.
+		id, _, exp, err := r.Verifier.Issue(req.Context(), p.UserID, kind)
 		if err != nil {
 			// The 6-digit code is never logged, here or anywhere.
 			log.ErrorContext(ctx, "verification code issue failed",
@@ -246,9 +255,8 @@ func (r *Router) VerificationHandler() http.HandlerFunc {
 
 		writeJSON(w, http.StatusOK, VerificationResponse{
 			VerificationID: id,
-			Code:           code,
 			ExpiresAt:      exp,
-			Delivery:       "inline",
+			Delivery:       "mobile",
 		})
 	}
 }

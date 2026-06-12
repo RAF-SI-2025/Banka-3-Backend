@@ -554,14 +554,16 @@ internal admin metadata to fetch the recipient address).
 **Verification primitive** (`pkg/verification`, gateway middleware):
 spec p.11 verifikacioni-kod gates payments / transfers / limit
 changes / card issuance. Redis-keyed, 6-digit, 5-min TTL, 3 wrong
-attempts retire the record. The web flow returns the code in the
-`/verification/request` response so the FE renders it inline (dev
-mode — unchanged). The mobile app (spec p.84) instead polls
-`GET /api/v1/verification/pending` (additive; `pkg/verification`
-keeps a per-user index, gateway type-asserts the optional
-`PendingLister`) and shows the code on the phone for the user to type
-back on the web. Do NOT remove the web in-body code — Cypress depends
-on it.
+attempts retire the record. **The mobile app is the second factor
+(2026-06-12): `/verification/request` returns the id only, never the
+code (`delivery: "mobile"`).** The code is delivered solely through
+`GET /api/v1/verification/pending` — the mobile app (spec p.84) polls
+it (`pkg/verification` keeps a per-user index; gateway type-asserts
+the optional `PendingLister`). The web user either taps „Odobri“ on
+the phone (quick-approve: `POST /verification/{id}/approve` →
+middleware's `ConsumeApproved` admits an id-only request) or types the
+code the phone displays. The 6-digit code is no longer in any HTTP
+response except `/pending`.
 
 **Tests**: bank service ~50 (`integration` build tag for ~33 of them),
 user service ~30 integration, gateway middleware suites (auth +
