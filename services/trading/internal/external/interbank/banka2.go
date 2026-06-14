@@ -4,12 +4,33 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"math"
 	"strconv"
 	"time"
 
 	"github.com/RAF-SI-2025/Banka-3-Backend/services/trading/internal/domain"
 	"github.com/RAF-SI-2025/Banka-3-Backend/services/trading/internal/service"
 )
+
+// parseBanka2Amount parses a share count Banka-2 sends on /public-stock and
+// /negotiations. Their amounts are JSON numbers carrying a decimal scale
+// (e.g. "9.0000" for 9 shares), so a plain strconv.ParseInt fails and the
+// quantity silently falls back to 0 — which makes every partner offer render
+// as "0 available" and disables the buy button on our side. Accept the plain
+// integer form, then fall back to a decimal parse (rounded, since shares are
+// whole units). Returns ok=false only when the value is genuinely unparseable.
+func parseBanka2Amount(s string) (int32, bool) {
+	if s == "" {
+		return 0, false
+	}
+	if n, err := strconv.ParseInt(s, 10, 32); err == nil {
+		return int32(n), true
+	}
+	if f, err := strconv.ParseFloat(s, 64); err == nil {
+		return int32(math.Round(f)), true
+	}
+	return 0, false
+}
 
 // =====================================================================
 // Banka 2 dialect — REST shape used by coursemates whose Spring Boot
@@ -96,10 +117,10 @@ func (c *Client) discoverBanka2(ctx context.Context, bankCode, tickerFilter stri
 	out := make([]*service.PartnerHolding, 0)
 	for _, ps := range parsed {
 		for _, s := range ps.Sellers {
-			qty, qerr := strconv.ParseInt(s.Amount.String(), 10, 32)
-			if qerr != nil {
+			qty, ok := parseBanka2Amount(s.Amount.String())
+			if !ok {
 				c.log.WarnContext(ctx, "banka2 public-stock seller amount unparsable, defaulting to 0",
-					"err", qerr.Error(), "bank_code", bankCode, "ticker", ps.Stock.Ticker, "amount", s.Amount.String())
+					"bank_code", bankCode, "ticker", ps.Stock.Ticker, "amount", s.Amount.String())
 			}
 			rowBankCode := strconv.Itoa(s.Seller.RoutingNumber)
 			if rowBankCode == "" {
@@ -113,7 +134,7 @@ func (c *Client) discoverBanka2(ctx context.Context, bankCode, tickerFilter stri
 				SecurityTicker:   ps.Stock.Ticker,
 				SecurityType:     domain.SecurityStock,
 				Currency:         domain.CurrencyUSD, // Banka2 /public-stock doesn't carry currency; default to USD (course convention).
-				Quantity:         int32(qty),
+				Quantity:         qty,
 				AskPrice:         "",
 				Premium:          "",
 			})
