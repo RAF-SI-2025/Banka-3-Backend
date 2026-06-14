@@ -503,7 +503,7 @@ func (p *PartnerBanka2) handleOTCSettlementNewTX(w http.ResponseWriter, r *http.
 		SenderBankCode: strconv.Itoa(key.RoutingNumber),
 		TransactionId:  tx.TransactionID.ID,
 		OptionRef:      intent.OptionRef.ID,
-		SellerUserRef:  intent.SellerID.ID,
+		SellerUserRef:  banka2StripSellerID(intent.SellerID.ID),
 		CashAmount:     intent.CashAmount,
 		CashCurrency:   intent.CashCurrency,
 		Ticker:         intent.Ticker,
@@ -828,7 +828,7 @@ func (p *PartnerBanka2) handlePublicStock(w http.ResponseWriter, r *http.Request
 			order = append(order, t)
 		}
 		ps.Sellers = append(ps.Sellers, b2PublicSeller{
-			Seller: b2ForeignID{RoutingNumber: ourRouting, ID: it.GetSellerId()},
+			Seller: b2ForeignID{RoutingNumber: ourRouting, ID: banka2PrefixSellerID(it.GetSellerKind(), it.GetSellerId())},
 			Amount: json.Number(strconv.Itoa(int(it.GetAvailableCount()))),
 		})
 	}
@@ -955,7 +955,7 @@ func (p *PartnerBanka2) handleReadNegotiation(w http.ResponseWriter, r *http.Req
 	ourRouting, _ := strconv.Atoi(p.BankRoutingNumber)
 	seller := b2ForeignID{
 		RoutingNumber: ourRouting,
-		ID:            t.GetLocalUserId(),
+		ID:            banka2PrefixSellerID(t.GetLocalUserKind(), t.GetLocalUserId()),
 	}
 	modifiedBy := seller
 	if t.GetModifiedBySide() == tradingpb.ExternalOTCSide_EXTERNAL_OTC_SIDE_REMOTE {
@@ -1082,7 +1082,61 @@ func (p *PartnerBanka2) handleAcceptNegotiation(w http.ResponseWriter, r *http.R
 // resolveBanka2Holding walks ListPublicHoldings to translate a
 // (ticker, seller-user-uuid) pair from the Banka-2 dialect into our
 // service's holding_id. Returns NotFound when nothing matches.
+// Banka-2 infers the seller's OTC trading role (spec p.79 — clients
+// negotiate with clients, actuaries with actuaries) from a one-char
+// prefix on the foreign user id it reads off our /public-stock feed:
+// "C-" = client, "E-" = employee/actuary (their
+// InterbankOtcWrapperService.inferRole). Without a recognized prefix
+// the listing is flagged "rola prodavca nepoznata" and a buy attempt is
+// rejected. We therefore prefix our seller ids when serving discovery,
+// and strip the prefix everywhere the id round-trips back inbound
+// (negotiation create, settlement, /user lookup). Stripping is a no-op
+// on a bare id, so non-Banka-2 / native callers are unaffected — and a
+// real UUID never starts with "C-"/"E-", so the prefix is unambiguous.
+const (
+	banka2ClientIDPrefix   = "C-"
+	banka2EmployeeIDPrefix = "E-"
+)
+
+func banka2PrefixSellerID(kind tradingpb.UserKind, id string) string {
+	if kind == tradingpb.UserKind_USER_KIND_EMPLOYEE {
+		return banka2EmployeeIDPrefix + id
+	}
+	return banka2ClientIDPrefix + id
+}
+
+func banka2StripSellerID(id string) string {
+	if s, ok := strings.CutPrefix(id, banka2ClientIDPrefix); ok {
+		return s
+	}
+	if s, ok := strings.CutPrefix(id, banka2EmployeeIDPrefix); ok {
+		return s
+	}
+	return id
+}
+
+// isOurRouting reports whether the inbound URL's routing number addresses
+// us — either our real routing (333) or any routing we present to a
+// partner (Banka-2 knows us as 265). Partners address the OTC seller /user
+// lookup with the routing they have on file for us, so both must resolve.
+func (p *PartnerBanka2) isOurRouting(routing string) bool {
+	ours := p.BankRoutingNumber
+	if ours == "" {
+		ours = "333"
+	}
+	if routing == ours {
+		return true
+	}
+	for _, presented := range p.PresentedRouting {
+		if presented == routing {
+			return true
+		}
+	}
+	return false
+}
+
 func (p *PartnerBanka2) resolveBanka2Holding(ctx context.Context, ticker, sellerUserID string) (string, error) {
+	sellerUserID = banka2StripSellerID(sellerUserID)
 	resp, err := p.Trading.ListPublicHoldings(partnerCtx(ctx), &tradingpb.ListPublicHoldingsRequest{Ticker: ticker})
 	if err != nil {
 		return "", err
@@ -1131,12 +1185,15 @@ func (p *PartnerBanka2) handleUserInfo(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 	log := logger.From(ctx)
 	wantRouting := r.PathValue("routing_number")
-	wantID := r.PathValue("user_id")
+	// Banka-2 calls this with the seller id it read off /public-stock,
+	// which we prefix with C-/E- for role inference; strip it back to the
+	// bare UUID before resolving the user.
+	wantID := banka2StripSellerID(r.PathValue("user_id"))
 	ours := p.BankRoutingNumber
 	if ours == "" {
 		ours = "333"
 	}
-	if wantRouting != ours {
+	if !p.isOurRouting(wantRouting) {
 		log.WarnContext(ctx, "partner user lookup rejected: routing not ours",
 			"requested_routing", wantRouting, "our_routing", ours, "user_id", wantID)
 		writeError(w, http.StatusNotFound, "routing number is not ours")
